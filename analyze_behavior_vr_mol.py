@@ -19,6 +19,7 @@ procdatadir     = "V:\\Procdata\\"
 
 animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
 sessiondates        = ['2022_12_8']
+sessiondates        = ['2022_12_9']
 sessiondates        = ['2022_12_1']
 
 sessiondates        = ['2022_11_30',
@@ -152,8 +153,8 @@ fig, ax = plt.subplots()
 
 for i in range(4):
     # ax.plot(bincenters,np.nanmean(runPSTH[idx_gonogo[:,i],:],axis=0))
-    data_mean = np.nanmean(lickPSTH[idx_gonogo[:,i] & (trd.trialnum<300),:],axis=0)
-    data_error = np.nanstd(lickPSTH[idx_gonogo[:,i] & (trd.trialnum<300),:],axis=0) / math.sqrt(sum(idx_gonogo[:,i] & (trd.trialnum<300)))
+    data_mean   = np.nanmean(lickPSTH[idx_gonogo[:,i] & (trd.trialnum<300),:],axis=0)
+    data_error  = np.nanstd(lickPSTH[idx_gonogo[:,i] & (trd.trialnum<300),:],axis=0) / math.sqrt(sum(idx_gonogo[:,i] & (trd.trialnum<300)))
     ax.plot(bincenters,data_mean,label=labels_gonogo[i])
     ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.5, linewidth=0)
 
@@ -174,4 +175,62 @@ ax.add_patch(matplotlib.patches.Rectangle((30,0),30,1.6,
 plt.text(5, 1.4, 'Stim',fontsize=12)
 plt.text(35, 1.4, 'Reward',fontsize=12)
 
+#####
 
+idx_gonogo          = np.empty(shape=(ntrials, 4),dtype=bool)
+idx_gonogo[:,0]     = (trd['rewardtrial'] == 1) & (trd.lickresponse == True)
+idx_gonogo[:,1]     = (trd['rewardtrial'] == 1) & (trd.lickresponse == False)
+idx_gonogo[:,2]     = (trd['rewardtrial'] == 0) & (trd.lickresponse == True)
+idx_gonogo[:,3]     = (trd['rewardtrial'] == 0) & (trd.lickresponse == False)
+
+smooth_hitrate        = np.empty(shape=(ntrials, 1))
+smooth_farate         = np.empty(shape=(ntrials, 1))
+
+window_size = 30;
+
+for itrial in range(window_size,ntrials):
+    smooth_hitrate[itrial,0] = sum(idx_gonogo[itrial-window_size:itrial,0]) / (sum(idx_gonogo[itrial-window_size:itrial,0]) + sum(idx_gonogo[itrial-window_size:itrial,1]))
+    smooth_farate[itrial,0] = sum(idx_gonogo[itrial-window_size:itrial,2]) / (sum(idx_gonogo[itrial-window_size:itrial,2]) + sum(idx_gonogo[itrial-window_size:itrial,3]))
+
+smooth_hitrate[smooth_hitrate<0.001] = 0.001
+smooth_hitrate[smooth_hitrate>0.999] = 0.999
+smooth_farate[smooth_farate<0.001] = 0.001
+smooth_farate[smooth_farate>0.999] = 0.999
+
+smooth_d_prime           = st.norm.ppf(smooth_hitrate) - st.norm.ppf(smooth_farate)
+
+fig, ax = plt.subplots()
+
+plt.plot(trd['trialnum'],smooth_hitrate,color="green")
+plt.plot(trd['trialnum'],smooth_farate,color="brown")
+plt.xlabel('trial number')
+plt.ylabel('HITrate / FArate')
+# plt.ylim(0,50)
+plt.xlim(window_size,)
+plt.legend(['HIT','FA'])
+colors = ["cyan","pink"]
+for iblock in np.arange(0,ntrials,100):
+    ax.add_patch(matplotlib.patches.Rectangle((iblock,0),50,1.0, 
+                        fill = True, alpha=0.2,
+                        color = colors[0], linewidth = 0))
+for iblock in np.arange(50,ntrials,100):
+    ax.add_patch(matplotlib.patches.Rectangle((iblock,0),50,1.0, 
+                        fill = True, alpha=0.2,
+                        color = colors[1], linewidth = 0))
+    
+fig, ax = plt.subplots()
+plt.plot(trd['trialnum'],smooth_d_prime,color="blue")
+plt.xlabel('trial number')
+plt.ylabel('Dprime')
+plt.ylim(0,5)
+plt.xlim(window_size,)
+plt.legend(['Dprime'])
+colors = ["cyan","pink"]
+for iblock in np.arange(0,ntrials,100):
+    ax.add_patch(matplotlib.patches.Rectangle((iblock,0),50,5.0, 
+                        fill = True, alpha=0.2,
+                        color = colors[0], linewidth = 0))
+for iblock in np.arange(50,ntrials,100):
+    ax.add_patch(matplotlib.patches.Rectangle((iblock,0),50,5.0, 
+                        fill = True, alpha=0.2,
+                        color = colors[1], linewidth = 0))

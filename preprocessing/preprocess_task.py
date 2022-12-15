@@ -24,6 +24,7 @@ sessiondates        = ['2022_11_30',
  '2022_12_6',
  '2022_12_7',
  '2022_12_8'] #If empty than all animals in folder will be processed
+sessiondates        = ['2022_12_9']
 
 def proc_behavior(rawdatadir,animal_id,sessiondate,protocol):
     """ preprocess all the trial, stimulus and behavior data for one session """
@@ -36,20 +37,20 @@ def proc_behavior(rawdatadir,animal_id,sessiondate,protocol):
     
     nwbfile = NWBFile(
     session_description="MouseVirtualCorridor",  # required
-    identifier=animal_id + "_" + sessiondate,  # required
-    session_start_time=session_start_time,  # required
-    session_id="session_1234",  # optional
-    experimenter="Matthijs Oude Lohuis",  # optional
-    lab="Petreanu Lab",  # optional
-    institution="Champalimaud Research",  # optional
+    identifier          = animal_id + "_" + sessiondate,  # required
+    session_start_time  = session_start_time,  # required
+    # session_id        = "session_1234",  # optional
+    experimenter        = "Matthijs Oude Lohuis",  # optional
+    lab                 = "Petreanu Lab",  # optional
+    institution         = "Champalimaud Research",  # optional
     )
     
     nwbfile.subject = Subject(
-    subject_id=animal_id,
-    # age="P90D",
-    # description="mouse 5",
-    species="Mus musculus",
-    # sex="M",
+    subject_id      = animal_id,
+    # age           = "P90D",
+    # description   = "mouse 5",
+    species         = "Mus musculus",
+    # sex           = "M",
     )
     
     behavior_module = nwbfile.create_processing_module(
@@ -74,41 +75,41 @@ def proc_behavior(rawdatadir,animal_id,sessiondate,protocol):
     
     ## Wheel voltage
     time_series_with_timestamps = TimeSeries(
-    name="WheelVoltage",
-    description="Raw voltage from wheel rotary encoder",
-    data=harpdata[:,0].astype(np.float64),
-    unit="V",
-    timestamps=timestamps,
+    name            = "WheelVoltage",
+    description     = "Raw voltage from wheel rotary encoder",
+    data            = harpdata[:,0].astype(np.float64),
+    unit            = "V",
+    timestamps      = timestamps,
     )
     nwbfile.add_acquisition(time_series_with_timestamps)
     
     ## Z position
     time_series_with_timestamps = TimeSeries(
-    name="CorridorPosition",
-    description="z position along the corridor",
-    data=harpdata[:,3].astype(np.float64),
-    unit="cm",
-    timestamps=timestamps,
+    name            = "CorridorPosition",
+    description     = "z position along the corridor",
+    data            = harpdata[:,3].astype(np.float64),
+    unit            = "cm",
+    timestamps      = timestamps,
     )
     nwbfile.add_acquisition(time_series_with_timestamps)
         
     ## Running speed
     time_series_with_timestamps = TimeSeries(
-    name="RunningSpeed",
-    description="Speed of VR wheel rotation",
-    data=harpdata[:,4].astype(np.float64),
-    unit="cm s-1",
-    timestamps=timestamps,
+    name            = "RunningSpeed",
+    description     = "Speed of VR wheel rotation",
+    data            = harpdata[:,4].astype(np.float64),
+    unit            = "cm s-1",
+    timestamps      = timestamps,
     )
     nwbfile.add_acquisition(time_series_with_timestamps)
     
     ## Wheel voltage
     time_series_with_timestamps = TimeSeries(
-    name="TrialNumber",
-    description="During which trial number the other acquisition channels were sampled",
-    data=harpdata[:,2].astype(np.int64),
-    unit="na",
-    timestamps=timestamps,
+    name            = "TrialNumber",
+    description     = "During which trial number the other acquisition channels were sampled",
+    data            = harpdata[:,2].astype(np.int64),
+    unit            = "na",
+    timestamps      = timestamps,
     )
     nwbfile.add_acquisition(time_series_with_timestamps)
     
@@ -119,11 +120,11 @@ def proc_behavior(rawdatadir,animal_id,sessiondate,protocol):
     print("%d licks" % idx.sum()) #Give output to check if reasonable
     
     time_series = TimeSeries(
-        name="Licks",
-        data=np.ones([idx.sum(),1]),
-        timestamps=timestamps[idx],
-        description="When luminance of tongue crossed a threshold at an ROI at the lick spout",
-        unit="a.u.",
+        name        = "Licks",
+        data        = np.ones([idx.sum(),1]),
+        timestamps  = timestamps[idx],
+        description = "When luminance of tongue crossed a threshold at an ROI at the lick spout",
+        unit        = "a.u.",
     )
     
     lick_events = BehavioralEvents(time_series=time_series, name="Licks")
@@ -136,11 +137,11 @@ def proc_behavior(rawdatadir,animal_id,sessiondate,protocol):
     print("%d rewards" % idx.sum()) #Give output to check if reasonable
     
     time_series = TimeSeries(
-        name="Rewards",
-        data=np.ones([idx.sum(),1])*5,
-        timestamps=timestamps[idx],
-        description="Rewards delivered at lick spout",
-        unit="uL",
+        name        = "Rewards",
+        data        = np.ones([idx.sum(),1])*5,
+        timestamps  = timestamps[idx],
+        description = "Rewards delivered at lick spout",
+        unit        = "uL",
     )
     reward_events = BehavioralEvents(time_series=time_series, name="Rewards")
     behavior_module.add(reward_events)
@@ -183,6 +184,20 @@ def proc_behavior(rawdatadir,animal_id,sessiondate,protocol):
 
 
 
+def proc_imaging(rawdatadir,animal_id,sessiondate,protocol, nwbfile):
+    """ integrate preprocessed calcium imaging data """
+    # nwbfile #main processing function
+    
+    sesfolder   = os.path.join(rawdatadir,animal_id,sessiondate,protocol)
+    sesfolder   = os.path.join(rawdatadir,animal_id,sessiondate,protocol,"Imaging")
+    
+    io = NWBHDF5IO(os.path.join(sesfolder,"suite2p.nwb"), mode="r")
+    nwbimaging = io.read()
+    
+    # session_start_time = datetime(y, m, d, 2, 30, 3, tzinfo=tz.gettz("Europe/Lisbon"))
+    
+    return nwbfile
+
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
     animal_ids = os.listdir(rawdatadir)
@@ -194,6 +209,11 @@ for animal_id in animal_ids: #for each animal
 
     for sessiondate in sessiondates: #for each of the sessions for this animal
         nwbfile         = proc_behavior(rawdatadir,animal_id,sessiondate,"VR") #main processing function
+        
+        imagingdir      = os.path.join(rawdatadir,animal_id,sessiondate,"VR","Imaging")
+        if os.path.exists(imagingdir):
+            print('Detected imaging data\n')
+            nwbfile         = proc_imaging(imagingdir,nwbfile) #main processing function
         
         savefilename    = animal_id + "_" + sessiondate + "_VR.nwb" #define save file name
         outdir          = os.path.join(procdatadir,animal_id) #construct output save directory string
