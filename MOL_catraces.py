@@ -38,13 +38,13 @@ spksselec = spksselec - np.min(spksselec, axis=1)[:, np.newaxis]
 # Divide by the range of values in each row
 spksselec = spksselec / row_range[:, np.newaxis]
 
-spksselec = spksselec +
+# spksselec = spksselec 
 nframes = np.shape(spksselec)[1]
 
 temp = np.repeat(range(ncells.astype('Int32')), nframes, axis=1)
 
 # Print the normalized array
-print(arr)
+# print(arr)
 
 plt.figure()
 plt.plot(spksselec)
@@ -63,5 +63,44 @@ for n, j in enumerate(iscell[:,0]):
         im[ypix,xpix] = n+1
 
 plt.imshow(im)
+plt.show()
+
+
+######################
+
+from pynwb import NWBFile, NWBHDF5IO
+imagingdir = 'X:\\RawData\\NSH07422\\2022_12_09\\VR\\ROI_0'
+
+
+filename = os.path.join(imagingdir,'suite2p','ophys.nwb')
+
+# Open the file in read mode "r"
+io = NWBHDF5IO(filename, mode="r")
+ophysnwbfile = io.read()
+
+dFdeconv = ophysnwbfile.processing['ophys']['Deconvolved']['Deconvolved'].data[:]
+dFdeconv = ophysnwbfile.processing['ophys']['Fluorescence']['Fluorescence'].data[:]
+
+iscell = ophysnwbfile.processing['ophys']['ImageSegmentation']['PlaneSegmentation']['iscell'].data[:]
+
+dFdeconv_selec = dFdeconv[iscell[:,0]==1,:]
+
+####
+# Calculate the range of values in each row
+row_range = np.ptp(dFdeconv_selec, axis=1)
+# Subtract the minimum value from each element in the row
+dFdeconv_selec = dFdeconv_selec - np.min(dFdeconv_selec, axis=1)[:, np.newaxis]
+# Divide by the range of values in each row
+dFdeconv_selec = dFdeconv_selec / row_range[:, np.newaxis]
+
+# spksselec = spksselec 
+nframes = np.shape(dFdeconv_selec)[1]
+ncells = sum(iscell[:,0]).astype('int64')
+
+for i in range(ncells):
+    dFdeconv_selec[i,:] =  dFdeconv_selec[i,:] + i
+
+plt.figure()
+plt.plot(np.transpose(dFdeconv_selec[:,10000:20000]),linewidth=0.2)
 plt.show()
 
