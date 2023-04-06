@@ -41,7 +41,7 @@ for animal_id in animal_ids: #for each animal
 
 ###### Construct
 F           = nwbfile.processing['ophys']['Fluorescence']['Fluorescence'].data[:]
-F           = nwbfile.processing['ophys']['dF_F']['dF_F'].data[:]
+# F           = nwbfile.processing['ophys']['dF_F']['dF_F'].data[:]
 
 #Filter only selected cells (ROIs) from suite2p
 iscell      = nwbfile.processing['ophys']['ImageSegmentation']['PlaneSegmentation']['iscell'].data[:,0]
@@ -58,6 +58,8 @@ runspeed_F  = np.interp(x=ts_F,xp=nwbfile.acquisition['RunningSpeed'].timestamps
 trialnum_F  = np.interp(x=ts_F,xp=nwbfile.acquisition['TrialNumber'].timestamps[:],
                         fp=nwbfile.acquisition['TrialNumber'].data[:])
 
+
+F_Z           = st.zscore(F,axis=0)
 
 
 ## Construct tensor: 3D 'matrix' of N neurons by T trials by S spatial bins
@@ -77,11 +79,13 @@ T           = len(trd)
 S           = len(bincenters)
 
 tensor      = np.empty([N,T,S])
+tensor_z    = np.empty([N,T,S])
 
 for iT in range(T):
     idx = trialnum_F==iT+1
     for iN in range(N):
         tensor[iN,iT,:] = binned_statistic(zpos_F[idx]-trd.loc[iT, 'stimstart'],F[idx,iN], statistic='mean', bins=binedges)[0]
+        tensor_z[iN,iT,:] = binned_statistic(zpos_F[idx]-trd.loc[iT, 'stimstart'],F_Z[idx,iN], statistic='mean', bins=binedges)[0]
 
 
 ##### Construct heatmaps per stim:
@@ -90,7 +94,8 @@ stimtypes = ['stimA','stimB','stimC','stimD']
 snakeplots = np.empty([N,S,len(stimtypes)])
 
 for iTT in range(len(stimtypes)):
-    snakeplots[:,:,iTT] = np.nanmean(tensor[:,trd['stimright'] == stimtypes[iTT],:],axis=1)
+    # snakeplots[:,:,iTT] = np.nanmean(tensor[:,trd['stimright'] == stimtypes[iTT],:],axis=1)
+    snakeplots[:,:,iTT] = np.nanmean(tensor_z[:,trd['stimright'] == stimtypes[iTT],:],axis=1)
 
 fig, axes = plt.subplots(nrows=2,ncols=2)
 
@@ -103,7 +108,8 @@ X, Y = np.meshgrid(bincenters, range(N))
 for iTT in range(len(stimtypes)):
     plt.subplot(2,2,iTT+1)
     # c = plt.pcolormesh(X,Y,snakeplots2[:,:,iTT], cmap = 'PuRd',vmin=-50.0,vmax=700)
-    c = plt.pcolormesh(X,Y,snakeplots[:,:,iTT], cmap = 'gnuplot',vmin=-50.0,vmax=600)
+    # c = plt.pcolormesh(X,Y,snakeplots[:,:,iTT], cmap = 'gnuplot',vmin=-50.0,vmax=600)
+    c = plt.pcolormesh(X,Y,snakeplots[:,:,iTT], cmap = 'gnuplot',vmin=-0.5,vmax=1.5)
     # plt.imshow(snakeplots[:,:,iTT], cmap = 'autumn' , interpolation = 'nearest')
     plt.title(stimtypes[iTT],fontsize=10)
     plt.ylabel('nNeurons',fontsize=9)
@@ -122,7 +128,8 @@ idx_rsp     = (bincenters>-5) & (bincenters<25)
 idx_bsl     = (bincenters>-100) & (bincenters<-10)
 # stimactiv   = np.nanmean(tensor[:,:,idx],axis=2)
 
-stimactiv   = np.nanmean(tensor[:,:,idx_rsp],axis=2) - np.nanmean(tensor[:,:,idx_bsl],axis=2)
+# stimactiv   = np.nanmean(tensor[:,:,idx_rsp],axis=2) - np.nanmean(tensor[:,:,idx_bsl],axis=2)
+stimactiv   = np.nanmean(tensor_z[:,:,idx_rsp],axis=2) - np.nanmean(tensor_z[:,:,idx_bsl],axis=2)
 
 def z_score(X):
     # X: ndarray, shape (n_features, n_samples)
@@ -166,7 +173,7 @@ nBins = np.shape(snakeselec)[1]
 Xa = np.reshape(snakeselec, [N,nBins*4])
 
 n_components = 15
-Xa = z_score(Xa) #Xav_sc = center(Xav)
+# Xa = z_score(Xa) #Xav_sc = center(Xav)
 pca = PCA(n_components=n_components)
 Xa_p = pca.fit_transform(Xa.T).T
 
@@ -188,6 +195,9 @@ sns.despine(fig=fig, right=True, top=True)
 plt.tight_layout(rect=[0, 0, 0.9, 1])
 
 plt.imshow(Xa)
+
+
+
 
 ## Trial outcomes:
 idx_gonogo          = np.empty(shape=(T, 4),dtype=bool)

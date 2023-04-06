@@ -1,0 +1,253 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Apr  3 17:44:04 2023
+
+@author: USER
+"""
+
+import os
+import numpy as np
+import suite2p
+from suite2p.io.binary import BinaryFile
+from suite2p.extraction import extract, masks
+
+ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
+
+ops['do_registration']      = True
+ops['roidetect']            = False
+
+print(ops)
+
+db = {
+    'data_path': ['X:/RawData/LPE09665/2023_03_15/'],
+    'save_path0': 'X:/RawData/LPE09665/2023_03_15/',
+    'subfolders': ['X:/RawData/LPE09665/2023_03_15/IM/Imaging'],
+    'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
+}
+
+db = {
+    'data_path': ['X:/RawData/LPE09665/2023_03_14/'],
+    'save_path0': 'X:/RawData/LPE09665/2023_03_14/',
+    'subfolders': ['X:/RawData/LPE09665/2023_03_14/GR/Imaging','X:/RawData/LPE09665/2023_03_14/RF/Imaging','X:/RawData/LPE09665/2023_03_14/SP/Imaging'],
+    'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
+}
+
+db = {
+    'data_path': ['C:/TempData/LPE09665/2023_03_14/GR/Imaging/'],
+    'save_path0': 'C:/TempData/LPE09665/2023_03_14/GR/Imaging/',
+}
+
+db = {
+    'data_path': ['C:/TempData/LPE09665/2023_03_14/GR/Imaging_tdTomcorr/'],
+    'save_path0': 'C:/TempData/LPE09665/2023_03_14/GR/Imaging_tdTomcorr/',
+}
+
+db = {
+    'data_path': ['C:/TempData/LPE09665/2023_03_14/GR/Imaging_bincorrected/'],
+    'save_path0': 'C:/TempData/LPE09665/2023_03_14/GR/Imaging_bincorrected/',
+}
+
+# run one experiment
+output_ops = suite2p.run_s2p(ops=ops, db=db)
+
+###################################################################
+## tdTomato bleedthrough correction:
+
+coeff = 1.54
+nplanes = 8
+
+for iplane in np.arange(nplanes):
+    print('Correcting tdTomato bleedthrough for plane %s / %s' % (iplane+1,nplanes))
+
+    file_chan1       = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data.bin')
+    file_chan2       = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_chan2.bin')
+    file_chan1_corr   = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin')
+    
+    with BinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
+        
+          for i in np.arange(f1.n_frames):
+              [ind,datagreen]      = f1.read(batch_size=1)
+              [ind,datared]        = f2.read(batch_size=1)
+             
+              datagreencorr = datagreen - coeff * datared
+         
+              f1.write(data=datagreencorr)
+        
+# file_chan1_test       = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_test.bin')
+# for iplane = np.arange(8):
+    #     file_chan_orig   = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_orig.bin')
+#     os.rename(file_chan1, file_chan_orig)
+#     os.rename(file_chan1_corr, file_chan1_test)
+    
+### Update mean images and added enhanced images:
+for iplane in np.arange(8):
+    print('Modifying mean images in ops file for plane %s / %s' % (iplane+1,nplanes))
+    ops = np.load(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),allow_pickle='TRUE').item()
+    # ops['reg_file']         = ops['reg_file'].replace('data','data_corr')
+    
+    with BinaryFile(read_filename=os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin'),Ly=512, Lx=512) as f1:
+        ops['meanImg']      = f1.sampled_mean()
+    
+    ops                     = extract.enhanced_mean_image(ops)
+    ops                     = extract.enhanced_mean_image_chan2(ops)
+    ops                     = np.save(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),ops)
+
+# Verify new images added to ops:
+# import copy
+
+# iplane = 1
+# file_chan1_corr   = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin')
+# file_chan2       = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_chan2.bin')
+
+# ops1 = np.load('X:\\RawData\\LPE09665\\2023_03_14\\suite2p\\plane1\\ops.npy',allow_pickle='TRUE').item()
+# ops1_2 = copy.deepcopy(ops1)
+
+# with BinaryFile(read_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
+#     ops1_2['meanImg']               = f1.sampled_mean()
+#     ops1_2['meanImg_chan2']         = f2.sampled_mean()
+
+# ops1 = extract.enhanced_mean_image_chan2(ops1)
+
+# ops1_2 = extract.enhanced_mean_image(ops1_2)
+# ops1_2 = extract.enhanced_mean_image_chan2(ops1_2)
+
+# fig, ((ax1, ax2, ax3, ax4), (ax5, ax6, ax7, ax8)) = plt.subplots(nrows=2, ncols=4, figsize=(10,6.5))
+
+# ax1.imshow(ops1['meanImg'],vmin=0, vmax=5000)
+# ax1.set_axis_off()
+# ax5.imshow(ops1_2['meanImg'],vmin=0, vmax=5000)
+# ax5.set_axis_off()
+
+# ax2.imshow(ops1['meanImgE'],vmin=0, vmax=1)
+# ax2.set_axis_off()
+# ax6.imshow(ops1_2['meanImgE'],vmin=0, vmax=1)
+# ax6.set_axis_off()
+
+# ax3.imshow(ops1['meanImg_chan2'],vmin=0, vmax=5000)
+# ax3.set_axis_off()
+# ax7.imshow(ops1_2['meanImg_chan2'],vmin=0, vmax=5000)
+# ax7.set_axis_off()
+
+# ax4.imshow(ops1['meanImgE_chan2'],vmin=0, vmax=1)
+# ax4.set_axis_off()
+# ax8.imshow(ops1_2['meanImgE_chan2'],vmin=0, vmax=1)
+# ax8.set_axis_off()
+
+    
+###################################################################
+
+import matplotlib.pyplot as plt
+
+data_green      = np.empty([0,512,512])
+data_red        = np.empty([0,512,512])
+
+# with BinaryFile(read_filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(read_filename=file_chan1_corr, Ly=512, Lx=512) as fout:
+with BinaryFile(read_filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan1_corr, Ly=512, Lx=512) as f2, BinaryFile(read_filename=file_chan1_corr, Ly=512, Lx=512) as fout:
+     for i in np.arange(100):
+         [ind,datagreen]      = f1.read(batch_size=1)
+         [ind,datared]        = f2.read(batch_size=1)
+         
+         data_green = np.append(data_green, datagreen,axis=0)
+         data_red = np.append(data_red,datared,axis=0)
+
+
+    ## Show 
+fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(nrows=2, ncols=3, figsize=(10,6.5))
+
+greenchanim = np.average(data_green,axis=0)
+ax1.imshow(greenchanim,vmin=0, vmax=5000)
+ax1.set_title('Chan 1')
+ax1.set_axis_off()
+
+redchanim = np.average(data_red,axis=0)
+ax2.imshow(redchanim,vmin=0, vmax=3000)
+ax2.set_title('Chan 2')
+ax2.set_axis_off()
+
+greenchan = greenchanim.reshape(1,512*512)[0]
+redchan = redchanim.reshape(1,512*512)[0]
+
+ax3.scatter(redchan,greenchan,0.02)
+# ax3.scatter(data_green.flatten(),data_red.flatten(),0.02)
+ax3.set_xlabel('Chan 2')
+ax3.set_ylabel('Chan 1')
+
+# Fit linear regression via least squares with numpy.polyfit
+b, a = np.polyfit(redchan, greenchan, deg=1)
+
+xseq = np.linspace(-15000, 32000, num=32000)
+# Plot regression line
+ax3.plot(xseq, a + b * xseq, color="k", lw=1.5);
+
+ax3.set_xlim([-2000,20000])
+ax3.set_ylim([-2000,20000])
+ax3.plot(xseq, coeff * xseq, color="k", lw=1.5);
+
+txt1 = "Coefficient is %1.4f" % b
+
+ax3.text(2500,1000,txt1, fontsize=9)
+
+#Correction:
+# data_green_corr = data_green - coeff * data_red
+temp = np.repeat(np.average(data_red,axis=0)[np.newaxis,:, :], np.shape(data_green)[0], axis=0)
+data_green_corr = data_green - coeff * temp
+
+greenchanim = np.average(data_green_corr,axis=0)
+ax4.imshow(greenchanim,vmin=-200, vmax=6000)
+ax4.set_title('Chan 1')
+ax4.set_axis_off()
+
+redchanim = np.average(data_red,axis=0)
+ax5.imshow(redchanim,vmin=-200, vmax=6000)
+ax5.set_title('Chan 2')
+ax5.set_axis_off()
+
+greenchan = greenchanim.reshape(1,512*512)[0]
+redchan = redchanim.reshape(1,512*512)[0]
+
+ax6.scatter(redchan,greenchan,0.02)
+ax6.set_xlabel('Chan 2')
+ax6.set_ylabel('Chan 1')
+
+
+#      for i
+     
+# def iter_frames(self, batch_size=1, dtype=np.float32):
+#         while True:
+#             results = self.read(batch_size=batch_size, dtype=dtype)
+#             if results is None:
+#                 break
+#             indices, data = results
+#             yield indices, 
+            
+# fread = open(read_filename, mode='rb')
+# fwrite = open(write_filename, mode='wb')
+       
+
+    
+
+# read_filename = 'C:/TempData/LPE09665/2023_03_14/GR/Imaging/suite2p/plane0/data.bin'
+# write_filename = 'C:/TempData/LPE09665/2023_03_14/GR/Imaging/suite2p/plane0/data_corr.bin'
+
+# fread = open(read_filename, mode='rb')
+# fwrite = open(write_filename, mode='wb')
+    
+
+# ops2 = np.load('C:/TempData/LPE09665/2023_03_14/GR/Imaging/suite2p/plane0/ops.npy',allow_pickle='TRUE').item()
+
+
+###################################################################
+## ROI detection: 
+
+ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
+
+ops['do_registration']      = False
+ops['roidetect']            = True
+
+output_ops = suite2p.run_s2p(ops=ops, db=db)
+
+
+iplane = 0
+
+ops = np.load(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),allow_pickle='TRUE').item()
+
