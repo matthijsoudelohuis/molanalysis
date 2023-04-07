@@ -4,7 +4,7 @@ Created on Thu Apr  6 18:51:50 2023
 
 @author: USER
 """
-import os, sys, shutil
+import os, sys
 sys.path.append('T:/Python/molanalysis/preprocessing')
 from preprocesslib import *
 
@@ -44,7 +44,7 @@ for animal_id in animal_ids: #for each animal
         
                 if not os.path.exists(outdir): #check if output directory already exists, otherwise make
                     os.makedirs(outdir)
-                    
+                
                 sessiondata         = proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol)
                 sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')
         
@@ -56,20 +56,20 @@ for animal_id in animal_ids: #for each animal
                      trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
         
                 elif protocol == 'RF':
-                    [rf_folder,rf_file] = proc_RF(rawdatadir,sessiondata)
-                    
-                    shutil.copyfile(os.path.join(rf_folder,rf_file[0]),os.path.join(outdir,'RF_log.bin'))
-        
+                    [grid_array,RF_timestamps] = proc_RF(rawdatadir,sessiondata)
+
+                    # np.save(os.path.join(outdir,"trialdata.npy"),grid_array,RF_timestamps)
+                    np.savez(os.path.join(outdir,"trialdata.npz"),x=grid_array,y=RF_timestamps)
+
                 if os.path.exists(os.path.join(sesfolder,"suite2p")):
                     print('Detected imaging data\n')
-                    # [celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
-                     # imagingdata.to_csv(os.path.join(outdir,"imagingdata.csv"), sep=',')
+                    [celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
+                    celldata.to_csv(os.path.join(outdir,"celldata.csv"), sep=',')
+                    calciumdata.to_csv(os.path.join(outdir,"calciumdata.csv"), sep=',')
 
 
 
-
-[celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
-
+# [celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
 
 
 # ## Loop over all selected animals and folders

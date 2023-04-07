@@ -2,15 +2,17 @@
 Created on Mon Dec 12 11:05:43 2022
 @author: USER
 """
-import os
+import os, math
 from pathlib import Path
 import pandas as pd
 import numpy as np
 from natsort import natsorted 
 from datetime import datetime
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
-from ScanImageTiffReader import ScanImageTiffReader as imread
+# from ScanImageTiffReader import ScanImageTiffReader as imread
+from twoplib import get_meta
 
+        
 def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     """ preprocess general information about this mouse and session """
     
@@ -58,7 +60,7 @@ def proc_behavior_passive(rawdatadir,sessiondata):
     behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
     behaviordata.columns = ["rawvoltage","ts","zpos","runspeed"] #rename the columns
     behaviordata = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
-    behaviordata = behaviordata.iloc[::10, :].reset_index() #subsample data 10 times (to 100 Hz)
+    behaviordata = behaviordata.iloc[::10, :].reset_index(drop=True) #subsample data 10 times (to 100 Hz)
 
     return behaviordata
 
@@ -75,15 +77,36 @@ def proc_GR(rawdatadir,sessiondata):
 
 def proc_RF(rawdatadir,sessiondata):
     sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
-    sesfolder       = Path(sesfolder)
     
     filenames       = os.listdir(sesfolder)
     
     log_file        = list(filter(lambda a: 'log' in a, filenames)) #find the trialdata file
     
-    # log_file        = os.path.join(sesfolder,log_file)
+    #RF_log.bin
+    #The vector saved is long GridSize(1)xGridSize(2)x(RunTime/Duration)
+    #where RunTime is the total display time of the Bonsai programme.
+    with open(os.path.join(sesfolder,log_file[0]) , 'rb') as fid:
+        grid_array = np.fromfile(fid, np.int8)
     
-    return sesfolder,log_file
+    xGrid           = 52
+    yGrid           = 13
+    nGrids          = 1800
+    
+    grid_array                      = np.reshape(grid_array, [xGrid,yGrid,nGrids])
+    grid_array[grid_array==0]       = 1
+    grid_array[grid_array==-128]    = 0
+
+    # fig, ax = plt.subplots(figsize=(7, 3))
+    # ax.imshow(grid_array[:,:,0].transpose(), aspect='auto',cmap='gray')
+
+    ## Get trigger data to align timestamps:
+    triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
+    triggerdata       = pd.read_csv(os.path.join(sesfolder,triggerdata_file[0]),skiprows=2).to_numpy()
+    
+    #rework from last timestamp: triggerdata[1,-1]
+    RF_timestamps = np.linspace(triggerdata[-1,1]-nGrids*0.5, triggerdata[-1,1], num=nGrids, endpoint=True)
+    
+    return grid_array,RF_timestamps
 
 def proc_behavior_vr(rawdatadir,animal_id,sessiondate,protocol):
     """ preprocess all the trial, stimulus and behavior data for one session """
@@ -243,36 +266,13 @@ def proc_imaging(sesfolder, sessiondata):
     # load ops of plane0:
     ops                = np.load(os.path.join(plane_folders[0], 'ops.npy'), allow_pickle=True).item()
     
-    f = ops['filelist'][0]
-    reader = imread(f)
-    
-#     # read meta
-#     lines = reader.metadata().split('\n')
-#     split_ix = lines.index('')
-
-# for i in range(n_frames):
-#     # the parser
-#     t  = np.float32(reader.description(i).split('\n')[3].split(' = ')[1])
-#     t_stamps[i] = t
-
-# return t_stamps
-
-# for line in meta_si:
-#     if line.startswith(key):
-#         return float(line.split(' = ')[1])
-#     flyToTime = read_float_from_meta(meta_si,"SI.hScan2D.flytoTimePerScanfield")
-#     linePeriod = read_float_from_meta(meta_si,"SI.hRoiManager.linePeriod")
-    
-#     # getting individual ROIsizes
-#     nROIs = len(meta['RoiGroups']['imagingRoiGroup']['rois'])
-#     xpx = []
-#     ypx = []
-#     for i in range(nROIs):
-#         xpx_, ypx_ = meta['RoiGroups']['imagingRoiGroup']['rois'][i]['scanfields']['pixelResolutionXY']
-#         xpx.append(xpx_)
-#         ypx.append(ypx_)
-        
-
+    # read metadata from tiff (just take first tiff from the filelist
+    # metadata should be same for all if settings haven't changed during differernt protocols
+    meta, meta_si   = get_meta(ops['filelist'][0])
+    meta_dict       = dict() #convert to dictionary:
+    for line in meta_si:
+        meta_dict[line.split(' = ')[0]] = line.split(' = ')[1]
+   
     #put some general information in the sessiondata
     sessiondata = sessiondata.assign(nplanes = ops['nplanes'])
     sessiondata = sessiondata.assign(roi_xpix = ops['Lx'])
@@ -284,6 +284,36 @@ def proc_imaging(sesfolder, sessiondata):
     sessiondata = sessiondata.assign(laser_wavelength = ['920'])
     sessiondata = sessiondata.assign(calcium_indicator = ['GCaMP6s'])
     
+    #Add information about the imaging from scanimage:  
+    sessiondata = sessiondata.assign(SI_pz_constant             = float(meta_dict['SI.hBeams.lengthConstants']))
+    sessiondata = sessiondata.assign(SI_pz_Fraction             = float(meta_dict['SI.hBeams.powerFractions']))
+    sessiondata = sessiondata.assign(SI_pz_power                = float(meta_dict['SI.hBeams.powers']))
+    sessiondata = sessiondata.assign(SI_pz_adjust               = meta_dict['SI.hBeams.pzAdjust'])
+    sessiondata = sessiondata.assign(SI_pz_reference            = float(meta_dict['SI.hStackManager.zPowerReference']))
+    
+    sessiondata = sessiondata.assign(SI_motioncorrection        = bool(meta_dict['SI.hMotionManager.correctionEnableXY']))
+    sessiondata = sessiondata.assign(SI_linePeriod              = float(meta_dict['SI.hRoiManager.linePeriod']))
+    sessiondata = sessiondata.assign(SI_linesPerFrame           = float(meta_dict['SI.hRoiManager.linesPerFrame']))
+    sessiondata = sessiondata.assign(SI_pixelsPerLine           = float(meta_dict['SI.hRoiManager.pixelsPerLine']))
+    sessiondata = sessiondata.assign(SI_scanFramePeriod         = float(meta_dict['SI.hRoiManager.scanFramePeriod']))
+    sessiondata = sessiondata.assign(SI_volumeFrameRate         = float(meta_dict['SI.hRoiManager.scanFrameRate']))
+    sessiondata = sessiondata.assign(SI_frameRate               = float(meta_dict['SI.hRoiManager.scanVolumeRate']))
+    sessiondata = sessiondata.assign(SI_bidirectionalscan       = bool(meta_dict['SI.hScan2D.bidirectional']))
+    
+    sessiondata = sessiondata.assign(SI_fillFractionSpatial     = float(meta_dict['SI.hScan2D.fillFractionSpatial']))
+    sessiondata = sessiondata.assign(SI_fillFractionTemporal    = float(meta_dict['SI.hScan2D.fillFractionTemporal']))
+    sessiondata = sessiondata.assign(SI_flybackTimePerFrame     = float(meta_dict['SI.hScan2D.flybackTimePerFrame']))
+    sessiondata = sessiondata.assign(SI_flytoTimePerScanfield   = float(meta_dict['SI.hScan2D.flytoTimePerScanfield']))
+    sessiondata = sessiondata.assign(SI_linePhase               = float(meta_dict['SI.hScan2D.linePhase']))
+    sessiondata = sessiondata.assign(SI_scanPixelTimeMean       = float(meta_dict['SI.hScan2D.scanPixelTimeMean']))
+    sessiondata = sessiondata.assign(SI_scannerFrequency        = float(meta_dict['SI.hScan2D.scannerFrequency']))
+    sessiondata = sessiondata.assign(SI_actualNumSlices         = int(meta_dict['SI.hStackManager.actualNumSlices']))
+    sessiondata = sessiondata.assign(SI_numFramesPerVolume      = int(meta_dict['SI.hStackManager.numFramesPerVolume']))
+
+    #lists, not really necessary:
+    # sessiondata = sessiondata.assign(SI_zdepths                 = meta_dict['SI.hStackManager.zs'])
+    # sessiondata = sessiondata.assign(SI_axesPosition            = meta_dict['SI.hMotors.axesPosition'])
+
     # triggerdata = np.empty([0,2])
     # for protocol in ['IM','GR','RF','SP']:
     #      ## Get trigger data to align timestamps:
@@ -333,13 +363,25 @@ def proc_imaging(sesfolder, sessiondata):
     if any(h<0) or any(h>1) or any(diffvec>0) or any(diffvec<-1):
         print('Problem with aligning trigger timestamps to imaging frames')
     
+    
+    # getting numer of ROIs
+    nROIs = len(meta['RoiGroups']['imagingRoiGroup']['rois'])
+    #Find the names of the rois:
+    roi_area    = [meta['RoiGroups']['imagingRoiGroup']['rois'][i]['name'] for i in range(nROIs)]
+    #Find the depths of the planes for each roi:
+    roi_depths  = np.array([meta['RoiGroups']['imagingRoiGroup']['rois'][i]['zs'] for i in range(nROIs)]) #numpy array of depths for each roi
+    #get all the depths of the planes in order of imaging:
+    plane_zs    = np.array(meta_dict['SI.hStackManager.zs'].replace('[','').replace(']','').split(' ')).astype('int')
+    #Find the roi to which each plane belongs:
+    plane_roi_idx  = np.array([np.where(roi_depths == plane_zs[i])[0][0] for i in range(8)])
+
     # for iplane,plane_folder in enumerate(plane_folders):
     #         print(5)
     
-    
     iplane = 0
     plane_folder = plane_folders[0]
-    for iplane,plane_folder in enumerate(plane_folders):
+    # for iplane,plane_folder in enumerate(plane_folders):
+    for iplane,plane_folder in enumerate(plane_folders[:1]):
         ops                 = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
         
         iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
@@ -369,40 +411,43 @@ def proc_imaging(sesfolder, sessiondata):
             celldata_plane['xloc'][k] = stat[k]['med'][0]
             celldata_plane['yloc'][k] = stat[k]['med'][1]
         
-        celldata_plane['chan2_prob'] = stat[k]['med'][1]
 
-        if iplane == 0:
+        celldata_plane['roi_idx']   = plane_roi_idx[iplane]
+        celldata_plane['roi_name']  = roi_area[plane_roi_idx[iplane]]
+        celldata_plane['depth']     = plane_zs[iplane] - sessiondata['ROI%d_dura' % (plane_roi_idx[iplane]+1)][0]
+        #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
+        celldata_plane['power_mw']  = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
+
+
+        if iplane == 0: #if first plane then init dataframe, otherwise append
             celldata = celldata_plane.copy()
         else:
             celldata = celldata.merge(celldata_plane)
-        
+            
+        #load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
         Fneu                = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
         spks                = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
 
-        # Construct dF/F:
-        dF      = F - 0.7*Fneu
-        
-        dF      = calc_dF(dF, ops['baseline'], ops['win_baseline'], 
+        # Compute dF/F:
+        dF              = F - 0.7*Fneu
+        dF              = calc_dF(dF, ops['baseline'], ops['win_baseline'], 
                                 ops['sig_baseline'], ops['fs'], ops['prctile_baseline'])
  
-        calciumdata_plane   = pd.DataFrame()
-        
-        cell_ids = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
-        calciumdata_plane = pd.DataFrame(F[:,protocol_frame_idx==1].transpose(), columns=cell_ids)
-
-        calciumdata_plane = pd.DataFrame(np.random.rand(ncells_plane,50), columns=cell_ids)
+        #construct dataframe with activity by cells: give unique cell_id as label:
+        cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
+        calciumdata_plane   = pd.DataFrame(F[:,protocol_frame_idx==1].transpose(), columns=cell_ids)
+        calciumdata_plane['timestamps']   = timestamps    #add timestamps
 
         if iplane == 0:
             calciumdata = calciumdata_plane.copy()
         else:
             calciumdata = calciumdata.merge(calciumdata_plane)
             
-        
-    celldata["labeled"] = celldata["chan2_prob"] > 0.75
-
-
     
+    #Finally set which cells are labeled with tdTomato: 
+    celldata["labeled"] = celldata['chan2_prob'] > 0.75
+
     return celldata,calciumdata
 
 def list_tifs(dir):

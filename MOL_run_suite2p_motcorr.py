@@ -5,7 +5,7 @@ Created on Mon Apr  3 17:44:04 2023
 @author: USER
 """
 
-import os
+import os, shutil
 import numpy as np
 import suite2p
 from suite2p.io.binary import BinaryFile
@@ -47,15 +47,17 @@ db = {
     'save_path0': 'C:/TempData/LPE09665/2023_03_14/GR/Imaging_bincorrected/',
 }
 
-# run one experiment
+###################################################################
+## Run registration:
 output_ops = suite2p.run_s2p(ops=ops, db=db)
 
 ###################################################################
 ## tdTomato bleedthrough correction:
 
 coeff = 1.54
-nplanes = 8
+nplanes = output_ops['nplanes']
 
+#Write new binary file with corrected data per plane:
 for iplane in np.arange(nplanes):
     print('Correcting tdTomato bleedthrough for plane %s / %s' % (iplane+1,nplanes))
 
@@ -73,11 +75,18 @@ for iplane in np.arange(nplanes):
          
               f1.write(data=datagreencorr)
         
-# file_chan1_test       = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_test.bin')
-# for iplane = np.arange(8):
-    #     file_chan_orig   = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_orig.bin')
-#     os.rename(file_chan1, file_chan_orig)
-#     os.rename(file_chan1_corr, file_chan1_test)
+#move original to subdir and rename corrected to data.bin to be read by suite2p for detection:
+for iplane in np.arange(nplanes):
+    planefolder = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane)
+    file_chan1       = os.path.join(planefolder,'data.bin')
+    file_chan1_corr   = os.path.join(planefolder,'data_corr.bin')
+    
+    os.mkdir(os.path.join(planefolder,'orig'))
+
+    shutil.move(os.path.join(planefolder,file_chan1),os.path.join(planefolder,'orig'))
+    
+    os.rename(os.path.join(planefolder,file_chan1_corr), os.path.join(planefolder,file_chan1))
+
     
 ### Update mean images and added enhanced images:
 for iplane in np.arange(8):
@@ -91,6 +100,20 @@ for iplane in np.arange(8):
     ops                     = extract.enhanced_mean_image(ops)
     ops                     = extract.enhanced_mean_image_chan2(ops)
     ops                     = np.save(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),ops)
+
+###################################################################
+## ROI detection: 
+
+ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
+
+ops['do_registration']      = False
+ops['roidetect']            = True
+
+output_ops = suite2p.run_s2p(ops=ops, db=db)
+
+
+############################
+# Debug / Verification code:
 
 # Verify new images added to ops:
 # import copy
@@ -134,120 +157,77 @@ for iplane in np.arange(8):
 # ax8.set_axis_off()
 
     
-###################################################################
+# ###################################################################
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
-data_green      = np.empty([0,512,512])
-data_red        = np.empty([0,512,512])
+# data_green      = np.empty([0,512,512])
+# data_red        = np.empty([0,512,512])
 
-# with BinaryFile(read_filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(read_filename=file_chan1_corr, Ly=512, Lx=512) as fout:
-with BinaryFile(read_filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan1_corr, Ly=512, Lx=512) as f2, BinaryFile(read_filename=file_chan1_corr, Ly=512, Lx=512) as fout:
-     for i in np.arange(100):
-         [ind,datagreen]      = f1.read(batch_size=1)
-         [ind,datared]        = f2.read(batch_size=1)
+# # with BinaryFile(read_filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(read_filename=file_chan1_corr, Ly=512, Lx=512) as fout:
+# with BinaryFile(read_filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan1_corr, Ly=512, Lx=512) as f2, BinaryFile(read_filename=file_chan1_corr, Ly=512, Lx=512) as fout:
+#      for i in np.arange(100):
+#          [ind,datagreen]      = f1.read(batch_size=1)
+#          [ind,datared]        = f2.read(batch_size=1)
          
-         data_green = np.append(data_green, datagreen,axis=0)
-         data_red = np.append(data_red,datared,axis=0)
+#          data_green = np.append(data_green, datagreen,axis=0)
+#          data_red = np.append(data_red,datared,axis=0)
 
 
-    ## Show 
-fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(nrows=2, ncols=3, figsize=(10,6.5))
+# ## Show 
+# fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(nrows=2, ncols=3, figsize=(10,6.5))
 
-greenchanim = np.average(data_green,axis=0)
-ax1.imshow(greenchanim,vmin=0, vmax=5000)
-ax1.set_title('Chan 1')
-ax1.set_axis_off()
+# greenchanim = np.average(data_green,axis=0)
+# ax1.imshow(greenchanim,vmin=0, vmax=5000)
+# ax1.set_title('Chan 1')
+# ax1.set_axis_off()
 
-redchanim = np.average(data_red,axis=0)
-ax2.imshow(redchanim,vmin=0, vmax=3000)
-ax2.set_title('Chan 2')
-ax2.set_axis_off()
+# redchanim = np.average(data_red,axis=0)
+# ax2.imshow(redchanim,vmin=0, vmax=3000)
+# ax2.set_title('Chan 2')
+# ax2.set_axis_off()
 
-greenchan = greenchanim.reshape(1,512*512)[0]
-redchan = redchanim.reshape(1,512*512)[0]
+# greenchan = greenchanim.reshape(1,512*512)[0]
+# redchan = redchanim.reshape(1,512*512)[0]
 
-ax3.scatter(redchan,greenchan,0.02)
-# ax3.scatter(data_green.flatten(),data_red.flatten(),0.02)
-ax3.set_xlabel('Chan 2')
-ax3.set_ylabel('Chan 1')
+# ax3.scatter(redchan,greenchan,0.02)
+# # ax3.scatter(data_green.flatten(),data_red.flatten(),0.02)
+# ax3.set_xlabel('Chan 2')
+# ax3.set_ylabel('Chan 1')
 
-# Fit linear regression via least squares with numpy.polyfit
-b, a = np.polyfit(redchan, greenchan, deg=1)
+# # Fit linear regression via least squares with numpy.polyfit
+# b, a = np.polyfit(redchan, greenchan, deg=1)
 
-xseq = np.linspace(-15000, 32000, num=32000)
-# Plot regression line
-ax3.plot(xseq, a + b * xseq, color="k", lw=1.5);
+# xseq = np.linspace(-15000, 32000, num=32000)
+# # Plot regression line
+# ax3.plot(xseq, a + b * xseq, color="k", lw=1.5);
 
-ax3.set_xlim([-2000,20000])
-ax3.set_ylim([-2000,20000])
-ax3.plot(xseq, coeff * xseq, color="k", lw=1.5);
+# ax3.set_xlim([-2000,20000])
+# ax3.set_ylim([-2000,20000])
+# ax3.plot(xseq, coeff * xseq, color="k", lw=1.5);
 
-txt1 = "Coefficient is %1.4f" % b
+# txt1 = "Coefficient is %1.4f" % b
 
-ax3.text(2500,1000,txt1, fontsize=9)
+# ax3.text(2500,1000,txt1, fontsize=9)
 
-#Correction:
-# data_green_corr = data_green - coeff * data_red
-temp = np.repeat(np.average(data_red,axis=0)[np.newaxis,:, :], np.shape(data_green)[0], axis=0)
-data_green_corr = data_green - coeff * temp
+# #Correction:
+# # data_green_corr = data_green - coeff * data_red
+# temp = np.repeat(np.average(data_red,axis=0)[np.newaxis,:, :], np.shape(data_green)[0], axis=0)
+# data_green_corr = data_green - coeff * temp
 
-greenchanim = np.average(data_green_corr,axis=0)
-ax4.imshow(greenchanim,vmin=-200, vmax=6000)
-ax4.set_title('Chan 1')
-ax4.set_axis_off()
+# greenchanim = np.average(data_green_corr,axis=0)
+# ax4.imshow(greenchanim,vmin=-200, vmax=6000)
+# ax4.set_title('Chan 1')
+# ax4.set_axis_off()
 
-redchanim = np.average(data_red,axis=0)
-ax5.imshow(redchanim,vmin=-200, vmax=6000)
-ax5.set_title('Chan 2')
-ax5.set_axis_off()
+# redchanim = np.average(data_red,axis=0)
+# ax5.imshow(redchanim,vmin=-200, vmax=6000)
+# ax5.set_title('Chan 2')
+# ax5.set_axis_off()
 
-greenchan = greenchanim.reshape(1,512*512)[0]
-redchan = redchanim.reshape(1,512*512)[0]
+# greenchan = greenchanim.reshape(1,512*512)[0]
+# redchan = redchanim.reshape(1,512*512)[0]
 
-ax6.scatter(redchan,greenchan,0.02)
-ax6.set_xlabel('Chan 2')
-ax6.set_ylabel('Chan 1')
-
-
-#      for i
-     
-# def iter_frames(self, batch_size=1, dtype=np.float32):
-#         while True:
-#             results = self.read(batch_size=batch_size, dtype=dtype)
-#             if results is None:
-#                 break
-#             indices, data = results
-#             yield indices, 
-            
-# fread = open(read_filename, mode='rb')
-# fwrite = open(write_filename, mode='wb')
-       
-
-    
-
-# read_filename = 'C:/TempData/LPE09665/2023_03_14/GR/Imaging/suite2p/plane0/data.bin'
-# write_filename = 'C:/TempData/LPE09665/2023_03_14/GR/Imaging/suite2p/plane0/data_corr.bin'
-
-# fread = open(read_filename, mode='rb')
-# fwrite = open(write_filename, mode='wb')
-    
-
-# ops2 = np.load('C:/TempData/LPE09665/2023_03_14/GR/Imaging/suite2p/plane0/ops.npy',allow_pickle='TRUE').item()
-
-
-###################################################################
-## ROI detection: 
-
-ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
-
-ops['do_registration']      = False
-ops['roidetect']            = True
-
-output_ops = suite2p.run_s2p(ops=ops, db=db)
-
-
-iplane = 0
-
-ops = np.load(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),allow_pickle='TRUE').item()
-
+# ax6.scatter(redchan,greenchan,0.02)
+# ax6.set_xlabel('Chan 2')
+# ax6.set_ylabel('Chan 1')
