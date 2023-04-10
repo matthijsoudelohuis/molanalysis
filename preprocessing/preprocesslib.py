@@ -75,6 +75,17 @@ def proc_GR(rawdatadir,sessiondata):
     
     return trialdata
 
+def proc_IM(rawdatadir,sessiondata):
+    sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
+    sesfolder       = Path(sesfolder)
+    
+    filenames       = os.listdir(sesfolder)
+    
+    trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
+    trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=0)
+    
+    return trialdata
+
 def proc_RF(rawdatadir,sessiondata):
     sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
     
@@ -378,14 +389,21 @@ def proc_imaging(sesfolder, sessiondata):
     # for iplane,plane_folder in enumerate(plane_folders):
     #         print(5)
     
-    iplane = 0
-    plane_folder = plane_folders[0]
-    # for iplane,plane_folder in enumerate(plane_folders):
-    for iplane,plane_folder in enumerate(plane_folders[:1]):
+    # iplane = 0
+    # plane_folder = plane_folders[0]
+    # iplane = 1
+    # plane_folder = plane_folders[1]
+    
+    for iplane,plane_folder in enumerate(plane_folders):
+    # for iplane,plane_folder in enumerate(plane_folders[:1]):
+        print('processing plane %s / %s' % (iplane+1,ops['nplanes']))
+
         ops                 = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
         
+
         iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
         stat                = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
+        redcell             = np.load(os.path.join(plane_folder, 'redcell.npy'), allow_pickle=True)
 
         ncells_plane              = len(iscell)
         
@@ -404,31 +422,39 @@ def proc_imaging(sesfolder, sessiondata):
 
         for k in range(1,ncells_plane):
             celldata_plane['skew'][k] = stat[k]['skew']
-            celldata_plane['chan2_prob'][k] = stat[k]['chan2_prob']
             celldata_plane['radius'][k] = stat[k]['radius']
             celldata_plane['npix_soma'][k] = stat[k]['npix_soma']
             celldata_plane['npix'][k] = stat[k]['npix']
             celldata_plane['xloc'][k] = stat[k]['med'][0]
             celldata_plane['yloc'][k] = stat[k]['med'][1]
         
+        celldata_plane['redcell_prob']  = redcell[:,1]
+        celldata_plane['redcell']       = redcell[:,0]
 
-        celldata_plane['roi_idx']   = plane_roi_idx[iplane]
-        celldata_plane['roi_name']  = roi_area[plane_roi_idx[iplane]]
-        celldata_plane['depth']     = plane_zs[iplane] - sessiondata['ROI%d_dura' % (plane_roi_idx[iplane]+1)][0]
+        celldata_plane['roi_idx']       = plane_roi_idx[iplane]
+        celldata_plane['roi_name']      = roi_area[plane_roi_idx[iplane]]
+        celldata_plane['depth']         = plane_zs[iplane] - sessiondata['ROI%d_dura' % (plane_roi_idx[iplane]+1)][0]
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
-        celldata_plane['power_mw']  = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
+        celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
 
 
         if iplane == 0: #if first plane then init dataframe, otherwise append
             celldata = celldata_plane.copy()
         else:
-            celldata = celldata.merge(celldata_plane)
+            celldata = celldata.append(celldata_plane)
             
         #load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
         Fneu                = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
         spks                = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
 
+        #if imaging was aborted during scanning of a volume, later planes have less frames
+        #Compensate by appending a zero value to relevant variables
+        if np.shape(F)[1]==(protocol_nframes-1):
+            F       = np.c_[F,np.ones(ncells_plane)]
+            Fneu    = np.c_[Fneu,np.ones(ncells_plane)]
+            spks    = np.c_[spks,np.ones(ncells_plane)]
+            
         # Compute dF/F:
         dF              = F - 0.7*Fneu
         dF              = calc_dF(dF, ops['baseline'], ops['win_baseline'], 
@@ -446,7 +472,7 @@ def proc_imaging(sesfolder, sessiondata):
             
     
     #Finally set which cells are labeled with tdTomato: 
-    celldata["labeled"] = celldata['chan2_prob'] > 0.75
+    # celldata["labeled"] = celldata['chan2_prob'] > 0.75
 
     return celldata,calciumdata
 

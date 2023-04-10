@@ -14,6 +14,7 @@ procdatadir     = "V:\\Procdata\\"
 animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
 animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
 sessiondates        = ['2023_03_14']
+sessiondates        = ['2023_03_15']
 # sessiondates        = ['2022_11_30',
 # sessiondates        = ['2022_12_09']
 
@@ -60,7 +61,11 @@ for animal_id in animal_ids: #for each animal
 
                     # np.save(os.path.join(outdir,"trialdata.npy"),grid_array,RF_timestamps)
                     np.savez(os.path.join(outdir,"trialdata.npz"),x=grid_array,y=RF_timestamps)
-
+                
+                elif protocol == 'IM':
+                    trialdata = proc_IM(rawdatadir,sessiondata)
+                    trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
+                    
                 if os.path.exists(os.path.join(sesfolder,"suite2p")):
                     print('Detected imaging data\n')
                     [celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
