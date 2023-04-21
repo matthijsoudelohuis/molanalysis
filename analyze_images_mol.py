@@ -22,7 +22,7 @@ animal_ids          = ['LPE09665'] #If empty than all animals in folder will be 
 sessiondates        = ['2023_03_15']
 protocol            = ['IM']
 
-sesfolder = os.path.join(procdatadir,protocol[0],animal_ids[0],sessiondates[0],)
+sesfolder = os.path.join(procdatadir,protocol[0],animal_ids[0],sessiondates[0])
 
 #load the data:
 sessiondata         = pd.read_csv(os.path.join(sesfolder,"sessiondata.csv"), sep=',', index_col=0)
@@ -43,6 +43,16 @@ calciumdata         = calciumdata.drop(columns=['timestamps'],axis=1)
 # zscore all the calcium traces:
 calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
 
+
+zs = np.unique(celldata['depth'])
+for iplane in range(sessiondata['nplanes']):
+# for iplane in range(8):
+    idx = celldata['depth']==zs[iplane]
+    area =  np.unique(celldata['roi_name'][idx])[0]
+    
+    print(f"Plane {iplane+1} ({area}): {int(sum(celldata['redcell'][idx]))} / {sum(idx)} cells")
+    
+print(f"Total labeled cells: {int(sum(celldata['redcell']))} / {len(celldata)} ({sum(celldata['redcell']) / len(celldata) * 100} %)")
 
 ## Construct response matrix of N neurons by K trials
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins

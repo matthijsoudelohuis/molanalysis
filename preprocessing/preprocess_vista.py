@@ -5,23 +5,20 @@ Created on Thu Apr  6 18:51:50 2023
 @author: USER
 """
 import os, sys
+import numpy as np
 sys.path.append('T:/Python/molanalysis/preprocessing')
 from preprocesslib import *
 
 rawdatadir      = "X:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
-animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-sessiondates        = ['2023_03_14']
-sessiondates        = ['2023_03_15']
-# sessiondates        = ['2022_11_30',
-# sessiondates        = ['2022_12_09']
-
-# animal_id           = animal_ids[0]
-# sessiondate         = sessiondates[0]
+animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
+sessiondates        = ['2023_04_10']
+# animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
+# sessiondates        = ['2023_03_14']
 
 protocols           = ['IM','GR','RF','SP']
+protocols           = ['RF']
 
 
 ## Loop over all selected animals and folders
@@ -47,7 +44,6 @@ for animal_id in animal_ids: #for each animal
                     os.makedirs(outdir)
                 
                 sessiondata         = proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol)
-                sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')
         
                 behaviordata        = proc_behavior_passive(rawdatadir,sessiondata) #main processing function
                 behaviordata.to_csv(os.path.join(outdir,"behaviordata.csv"), sep=',')
@@ -68,9 +64,13 @@ for animal_id in animal_ids: #for each animal
                     
                 if os.path.exists(os.path.join(sesfolder,"suite2p")):
                     print('Detected imaging data\n')
-                    [celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
+                    [sessiondata,celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
+                    print('Saving imaging data\n')
                     celldata.to_csv(os.path.join(outdir,"celldata.csv"), sep=',')
                     calciumdata.to_csv(os.path.join(outdir,"calciumdata.csv"), sep=',')
+                
+                #Save sessiondata:
+                sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')
 
 
 

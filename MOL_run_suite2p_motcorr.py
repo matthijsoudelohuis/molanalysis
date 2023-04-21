@@ -16,36 +16,49 @@ ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
 ops['do_registration']      = True
 ops['roidetect']            = False
 
-print(ops)
+# protocols           = ['GR','RF','SP']
+protocols           = ['SP','RF','GR']
 
+animal_id          = 'LPE09830' #If empty than all animals in folder will be processed
+sessiondate        = '2023_04_10'
+rawdatadir          ='X:\\RawData\\'
 db = {
-    'data_path': ['X:/RawData/LPE09665/2023_03_15/'],
-    'save_path0': 'X:/RawData/LPE09665/2023_03_15/',
-    'subfolders': ['X:/RawData/LPE09665/2023_03_15/IM/Imaging'],
+    'data_path': [os.path.join(rawdatadir,animal_id,sessiondate)],
+    'save_path0': os.path.join(rawdatadir,animal_id,sessiondate),
     'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
 }
+# db['subfolders'] = [f for f in os.listdir(db['data_path']) 
+                    # if any(f.endswith(ext) for ext in included_extensions)]
+# db['subfolders'] = [f for f in os.listdir(db['data_path']) if re.match(r'[0-9]+.*\.jpg', f)]
+db['subfolders']  = [os.path.join(rawdatadir,animal_id,sessiondate,p,'Imaging') for p in protocols]
 
-db = {
-    'data_path': ['X:/RawData/LPE09665/2023_03_14/'],
-    'save_path0': 'X:/RawData/LPE09665/2023_03_14/',
-    'subfolders': ['X:/RawData/LPE09665/2023_03_14/GR/Imaging','X:/RawData/LPE09665/2023_03_14/RF/Imaging','X:/RawData/LPE09665/2023_03_14/SP/Imaging'],
-    'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
-}
+# db = {
+#     'data_path': ['X:/RawData/NSH07422/2023_03_13/'],
+#     'save_path0': 'X:/RawData/NSH07422/2023_03_13/',
+#     'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
+# }
 
-db = {
-    'data_path': ['C:/TempData/LPE09665/2023_03_14/GR/Imaging/'],
-    'save_path0': 'C:/TempData/LPE09665/2023_03_14/GR/Imaging/',
-}
+#     'subfolders': ['X:/RawData/NSH07422/2023_03_13/GR/Imaging','X:/RawData/NSH07422/2023_03_13/RF/Imaging','X:/RawData/NSH07422/2023_03_13/SP/Imaging'],
 
-db = {
-    'data_path': ['C:/TempData/LPE09665/2023_03_14/GR/Imaging_tdTomcorr/'],
-    'save_path0': 'C:/TempData/LPE09665/2023_03_14/GR/Imaging_tdTomcorr/',
-}
 
-db = {
-    'data_path': ['C:/TempData/LPE09665/2023_03_14/GR/Imaging_bincorrected/'],
-    'save_path0': 'C:/TempData/LPE09665/2023_03_14/GR/Imaging_bincorrected/',
-}
+# db = {
+#     'data_path': ['X:/RawData/LPE09665/2023_03_15/'],
+#     'save_path0': 'X:/RawData/LPE09665/2023_03_15/',
+#     'subfolders': ['X:/RawData/LPE09665/2023_03_15/IM/Imaging'],
+#     'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
+# }
+
+# db = {
+#     'data_path': ['X:/RawData/LPE09665/2023_03_14/'],
+#     'save_path0': 'X:/RawData/LPE09665/2023_03_14/',
+#     'subfolders': ['X:/RawData/LPE09665/2023_03_14/GR/Imaging','X:/RawData/LPE09665/2023_03_14/RF/Imaging','X:/RawData/LPE09665/2023_03_14/SP/Imaging'],
+#     'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
+# }
+
+# db = {
+#     'data_path': ['C:/TempData/LPE09665/2023_03_14/GR/Imaging/'],     
+#     'save_path0': 'C:/TempData/LPE09665/2023_03_14/GR/Imaging/',
+# }
 
 ###################################################################
 ## Run registration:
@@ -54,7 +67,7 @@ output_ops = suite2p.run_s2p(ops=ops, db=db)
 ###################################################################
 ## tdTomato bleedthrough correction:
 
-coeff = 1.54
+coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
 nplanes = output_ops['nplanes']
 
 #Write new binary file with corrected data per plane:
@@ -87,19 +100,19 @@ for iplane in np.arange(nplanes):
     
     os.rename(os.path.join(planefolder,file_chan1_corr), os.path.join(planefolder,file_chan1))
 
-    
 ### Update mean images and added enhanced images:
 for iplane in np.arange(8):
     print('Modifying mean images in ops file for plane %s / %s' % (iplane+1,nplanes))
     ops = np.load(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),allow_pickle='TRUE').item()
     # ops['reg_file']         = ops['reg_file'].replace('data','data_corr')
     
-    with BinaryFile(read_filename=os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin'),Ly=512, Lx=512) as f1:
+    # with BinaryFile(read_filename=os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin'),Ly=512, Lx=512) as f1:
+    with BinaryFile(read_filename=os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data.bin'),Ly=512, Lx=512) as f1:
         ops['meanImg']      = f1.sampled_mean()
     
     ops                     = extract.enhanced_mean_image(ops)
     ops                     = extract.enhanced_mean_image_chan2(ops)
-    ops                     = np.save(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),ops)
+    np.save(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),ops)
 
 ###################################################################
 ## ROI detection: 
@@ -110,7 +123,6 @@ ops['do_registration']      = False
 ops['roidetect']            = True
 
 output_ops = suite2p.run_s2p(ops=ops, db=db)
-
 
 ############################
 # Debug / Verification code:

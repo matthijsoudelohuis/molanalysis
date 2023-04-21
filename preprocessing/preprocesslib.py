@@ -103,19 +103,29 @@ def proc_RF(rawdatadir,sessiondata):
     yGrid           = 13
     nGrids          = 1800
     
-    grid_array                      = np.reshape(grid_array, [xGrid,yGrid,nGrids])
-    grid_array[grid_array==0]       = 1
+    grid_array                      = np.reshape(grid_array, [nGrids,xGrid,yGrid])
+    grid_array                      = np.transpose(grid_array, [1,2,0])
+    grid_array = np.rot90(grid_array, k=1, axes=(0,1))
+    
+    grid_array[grid_array==-1]       = 1
+    grid_array[grid_array==0]       = -1
     grid_array[grid_array==-128]    = 0
-
+    
     # fig, ax = plt.subplots(figsize=(7, 3))
     # ax.imshow(grid_array[:,:,0].transpose(), aspect='auto',cmap='gray')
-
-    ## Get trigger data to align timestamps:
-    triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
-    triggerdata       = pd.read_csv(os.path.join(sesfolder,triggerdata_file[0]),skiprows=2).to_numpy()
     
-    #rework from last timestamp: triggerdata[1,-1]
-    RF_timestamps = np.linspace(triggerdata[-1,1]-nGrids*0.5, triggerdata[-1,1], num=nGrids, endpoint=True)
+    trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
+
+    if os.path.exists(os.path.join(sesfolder,trialdata_file[0])):
+        trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=0)
+        RF_timestamps   = trialdata.iloc[:,1].to_numpy()
+
+    else: ## Get trigger data to align ts_master:
+        triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
+        triggerdata       = pd.read_csv(os.path.join(sesfolder,triggerdata_file[0]),skiprows=2).to_numpy()
+        
+        #rework from last timestamp: triggerdata[1,-1]
+        RF_timestamps = np.linspace(triggerdata[-1,1]-nGrids*0.5, triggerdata[-1,1], num=nGrids, endpoint=True)
     
     return grid_array,RF_timestamps
 
@@ -325,56 +335,13 @@ def proc_imaging(sesfolder, sessiondata):
     # sessiondata = sessiondata.assign(SI_zdepths                 = meta_dict['SI.hStackManager.zs'])
     # sessiondata = sessiondata.assign(SI_axesPosition            = meta_dict['SI.hMotors.axesPosition'])
 
-    # triggerdata = np.empty([0,2])
-    # for protocol in ['IM','GR','RF','SP']:
-    #      ## Get trigger data to align timestamps:
-    #      if os.path.exists(os.path.join(sesfolder,protocol,'Behavior')):
-    #         filenames           = os.listdir(os.path.join(sesfolder,protocol,'Behavior'))
-    #         triggerdata_file    = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
-    #         triggerdata         = np.append(triggerdata,pd.read_csv(os.path.join(sesfolder,protocol,'Behavior',triggerdata_file[0]),skiprows=2).to_numpy())
-
     ## Get trigger data to align timestamps:
     filenames           = os.listdir(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior'))
     triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
     triggerdata       = pd.read_csv(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior',triggerdata_file[0]),skiprows=2).to_numpy()
 
-    # get idx of frames belonging to this protocol:
-    protocol_tifs       = list(filter(lambda x: sessiondata['protocol'][0] in x, ops['filelist']))
-    protocol_tif_idx    = np.array([i for i, x in enumerate(ops['filelist']) if x in protocol_tifs])
-    
-    protocol_tif_nframes    = ops['frames_per_file'][protocol_tif_idx]
-    
-    protocol_frame_idx = []
-    for i in np.arange(len(ops['filelist'])):
-        if i in protocol_tif_idx:
-            protocol_frame_idx = np.append(protocol_frame_idx,np.repeat(True,ops['frames_per_file'][i]))
-        else:
-           protocol_frame_idx = np.append(protocol_frame_idx,np.repeat(False,ops['frames_per_file'][i]))
-    
-    protocol_nframes = sum(protocol_frame_idx).astype('int')
-    
-    ## Get trigger information:
-    nTriggers = np.shape(triggerdata)[0]
-    # timestamps = np.empty([ops['nframes'],1]) #init empty array for the timestamps
-    timestamps = np.empty([protocol_nframes,1]) #init empty array for the timestamps
+    [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
 
-    for i in np.arange(nTriggers):
-        startidx    = sum(protocol_tif_nframes[0:i]) 
-        endidx      = startidx + protocol_tif_nframes[i]
-        start_ts    = triggerdata[i,1]
-        tempts      = np.linspace(start_ts,start_ts+(protocol_tif_nframes[i]-1)*1/ops['fs'],num=protocol_tif_nframes[i])
-        timestamps[startidx:endidx,0] = tempts
-        
-    #Verification of alignment:
-    idx = np.append([0],np.cumsum(protocol_tif_nframes[:]).astype('int64')-1)
-    reconstr    = timestamps[idx,0]
-    target      = triggerdata[:,1]
-    diffvec     = reconstr[0:len(target)] - target
-    h           = np.diff(timestamps[:,0])
-    if any(h<0) or any(h>1) or any(diffvec>0) or any(diffvec<-1):
-        print('Problem with aligning trigger timestamps to imaging frames')
-    
-    
     # getting numer of ROIs
     nROIs = len(meta['RoiGroups']['imagingRoiGroup']['rois'])
     #Find the names of the rois:
@@ -386,20 +353,13 @@ def proc_imaging(sesfolder, sessiondata):
     #Find the roi to which each plane belongs:
     plane_roi_idx  = np.array([np.where(roi_depths == plane_zs[i])[0][0] for i in range(8)])
 
-    # for iplane,plane_folder in enumerate(plane_folders):
-    #         print(5)
-    
-    # iplane = 0
-    # plane_folder = plane_folders[0]
-    # iplane = 1
-    # plane_folder = plane_folders[1]
-    
     for iplane,plane_folder in enumerate(plane_folders):
     # for iplane,plane_folder in enumerate(plane_folders[:1]):
         print('processing plane %s / %s' % (iplane+1,ops['nplanes']))
 
         ops                 = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
         
+        [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
 
         iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
         stat                = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
@@ -447,34 +407,84 @@ def proc_imaging(sesfolder, sessiondata):
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
         Fneu                = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
         spks                = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
-
-        #if imaging was aborted during scanning of a volume, later planes have less frames
-        #Compensate by appending a zero value to relevant variables
-        if np.shape(F)[1]==(protocol_nframes-1):
-            F       = np.c_[F,np.ones(ncells_plane)]
-            Fneu    = np.c_[Fneu,np.ones(ncells_plane)]
-            spks    = np.c_[spks,np.ones(ncells_plane)]
-            
         # Compute dF/F:
         dF              = F - 0.7*Fneu
         dF              = calc_dF(dF, ops['baseline'], ops['win_baseline'], 
                                 ops['sig_baseline'], ops['fs'], ops['prctile_baseline'])
+        
+        F = F[:,protocol_frame_idx_plane==1].transpose()
+        Fneu = Fneu[:,protocol_frame_idx_plane==1].transpose()
+        spks = spks[:,protocol_frame_idx_plane==1].transpose()
+        dF = dF[:,protocol_frame_idx_plane==1].transpose()
+        
+        # if imaging was aborted during scanning of a volume, later planes have less frames
+        # Compensate by duplicating last value
+        if np.shape(F)[0]==len(ts_master):
+            pass       #do nothing, shapes match
+        elif np.shape(F)[0]==len(ts_master)-1: #copy last timestamp of array
+            F           = np.vstack((F, np.tile(F[[-1],:], 1)))
+            Fneu        = np.vstack((Fneu, np.tile(Fneu[[-1],:], 1)))
+            spks        = np.vstack((spks, np.tile(spks[[-1],:], 1)))
+            dF          = np.vstack((dF, np.tile(dF[[-1],:], 1)))
+        else:
+            print("Problem with timestamps and imaging frames")
  
         #construct dataframe with activity by cells: give unique cell_id as label:
         cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
-        calciumdata_plane   = pd.DataFrame(F[:,protocol_frame_idx==1].transpose(), columns=cell_ids)
-        calciumdata_plane['timestamps']   = timestamps    #add timestamps
+        # calciumdata_plane   = pd.DataFrame(F, columns=cell_ids)
+        calciumdata_plane   = pd.DataFrame(spks, columns=cell_ids)
+        calciumdata_plane['timestamps']   = ts_master    #add timestamps
 
+        
         if iplane == 0:
             calciumdata = calciumdata_plane.copy()
         else:
             calciumdata = calciumdata.merge(calciumdata_plane)
             
-    
     #Finally set which cells are labeled with tdTomato: 
     # celldata["labeled"] = celldata['chan2_prob'] > 0.75
 
-    return celldata,calciumdata
+    return sessiondata,celldata,calciumdata
+
+def align_timestamps(sessiondata, ops, triggerdata):
+    # get idx of frames belonging to this protocol:
+    protocol_tifs       = list(filter(lambda x: sessiondata['protocol'][0] in x, ops['filelist']))
+    protocol_tif_idx    = np.array([i for i, x in enumerate(ops['filelist']) if x in protocol_tifs])
+    
+    protocol_tif_nframes    = ops['frames_per_file'][protocol_tif_idx]
+    
+    protocol_frame_idx = []
+    for i in np.arange(len(ops['filelist'])):
+        if i in protocol_tif_idx:
+            protocol_frame_idx = np.append(protocol_frame_idx,np.repeat(True,ops['frames_per_file'][i]))
+        else:
+           protocol_frame_idx = np.append(protocol_frame_idx,np.repeat(False,ops['frames_per_file'][i]))
+    
+    protocol_nframes = sum(protocol_frame_idx).astype('int')
+    
+    ## Get trigger information:
+    nTriggers = np.shape(triggerdata)[0]
+    # timestamps = np.empty([ops['nframes'],1]) #init empty array for the timestamps
+    timestamps = np.empty([protocol_nframes,1]) #init empty array for the timestamps
+
+    for i in np.arange(nTriggers):
+        startidx    = sum(protocol_tif_nframes[0:i]) 
+        endidx      = startidx + protocol_tif_nframes[i]
+        start_ts    = triggerdata[i,1]
+        tempts      = np.linspace(start_ts,start_ts+(protocol_tif_nframes[i]-1)*1/ops['fs'],num=protocol_tif_nframes[i])
+        timestamps[startidx:endidx,0] = tempts
+        
+    #Verification of alignment:
+    idx = np.append([0],np.cumsum(protocol_tif_nframes[:]).astype('int64')-1)
+    reconstr    = timestamps[idx,0]
+    target      = triggerdata[:,1]
+    diffvec     = reconstr[0:len(target)] - target
+    h           = np.diff(timestamps[:,0])
+    if any(h<0) or any(h>1) or any(diffvec>0) or any(diffvec<-1):
+        print('Problem with aligning trigger timestamps to imaging frames')
+        
+    return timestamps, protocol_frame_idx
+
 
 def list_tifs(dir):
     r = []
