@@ -391,7 +391,9 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['redcell_prob']  = redcell[:,1]
         celldata_plane['redcell']       = redcell[:,0]
 
+        celldata_plane['plane_idx']     = iplane
         celldata_plane['roi_idx']       = plane_roi_idx[iplane]
+        celldata_plane['plane_in_roi_idx']       = sqrt(roi_area)
         celldata_plane['roi_name']      = roi_area[plane_roi_idx[iplane]]
         celldata_plane['depth']         = plane_zs[iplane] - sessiondata['ROI%d_dura' % (plane_roi_idx[iplane]+1)][0]
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)

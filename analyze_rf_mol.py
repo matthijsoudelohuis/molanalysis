@@ -46,11 +46,15 @@ calciumdata         = calciumdata.drop(columns=['timestamps'],axis=1)
 # zscore all the calcium traces:
 calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
 
-[xGrid,yGrid ,nGrids] = np.shape(grid_array)
+with np.load(os.path.join(sesfolder,"trialdata.npz")) as data:
+    RF_timestamps = data['y']
+    
+    
+
+### get parameters
+[xGrid , yGrid , nGrids] = np.shape(grid_array)
 
 N               = celldata.shape[0]
-
-N = 200
 
 rfmaps          = np.zeros([xGrid,yGrid,N])
 
@@ -59,10 +63,8 @@ t_resp_stop      = 0.6        #post s
 t_base_start     = -0.5     #pre s
 t_base_stop      = 0        #post s
 
-with np.load(os.path.join(sesfolder,"trialdata.npz")) as data:
-    RF_timestamps = data['y']
-    
-  
+
+### Compute RF maps:
 for n in range(N):
     print(f"\rComputing RF for neuron {n+1} / {N}")
 
@@ -76,33 +78,91 @@ for n in range(N):
         rfmaps[:,:,n] = np.nansum(np.dstack((rfmaps[:,:,n],np.max([resp-base,0]) * grid_array[:,:,g])),2)
         # rfmaps[:,:,n] = np.nansum(np.dstack((rfmaps[:,:,n],np.max([resp-base,0]) * grid_array[:,:,g])),2)
 
-        # temp = np.logical_and(ts_F > RF_timestamps[g]+t_base_start,ts_F < RF_timestamps[g]+t_base_stop)
-        # resp = calciumdata.iloc[temp,n].mean()
-        # rfmaps[:,:,n] = rfmaps[:,:,n] + resp * grid_array[:,:,g]
+#### Zscored version:
+rfmaps_z          = np.zeros([xGrid,yGrid,N])
 
-fig, axes = plt.subplots(10, 20, figsize=[17, 8], sharey='row')
-for i in range(10):
-    for j in range(20):
-        # n = np.random.randint(0,N)
-        n = i*10 + j
+for n in range(N):
+    print(f"\rZscoring RF for neuron {n+1} / {N}")
+    rfmaps_z[:,:,n] = st.zscore(rfmaps[:,:,n],axis=None)
+
+## Show example cell RF maps:
+example_cells = [0,24,285,335,377,496,417,551,430,543,696,689,617,612,924] #V1
+example_cells = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
+
+example_cells = range(900,1000) #PM
+
+Tot         = len(example_cells)
+Rows        = int(np.floor(np.sqrt(Tot)))
+Cols        = Tot // Rows # Compute Rows required
+if Tot % Rows != 0: #If one additional row is necessary -> add one:
+    Cols += 1
+Position = range(1,Tot + 1) # Create a Position index
+
+fig = plt.figure(figsize=[18, 9])
+for i,n in enumerate(example_cells):
+    # add every single subplot to the figure with a for loop
+    ax = fig.add_subplot(Rows,Cols,Position[i])
+    ax.imshow(rfmaps[:,:,n],cmap='gray',vmin=-np.max(abs(rfmaps[:,:,n])),vmax=np.max(abs(rfmaps[:,:,n])))
+    ax.set_axis_off()
+    ax.set_aspect('auto')
+    ax.set_title(n)
+  
+plt.tight_layout(rect=[0, 0, 1, 1])
+
+
+#### 
+fig, axes = plt.subplots(7, 13, figsize=[17, 8])
+for i in range(np.shape(axes)[0]):
+    for j in range(np.shape(axes)[1]):
+        n = i*np.shape(axes)[1] + j
         ax = axes[i,j]
         # ax.imshow(rfmaps[:,:,n],cmap='gray')
         ax.imshow(rfmaps[:,:,n],cmap='gray',vmin=-np.max(abs(rfmaps[:,:,n])),vmax=np.max(abs(rfmaps[:,:,n])))
+        ax.set_axis_off()
+        ax.set_aspect('auto')
+        ax.set_title(n)
 
-plt.tight_layout(rect=[0, 0, 0.9, 1])
-
+### 
 plt.close('all')
 
-fig, axes = plt.subplots(figsize=[17, 8])
-axes.imshow(calciumdata[:,:,n],cmap='gray')
+####################### Population Receptive Field
+
+depths,ind  = np.unique(celldata['depth'], return_index=True)
+depths      = depths[np.argsort(ind)]
+areas       = ['V1','V1','V1','V1','PM','PM','PM','PM']
+
+Rows        = 2
+Cols        = 4 
+Position    = range(1,8 + 1) # Create a Position index
+
+# fig, axes = plt.subplots(2, 4, figsize=[17, 8])
+fig = plt.figure()
+
+for iplane,depth in enumerate(depths):
+    # add every single subplot to the figure with a for loop
+    ax = fig.add_subplot(Rows,Cols,Position[iplane])
+    idx = celldata['depth']==depth
+    # popmap = np.nanmean(abs(rfmaps_z[:,:,idx]),axis=2)
+    popmap = np.nanmean(abs(rfmaps[:,:,idx]),axis=2)
+    ax.imshow(popmap,cmap='OrRd')
+    ax.set_axis_off()
+    ax.set_aspect('auto')
+    ax.set_title(areas[iplane])
+    
+plt.tight_layout(rect=[0, 0, 1, 1])
+
+###
 
 
 
-t_resp_start     = 0.0        #pre s
-t_resp_stop      = 0.5        #post s
 
 
 
+
+
+
+
+## old code to find optimal response window size:
 n = 24
 n = 0
 t_base_start     = -0.5     #pre s
