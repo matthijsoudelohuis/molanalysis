@@ -97,9 +97,7 @@ ax.add_artist(AnchoredSizeBar(ax.transData, 10, "10 Sec",loc=4,frameon=False))
 ax.axis('off')
 
 
-
 # plt.close('all')
-
 
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
 ## Parameters for temporal binning
@@ -114,21 +112,21 @@ N           = celldata.shape[0]
 K           = trialdata.shape[0]
 T           = len(bincenters)
 
-tensor      = np.empty([N,K,T])
-tensor_z    = np.empty([N,K,T])
+# tensor      = np.empty([N,K,T])
+# tensor_z    = np.empty([N,K,T])
 
-for n in range(N):
-    # print('Computing tensor for neuron %d/%d',[n,N)
-    print(f"\rComputing tensor for neuron {n+1} / {N}")
-    for k in range(K):
-        tensor[n,k,:]       = binned_statistic(ts_F-trialdata['tOnset'][k],calciumdata.iloc[:,n], statistic='mean', bins=binedges)[0]
-        tensor_z[n,k,:]     = binned_statistic(ts_F-trialdata['tOnset'][k],calciumdata_z.iloc[:,n], statistic='mean', bins=binedges)[0]
+# for n in range(N):
+#     # print('Computing tensor for neuron %d/%d',[n,N)
+#     print(f"\rComputing tensor for neuron {n+1} / {N}")
+#     for k in range(K):
+#         tensor[n,k,:]       = binned_statistic(ts_F-trialdata['tOnset'][k],calciumdata.iloc[:,n], statistic='mean', bins=binedges)[0]
+#         tensor_z[n,k,:]     = binned_statistic(ts_F-trialdata['tOnset'][k],calciumdata_z.iloc[:,n], statistic='mean', bins=binedges)[0]
 
-#Compute mean response during response window:
-resp_meantime_z = tensor_z[:,:,np.logical_and(bincenters>0,bincenters<1.5)].mean(axis=2)
+# #Compute mean response during response window:
+# resp_meantime_z = tensor_z[:,:,np.logical_and(bincenters>0,bincenters<1.5)].mean(axis=2)
 
-#Compute mean response during response window - baseline:
-resp_meantime_z = tensor[:,:,np.logical_and(bincenters>0,bincenters<1.5)].mean(axis=2) - tensor[:,:,np.logical_and(bincenters>-1,bincenters<0)].mean(axis=2)
+# #Compute mean response during response window - baseline:
+# resp_meantime_z = tensor[:,:,np.logical_and(bincenters>0,bincenters<1.5)].mean(axis=2) - tensor[:,:,np.logical_and(bincenters>-1,bincenters<0)].mean(axis=2)
 
 ############Alternative method, much faster:
 resp_meantime       = np.empty([N,K])

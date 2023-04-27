@@ -116,7 +116,7 @@ def proc_RF(rawdatadir,sessiondata):
     
     trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
 
-    if os.path.exists(os.path.join(sesfolder,trialdata_file[0])):
+    if not len(trialdata_file)==0 and os.path.exists(os.path.join(sesfolder,trialdata_file[0])):
         trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=0)
         RF_timestamps   = trialdata.iloc[:,1].to_numpy()
 
@@ -393,12 +393,11 @@ def proc_imaging(sesfolder, sessiondata):
 
         celldata_plane['plane_idx']     = iplane
         celldata_plane['roi_idx']       = plane_roi_idx[iplane]
-        celldata_plane['plane_in_roi_idx']       = sqrt(roi_area)
+        celldata_plane['plane_in_roi_idx']       = np.where(np.where(plane_roi_idx==plane_roi_idx[iplane])[0] == iplane)[0][0]
         celldata_plane['roi_name']      = roi_area[plane_roi_idx[iplane]]
         celldata_plane['depth']         = plane_zs[iplane] - sessiondata['ROI%d_dura' % (plane_roi_idx[iplane]+1)][0]
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
-
 
         if iplane == 0: #if first plane then init dataframe, otherwise append
             celldata = celldata_plane.copy()

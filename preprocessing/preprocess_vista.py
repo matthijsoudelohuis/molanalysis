@@ -18,7 +18,7 @@ sessiondates        = ['2023_04_10']
 # sessiondates        = ['2023_03_14']
 
 protocols           = ['IM','GR','RF','SP']
-protocols           = ['RF']
+# protocols           = ['RF']
 
 
 ## Loop over all selected animals and folders

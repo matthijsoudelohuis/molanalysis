@@ -9,8 +9,6 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-from suite2p.extraction import extract, masks
-
 direc = 'X:\\RawData\\NSH07422\\2022_12_9\\VR\\Imaging\\ROI_1\\suite2p\\plane0'
 
 os.chdir(direc)
@@ -22,7 +20,6 @@ stat = np.load('stat.npy', allow_pickle=True)
 ops =  np.load('ops.npy', allow_pickle=True).item()
 iscell = np.load('iscell.npy', allow_pickle=True)
 
-ops = extract.enhanced_mean_image_chan2(ops)
 
 ###################################################
 ## To show the different images constructed from the tiff during suite2p analyses
