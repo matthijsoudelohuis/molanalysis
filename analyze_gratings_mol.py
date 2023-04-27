@@ -144,7 +144,6 @@ for k in range(K):
     # resp_meantime[:,k]      = calciumdata_z[np.logical_and(ts_F>trialdata['tOnset'][k],ts_F<trialdata['tOnset'][k]+2)].to_numpy().mean(axis=0)
 
 
-
 resp_meanori = np.empty([N,16])
 oris = np.sort(pd.Series.unique(trialdata['Orientation']))
 
@@ -166,14 +165,14 @@ arr1inds                = magresp.argsort()
 resp_meanori_pref       = resp_meanori_pref[arr1inds[::-1],:]
 
 fig, ax = plt.subplots(figsize=(4, 7))
-ax.imshow(resp_meanori_pref, aspect='auto',extent=[0,360,0,N],vmin=-150,vmax=700) 
-# ax.imshow(resp_meanori_z_pref, aspect='auto',extent=[0,360,0,N],vmin=-0.5,vmax=3) 
+# ax.imshow(resp_meanori_pref, aspect='auto',extent=[0,360,0,N],vmin=-150,vmax=700) 
+ax.imshow(resp_meanori_pref, aspect='auto',extent=[0,360,0,N],vmin=-0.5,vmax=100) 
 
 plt.tight_layout(rect=[0.1, 0.1, 0.9, 0.9])
 ax.set_xlabel('Orientation (deg)')
 ax.set_ylabel('Neuron')
 
-plt.close('all')
+# plt.close('all')
 
 ####
 

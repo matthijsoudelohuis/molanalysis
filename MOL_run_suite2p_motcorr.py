@@ -22,6 +22,7 @@ protocols           = ['SP','RF','GR']
 animal_id          = 'LPE09830' #If empty than all animals in folder will be processed
 sessiondate        = '2023_04_10'
 rawdatadir          ='X:\\RawData\\'
+
 db = {
     'data_path': [os.path.join(rawdatadir,animal_id,sessiondate)],
     'save_path0': os.path.join(rawdatadir,animal_id,sessiondate),
