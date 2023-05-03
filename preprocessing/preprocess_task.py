@@ -33,7 +33,6 @@ sessiondata         = proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol
 
 [sessiondata, trialdata, behaviordata]         = proc_behavior(rawdatadir,animal_id,sessiondate,"VR") #main processing function
 
-
 [imagingdata]         = proc_imaging(rawdatadir,animal_id,sessiondate,"VR") #main processing function
 
 

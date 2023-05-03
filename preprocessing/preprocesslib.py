@@ -1,6 +1,11 @@
 """
-Created on Mon Dec 12 11:05:43 2022
-@author: USER
+Author: Matthijs Oude Lohuis, Champalimaud Research
+2022-2025
+
+This script contains a series of preprocessing functions that take raw data
+(behavior, task, microscope, video) and preprocess them. Is called by preprocess_main.
+Principally the data is integrated with additional info and stored for pandas dataframe usage
+
 """
 import os, math
 from pathlib import Path
@@ -96,6 +101,7 @@ def proc_RF(rawdatadir,sessiondata):
     #RF_log.bin
     #The vector saved is long GridSize(1)xGridSize(2)x(RunTime/Duration)
     #where RunTime is the total display time of the Bonsai programme.
+    #The file format is .binary data with int8 data format
     with open(os.path.join(sesfolder,log_file[0]) , 'rb') as fid:
         grid_array = np.fromfile(fid, np.int8)
     
@@ -129,10 +135,10 @@ def proc_RF(rawdatadir,sessiondata):
     
     return grid_array,RF_timestamps
 
-def proc_behavior_vr(rawdatadir,animal_id,sessiondate,protocol):
-    """ preprocess all the trial, stimulus and behavior data for one session """
+def proc_task(rawdatadir,sessiondata):
+    """ preprocess all the trial, stimulus and behavior data for one behavior VR session """
     
-    sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate,protocol,'Behavior')
+    sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
     sesfolder       = Path(sesfolder)
     
     #Init output dataframes:
@@ -141,141 +147,71 @@ def proc_behavior_vr(rawdatadir,animal_id,sessiondate,protocol):
 
 
     #Process behavioral data:
-
-# ([pd.DataFrame([i], columns=['A']) for i in range(5)],
-          # ignore_index=True)
-    
     filenames       = os.listdir(sesfolder)
     
     harpdata_file   = list(filter(lambda a: 'harp' in a, filenames)) #find the harp files
     harpdata_file   = list(filter(lambda a: 'csv'  in a, harpdata_file)) #take the csv file, not the rawharp bin
-    # harpdata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=1).to_numpy()
-    harpdata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
     
     trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
-    # trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=1).to_numpy()
-    trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=1)
+    trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]))
     
-    trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),sep=",")
+    #Code stimuli simply as A, B, C, etc.:
+    trialdata = trialdata.replace('stim','', regex=True)
     
-    trialdata       = pd.read_csv('W:/Users/Matthijs/Rawdata/NSH07429/2023_03_12/IM/Behavior/IM_NSH07429_trialdata_2023-03-12T15_14_35.csv')
-    trialdata       = pd.read_csv('X:/RawData/NSH07422/2022_12_08/VR/Behavior/VR_NSH07422trialdata2022-12-08T16_18_09.csv')
-
-    ## Start storing and processing the rawdata in the NWB session file:
-    timestamps      = harpdata[:,1].astype(np.float64)
-    
-    behaviordata
-    
-    # ## Wheel voltage
-    # time_series_with_timestamps = TimeSeries(
-    # name            = "WheelVoltage",
-    # description     = "Raw voltage from wheel rotary encoder",
-    # data            = harpdata[:,0].astype(np.float64),
-    # unit            = "V",
-    # timestamps      = timestamps,
-    # )
-    # nwbfile.add_acquisition(time_series_with_timestamps)
-    
-    # ## Z position
-    # time_series_with_timestamps = TimeSeries(
-    # name            = "CorridorPosition",
-    # description     = "z position along the corridor",
-    # data            = harpdata[:,3].astype(np.float64),
-    # unit            = "cm",
-    # timestamps      = timestamps,
-    # )
-    # nwbfile.add_acquisition(time_series_with_timestamps)
+    #If rewarded stimulus is on the left, context = 1, right = 0
+    blocklen = 50
+    temp = np.repeat(np.concatenate([np.ones(blocklen),np.zeros(blocklen)]),100).astype('int')
+    if np.argmax(trialdata['stimLeft'] == sessiondata['gostim'][0])<blocklen:    #identify first block left or right:
+        trialdata['context'] = temp[:len(trialdata)]
+    else:
+        trialdata['context'] = 1-temp[:len(trialdata)]
         
-    # ## Running speed
-    # time_series_with_timestamps = TimeSeries(
-    # name            = "RunningSpeed",
-    # description     = "Speed of VR wheel rotation",
-    # data            = harpdata[:,4].astype(np.float64),
-    # unit            = "cm s-1",
-    # timestamps      = timestamps,
-    # )
-    # nwbfile.add_acquisition(time_series_with_timestamps)
+    #Add which trial number it is relative to block switch:
+    temp        = np.tile(range(blocklen),100).astype('int')
+    trialdata['n_in_block']         = temp[:len(trialdata)]
     
-    # ## Wheel voltage
-    # time_series_with_timestamps = TimeSeries(
-    # name            = "TrialNumber",
-    # description     = "During which trial number the other acquisition channels were sampled",
-    # data            = harpdata[:,2].astype(np.int64),
-    # unit            = "na",
-    # timestamps      = timestamps,
-    # )
-    # nwbfile.add_acquisition(time_series_with_timestamps)
+    #Add what the stimuli are normalized across mice: here 0 is the rewarded stimulus, 
+    # and the rest relative to that one (wrapped numbering, so with C=reward, C=0,D=1,A=2,B=3)
+    temp    = np.array([ord(trialdata['stimLeft'][itrial]) - 65 for itrial in range(len(trialdata))])
+    trialdata['stimLeft_norm'] = np.mod(temp - (ord(sessiondata['gostim'][0]) - 65),4)
+    temp    = np.array([ord(trialdata['stimRight'][itrial]) - 65 for itrial in range(len(trialdata))])
+    trialdata['stimRight_norm'] = np.mod(temp - (ord(sessiondata['gostim'][0]) - 65),4)
+    
+    #Get behavioral data, construct dataframe and modify a bit:
+    behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
+    behaviordata.columns = ["rawvoltage","ts","trialnum","zpos","runspeed","lick","reward"] #rename the columns
+    behaviordata = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
     
     ## Licks
-    lickactivity    = np.diff(harpdata[:,5])
-    lickactivity    = np.append(lickactivity,0)
-    idx             = lickactivity==1
-    print("%d licks" % idx.sum()) #Give output to check if reasonable
+    lickactivity    = np.diff(behaviordata['lick'])
+    lick_ts         = behaviordata['ts'][np.append(lickactivity==1,False)].to_numpy()
     
-    # time_series = TimeSeries(
-    #     name        = "Licks",
-    #     data        = np.ones([idx.sum(),1]),
-    #     timestamps  = timestamps[idx],
-    #     description = "When luminance of tongue crossed a threshold at an ROI at the lick spout",
-    #     unit        = "a.u.",
-    # )
-    
-    # lick_events = BehavioralEvents(time_series=time_series, name="Licks")
-    # behavior_module.add(lick_events)
-
     ## Rewards
-    rewardactivity = np.diff(harpdata[:,6])
-    rewardactivity = np.append(rewardactivity,0)
-    idx = rewardactivity>0
-    print("%d rewards" % idx.sum()) #Give output to check if reasonable
+    rewardactivity = np.diff(behaviordata['reward'])
+    reward_ts      = behaviordata['ts'][np.append(rewardactivity>0,False)].to_numpy()
     
-    # time_series = TimeSeries(
-    #     name        = "Rewards",
-    #     data        = np.ones([idx.sum(),1])*5,
-    #     timestamps  = timestamps[idx],
-    #     description = "Rewards delivered at lick spout",
-    #     unit        = "uL",
-    # )
-    # reward_events = BehavioralEvents(time_series=time_series, name="Rewards")
-    # behavior_module.add(reward_events)
+    #Subsample the data, don't need this resolution
+    behaviordata = behaviordata.iloc[::10, :].copy().reset_index(drop=True) #subsample data 10 times (to 100 Hz)
     
-    # ##Trial information
-    # nwbfile.add_trial_column(name='trialnum', description='the number of the trial in this session')    # Add a column to the trial table.
-    # nwbfile.add_trial_column(name='trialtype', description='G=go, N=nogo')
-    # nwbfile.add_trial_column(name='rewardtrial', description='Whether licking this trial is rewarded')
-    # nwbfile.add_trial_column(name='outcome', description='string describing outcome of trial HIT MISS FA CR')
-    # nwbfile.add_trial_column(name='lickresponse', description='whether the animal licked in the reward zone')
-    # nwbfile.add_trial_column(name='nlicks', description='number of licks within the reward zone')
-    # nwbfile.add_trial_column(name='stimstart', description='Start of the stimulus in the corridor')
-    # nwbfile.add_trial_column(name='stimstop', description='End of the stimulus in the corridor')
-    # nwbfile.add_trial_column(name='rewardzonestart', description='Start of the response zone in the corridor')
-    # nwbfile.add_trial_column(name='rewardzonestop', description='End of the response zone in the corridor')
-    # nwbfile.add_trial_column(name='stimleft', description='the visual stimuli during the trial')
-    # nwbfile.add_trial_column(name='stimright', description='the visual stimuli during the trial')
+    behaviordata['lick'] = False
+    behaviordata['reward'] = False
+    
+    #Now add the lick times and reward times again to the subsampled dataframe:
+    for lick in lick_ts:
+        # behaviordata['lick'][np.argmax(lick<behaviordata['ts'])] = True
+        behaviordata.loc[behaviordata.index[np.argmax(lick<behaviordata['ts'])],'lick'] = True
+        
+    # print("%d licks" % len(lick_ts)) #Give output to check if reasonable
+    print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
 
-    # #Add trials to the trial table:
-    # itrial=0 #for the first trial take time stamp from the start of the session
-    # nwbfile.add_trial(start_time=harpdata[0,1],                stop_time=trialdata[itrial,2]+10, 
-    #                      trialnum=trialdata[itrial,1],         trialtype=trialdata[itrial,3], 
-    #                      rewardtrial=trialdata[itrial,4],      outcome=trialdata[itrial,0],
-    #                      lickresponse=trialdata[itrial,8],     nlicks=trialdata[itrial,9],
-    #                      stimstart=trialdata[itrial,5],        stimstop=trialdata[itrial,5]+30,
-    #                      rewardzonestart=trialdata[itrial,6],  rewardzonestop=trialdata[itrial,7],
-    #                      stimleft=trialdata[itrial,10],        stimright=trialdata[itrial,11])
+    for reward in reward_ts:
+        # behaviordata['reward'][np.argmax(reward<behaviordata['ts'])] = True
+        behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
+    
+    # print("%d rewards" % len(reward_ts)) #Give output to check if reasonable
+    print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
 
-    # for itrial in range(1,len(trialdata)):
-
-    #     nwbfile.add_trial(start_time=trialdata[itrial-1,2],     stop_time=trialdata[itrial,2], 
-    #                       trialnum=trialdata[itrial,1],         trialtype=trialdata[itrial,3], 
-    #                       rewardtrial=trialdata[itrial,4],      outcome=trialdata[itrial,0],
-    #                       lickresponse=trialdata[itrial,8],     nlicks=trialdata[itrial,9],
-    #                       stimstart=trialdata[itrial,5],        stimstop=trialdata[itrial,5]+30,
-    #                       rewardzonestart=trialdata[itrial,6],  rewardzonestop=trialdata[itrial,7],
-    #                       stimleft=trialdata[itrial,10],        stimright=trialdata[itrial,11])
-           
     return sessiondata, trialdata, behaviordata
-
-
 
 def proc_imaging(sesfolder, sessiondata):
     """ integrate preprocessed calcium imaging data """

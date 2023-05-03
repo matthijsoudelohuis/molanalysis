@@ -9,7 +9,7 @@ import os, shutil
 import numpy as np
 import suite2p
 from suite2p.io.binary import BinaryFile
-from suite2p.extraction import extract, masks
+from suite2p.extraction import extract
 
 ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
 
@@ -18,9 +18,13 @@ ops['roidetect']            = False
 
 # protocols           = ['GR','RF','SP']
 protocols           = ['SP','RF','GR']
+protocols           = ['VR','RF']
 
-animal_id          = 'LPE09830' #If empty than all animals in folder will be processed
-sessiondate        = '2023_04_10'
+animal_id          = 'LPE09829' #If empty than all animals in folder will be processed
+sessiondate        = '2023_03_29'
+
+# animal_id          = 'LPE09830' #If empty than all animals in folder will be processed
+# sessiondate        = '2023_04_10'
 rawdatadir          ='X:\\RawData\\'
 
 db = {

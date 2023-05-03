@@ -20,7 +20,6 @@ stat = np.load('stat.npy', allow_pickle=True)
 ops =  np.load('ops.npy', allow_pickle=True).item()
 iscell = np.load('iscell.npy', allow_pickle=True)
 
-
 ###################################################
 ## To show the different images constructed from the tiff during suite2p analyses
 fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(nrows=2, ncols=3, figsize=(10,6.5))

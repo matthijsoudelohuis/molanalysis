@@ -249,10 +249,33 @@ for i,n in enumerate(example_cells):
   
 plt.tight_layout(rect=[0, 0, 1, 1])
 
+## POP map
+depths,ind  = np.unique(celldata['depth'], return_index=True)
+depths      = depths[np.argsort(ind)]
+areas       = ['V1','V1','V1','V1','PM','PM','PM','PM']
 
+Rows        = 2
+Cols        = 4 
+Position    = range(1,8 + 1) # Create a Position index
 
+# fig, axes = plt.subplots(2, 4, figsize=[17, 8])
+fig = plt.figure(figsize=[9, 3])
 
+for iplane,depth in enumerate(depths):
+    # add every single subplot to the figure with a for loop
+    ax = fig.add_subplot(Rows,Cols,Position[iplane])
+    idx = celldata['depth']==depth
+    
+    # popmap = np.sum(np.logical_or(rfmaps_on_p[:,:,idx] <0.001, rfmaps_off_p[:,:,idx] < 0.001),axis=2) / np.sum(idx)
+    popmap = np.sum(np.logical_or(rfmaps_on_p[:,:,idx] <0.01, rfmaps_off_p[:,:,idx] < 0.01),axis=2) / np.sum(idx)
+    IM = ax.imshow(popmap,cmap='PuRd',vmin=0,vmax=0.25)
+    ax.set_axis_off()
+    ax.set_aspect('auto')
+    ax.set_title(areas[iplane])
+    fig.colorbar(IM, ax=ax)
 
+    
+plt.tight_layout(rect=[0, 0, 1, 1])
 
 
 ## old code to find optimal response window size:

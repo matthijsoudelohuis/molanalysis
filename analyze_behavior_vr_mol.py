@@ -15,6 +15,8 @@ import scipy.stats as st
 from scipy.ndimage import gaussian_filter
 from scipy.stats import binned_statistic
 
+from utils import compute_dprime
+
 procdatadir     = "V:\\Procdata\\"
 
 animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
@@ -66,6 +68,8 @@ falsealarm_rate_R   = sum((trd.rewardtrial == 0) & (trd.lickresponse == True) & 
 
 d_prime_L           = st.norm.ppf(hit_rate_L) - st.norm.ppf(falsealarm_rate_L)
 d_prime_R           = st.norm.ppf(hit_rate_R) - st.norm.ppf(falsealarm_rate_R)
+
+
 
 temp        = trd['lickresponse'].astype(float)
 tempfilt    = gaussian_filter(temp, sigma=15)

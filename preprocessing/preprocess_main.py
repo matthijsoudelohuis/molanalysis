@@ -12,13 +12,14 @@ from preprocesslib import *
 rawdatadir      = "X:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
-animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-sessiondates        = ['2023_04_10']
-# animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-# sessiondates        = ['2023_03_14']
+# animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
+# sessiondates        = ['2023_04_10']
+animal_ids          = ['LPE09829'] #If empty than all animals in folder will be processed
+sessiondates        = ['2023_03_29']
 
-protocols           = ['IM','GR','RF','SP']
+# protocols           = ['IM','GR','RF','SP']
 # protocols           = ['RF']
+protocols           = ['VR']
 
 
 ## Loop over all selected animals and folders
@@ -45,8 +46,13 @@ for animal_id in animal_ids: #for each animal
                 
                 sessiondata         = proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol)
         
-                behaviordata        = proc_behavior_passive(rawdatadir,sessiondata) #main processing function
-                behaviordata.to_csv(os.path.join(outdir,"behaviordata.csv"), sep=',')
+                if protocol == 'VR':
+                    [sessiondata,trialdata,behaviordata] = proc_task(rawdatadir,sessiondata)
+                    trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
+                    behaviordata.to_csv(os.path.join(outdir,"behaviordata.csv"), sep=',')
+                else: 
+                    behaviordata        = proc_behavior_passive(rawdatadir,sessiondata) #main processing function for harp data
+                    behaviordata.to_csv(os.path.join(outdir,"behaviordata.csv"), sep=',')
         
                 if protocol == 'GR':
                      trialdata = proc_GR(rawdatadir,sessiondata)
@@ -61,7 +67,8 @@ for animal_id in animal_ids: #for each animal
                 elif protocol == 'IM':
                     trialdata = proc_IM(rawdatadir,sessiondata)
                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
-                    
+                
+   
                 if os.path.exists(os.path.join(sesfolder,"suite2p")):
                     print('Detected imaging data\n')
                     [sessiondata,celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
