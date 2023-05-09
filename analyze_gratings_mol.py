@@ -14,6 +14,8 @@ from scipy.stats import binned_statistic
 from sklearn import preprocessing
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
+import utils.py
+
 
 # from sklearn.decomposition import PCA
 

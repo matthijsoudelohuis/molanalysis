@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Dec 16 11:19:51 2022
 
-@author: USER
-"""
 import numpy as np
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
 
@@ -36,7 +32,7 @@ def calc_dF(F: np.ndarray, baseline: str, win_baseline: float,
     
     Returns
     ----------------
-
+    
     F : float, 2D array
         size [neurons x time], baseline-corrected fluorescence
 
