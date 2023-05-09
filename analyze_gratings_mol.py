@@ -5,7 +5,8 @@ Created on Fri Apr  7 13:24:24 2023
 @author: USER
 """
 
-import os
+####################################################
+# import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,44 +14,27 @@ import scipy.stats as st
 from scipy.stats import binned_statistic
 from sklearn import preprocessing
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler
 
-from session_info import filter_sessions,load_sessions,report_sessions
+from session_info import filter_sessions,load_sessions
+from utils.psth import compute_tensor,compute_respmat
+from sklearn.decomposition import PCA
 
-# import utils.py
+%matplotlib qt
 
-# from sklearn.decomposition import PCA
+##################################################
+session_list        = np.array([['LPE09830','2023_04_10']])
+sessions            = load_sessions(protocol = 'GR',session_list=session_list)
 
-# procdatadir         = "V:\\Procdata\\"
-
-# # animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-# # sessiondates        = ['2023_03_14']
-# animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-# sessiondates        = ['2023_04_10']
-# protocol            = ['GR']
-
-# sesfolder = os.path.join(procdatadir,protocol[0],animal_ids[0],sessiondates[0],)
-
-# #load the data:
-# sessiondata         = pd.read_csv(os.path.join(sesfolder,"sessiondata.csv"), sep=',', index_col=0)
-# behaviordata        = pd.read_csv(os.path.join(sesfolder,"behaviordata.csv"), sep=',', index_col=0)
-# celldata            = pd.read_csv(os.path.join(sesfolder,"celldata.csv"), sep=',', index_col=0)
-# calciumdata         = pd.read_csv(os.path.join(sesfolder,"calciumdata.csv"), sep=',', index_col=0)
-# trialdata           = pd.read_csv(os.path.join(sesfolder,"trialdata.csv"), sep=',', index_col=0)
-
-# #get only good cells:
-# idx = celldata['iscell'] == 1
-# celldata            = celldata[idx].reset_index(drop=True)
-# calciumdata         = calciumdata.drop(calciumdata.columns[~idx.append(pd.Series([True]),ignore_index = True)],axis=1)
+sessions[0].load_data(load_behaviordata=True,load_calciumdata=True)
 
 sessiondata         = sessions[0].sessiondata
-# behaviordata        = sessions[0].sessiondata
 celldata            = sessions[0].celldata
 calciumdata         = sessions[0].calciumdata
 trialdata           = sessions[0].trialdata
+behaviordata        = sessions[0].behaviordata
 
-
-session_list        = np.array(['LPE09830','2023_04_10'])
-sessions            = load_sessions(protocol = 'GR',session_list=session_list)
 
 #Get timestamps and remove from dataframe:
 ts_F                = np.array(calciumdata['timestamps'])
@@ -84,7 +68,6 @@ excerpt = min_max_scaler.fit_transform(excerpt)
 for i in range(ncells):
     excerpt[:,i] =  excerpt[:,i] + i
 
-
 oris = np.unique(trialdata['Orientation'])
 rgba_color = plt.get_cmap('hsv',lut=16)(np.linspace(0, 1, len(oris)))  
   
@@ -112,58 +95,34 @@ ax.axis('off')
 
 # plt.close('all')
 
-## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
+##############################################################################
+## Construct tensor: 3D 'matrix' of K trials by N neurons by T time bins
 ## Parameters for temporal binning
 t_pre       = -1    #pre s
 t_post      = 2     #post s
-binsize     = 0.2  #temporal binsize in s
+binsize     = 0.2   #temporal binsize in s
 
-binedges    = np.arange(t_pre-binsize/2,t_post+binsize+binsize/2,binsize)
-bincenters  = np.arange(t_pre,t_post+binsize,binsize)
+[tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='binmean')
 
-N           = celldata.shape[0]
-K           = trialdata.shape[0]
-T           = len(bincenters)
+[tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='interp_lin')
+respmat         = tensor[:,:,np.logical_and(t_axis>0,t_axis<2)].mean(axis=2)
 
-# tensor      = np.empty([N,K,T])
-# tensor_z    = np.empty([N,K,T])
+#Alternative method, much faster:
+respmat         = compute_respmat(calciumdata, ts_F, trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
 
-# for n in range(N):
-#     # print('Computing tensor for neuron %d/%d',[n,N)
-#     print(f"\rComputing tensor for neuron {n+1} / {N}")
-#     for k in range(K):
-#         tensor[n,k,:]       = binned_statistic(ts_F-trialdata['tOnset'][k],calciumdata.iloc[:,n], statistic='mean', bins=binedges)[0]
-#         tensor_z[n,k,:]     = binned_statistic(ts_F-trialdata['tOnset'][k],calciumdata_z.iloc[:,n], statistic='mean', bins=binedges)[0]
+[K,N]           = np.shape(respmat) #get dimensions of response matrix
 
-# #Compute mean response during response window:
-# resp_meantime_z = tensor_z[:,:,np.logical_and(bincenters>0,bincenters<1.5)].mean(axis=2)
+#hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
+temp = pd.DataFrame(np.reshape(np.array(behaviordata['runspeed']),(len(behaviordata['runspeed']),1)))
+respmat_runspeed = compute_respmat(temp, behaviordata['ts'], trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean')
 
-# #Compute mean response during response window - baseline:
-# resp_meantime_z = tensor[:,:,np.logical_and(bincenters>0,bincenters<1.5)].mean(axis=2) - tensor[:,:,np.logical_and(bincenters>-1,bincenters<0)].mean(axis=2)
-
-############Alternative method, much faster:
-resp_meantime       = np.empty([N,K])
-resp_meantime_z     = np.empty([N,K])
-
-for k in range(K):
-    print(f"\rComputing response for trial {k+1} / {K}")
-    # resp_meantime[:,k]      = calciumdata[np.logical_and(ts_F>trialdata['tOnset'][k],ts_F<trialdata['tOnset'][k]+2)].to_numpy().mean(axis=0)
-
-
-    resp_meantime[:,k]      = np.subtract(calciumdata[np.logical_and(ts_F>trialdata['tOnset'][k],ts_F<trialdata['tOnset'][k]+2)].to_numpy().mean(axis=0), 
-                                          calciumdata[np.logical_and(ts_F>trialdata['tOnset'][k]-2,ts_F<trialdata['tOnset'][k])].to_numpy().mean(axis=0))
-
-
-    # resp_meantime[:,k]      = calciumdata_z[np.logical_and(ts_F>trialdata['tOnset'][k],ts_F<trialdata['tOnset'][k]+2)].to_numpy().mean(axis=0)
-
-
+#############################################################################
 resp_meanori = np.empty([N,16])
 oris = np.sort(pd.Series.unique(trialdata['Orientation']))
 
 for n in range(N):
     for i,ori in enumerate(oris):
-        resp_meanori[n,i] = np.nanmean(resp_meantime[n,trialdata['Orientation']==ori],axis=0)
-        # resp_meanori_z[n,i] = np.nanmean(resp_meantime_z[n,trialdata['Orientation']==ori],axis=0)
+        resp_meanori[n,i] = np.nanmean(respmat[trialdata['Orientation']==ori,n],axis=0)
 
 prefori  = np.argmax(resp_meanori,axis=1)
 # prefori  = np.argmax(resp_meanori_z,axis=1)
@@ -187,7 +146,72 @@ ax.set_ylabel('Neuron')
 
 # plt.close('all')
 
-####
+############################
+
+def z_score(X):
+    # X: ndarray, shape (n_features, n_samples)
+    ss = StandardScaler(with_mean=True, with_std=True)
+    Xz = ss.fit_transform(X)
+    return Xz
+
+
+respmat_zsc   = z_score(respmat)
+
+pca         = PCA(n_components=15) #construct PCA object with specified number of components
+Xp          = pca.fit_transform(respmat_zsc) #fit pca to response matrix
+
+ori         = trialdata['Orientation']
+oris        = np.sort(pd.Series.unique(trialdata['Orientation']))
+
+ori_ind      = [np.argwhere(np.array(ori) == iori)[:, 0] for iori in oris]
+
+shade_alpha      = 0.2
+lines_alpha      = 0.8
+pal = sns.color_palette('husl', len(oris))
+pal = np.tile(sns.color_palette('husl', int(len(oris)/2)),(2,1))
+
+projections = [(0, 1), (1, 2), (0, 2)]
+fig, axes = plt.subplots(1, 3, figsize=[9, 3], sharey='row', sharex='row')
+for ax, proj in zip(axes, projections):
+    for t, t_type in enumerate(oris):                       #plot orientation separately with diff colors
+        x = Xp[ori_ind[t],proj[0]]                          #get all data points for this ori along first PC or projection pairs
+        y = Xp[ori_ind[t],proj[1]]                          #and the second
+        # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
+        ax.scatter(x, y, color=pal[t], s=respmat_runspeed[ori_ind[t]], alpha=0.8)     #each trial is one dot
+        ax.set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
+        ax.set_ylabel('PC {}'.format(proj[1]+1))
+        
+sns.despine(fig=fig, top=True, right=True)
+ax.legend(oris,title='Ori')
+
+##############################
+
+# snakeselec = np.array(snakeplots[:,(bincenters>-60) & (bincenters<30),:])
+# nBins = np.shape(snakeselec)[1]
+# Xa = np.reshape(snakeselec, [N,nBins*4])
+
+# n_components = 15
+# pca = PCA(n_components=n_components)
+# Xa_p = pca.fit_transform(Xa).T
+
+# trial_size = nBins
+# space = bincenters[(bincenters>-60) & (bincenters<30)]
+
+# fig, axes = plt.subplots(1, 3, figsize=[10, 2.8], sharey='row')
+# for comp in range(3):
+#     ax = axes[comp]
+#     for kk, type in enumerate(trial_types):
+#         x = Xa_p[comp, kk * trial_size :(kk+1) * trial_size]
+#         # x = gaussian_filter1d(x, sigma=3)
+#         ax.plot(space, x, c=pal[kk])
+#     # add_stim_to_plot(ax)
+#     ax.set_ylabel('PC {}'.format(comp+1))
+# # add_orientation_legend(axes[2])
+# axes[1].set_xlabel('Time (s)')
+# sns.despine(fig=fig, right=True, top=True)
+# plt.tight_layout(rect=[0, 0, 0.9, 1])
+
+# plt.imshow(Xa)
 
 
 

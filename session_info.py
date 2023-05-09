@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from session import Session
-from constants import *
+from constants import get_data_folder
 import os
 # import subprocess
 # import warnings
@@ -60,6 +60,8 @@ def load_sessions(protocol,session_list):
     """
     sessions = []
     
+    assert np.shape(session_list)[1]==2, 'session list does not seem to have two columns for animal and dates'
+    
     # iterate over sessions in requested array:
     for i,ses in enumerate(session_list):
         ses = Session(protocol=protocol,animal_id=session_list[i,0],session_id=session_list[i,1])
@@ -86,8 +88,8 @@ def filter_sessions(protocol,min_cells=None, min_trials=None):
     sessions = []
     
     # iterate over files in that directory
-    for animal_id in os.listdir(os.path.join(DATA_FOLDER,protocol)):
-        for session_id in os.listdir(os.path.join(DATA_FOLDER,protocol,animal_id)):
+    for animal_id in os.listdir(os.path.join(get_data_folder(),protocol)):
+        for session_id in os.listdir(os.path.join(get_data_folder(),protocol,animal_id)):
             
             ses = Session(protocol=protocol,animal_id=animal_id,session_id=session_id)
             ses.load_data()

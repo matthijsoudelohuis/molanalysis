@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue May  9 11:55:08 2023
-
-@author: USER
+This script load one session
+By default it is a shallow load which means it loads information about
+the session, trials and the cells, but does not load behavioral data traces, 
+video data and calcium activity.
+It creates an instance of a class session
+Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 import os
-import numpy as np
+# import numpy as np
 import pandas as pd
 # import scipy
 # from scipy.signal import firwin, remez, kaiser_atten, kaiser_beta
@@ -18,7 +21,7 @@ import pandas as pd
 # from sklearn.preprocessing import KBinsDiscretizer
 # import matplotlib.pyplot as plt
 # import seaborn as sns
-from constants import *
+from constants import get_data_folder
 # from loadmat import loadmat
 
 class Session():
@@ -27,7 +30,7 @@ class Session():
 
         print('\nInitializing Session object for: \n- animal ID: {}'
               '\n- Session ID: {}\n'.format(animal_id, session_id))
-        self.data_folder = os.path.join(DATA_FOLDER, protocol, animal_id, session_id)
+        self.data_folder = os.path.join(get_data_folder(), protocol, animal_id, session_id)
         self.verbose = verbose
         self.protocol = protocol
         self.animal_id = animal_id
@@ -40,45 +43,40 @@ class Session():
         self.calciumdata_path   = os.path.join(self.data_folder, 'calciumdata.csv')
         self.celldata_path      = os.path.join(self.data_folder, 'celldata.csv')
         self.behaviordata_path  = os.path.join(self.data_folder, 'behaviordata.csv')
-
-        print('Loading session data at {}'.format(self.sessiondata_path))
-        self.sessiondata  = pd.read_csv(self.sessiondata_path, sep=',', index_col=0)
-
-        print('Loading trial data at {}'.format(self.trialdata_path))
-        self.trialdata  = pd.read_csv(self.trialdata_path, sep=',', index_col=0)
         
-        print('Loading cell data at {}'.format(self.celldata_path))
-        self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
-        
-        
-        #get only good cells:
-        goodcells = self.celldata['iscell'] == 1
-        self.celldata            = self.celldata[goodcells].reset_index(drop=True)
-        
-
-        if load_behaviordata:
-            print('Loading behavior data at {}'.format(self.behaviordata_path))
-            self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
-        else:
-            self.behaviordata = None
-
-        if load_calciumdata:
-            print('Loading calcium data at {}'.format(self.calciumdata_path))
-            self.calciumdata         = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
-            self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells.append(pd.Series([True]),ignore_index = True)],axis=1)
-            # # zscore all the calcium traces:
-            # calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
-        else:
-            self.calciumdata = None
-
-
-        # self.initialize(sessiondata=sessiondata,
-        #                 trialdata=trialdata,
-        #                 behaviordata=behaviordata,
-        #                 celldata=celldata,
-        #                 calciumdata=calciumdata)
-
-
+        try: 
+            print('Loading session data at {}'.format(self.sessiondata_path))
+            self.sessiondata  = pd.read_csv(self.sessiondata_path, sep=',', index_col=0)
+    
+            print('Loading trial data at {}'.format(self.trialdata_path))
+            self.trialdata  = pd.read_csv(self.trialdata_path, sep=',', index_col=0)
+            
+            print('Loading cell data at {}'.format(self.celldata_path))
+            self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
+            
+            
+            #get only good cells:
+            goodcells = self.celldata['iscell'] == 1
+            self.celldata            = self.celldata[goodcells].reset_index(drop=True)
+            
+    
+            if load_behaviordata:
+                print('Loading behavior data at {}'.format(self.behaviordata_path))
+                self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
+            else:
+                self.behaviordata = None
+    
+            if load_calciumdata:
+                print('Loading calcium data at {}'.format(self.calciumdata_path))
+                self.calciumdata         = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
+                self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells.append(pd.Series([True]),ignore_index = True)],axis=1)
+                # # zscore all the calcium traces:
+                # calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
+            else:
+                self.calciumdata = None
+        except FileNotFoundError:
+            print('There is no data in this directory')
+            
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,
 #                    center_lfp=True):
 
