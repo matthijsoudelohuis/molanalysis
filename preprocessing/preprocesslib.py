@@ -5,8 +5,8 @@ Author: Matthijs Oude Lohuis, Champalimaud Research
 This script contains a series of preprocessing functions that take raw data
 (behavior, task, microscope, video) and preprocess them. Is called by preprocess_main.
 Principally the data is integrated with additional info and stored for pandas dataframe usage
-
 """
+
 import os, math
 from pathlib import Path
 import pandas as pd
@@ -14,9 +14,7 @@ import numpy as np
 from natsort import natsorted 
 from datetime import datetime
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
-# from ScanImageTiffReader import ScanImageTiffReader as imread
 from twoplib import get_meta
-
         
 def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     """ preprocess general information about this mouse and session """

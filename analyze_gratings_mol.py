@@ -14,32 +14,43 @@ from scipy.stats import binned_statistic
 from sklearn import preprocessing
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
-import utils.py
+from session_info import filter_sessions,load_sessions,report_sessions
 
+# import utils.py
 
 # from sklearn.decomposition import PCA
 
-procdatadir         = "V:\\Procdata\\"
+# procdatadir         = "V:\\Procdata\\"
 
-# animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-# sessiondates        = ['2023_03_14']
-animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-sessiondates        = ['2023_04_10']
-protocol            = ['GR']
+# # animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
+# # sessiondates        = ['2023_03_14']
+# animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
+# sessiondates        = ['2023_04_10']
+# protocol            = ['GR']
 
-sesfolder = os.path.join(procdatadir,protocol[0],animal_ids[0],sessiondates[0],)
+# sesfolder = os.path.join(procdatadir,protocol[0],animal_ids[0],sessiondates[0],)
 
-#load the data:
-sessiondata         = pd.read_csv(os.path.join(sesfolder,"sessiondata.csv"), sep=',', index_col=0)
-behaviordata        = pd.read_csv(os.path.join(sesfolder,"behaviordata.csv"), sep=',', index_col=0)
-celldata            = pd.read_csv(os.path.join(sesfolder,"celldata.csv"), sep=',', index_col=0)
-calciumdata         = pd.read_csv(os.path.join(sesfolder,"calciumdata.csv"), sep=',', index_col=0)
-trialdata           = pd.read_csv(os.path.join(sesfolder,"trialdata.csv"), sep=',', index_col=0)
+# #load the data:
+# sessiondata         = pd.read_csv(os.path.join(sesfolder,"sessiondata.csv"), sep=',', index_col=0)
+# behaviordata        = pd.read_csv(os.path.join(sesfolder,"behaviordata.csv"), sep=',', index_col=0)
+# celldata            = pd.read_csv(os.path.join(sesfolder,"celldata.csv"), sep=',', index_col=0)
+# calciumdata         = pd.read_csv(os.path.join(sesfolder,"calciumdata.csv"), sep=',', index_col=0)
+# trialdata           = pd.read_csv(os.path.join(sesfolder,"trialdata.csv"), sep=',', index_col=0)
 
-#get only good cells:
-idx = celldata['iscell'] == 1
-celldata            = celldata[idx].reset_index(drop=True)
-calciumdata         = calciumdata.drop(calciumdata.columns[~idx.append(pd.Series([True]),ignore_index = True)],axis=1)
+# #get only good cells:
+# idx = celldata['iscell'] == 1
+# celldata            = celldata[idx].reset_index(drop=True)
+# calciumdata         = calciumdata.drop(calciumdata.columns[~idx.append(pd.Series([True]),ignore_index = True)],axis=1)
+
+sessiondata         = sessions[0].sessiondata
+# behaviordata        = sessions[0].sessiondata
+celldata            = sessions[0].celldata
+calciumdata         = sessions[0].calciumdata
+trialdata           = sessions[0].trialdata
+
+
+session_list        = np.array(['LPE09830','2023_04_10'])
+sessions            = load_sessions(protocol = 'GR',session_list=session_list)
 
 #Get timestamps and remove from dataframe:
 ts_F                = np.array(calciumdata['timestamps'])
