@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Apr  7 13:24:24 2023
-
-@author: USER
+This script analyzes neural and behavioral data in a multi-area calcium imaging
+dataset with labeled projection neurons. The visual stimuli are oriented gratings.
+Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 ####################################################
@@ -102,10 +102,11 @@ t_pre       = -1    #pre s
 t_post      = 2     #post s
 binsize     = 0.2   #temporal binsize in s
 
-[tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='binmean')
+# [tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='binmean')
 
 [tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='interp_lin')
-respmat         = tensor[:,:,np.logical_and(t_axis>0,t_axis<2)].mean(axis=2)
+respmat         = tensor[:,:,np.logical_and(t_axis > 0,t_axis < 1)].mean(axis=2)
+[K,N,T]         = np.shape(tensor) #get dimensions of tensor
 
 #Alternative method, much faster:
 respmat         = compute_respmat(calciumdata, ts_F, trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
@@ -154,7 +155,8 @@ def z_score(X):
     Xz = ss.fit_transform(X)
     return Xz
 
-
+############################
+# PCA on trial-averaged responses: and plot result as scatter by orientation:
 respmat_zsc   = z_score(respmat)
 
 pca         = PCA(n_components=15) #construct PCA object with specified number of components
@@ -185,6 +187,25 @@ sns.despine(fig=fig, top=True, right=True)
 ax.legend(oris,title='Ori')
 
 ##############################
+# PCA on trial-concatenated matrix:
+
+
+#reorder such that tensor is K by T y N (not K by N by T
+ # then reshape to KxT by N (each column is now the activity of all trials over time concatenated for one neuron)
+mat_zsc     = tensor.transpose((0,2,1)).reshape(K*T,N,order='F') 
+mat_zsc     = z_score(mat_zsc)
+
+
+pca                 = PCA(n_components=100) #construct PCA object with specified number of components
+Xp                  = pca.fit_transform(respmat_zsc) #fit pca to response matrix
+
+[U,S,Vt]          = pca._fit_full(respmat_zsc,100) #fit pca to response matrix
+
+[U,S,Vt]          = pca._fit_truncated(respmat_zsc,100,"arpack") #fit pca to response matrix
+
+sns.lineplot(data=pca.explained_variance_ratio_, x="components", y="EV")
+plt.figure()
+sns.lineplot(data=pca.explained_variance_ratio_)
 
 # snakeselec = np.array(snakeplots[:,(bincenters>-60) & (bincenters<30),:])
 # nBins = np.shape(snakeselec)[1]

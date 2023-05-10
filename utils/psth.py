@@ -27,12 +27,11 @@ def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpol
     
     
     N           = np.shape(data)[1]
-    
-    N = 10 #for debug only
-
     K           = len(ts_T)
     T           = len(bincenters)
     
+        # N = 10 #for debug only
+
     tensor      = np.empty([K,N,T])
     
     for n in range(N):
