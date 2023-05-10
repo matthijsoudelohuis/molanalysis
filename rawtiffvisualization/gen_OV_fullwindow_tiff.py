@@ -5,14 +5,15 @@ from twoplib import split_mROIs
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-rawdatadir      = "X:\\Rawdata\\"
-rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+# rawdatadir      = "X:\\Rawdata\\"
+# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+rawdatadir      = "O:\\Rawdata\\"
 outputdir      = "V:\\Procdata\\OV\\"
 
 animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
 animal_ids          = ['LPE09830','LPE09831'] #If empty than all animals in folder will be processed
 animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
-# animal_ids          = ['LPE09833'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10189','LPE10190','LPE10191','LPE10192'] #If empty than all animals in folder will be processed
 
 cmred = LinearSegmentedColormap.from_list(
         "Custom", [(0, 0, 0), (1, 0, 0)], N=100)
@@ -44,9 +45,6 @@ for animal_id in animal_ids: #for each animal
                     # for iframe in range(np.shape(mROI_data[0])[0])
                     c           = np.concatenate(mROI_data[:], axis=2) #reshape to full ROI (size frames by xpix by ypix)
                     
-                    # c           = np.concatenate(mROI_data[1:3][1,:,:], axis=2) #reshape to full ROI (size frames by xpix by ypix)
-                    # c           = np.concatenate(mROI_data[1:3], axis=2) #reshape to full ROI (size frames by xpix by ypix)
-
                     
                     if np.shape(greenframe)[0]==0:
                         greenframe  = np.empty(np.shape(c)[1:])
