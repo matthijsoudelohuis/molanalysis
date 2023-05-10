@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Apr  3 17:44:04 2023
-
-@author: USER
+This script run the suite2p analysis pipeline, but in separate steps. 
+1) run suite2p registration using the tdtomato (red) channel
+2) correct for the bleedthrough tdTomato signal to the green PMT
+3) run suite2p calcium trace extraction
+Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 import os, shutil
@@ -18,14 +20,20 @@ ops['roidetect']            = False
 
 # protocols           = ['GR','RF','SP']
 protocols           = ['SP','RF','GR']
-protocols           = ['VR','RF']
+# protocols           = ['VR','RF']
+protocols           = ['SP']
 
-animal_id          = 'LPE09829' #If empty than all animals in folder will be processed
-sessiondate        = '2023_03_29'
+# animal_id          = 'LPE09829' #If empty than all animals in folder will be processed
+# sessiondate        = '2023_03_29'
+
+animal_id          = 'LPE10192' #If empty than all animals in folder will be processed
+sessiondate        = '2023_05_04'
+ops['nplanes'] = 4
+ops['fs'] = 42.86 / ops['nplanes']
 
 # animal_id          = 'LPE09830' #If empty than all animals in folder will be processed
 # sessiondate        = '2023_04_10'
-rawdatadir          ='X:\\RawData\\'
+rawdatadir          ='O:\\RawData\\'
 
 db = {
     'data_path': [os.path.join(rawdatadir,animal_id,sessiondate)],
@@ -46,24 +54,6 @@ db['subfolders']  = [os.path.join(rawdatadir,animal_id,sessiondate,p,'Imaging') 
 #     'subfolders': ['X:/RawData/NSH07422/2023_03_13/GR/Imaging','X:/RawData/NSH07422/2023_03_13/RF/Imaging','X:/RawData/NSH07422/2023_03_13/SP/Imaging'],
 
 
-# db = {
-#     'data_path': ['X:/RawData/LPE09665/2023_03_15/'],
-#     'save_path0': 'X:/RawData/LPE09665/2023_03_15/',
-#     'subfolders': ['X:/RawData/LPE09665/2023_03_15/IM/Imaging'],
-#     'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
-# }
-
-# db = {
-#     'data_path': ['X:/RawData/LPE09665/2023_03_14/'],
-#     'save_path0': 'X:/RawData/LPE09665/2023_03_14/',
-#     'subfolders': ['X:/RawData/LPE09665/2023_03_14/GR/Imaging','X:/RawData/LPE09665/2023_03_14/RF/Imaging','X:/RawData/LPE09665/2023_03_14/SP/Imaging'],
-#     'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
-# }
-
-# db = {
-#     'data_path': ['C:/TempData/LPE09665/2023_03_14/GR/Imaging/'],     
-#     'save_path0': 'C:/TempData/LPE09665/2023_03_14/GR/Imaging/',
-# }
 
 ###################################################################
 ## Run registration:
@@ -106,7 +96,7 @@ for iplane in np.arange(nplanes):
     os.rename(os.path.join(planefolder,file_chan1_corr), os.path.join(planefolder,file_chan1))
 
 ### Update mean images and added enhanced images:
-for iplane in np.arange(8):
+for iplane in np.arange(nplanes):
     print('Modifying mean images in ops file for plane %s / %s' % (iplane+1,nplanes))
     ops = np.load(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),allow_pickle='TRUE').item()
     # ops['reg_file']         = ops['reg_file'].replace('data','data_corr')
@@ -122,7 +112,7 @@ for iplane in np.arange(8):
 ###################################################################
 ## ROI detection: 
 
-ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
+# ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
 
 ops['do_registration']      = False
 ops['roidetect']            = True
