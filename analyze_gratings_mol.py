@@ -17,11 +17,11 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 
-from session_info import filter_sessions,load_sessions
+from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from sklearn.decomposition import PCA
 
-%matplotlib qt
+%matplotlib inline
 
 ##################################################
 session_list        = np.array([['LPE09830','2023_04_10']])
@@ -39,6 +39,8 @@ behaviordata        = sessions[0].behaviordata
 #Get timestamps and remove from dataframe:
 ts_F                = np.array(calciumdata['timestamps'])
 calciumdata         = calciumdata.drop(columns=['timestamps'],axis=1)
+
+calciumdata         = calciumdata.drop(calciumdata.columns[100:],axis=1)
 
 # zscore all the calcium traces:
 calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
@@ -207,6 +209,23 @@ plt.figure()
 sns.lineplot(data=pca.explained_variance_ratio_)
 
 ##############################
+## Make dataframe of tensor with all trial, time information etc.
+
+mat_zsc     = tensor.transpose((0,2,1)).reshape(K*T,N,order='F') 
+mat_zsc     = z_score(mat_zsc)
+
+tracedata = pd.DataFrame(data=mat_zsc, columns=calciumdata.columns)
+
+tracedata['time']   = np.tile(t_axis,K)
+tracedata['ori']    = np.repeat(trialdata['Orientation'].to_numpy(),T)
+
+
+sns.lineplot(
+    data=tracedata, x="time", y=tracedata.columns[2], hue="ori", 
+)
+
+h = 2
+
 
 # PCA on trial-averaged data: 
 

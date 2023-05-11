@@ -11,8 +11,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 import os
 # import numpy as np
 import pandas as pd
-from loaddata.session_info import get_data_folder
-
+from loaddata.get_data_folder import get_data_folder
 
 class Session():
 

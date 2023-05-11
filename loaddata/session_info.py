@@ -6,21 +6,10 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 
 import numpy as np
 import pandas as pd
-from session import Session
+from loaddata.get_data_folder import get_data_folder
+from loaddata.session import Session
+
 import os
-
-
-# figure out the paths depending on which machine you are on
-def get_data_folder():
-    user = os.environ['USERDOMAIN']
-
-    if user == 'MATTHIJSOUDELOH':
-        DATA_FOLDER = 'V:/Procdata'
-
-    elif user == 'PCMatthijs':
-        DATA_FOLDER = 'E:/Procdata'
-
-    return DATA_FOLDER
 
 
 def load_sessions(protocol,session_list):
