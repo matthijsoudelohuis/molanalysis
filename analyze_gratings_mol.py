@@ -195,9 +195,8 @@ ax.legend(oris,title='Ori')
 mat_zsc     = tensor.transpose((0,2,1)).reshape(K*T,N,order='F') 
 mat_zsc     = z_score(mat_zsc)
 
-
-pca                 = PCA(n_components=100) #construct PCA object with specified number of components
-Xp                  = pca.fit_transform(respmat_zsc) #fit pca to response matrix
+pca               = PCA(n_components=100) #construct PCA object with specified number of components
+Xp                = pca.fit_transform(respmat_zsc) #fit pca to response matrix
 
 [U,S,Vt]          = pca._fit_full(respmat_zsc,100) #fit pca to response matrix
 
@@ -206,6 +205,11 @@ Xp                  = pca.fit_transform(respmat_zsc) #fit pca to response matrix
 sns.lineplot(data=pca.explained_variance_ratio_, x="components", y="EV")
 plt.figure()
 sns.lineplot(data=pca.explained_variance_ratio_)
+
+##############################
+
+# PCA on trial-averaged data: 
+
 
 # snakeselec = np.array(snakeplots[:,(bincenters>-60) & (bincenters<30),:])
 # nBins = np.shape(snakeselec)[1]

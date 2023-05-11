@@ -11,18 +11,8 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 import os
 # import numpy as np
 import pandas as pd
-# import scipy
-# from scipy.signal import firwin, remez, kaiser_atten, kaiser_beta
-# import neo
-# import elephant
-# import quantities as pq
-# import warnings
-# import copy
-# from sklearn.preprocessing import KBinsDiscretizer
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-from constants import get_data_folder
-# from loadmat import loadmat
+from loaddata.session_info import get_data_folder
+
 
 class Session():
 

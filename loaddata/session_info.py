@@ -1,55 +1,27 @@
+"""
+This script has data loading functions used to get dirs, filter and select sessions
+Actual loading happens as method of instances of sessions (session.py)
+Matthijs Oude Lohuis, 2023, Champalimaud Center
+"""
+
 import numpy as np
 import pandas as pd
 from session import Session
-from constants import get_data_folder
 import os
-# import subprocess
-# import warnings
-
-# def make_trial_overview():
-
-#     dfs = []
-
-#     for animal_id in decoding_sessions.keys():
-#         for session_id in decoding_sessions[animal_id]:
-#             session = Session(animal_id=animal_id, session_id=session_id)
-#             session.load_data(load_spikes=False, load_lfp=False)
-#             df = session.get_session_overview_trials()
-#             print(df)
-#             dfs.append(df)
-
-#     df = pd.concat(dfs).reset_index().drop('index', axis=1)
-
-#     ind = df.loc[(df['animal_id'] == '2009') &
-#            (df['session_id'] == '2018-08-24_11-56-35') &
-#            (df['target_name'] == 'visualOriPostNorm')].index
-
-#     df = df.drop(ind)
-
-#     # just to make sure
-#     sel = df.loc[(df['animal_id'] == '2009') &
-#            (df['session_id'] == '2018-08-24_11-56-35') &
-#            (df['target_name'] == 'visualOriPostNorm')]
-#     assert sel.shape[0] == 0
-
-#     return df
 
 
+# figure out the paths depending on which machine you are on
+def get_data_folder():
+    user = os.environ['USERDOMAIN']
 
-# def make_units_overview():
+    if user == 'MATTHIJSOUDELOH':
+        DATA_FOLDER = 'V:/Procdata'
 
-#     dfs = []
+    elif user == 'PCMatthijs':
+        DATA_FOLDER = 'E:/Procdata'
 
-#     for animal_id in decoding_sessions.keys():
-#         for session_id in decoding_sessions[animal_id]:
-#             session = Session(animal_id=animal_id, session_id=session_id)
-#             # TODO we should be able to provide the unit layer without loading
-#             # the LFP
-#             session.load_data(load_spikes=True, load_lfp=False)
-#             df = session.get_session_overview_n_units()
-#             dfs.append(df)
+    return DATA_FOLDER
 
-#     return pd.concat(dfs)
 
 def load_sessions(protocol,session_list):
     """
@@ -224,4 +196,49 @@ def report_sessions(sessions):
 #         sel_df = pd.merge(layers_df, trial_df, on=['animal_id', 'session_id'])
 
 
+
+# def make_trial_overview():
+
+#     dfs = []
+
+#     for animal_id in decoding_sessions.keys():
+#         for session_id in decoding_sessions[animal_id]:
+#             session = Session(animal_id=animal_id, session_id=session_id)
+#             session.load_data(load_spikes=False, load_lfp=False)
+#             df = session.get_session_overview_trials()
+#             print(df)
+#             dfs.append(df)
+
+#     df = pd.concat(dfs).reset_index().drop('index', axis=1)
+
+#     ind = df.loc[(df['animal_id'] == '2009') &
+#            (df['session_id'] == '2018-08-24_11-56-35') &
+#            (df['target_name'] == 'visualOriPostNorm')].index
+
+#     df = df.drop(ind)
+
+#     # just to make sure
+#     sel = df.loc[(df['animal_id'] == '2009') &
+#            (df['session_id'] == '2018-08-24_11-56-35') &
+#            (df['target_name'] == 'visualOriPostNorm')]
+#     assert sel.shape[0] == 0
+
+#     return df
+
+
+
+# def make_units_overview():
+
+#     dfs = []
+
+#     for animal_id in decoding_sessions.keys():
+#         for session_id in decoding_sessions[animal_id]:
+#             session = Session(animal_id=animal_id, session_id=session_id)
+#             # TODO we should be able to provide the unit layer without loading
+#             # the LFP
+#             session.load_data(load_spikes=True, load_lfp=False)
+#             df = session.get_session_overview_n_units()
+#             dfs.append(df)
+
+#     return pd.concat(dfs)
 

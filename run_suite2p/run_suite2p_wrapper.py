@@ -7,117 +7,36 @@ This script run the suite2p analysis pipeline, but in separate steps.
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
-import os, shutil
-import numpy as np
+import os
 import suite2p
-from suite2p.io.binary import BinaryFile
-from suite2p.extraction import extract
+from mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 
-ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
 
-ops['do_registration']      = True
-ops['roidetect']            = False
-
-# protocols           = ['GR','RF','SP']
-protocols           = ['SP','RF','GR']
-# protocols           = ['VR','RF']
-protocols           = ['SP']
-
-# animal_id          = 'LPE09829' #If empty than all animals in folder will be processed
-# sessiondate        = '2023_03_29'
-
-animal_id          = 'LPE10192' #If empty than all animals in folder will be processed
-sessiondate        = '2023_05_04'
-ops['nplanes'] = 4
-ops['fs'] = 42.86 / ops['nplanes']
-
-# animal_id          = 'LPE09830' #If empty than all animals in folder will be processed
-# sessiondate        = '2023_04_10'
 rawdatadir          ='O:\\RawData\\'
+animal_ids          = ['LPE10191'] #If empty than all animals in folder will be processed
+sessiondates        = ['2023_05_04']
 
-db = {
-    'data_path': [os.path.join(rawdatadir,animal_id,sessiondate)],
-    'save_path0': os.path.join(rawdatadir,animal_id,sessiondate),
-    'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
-}
-# db['subfolders'] = [f for f in os.listdir(db['data_path']) 
-                    # if any(f.endswith(ext) for ext in included_extensions)]
-# db['subfolders'] = [f for f in os.listdir(db['data_path']) if re.match(r'[0-9]+.*\.jpg', f)]
-db['subfolders']  = [os.path.join(rawdatadir,animal_id,sessiondate,p,'Imaging') for p in protocols]
-
-# db = {
-#     'data_path': ['X:/RawData/NSH07422/2023_03_13/'],
-#     'save_path0': 'X:/RawData/NSH07422/2023_03_13/',
-#     'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
-# }
-
-#     'subfolders': ['X:/RawData/NSH07422/2023_03_13/GR/Imaging','X:/RawData/NSH07422/2023_03_13/RF/Imaging','X:/RawData/NSH07422/2023_03_13/SP/Imaging'],
-
-
+[db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
 
 ###################################################################
 ## Run registration:
-output_ops = suite2p.run_s2p(ops=ops, db=db)
+suite2p.run_s2p(ops=ops, db=db)
 
 ###################################################################
 ## tdTomato bleedthrough correction:
 
 coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
-nplanes = output_ops['nplanes']
+coeff = 0.068 #for 0.6 and 0.4 combination of PMT gains
 
-#Write new binary file with corrected data per plane:
-for iplane in np.arange(nplanes):
-    print('Correcting tdTomato bleedthrough for plane %s / %s' % (iplane+1,nplanes))
+ops = run_bleedthrough_corr(db,ops,coeff)
 
-    file_chan1       = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data.bin')
-    file_chan2       = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_chan2.bin')
-    file_chan1_corr   = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin')
-    
-    with BinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
-        
-          for i in np.arange(f1.n_frames):
-              [ind,datagreen]      = f1.read(batch_size=1)
-              [ind,datared]        = f2.read(batch_size=1)
-             
-              datagreencorr = datagreen - coeff * datared
-         
-              f1.write(data=datagreencorr)
-        
-#move original to subdir and rename corrected to data.bin to be read by suite2p for detection:
-for iplane in np.arange(nplanes):
-    planefolder = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane)
-    file_chan1       = os.path.join(planefolder,'data.bin')
-    file_chan1_corr   = os.path.join(planefolder,'data_corr.bin')
-    
-    os.mkdir(os.path.join(planefolder,'orig'))
-
-    shutil.move(os.path.join(planefolder,file_chan1),os.path.join(planefolder,'orig'))
-    
-    os.rename(os.path.join(planefolder,file_chan1_corr), os.path.join(planefolder,file_chan1))
-
-### Update mean images and added enhanced images:
-for iplane in np.arange(nplanes):
-    print('Modifying mean images in ops file for plane %s / %s' % (iplane+1,nplanes))
-    ops = np.load(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),allow_pickle='TRUE').item()
-    # ops['reg_file']         = ops['reg_file'].replace('data','data_corr')
-    
-    # with BinaryFile(read_filename=os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin'),Ly=512, Lx=512) as f1:
-    with BinaryFile(read_filename=os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data.bin'),Ly=512, Lx=512) as f1:
-        ops['meanImg']      = f1.sampled_mean()
-    
-    ops                     = extract.enhanced_mean_image(ops)
-    ops                     = extract.enhanced_mean_image_chan2(ops)
-    np.save(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),ops)
 
 ###################################################################
 ## ROI detection: 
-
-# ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
-
 ops['do_registration']      = False
 ops['roidetect']            = True
 
-output_ops = suite2p.run_s2p(ops=ops, db=db)
+ops = suite2p.run_s2p(ops=ops, db=db)
 
 ############################
 # Debug / Verification code:

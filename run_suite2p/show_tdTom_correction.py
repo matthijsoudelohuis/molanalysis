@@ -5,80 +5,112 @@ Created on Mon Feb 13 10:50:43 2023
 @author: USER
 """
 
-# import sys, os
-# from pathlib import Path
-# import json
-
-# https://pypi.org/project/scanimage-tiff-reader/
 from ScanImageTiffReader import ScanImageTiffReader as imread
 import matplotlib.pyplot as plt
 import numpy as np
 import os 
-import imageio
+from suite2p.detection.chan2detect import correct_bleedthrough
+
+# import imageio
 
 
-fname = 'V:\\Rawdata\\PILOTS\\20230308_LPE09832_tdTomato_Bleedthrough\\Gain1_0.6_Gain2_0.6\\LPE09832_SP_00001_00001.tif'
-fname = 'V:\\Rawdata\\PILOTS\\20230308_LPE09832_tdTomato_Bleedthrough\\Gain1_0.7_Gain2_0.5\\LPE09832_SP_00001_00001.tif'
-fname = 'V:\\Rawdata\\PILOTS\\20230308_LPE09832_tdTomato_Bleedthrough\\CloseUp_zoom5x_Gain0.6_0.6\\LPE09832_SP_00001_00001.tif'
+#####################################################################################
+def load_data(directory,nplanes): 
+    data_green      = np.empty([0,512,512])
+    data_red        = np.empty([0,512,512])
+    maxtifs = 20
+    
+    # iterate over files in that directory
+    for filename in os.listdir(directory)[:maxtifs]:
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if f.endswith(".tif"):
+            print(f)
+            reader = imread(f)
+            Data = reader.data()
+            data_green = np.append(data_green, Data[0::(2*nplanes),:,:],axis=0)
+            data_red = np.append(data_red, Data[1::(2*nplanes),:,:],axis=0)
+    
+    return data_green,data_red
+
+## plotting func:
+def plot_correction(im1,im2,im1_corr):
+    fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(17,5))
+    
+    ax1.imshow(im1,vmin=np.percentile(im1,1), vmax=np.percentile(im1,99))
+    ax1.set_title('Chan 1')
+    ax1.set_axis_off()
+    
+    ax2.imshow(im2,vmin=np.percentile(im2,1), vmax=np.percentile(im2,99))
+    ax2.set_title('Chan 2')
+    ax2.set_axis_off()
+        
+    ax3.imshow(im1_corr,vmin=np.percentile(im1,1), vmax=np.percentile(im1,99))
+    ax3.set_title('Chan 2')
+    ax3.set_axis_off()
+
+## correlation func:
+def plot_correlation(im1,im2):
+    ## Show linear correction:
+    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(6,5))
+        
+    ax1.scatter(im2.flatten(),im1.flatten(),0.02)
+    ax1.set_xlabel('Chan 2')
+    ax1.set_ylabel('Chan 1')
+    
+    # Fit linear regression via least squares with numpy.polyfit
+    b, a = np.polyfit(im2.flatten(),im1.flatten(), deg=1)
+    
+    xseq = np.linspace(-15000, 32000, num=32000)
+    # Plot regression line
+    ax1.plot(xseq, a + b * xseq, color="k", lw=1.5);
+    
+    ax1.set_xlim(np.percentile(im2.flatten()*1.05,(0,100)))
+    ax1.set_ylim(np.percentile(im1.flatten()*1.05,(0,100)))
+    
+    txt1 = "Coefficient is %1.4f" % b
+    
+    plt.text(-500, 1200,txt1, fontsize=12)
+
+
+##########################################
+
+directory = 'O:\\RawData\\LPE10192\\2023_05_04\\SP\\Imaging\\'
+[data_green,data_red] = load_data(directory,nplanes=4)
+
+directory = 'X:\\RawData\\LPE09665\\2023_03_14\\GR\\Imaging\\'
+[data_green,data_red] = load_data(directory,nplanes=8)
 
 directory = 'V:\\Rawdata\\PILOTS\\20230308_LPE09832_tdTomato_Bleedthrough\\Gain1_0.6_Gain2_0.6\\'
-directory = 'V:\\Rawdata\\PILOTS\\20230308_LPE09832_tdTomato_Bleedthrough\\CloseUp_zoom5x_Gain0.6_0.6\\'
-directory = 'V:\\Rawdata\\PILOTS\\20230308_LPE09832_tdTomato_Bleedthrough\\Gain1_0.8_Gain2_0.6\\'
-
+[data_green,data_red] = load_data(directory,nplanes=1)
 
 # directory = 'C:\\TempData\\LPE09665\\2023_03_14\\GR\\Imaging\\'
 
-#####################################################################################
-
-data_green      = np.empty([0,512,512])
-data_red        = np.empty([0,512,512])
-
-# iterate over files in
-# that directory
-for filename in os.listdir(directory):
-    f = os.path.join(directory, filename)
-    # checking if it is a file
-    if os.path.isfile(f):
-        print(f)
-        reader = imread(f)
-        Data = reader.data()
-        data_green = np.append(data_green, Data[0::2,:,:],axis=0)
-        data_red = np.append(data_red, Data[1::2,:,:],axis=0)
-        
-
-## Show 
-fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(17,5))
-
 greenchanim = np.average(data_green,axis=0)
-ax1.imshow(greenchanim,vmin=0, vmax=1000)
-ax1.set_title('Chan 1')
-ax1.set_axis_off()
-
 redchanim = np.average(data_red,axis=0)
-ax2.imshow(redchanim,vmin=0, vmax=10000)
-ax2.set_title('Chan 2')
-ax2.set_axis_off()
 
-greenchan = greenchanim.reshape(1,512*512)[0]
-redchan = redchanim.reshape(1,512*512)[0]
+# greenchanim = np.average(data_green[:,256:,:256],axis=0)
+# redchanim = np.average(data_red[:,256:,:256],axis=0)
 
-ax3.scatter(redchan,greenchan,0.02)
-ax3.set_xlabel('Chan 2')
-ax3.set_ylabel('Chan 1')
+b, a = np.polyfit(redchanim.flatten(), greenchanim.flatten(), deg=1)
 
-# Fit linear regression via least squares with numpy.polyfit
-b, a = np.polyfit(redchan, greenchan, deg=1)
+plot_correlation(greenchanim,redchanim)
+plot_correction(greenchanim,redchanim,greenchanim - b * redchanim)
 
-xseq = np.linspace(-15000, 32000, num=32000)
-# Plot regression line
-ax3.plot(xseq, a + b * xseq, color="k", lw=1.5);
+plot_correction(greenchanim,redchanim,greenchanim - 0.068 * redchanim)
+plot_correction(greenchanim,redchanim,greenchanim - 1.54 * redchanim)
+plot_correction(greenchanim,redchanim,greenchanim - 1.6 * redchanim)
 
-ax3.set_xlim([-8000,32000])
-ax3.set_ylim([-800,10000])
+######################################
 
-txt1 = "Coefficient is %1.4f" % b
+# subtract bleedthrough of green into red channel
+# non-rigid regression with nblks x nblks pieces
+nblks = 1
+img1 = greenchanim.copy()
+img2 = redchanim.copy()
+greenchanim_corrected = correct_bleedthrough(512, 512, nblks, img2, img1)
 
-plt.text(-500, 1200,txt1, fontsize=12)
+plot_correction(greenchanim,redchanim,greenchanim_corrected)
 
 #####################################################################################
 
@@ -284,44 +316,3 @@ temp = np.repeat(np.average(data_red,axis=0)[np.newaxis,:, :], np.shape(data_gre
 data_green_corr_v2 = data_green - b * temp
 seqtogif(data_green_corr_v2,savedir,savefilename = 'green_corr_v2.gif')
 
-
-# reader = imread(fname)
-# Data = reader.data()
-
-# ## Show 
-# fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(17,5))
-
-# greenchanim = np.average(Data[0::2,:,:],axis=0)
-# ax1.imshow(greenchanim)
-# ax1.set_title('Chan 1')
-
-# redchanim = np.average(Data[1::2,:,:],axis=0)
-# ax2.imshow(redchanim)
-# ax2.set_title('Chan 2')
-
-# greenchan = greenchanim.reshape(1,512*512)[0]
-# redchan = redchanim.reshape(1,512*512)[0]
-
-# ax3.scatter(redchan,greenchan,0.01)
-
-
-# # greenchan = Data[0,:,:].reshape(1,512*512)[0]
-# # redchan = Data[1,:,:].reshape(1,512*512)[0]
-
-# ### 
-# fig, ax = plt.subplots(figsize = (9, 9))
-
-# # Add scatterplot
-# ax.scatter(redchan, greenchan, s=2, alpha=0.7, edgecolors="k")
-
-# # Fit linear regression via least squares with numpy.polyfit
-# b, a = np.polyfit(redchan, greenchan, deg=1)
-
-# xseq = np.linspace(-15000, 32000, num=32000)
-# # Plot regression line
-# ax.plot(xseq, a + b * xseq, color="k", lw=2.5);
-
-# ax.set_xlim([-10000,32000])
-# ax.set_ylim([-10000,32000])
-
-# print(b)

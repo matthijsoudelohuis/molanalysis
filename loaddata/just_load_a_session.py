@@ -27,4 +27,3 @@ sessions = filter_sessions(protocol)
 
 sessions[0].load_data(load_behaviordata=True,load_calciumdata=True)
 
-
