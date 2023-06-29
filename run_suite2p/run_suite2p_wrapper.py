@@ -5,16 +5,27 @@ This script run the suite2p analysis pipeline, but in separate steps.
 2) correct for the bleedthrough tdTomato signal to the green PMT
 3) run suite2p calcium trace extraction
 Matthijs Oude Lohuis, 2023, Champalimaud Center
+
+# VISTA 1: LPE09829, NSH07422
+# VISTA 2: LPE09830, 
 """
 
+# TODO:
+# auto detect folder for molanalysis
+# auto detect raw data folder
+# automatically taking right correction of PMT signals
+# take right nplanes in init_ops 
+# learn right way of module and folders etc.
+
 import os
+os.chdir('e:\\Python\\molanalysis\\')
+
 import suite2p
 from mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 
-
-rawdatadir          ='O:\\RawData\\'
-animal_ids          = ['LPE10191'] #If empty than all animals in folder will be processed
-sessiondates        = ['2023_05_04']
+rawdatadir          ='G:\\RawData\\'
+animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
+sessiondates        = ['2023_04_11']
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
 
@@ -26,15 +37,16 @@ suite2p.run_s2p(ops=ops, db=db)
 ## tdTomato bleedthrough correction:
 
 coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
-coeff = 0.068 #for 0.6 and 0.4 combination of PMT gains
+# coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
 
 ops = run_bleedthrough_corr(db,ops,coeff)
-
 
 ###################################################################
 ## ROI detection: 
 ops['do_registration']      = False
 ops['roidetect']            = True
+
+# ops['nbinned'] = 1000 #standard 5000
 
 ops = suite2p.run_s2p(ops=ops, db=db)
 

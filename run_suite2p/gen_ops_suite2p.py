@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 """
-Created on Wed Apr  5 14:55:09 2023
-
-@author: USER
+Script to generate parameters for suite2p pipeline with mesoscope recordings in 8 planes
+Matthijs Oude Lohuis, Champalimaud 2023
 """
 import numpy as np
 import suite2p
@@ -49,4 +47,6 @@ ops['neucoeff']             = 0.7
 ops['do_registration']      = False
 ops['roidetect']            = False
 
-np.save('T:/Python/ops_8planes.npy',ops)
+# np.save('T:/Python/ops_8planes.npy',ops)
+np.save('E:/Python/ops_8planes.npy',ops)
+
