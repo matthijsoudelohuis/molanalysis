@@ -6,7 +6,9 @@ Created on Thu Apr  6 18:51:50 2023
 """
 import os, sys
 import numpy as np
-sys.path.append('T:/Python/molanalysis/preprocessing')
+# sys.path.append('T:/Python/molanalysis/preprocessing')
+os.chdir('T:\\Python\\molanalysis\\')
+
 from preprocesslib import *
 
 rawdatadir      = "X:\\Rawdata\\"

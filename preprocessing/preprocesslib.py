@@ -14,7 +14,8 @@ import numpy as np
 from natsort import natsorted 
 from datetime import datetime
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
-from twoplib import get_meta
+# from twoplib import get_meta
+from utils.twoplib import get_meta
         
 def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     """ preprocess general information about this mouse and session """
@@ -280,12 +281,21 @@ def proc_imaging(sesfolder, sessiondata):
     nROIs = len(meta['RoiGroups']['imagingRoiGroup']['rois'])
     #Find the names of the rois:
     roi_area    = [meta['RoiGroups']['imagingRoiGroup']['rois'][i]['name'] for i in range(nROIs)]
+    
     #Find the depths of the planes for each roi:
-    roi_depths  = np.array([meta['RoiGroups']['imagingRoiGroup']['rois'][i]['zs'] for i in range(nROIs)]) #numpy array of depths for each roi
+    roi_depths = np.array([],dtype=int)
+    roi_depths_idx = np.array([],dtype=int)
+
+    for i in range(nROIs):
+        zs = np.array([meta['RoiGroups']['imagingRoiGroup']['rois'][i]['zs']]).flatten()
+        roi_depths = np.append(roi_depths,zs)
+        roi_depths_idx = np.append(roi_depths_idx,np.repeat(i,len(zs)))
+    
     #get all the depths of the planes in order of imaging:
     plane_zs    = np.array(meta_dict['SI.hStackManager.zs'].replace('[','').replace(']','').split(' ')).astype('int')
+    
     #Find the roi to which each plane belongs:
-    plane_roi_idx  = np.array([np.where(roi_depths == plane_zs[i])[0][0] for i in range(ops['nplanes'])])
+    plane_roi_idx = np.array([roi_depths_idx[np.where(roi_depths == plane_zs[i])[0][0]] for i in range(ops['nplanes'])])
 
     for iplane,plane_folder in enumerate(plane_folders):
     # for iplane,plane_folder in enumerate(plane_folders[:1]):

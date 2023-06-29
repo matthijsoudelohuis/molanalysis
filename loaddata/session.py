@@ -43,12 +43,10 @@ class Session():
             print('Loading cell data at {}'.format(self.celldata_path))
             self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
             
-            
             #get only good cells:
             goodcells = self.celldata['iscell'] == 1
             self.celldata            = self.celldata[goodcells].reset_index(drop=True)
             
-    
             if load_behaviordata:
                 print('Loading behavior data at {}'.format(self.behaviordata_path))
                 self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
@@ -59,6 +57,9 @@ class Session():
                 print('Loading calcium data at {}'.format(self.calciumdata_path))
                 self.calciumdata         = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
                 self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells.append(pd.Series([True]),ignore_index = True)],axis=1)
+
+                self.ts_F                = self.calciumdata['timestamps']
+                self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
                 # # zscore all the calcium traces:
                 # calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
             else:

@@ -6,14 +6,7 @@ Author: Matthijs Oude Lohuis, Champalimaud Research
 This script contains a series of functions that analyze activity in visual VR task. 
 """
 
-#TODO:
-# pass arguments to load data from start
-# pass arguments about type of calciumdata to load
-# 
-
 import os
-os.chdir('T:\\Python\\molanalysis\\')
-
 import numpy as np
 from pynwb import NWBHDF5IO
 import matplotlib.pyplot as plt
@@ -23,71 +16,56 @@ from scipy.stats import binned_statistic
 
 from sklearn.decomposition import PCA
 
-from loaddata.session_info import filter_sessions,load_sessions,report_sessions
+procdatadir     = "V:\\Procdata\\"
 
-from utils.psth import compute_tensor,compute_respmat
+animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
+sessiondates        = ['2022_12_9']
 
-protocol            = 'VR'
+## Loop over all selected animals and folders
+if len(animal_ids) == 0:
+    animal_ids = os.listdir(procdatadir)
 
-# session_list = np.array([['LPE09830', '2023_04_10'],
-#                         ['LPE09665', '2023_03_14']])
-session_list = np.array([['LPE09829', '2023_03_29']])
+for animal_id in animal_ids: #for each animal
+    
+    if len(sessiondates) == 0:
+        sessiondates = os.listdir(os.path.join(procdatadir,animal_id)) 
+    
+    for sessiondate in sessiondates: #for each of the sessions for this animal
+        savefilename    = animal_id + "_" + sessiondate + "_VR.nwb" #define save file name
+        savefilename    = os.path.join(procdatadir,animal_id,savefilename) #construct output save directory string
 
-#Load specified list of sessions:
-sessions = load_sessions(protocol,session_list)
-#Alternatively: load sessions that meet criteria:
-# sessions = filter_sessions(protocol)
+        # Open the file in read mode "r"
+        io = NWBHDF5IO(savefilename, mode="r")
+        nwbfile = io.read()
+        io.close()
 
-sessions[0].load_data(load_behaviordata=True,load_calciumdata=True)
 
-#Keep only first 100 cells to remain workable:
-sessions[0].calciumdata = sessions[0].calciumdata.drop(sessions[0].calciumdata.columns[100:],axis=1)
+###### Construct
+F           = nwbfile.processing['ophys']['Fluorescence']['Fluorescence'].data[:]
+# F           = nwbfile.processing['ophys']['dF_F']['dF_F'].data[:]
 
-F               = sessions[0].calciumdata
-F_Z             = st.zscore(F.copy(),axis=1)
+#Filter only selected cells (ROIs) from suite2p
+iscell      = nwbfile.processing['ophys']['ImageSegmentation']['PlaneSegmentation']['iscell'].data[:,0]
+F           = F[:,iscell==1]
 
-ts_F = sessions[0].ts_F.to_numpy()
-
-ts_harp = sessions[0].behaviordata['ts'].to_numpy()
+ts_F        = nwbfile.processing['ophys']['Fluorescence']['Fluorescence'].timestamps[:] #timestamps for imaging data
 
 ## Get interpolated values for behavioral variables at imaging frame rate:
-zpos_F      = np.interp(x=ts_F,xp=ts_harp,
-                        fp=sessions[0].behaviordata['zpos'])
-runspeed_F  = np.interp(x=ts_F,xp=ts_harp,
-                        fp=sessions[0].behaviordata['runspeed'])
-trialnum_F  = np.interp(x=ts_F,xp=ts_harp,
-                        fp=sessions[0].behaviordata['trialnum'])
+ts_harp     = nwbfile.acquisition['CorridorPosition'].timestamps[:]
+zpos_F      = np.interp(x=ts_F,xp=nwbfile.acquisition['CorridorPosition'].timestamps[:],
+                        fp=nwbfile.acquisition['CorridorPosition'].data[:])
+runspeed_F  = np.interp(x=ts_F,xp=nwbfile.acquisition['RunningSpeed'].timestamps[:],
+                        fp=nwbfile.acquisition['RunningSpeed'].data[:])
+trialnum_F  = np.interp(x=ts_F,xp=nwbfile.acquisition['TrialNumber'].timestamps[:],
+                        fp=nwbfile.acquisition['TrialNumber'].data[:])
 
-trialdata = sessions[0].trialdata #convert trials from dynamic table with vector to pandas dataframe
 
-# Define ts at StimStart
-# Define when animal is at StimEnd
-# Define when animal gets reward
+F_Z           = st.zscore(F,axis=0)
 
-# tStimStart = [ts_harp[np.where(np.logical_and(trialnum_F==i and zpos_F>= trialdata.iloc[i].loc['StimStart']))[0][0]] for i in range(1,len(trialdata))]
-# df.iloc[row_number].loc[['A', 'B']]
 
-##############################################################################
-## Construct tensor: 3D 'matrix' of K trials by N neurons by T time bins
-## Parameters for temporal binning
-t_pre       = -1    #pre s
-t_post      = 2     #post s
-binsize     = 0.2   #temporal binsize in s
+## Construct tensor: 3D 'matrix' of N neurons by T trials by S spatial bins
 
-# [tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='binmean')
-
-[tensor,t_axis] = compute_tensor(F_Z, ts_F, trialdata['StimStart'], t_pre, t_post, binsize,method='interp_lin')
-respmat         = tensor[:,:,np.logical_and(t_axis > 0,t_axis < 1)].mean(axis=2)
-[K,N,T]         = np.shape(tensor) #get dimensions of tensor
-
-#Alternative method, much faster:
-respmat         = compute_respmat(calciumdata, ts_F, trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
-
-[K,N]           = np.shape(respmat) #get dimensions of response matrix
-
-# #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
-# temp = pd.DataFrame(np.reshape(np.array(behaviordata['runspeed']),(len(behaviordata['runspeed']),1)))
-# respmat_runspeed = compute_respmat(temp, behaviordata['ts'], trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean')
+trd = nwbfile.trials.to_dataframe() #convert trials from dynamic table with vector to pandas dataframe
 
 ## Parameters for spatial binning
 s_pre       = -100  #pre cm
@@ -98,7 +76,7 @@ binedges    = np.arange(s_pre-binsize/2,s_post+binsize+binsize/2,binsize)
 bincenters  = np.arange(s_pre,s_post+binsize,binsize)
 
 N           = np.shape(F)[1]
-T           = len(trialdata)
+T           = len(trd)
 S           = len(bincenters)
 
 tensor      = np.empty([N,T,S])
@@ -107,8 +85,8 @@ tensor_z    = np.empty([N,T,S])
 for iT in range(T):
     idx = trialnum_F==iT+1
     for iN in range(N):
-        tensor[iN,iT,:] = binned_statistic(zpos_F[idx]-trialdata.loc[iT, 'StimStart'],F[idx,iN], statistic='mean', bins=binedges)[0]
-        tensor_z[iN,iT,:] = binned_statistic(zpos_F[idx]-trialdata.loc[iT, 'StimStart'],F_Z[idx,iN], statistic='mean', bins=binedges)[0]
+        tensor[iN,iT,:] = binned_statistic(zpos_F[idx]-trd.loc[iT, 'stimstart'],F[idx,iN], statistic='mean', bins=binedges)[0]
+        tensor_z[iN,iT,:] = binned_statistic(zpos_F[idx]-trd.loc[iT, 'stimstart'],F_Z[idx,iN], statistic='mean', bins=binedges)[0]
 
 
 ##### Construct heatmaps per stim:
@@ -117,8 +95,8 @@ stimtypes = ['stimA','stimB','stimC','stimD']
 snakeplots = np.empty([N,S,len(stimtypes)])
 
 for iTT in range(len(stimtypes)):
-    # snakeplots[:,:,iTT] = np.nanmean(tensor[:,trialdata['stimright'] == stimtypes[iTT],:],axis=1)
-    snakeplots[:,:,iTT] = np.nanmean(tensor_z[:,trialdata['stimright'] == stimtypes[iTT],:],axis=1)
+    # snakeplots[:,:,iTT] = np.nanmean(tensor[:,trd['stimright'] == stimtypes[iTT],:],axis=1)
+    snakeplots[:,:,iTT] = np.nanmean(tensor_z[:,trd['stimright'] == stimtypes[iTT],:],axis=1)
 
 fig, axes = plt.subplots(nrows=2,ncols=2)
 
@@ -169,7 +147,7 @@ pca     = PCA(n_components=15)
 Xp      = pca.fit_transform(Xr_sc.T).T
 # Xp      = pca.fit_transform(Xr_sc.T).T
 
-trial_type      = trialdata['stimright']
+trial_type      = trd['stimright']
 trial_types     = stimtypes
 t_type_ind      = [np.argwhere(np.array(trial_type) == t_type)[:, 0] for t_type in trial_types]
 
@@ -224,17 +202,17 @@ plt.imshow(Xa)
 
 ## Trial outcomes:
 idx_gonogo          = np.empty(shape=(T, 4),dtype=bool)
-idx_gonogo[:,0]     = (trialdata['rewardtrial'] == 1) & (trialdata.lickresponse == True)
-idx_gonogo[:,1]     = (trialdata['rewardtrial'] == 1) & (trialdata.lickresponse == False)
-idx_gonogo[:,2]     = (trialdata['rewardtrial'] == 0) & (trialdata.lickresponse == True)
-idx_gonogo[:,3]     = (trialdata['rewardtrial'] == 0) & (trialdata.lickresponse == False)
+idx_gonogo[:,0]     = (trd['rewardtrial'] == 1) & (trd.lickresponse == True)
+idx_gonogo[:,1]     = (trd['rewardtrial'] == 1) & (trd.lickresponse == False)
+idx_gonogo[:,2]     = (trd['rewardtrial'] == 0) & (trd.lickresponse == True)
+idx_gonogo[:,3]     = (trd['rewardtrial'] == 0) & (trd.lickresponse == False)
 
 labels_gonogo       = ['HIT', 'MISS', 'FA', 'CR']
 
 fig, ax = plt.subplots()
 
-plt.plot(trialdata['trialnum'],smooth_hitrate,color="green")
-plt.plot(trialdata['trialnum'],smooth_farate,color="brown")
+plt.plot(trd['trialnum'],smooth_hitrate,color="green")
+plt.plot(trd['trialnum'],smooth_farate,color="brown")
 plt.xlabel('trial number')
 plt.ylabel('HITrate / FArate')
 # plt.ylim(0,50)
@@ -251,7 +229,7 @@ for iblock in np.arange(50,ntrials,100):
                         color = colors[1], linewidth = 0))
     
 fig, ax = plt.subplots()
-plt.plot(trialdata['trialnum'],smooth_d_prime,color="blue")
+plt.plot(trd['trialnum'],smooth_d_prime,color="blue")
 plt.xlabel('trial number')
 plt.ylabel('Dprime')
 plt.ylim(0,5)
