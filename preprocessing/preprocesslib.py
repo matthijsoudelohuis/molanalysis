@@ -41,11 +41,12 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
         sessions_overview = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
 
     idx = np.where(np.logical_and(sessions_overview["sessiondate"] == sessiondate,sessions_overview["protocol"] == protocol))[0]
-    sessiondata = pd.merge(sessiondata,sessions_overview.loc[idx])
+    if np.any(idx):
+        sessiondata = pd.merge(sessiondata,sessions_overview.loc[idx])
 
-    age_in_days = (datetime.strptime(sessiondata['sessiondate'][0], "%Y_%m_%d") - datetime.strptime(sessiondata['DOB'][0], "%Y_%m_%d")).days
+        age_in_days = (datetime.strptime(sessiondata['sessiondate'][0], "%Y_%m_%d") - datetime.strptime(sessiondata['DOB'][0], "%Y_%m_%d")).days
     
-    sessiondata         = sessiondata.assign(age_in_days = [age_in_days])
+        sessiondata         = sessiondata.assign(age_in_days = [age_in_days])
 
     return sessiondata
 
@@ -203,14 +204,79 @@ def proc_task(rawdatadir,sessiondata):
     # print("%d licks" % len(lick_ts)) #Give output to check if reasonable
     print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
 
+    #Add the timestamps of entering and exiting stimulus zone:
+    trialdata['tStimStart'] = ''
+    trialdata['tStimEnd'] = ''
+    for t in range(len(trialdata)):
+        IDX             = behaviordata['trialnum']==t+1
+        z_temp          = behaviordata.loc[behaviordata.index[IDX],'zpos'].to_numpy()
+        ts_temp         = behaviordata.loc[behaviordata.index[IDX],'ts'].to_numpy()
+        try:
+            tStimStart      = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'StimStart'])[0][0]]
+        except:
+            tStimStart        = trialdata.loc[trialdata.index[t], 'tStart']
+            print('Stimulus start later than trial end')
+        trialdata.loc[trialdata.index[t], 'tStimStart'] = tStimStart
+        
+        try:
+            tStimEnd        = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'StimEnd'])[0][0]]
+        except:
+            tStimEnd        = trialdata.loc[trialdata.index[t], 'tEnd']
+            print('Stimulus end later than trial end')
+        trialdata.loc[trialdata.index[t], 'tStimEnd'] = tStimEnd
+
     for reward in reward_ts:
         # behaviordata['reward'][np.argmax(reward<behaviordata['ts'])] = True
         behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
     
+    # trialdata['tReward'] = 
+
     # print("%d rewards" % len(reward_ts)) #Give output to check if reasonable
     print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
 
     return sessiondata, trialdata, behaviordata
+
+
+def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
+    
+    sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
+
+    filenames       = os.listdir(sesfolder)
+
+    avi_file        = list(filter(lambda a: '.avi' in a, filenames)) #find the trialdata file
+    csv_file        = list(filter(lambda a: 'cameracsv' in a, filenames)) #find the trialdata file
+
+    csvdata         = pd.read_csv(os.path.join(sesfolder,csv_file[0]))
+    nts             = len(csvdata)
+    ts              = csvdata['Item2'].to_numpy()
+
+    videodata       = pd.DataFrame(data = ts, columns = 'timestamps')
+
+    #Check that the number of frames is ballpark range of what it should be based on framerate and session duration:
+    framerate       = 30
+    sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
+    assert np.isclose(nts,sesdur * framerate,rtol=3)
+    #Check that frame rate matches interframe interval:
+    assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
+    #Check that inter frame interval does not take on crazy values:
+    assert ~np.any(np.logical_or(np.diff(ts)<0.01,np.diff(ts)>0.06))
+
+    #Load FaceMap data: 
+    facemapfile =  list(filter(lambda a: '_proc' in a, filenames)) #find the processed facemap file
+    if os.path.exists(facemapfile):
+        # facemapfile = "W:\\Users\\Matthijs\\Rawdata\\NSH07422\\2023_03_13\\SP\\Behavior\\SP_NSH07422_camera_2023-03-13T16_44_07_proc.npy"
+        facemapfile = "W:\\Users\\Matthijs\\Rawdata\\LPE09829\\2023_03_29\\VR\\Behavior\\VR_LPE09829_camera_2023-03-29T15_32_29_proc.npy"
+        
+        proc = np.load(facemapfile,allow_pickle=True).item()
+        
+        iROI = 0
+        videodata['motionenergy'] = proc['motion'][iROI]
+        PC_labels           = list('videoPC_' + '%s' % k for k in range(0,keepPCs))
+        videodata = pd.concat([videodata,pd.DataFrame(proc['motSVD'][iROI][:,:keepPCs],columns=PC_labels)],axis=1)
+    else:
+        print('Could not locate facemapdata')
+
+    return videodata
 
 def proc_imaging(sesfolder, sessiondata):
     """ integrate preprocessed calcium imaging data """

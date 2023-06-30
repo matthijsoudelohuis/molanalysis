@@ -9,34 +9,31 @@ This script contains a series of functions that analyze activity in visual VR ta
 #TODO:
 # pass arguments to load data from start
 # pass arguments about type of calciumdata to load
-# 
+# set ts of rewards in trialdata
+# set ts of entering reward zone and stim zone in preprocessing
 
 import os
-os.chdir('T:\\Python\\molanalysis\\')
+# os.chdir('T:\\Python\\molanalysis\\')
+os.chdir('E:\\Python\\molanalysis\\')
 
 import numpy as np
-from pynwb import NWBHDF5IO
 import matplotlib.pyplot as plt
 import matplotlib.patches
-import scipy.stats as st
-from scipy.stats import binned_statistic
-
+from scipy.stats import zscore
 from sklearn.decomposition import PCA
-
-from loaddata.session_info import filter_sessions,load_sessions,report_sessions
-
-from utils.psth import compute_tensor,compute_respmat
+from loaddata.session_info import filter_sessions,load_sessions
+from utils.psth import compute_tensor,compute_respmat,compute_tensor_space
 
 protocol            = 'VR'
 
-# session_list = np.array([['LPE09830', '2023_04_10'],
-#                         ['LPE09665', '2023_03_14']])
-session_list = np.array([['LPE09829', '2023_03_29']])
 
-#Load specified list of sessions:
-sessions = load_sessions(protocol,session_list)
-#Alternatively: load sessions that meet criteria:
-# sessions = filter_sessions(protocol)
+session_list = np.array([['LPE09829', '2023_03_29']])
+session_list = np.array([['LPE09829', '2023_03_29'],
+                        ['LPE09829', '2023_03_30'],
+                        ['LPE09829', '2023_03_31']])
+
+sessions = load_sessions(protocol,session_list,load_behaviordata=True,load_calciumdata=True) #Load specified list of sessions:
+# sessions = filter_sessions(protocol) #load sessions that meet criteria:
 
 sessions[0].load_data(load_behaviordata=True,load_calciumdata=True)
 
@@ -44,7 +41,7 @@ sessions[0].load_data(load_behaviordata=True,load_calciumdata=True)
 sessions[0].calciumdata = sessions[0].calciumdata.drop(sessions[0].calciumdata.columns[100:],axis=1)
 
 F               = sessions[0].calciumdata
-F_Z             = st.zscore(F.copy(),axis=1)
+F_Z             = zscore(F.copy(),axis=0)
 
 ts_F = sessions[0].ts_F.to_numpy()
 
@@ -60,12 +57,8 @@ trialnum_F  = np.interp(x=ts_F,xp=ts_harp,
 
 trialdata = sessions[0].trialdata #convert trials from dynamic table with vector to pandas dataframe
 
-# Define ts at StimStart
-# Define when animal is at StimEnd
-# Define when animal gets reward
 
-# tStimStart = [ts_harp[np.where(np.logical_and(trialnum_F==i and zpos_F>= trialdata.iloc[i].loc['StimStart']))[0][0]] for i in range(1,len(trialdata))]
-# df.iloc[row_number].loc[['A', 'B']]
+# Define when animal gets reward
 
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of K trials by N neurons by T time bins
@@ -74,14 +67,12 @@ t_pre       = -1    #pre s
 t_post      = 2     #post s
 binsize     = 0.2   #temporal binsize in s
 
-# [tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='binmean')
-
-[tensor,t_axis] = compute_tensor(F_Z, ts_F, trialdata['StimStart'], t_pre, t_post, binsize,method='interp_lin')
-respmat         = tensor[:,:,np.logical_and(t_axis > 0,t_axis < 1)].mean(axis=2)
+[tensor,tbins] = compute_tensor(F_Z, ts_F, trialdata['tStimStart'], t_pre, t_post, binsize,method='interp_lin')
+respmat         = tensor[:,:,np.logical_and(tbins > 0,tbins < 1)].mean(axis=2)
 [K,N,T]         = np.shape(tensor) #get dimensions of tensor
 
 #Alternative method, much faster:
-respmat         = compute_respmat(calciumdata, ts_F, trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
+respmat         = compute_respmat(F_Z, ts_F, trialdata['tStimStart'],t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
 
 [K,N]           = np.shape(respmat) #get dimensions of response matrix
 
@@ -89,41 +80,30 @@ respmat         = compute_respmat(calciumdata, ts_F, trialdata['tOnset'],t_resp_
 # temp = pd.DataFrame(np.reshape(np.array(behaviordata['runspeed']),(len(behaviordata['runspeed']),1)))
 # respmat_runspeed = compute_respmat(temp, behaviordata['ts'], trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean')
 
+################################ Spatial Tensor #################################
 ## Parameters for spatial binning
 s_pre       = -100  #pre cm
 s_post      = 100   #post cm
 binsize     = 5     #spatial binning in cm
 
-binedges    = np.arange(s_pre-binsize/2,s_post+binsize+binsize/2,binsize)
-bincenters  = np.arange(s_pre,s_post+binsize,binsize)
-
-N           = np.shape(F)[1]
-T           = len(trialdata)
-S           = len(bincenters)
-
-tensor      = np.empty([N,T,S])
-tensor_z    = np.empty([N,T,S])
-
-for iT in range(T):
-    idx = trialnum_F==iT+1
-    for iN in range(N):
-        tensor[iN,iT,:] = binned_statistic(zpos_F[idx]-trialdata.loc[iT, 'StimStart'],F[idx,iN], statistic='mean', bins=binedges)[0]
-        tensor_z[iN,iT,:] = binned_statistic(zpos_F[idx]-trialdata.loc[iT, 'StimStart'],F_Z[idx,iN], statistic='mean', bins=binedges)[0]
-
+# tensor,bincenters = compute_tensor_space(F_Z,ts_F,trialdata['StimStart'],zpos_F,trialnum_F,s_pre=-100,s_post=100,binsize=5,method='interp_lin')
+tensor,sbins    = compute_tensor_space(F_Z.to_numpy(),ts_F,trialdata['StimStart'],zpos_F,trialnum_F,s_pre=-100,s_post=100,binsize=5,method='binmean')
+[K,N,S]         = np.shape(tensor) #get dimensions of tensor
 
 ##### Construct heatmaps per stim:
 
-stimtypes = ['stimA','stimB','stimC','stimD']
+stimtypes = ['A','B','C','D']
 snakeplots = np.empty([N,S,len(stimtypes)])
 
 for iTT in range(len(stimtypes)):
-    # snakeplots[:,:,iTT] = np.nanmean(tensor[:,trialdata['stimright'] == stimtypes[iTT],:],axis=1)
-    snakeplots[:,:,iTT] = np.nanmean(tensor_z[:,trialdata['stimright'] == stimtypes[iTT],:],axis=1)
+    snakeplots[:,:,iTT] = np.nanmean(tensor[trialdata['stimRight'] == stimtypes[iTT],:,:],axis=0)
+    # snakeplots[:,:,iTT] = np.nanmean(tensor[:,trialdata['stimRight'] == stimtypes[iTT],:],axis=1)
+    # snakeplots[:,:,iTT] = np.nanmean(tensor_z[:,trialdata['stimright'] == stimtypes[iTT],:],axis=1)
 
 fig, axes = plt.subplots(nrows=2,ncols=2)
 
 # make data with uneven sampling in x
-X, Y = np.meshgrid(bincenters, range(N))
+X, Y = np.meshgrid(sbins, range(N))
 
 # snakeplots
 # snakeplots2 = np.sort(snakeplots,axis=1)
@@ -131,8 +111,9 @@ X, Y = np.meshgrid(bincenters, range(N))
 for iTT in range(len(stimtypes)):
     plt.subplot(2,2,iTT+1)
     # c = plt.pcolormesh(X,Y,snakeplots2[:,:,iTT], cmap = 'PuRd',vmin=-50.0,vmax=700)
-    # c = plt.pcolormesh(X,Y,snakeplots[:,:,iTT], cmap = 'gnuplot',vmin=-50.0,vmax=600)
-    c = plt.pcolormesh(X,Y,snakeplots[:,:,iTT], cmap = 'gnuplot',vmin=-0.5,vmax=1.5)
+    c = plt.pcolormesh(X,Y,snakeplots[:,:,iTT], cmap = 'gnuplot',vmin=-0.5,vmax=3)
+    # c = plt.pcolormesh(X,Y,snakeplots[:,:,iTT], cmap = 'gnuplot',vmin=-0.5,vmax=1.5)
+    # c = plt.pcolormesh(X,Y,snakeplots[:,:,iTT], cmap = 'gnuplot')
     # plt.imshow(snakeplots[:,:,iTT], cmap = 'autumn' , interpolation = 'nearest')
     plt.title(stimtypes[iTT],fontsize=10)
     plt.ylabel('nNeurons',fontsize=9)
@@ -142,17 +123,18 @@ for iTT in range(len(stimtypes)):
     plt.colorbar(c)
 plt.show()
 
+
 ##
 
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 
-idx_rsp     = (bincenters>-5) & (bincenters<25)
-idx_bsl     = (bincenters>-100) & (bincenters<-10)
+idx_rsp     = (sbins>-10) & (sbins<30)
+idx_bsl     = (sbins>-100) & (sbins<-20)
 # stimactiv   = np.nanmean(tensor[:,:,idx],axis=2)
 
 # stimactiv   = np.nanmean(tensor[:,:,idx_rsp],axis=2) - np.nanmean(tensor[:,:,idx_bsl],axis=2)
-stimactiv   = np.nanmean(tensor_z[:,:,idx_rsp],axis=2) - np.nanmean(tensor_z[:,:,idx_bsl],axis=2)
+stimactiv   = np.nanmean(tensor[:,:,idx_rsp],axis=2) - np.nanmean(tensor[:,:,idx_bsl],axis=2)
 
 def z_score(X):
     # X: ndarray, shape (n_features, n_samples)
@@ -161,7 +143,7 @@ def z_score(X):
     return Xz
 
 
-Xr      = stimactiv
+Xr      = stimactiv.T
 # Xr_sc   = z_score(Xr)
 Xr_sc   = Xr
 
@@ -169,7 +151,7 @@ pca     = PCA(n_components=15)
 Xp      = pca.fit_transform(Xr_sc.T).T
 # Xp      = pca.fit_transform(Xr_sc.T).T
 
-trial_type      = trialdata['stimright']
+trial_type      = trialdata['stimRight']
 trial_types     = stimtypes
 t_type_ind      = [np.argwhere(np.array(trial_type) == t_type)[:, 0] for t_type in trial_types]
 
@@ -191,7 +173,7 @@ sns.despine(fig=fig, top=True, right=True)
 ax.legend(stimtypes)
 
 
-snakeselec = np.array(snakeplots[:,(bincenters>-60) & (bincenters<30),:])
+snakeselec = np.array(snakeplots[:,(sbins>-60) & (sbins<30),:])
 nBins = np.shape(snakeselec)[1]
 Xa = np.reshape(snakeselec, [N,nBins*4])
 
@@ -201,7 +183,7 @@ pca = PCA(n_components=n_components)
 Xa_p = pca.fit_transform(Xa.T).T
 
 trial_size = nBins
-space = bincenters[(bincenters>-60) & (bincenters<30)]
+space = sbins[(sbins>-60) & (sbins<30)]
 
 fig, axes = plt.subplots(1, 3, figsize=[10, 2.8], sharey='row')
 for comp in range(3):
@@ -266,3 +248,20 @@ for iblock in np.arange(50,ntrials,100):
     ax.add_patch(matplotlib.patches.Rectangle((iblock,0),50,5.0, 
                         fill = True, alpha=0.2,
                         color = colors[1], linewidth = 0))
+    
+
+# from rastermap import Rastermap
+
+# model = Rastermap(n_components=1, n_X=30, nPC=200, init='pca')
+
+# # fit does not return anything, it adds attributes to model
+# # attributes: embedding, u, s, v, isort1
+
+# model.fit(sp)
+# plt.imshow(sp[model.isort1, :])
+
+# # fit_transform returns embedding (upsampled cluster identities)
+# embedding = model.fit_transform(sp)
+
+# # transform can be used on new samples with the same number of features as sp
+# embed2 = model.transform(sp2)

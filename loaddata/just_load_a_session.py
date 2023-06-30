@@ -8,7 +8,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 import numpy as np
-from session_info import filter_sessions,load_sessions,report_sessions
+from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 
 # animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
 # sessiondates        = ['2023_04_10']
@@ -24,6 +24,7 @@ sessions = load_sessions(protocol,session_list)
 report_sessions(sessions)
 
 sessions = filter_sessions(protocol)
+sessions = filter_sessions(protocol,load_behaviordata=True,only_animal_id='LPE09830',min_trials=500)
 
 sessions[0].load_data(load_behaviordata=True,load_calciumdata=True)
 

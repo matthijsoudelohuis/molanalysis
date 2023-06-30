@@ -25,38 +25,45 @@ class Session():
         self.animal_id = animal_id
         self.session_id = session_id
 
-    def load_data(self, load_behaviordata=False, load_calciumdata=False):
+    def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False):
 
         self.sessiondata_path   = os.path.join(self.data_folder, 'sessiondata.csv')
         self.trialdata_path     = os.path.join(self.data_folder, 'trialdata.csv')
         self.calciumdata_path   = os.path.join(self.data_folder, 'calciumdata.csv')
         self.celldata_path      = os.path.join(self.data_folder, 'celldata.csv')
         self.behaviordata_path  = os.path.join(self.data_folder, 'behaviordata.csv')
+        self.videodata_path     = os.path.join(self.data_folder, 'videodata.csv')
         
         try: 
-            print('Loading session data at {}'.format(self.sessiondata_path))
+            # print('Loading session data at {}'.format(self.sessiondata_path))
             self.sessiondata  = pd.read_csv(self.sessiondata_path, sep=',', index_col=0)
     
-            print('Loading trial data at {}'.format(self.trialdata_path))
+            # print('Loading trial data at {}'.format(self.trialdata_path))
             self.trialdata  = pd.read_csv(self.trialdata_path, sep=',', index_col=0)
             
-            print('Loading cell data at {}'.format(self.celldata_path))
+            # print('Loading cell data at {}'.format(self.celldata_path))
             self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
             
             #get only good cells:
-            goodcells = self.celldata['iscell'] == 1
-            self.celldata            = self.celldata[goodcells].reset_index(drop=True)
+            goodcells               = self.celldata['iscell'] == 1
+            self.celldata           = self.celldata[goodcells].reset_index(drop=True)
             
             if load_behaviordata:
-                print('Loading behavior data at {}'.format(self.behaviordata_path))
+                # print('Loading behavior data at {}'.format(self.behaviordata_path))
                 self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
             else:
                 self.behaviordata = None
+
+            if load_videodata:
+                # print('Loading video data at {}'.format(self.videodata_path))
+                self.videodata  = pd.read_csv(self.videodata_path, sep=',', index_col=0)
+            else:
+                self.videodata = None
     
             if load_calciumdata:
-                print('Loading calcium data at {}'.format(self.calciumdata_path))
+                # print('Loading calcium data at {}'.format(self.calciumdata_path))
                 self.calciumdata         = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
-                self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells.append(pd.Series([True]),ignore_index = True)],axis=1)
+                self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[pd.concat([~goodcells,pd.Series([True])],ignore_index = True)],axis=1)
 
                 self.ts_F                = self.calciumdata['timestamps']
                 self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)

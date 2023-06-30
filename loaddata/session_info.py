@@ -12,7 +12,7 @@ from loaddata.session import Session
 import os
 
 
-def load_sessions(protocol,session_list):
+def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdata=False):
     """
     This function loads and outputs the session objects that have to be loaded.
     session_list is a 2D np array with animal_id and session_id pairs (each row one session)
@@ -26,7 +26,7 @@ def load_sessions(protocol,session_list):
     # iterate over sessions in requested array:
     for i,ses in enumerate(session_list):
         ses = Session(protocol=protocol,animal_id=session_list[i,0],session_id=session_list[i,1])
-        ses.load_data()
+        ses.load_data(load_behaviordata, load_calciumdata)
         
         sessions.append(ses)
       
@@ -34,7 +34,8 @@ def load_sessions(protocol,session_list):
     
     return sessions
 
-def filter_sessions(protocol,min_cells=None, min_trials=None):
+def filter_sessions(protocol,load_behaviordata=False, load_calciumdata=False,
+                    only_animal_id=None,min_cells=None, min_trials=None):
         #             only_correct=False, min_units=None,
         #             min_units_per_layer=None, min_channels_per_layer=None,
         #             exclude_NA_layer=False, min_perc_correct=None):
@@ -53,18 +54,22 @@ def filter_sessions(protocol,min_cells=None, min_trials=None):
         for session_id in os.listdir(os.path.join(get_data_folder(),protocol,animal_id)):
             
             ses = Session(protocol=protocol,animal_id=animal_id,session_id=session_id)
-            ses.load_data()
+            ses.load_data(load_behaviordata, load_calciumdata)
             
             ## go through specified conditions that have to be met for the session to be included:
             sesflag = True
             
             # SELECT BASED ON # TRIALS
+            if only_animal_id is not None:
+                sesflag = sesflag and animal_id in only_animal_id
+
+            # SELECT BASED ON # TRIALS
             if min_trials is not None:
-                sesflag = len(ses.trialdata) >= min_trials
+                sesflag = sesflag and len(ses.trialdata) >= min_trials
             
             # SELECT BASED ON # CELLS
             if sesflag and min_cells is not None:
-                sesflag = len(ses.celldata) >= min_cells
+                sesflag = sesflag and len(ses.celldata) >= min_cells
                 
             if sesflag:
                 sessions.append(ses)
@@ -84,9 +89,15 @@ def report_sessions(sessions):
     celldata        = pd.DataFrame()
     
     for ses in sessions:
-        sessiondata     = sessiondata.append(ses.sessiondata)
-        trialdata       = trialdata.append(ses.trialdata)
-        celldata        = celldata.append(ses.celldata)
+        # sessiondata     = sessiondata.append(ses.sessiondata)
+        # trialdata       = trialdata.append(ses.trialdata)
+        # celldata        = celldata.append(ses.celldata)
+
+        sessiondata     = pd.concat([sessiondata,ses.sessiondata])
+        trialdata     = pd.concat([trialdata,ses.trialdata])
+        celldata     = pd.concat([celldata,ses.celldata])
+
+
     
     print("{protocol} dataset: {nsessions} sessions, {ntrials} trials".format(
         protocol = pd.unique(sessiondata['protocol']),nsessions = len(sessiondata),ntrials = len(trialdata)))
