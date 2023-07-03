@@ -14,7 +14,7 @@ from utils.twoplib import get_meta
 
 def init_ops(sesfolder):
     
-    ops = np.load('E:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
+    ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
     
     ops['do_registration']      = True
     ops['roidetect']            = False #only do registration in this part
@@ -63,8 +63,8 @@ def run_bleedthrough_corr(db,ops,coeff):
         file_chan2       = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_chan2.bin')
         file_chan1_corr   = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin')
         
-        # with BinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
-        with BinaryFile(filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(filename=file_chan1_corr,Ly=512, Lx=512,n_frames=f1.n_frames) as f3:
+        with BinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
+        # with BinaryFile(filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(filename=file_chan1_corr,Ly=512, Lx=512,n_frames=f1.n_frames) as f3:
             
               for i in np.arange(f1.n_frames):
                   [ind,datagreen]      = f1.read(batch_size=1)
@@ -72,8 +72,8 @@ def run_bleedthrough_corr(db,ops,coeff):
                   
                   datagreencorr = datagreen - coeff * datared
 
-                #   f1.write(data=datagreencorr)
-                  f3.write(data=datagreencorr)
+                  f1.write(data=datagreencorr)
+                #   f3.write(data=datagreencorr)
             
     #move original to subdir and rename corrected to data.bin to be read by suite2p for detection:
     for iplane in np.arange(ops['nplanes']):

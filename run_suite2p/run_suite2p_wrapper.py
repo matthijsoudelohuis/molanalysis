@@ -18,14 +18,17 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 # learn right way of module and folders etc.
 
 import os
-os.chdir('e:\\Python\\molanalysis\\')
+os.chdir('t:\\Python\\molanalysis\\')
 
 import suite2p
-from mol_suite2p_funcs import init_ops, run_bleedthrough_corr
+from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 
-rawdatadir          ='G:\\RawData\\'
-animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-sessiondates        = ['2023_04_11']
+rawdatadir          ='X:\\RawData\\'
+animal_ids          = ['LPE09667'] 
+sessiondates        = ['2023_03_30']
+
+animal_ids          = ['LPE09829'] 
+sessiondates        = ['2023_03_30']
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
 

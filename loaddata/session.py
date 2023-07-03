@@ -25,15 +25,16 @@ class Session():
         self.animal_id = animal_id
         self.session_id = session_id
 
-    def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False):
+    def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
+        #Calciumversion can be 'dF' or 'deconv'
 
         self.sessiondata_path   = os.path.join(self.data_folder, 'sessiondata.csv')
         self.trialdata_path     = os.path.join(self.data_folder, 'trialdata.csv')
-        self.calciumdata_path   = os.path.join(self.data_folder, 'calciumdata.csv')
         self.celldata_path      = os.path.join(self.data_folder, 'celldata.csv')
         self.behaviordata_path  = os.path.join(self.data_folder, 'behaviordata.csv')
         self.videodata_path     = os.path.join(self.data_folder, 'videodata.csv')
-        
+        self.calciumdata_path   = os.path.join(self.data_folder, '%sdata.csv' % calciumversion)
+
         try: 
             # print('Loading session data at {}'.format(self.sessiondata_path))
             self.sessiondata  = pd.read_csv(self.sessiondata_path, sep=',', index_col=0)
@@ -67,12 +68,11 @@ class Session():
 
                 self.ts_F                = self.calciumdata['timestamps']
                 self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
-                # # zscore all the calcium traces:
-                # calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
+
             else:
                 self.calciumdata = None
         except FileNotFoundError:
-            print('There is no data in this directory')
+            print('Could not find session data in {}'.format(self.sessiondata_path))
             
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,
 #                    center_lfp=True):

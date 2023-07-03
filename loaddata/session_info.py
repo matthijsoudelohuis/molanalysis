@@ -12,7 +12,7 @@ from loaddata.session import Session
 import os
 
 
-def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdata=False):
+def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
     """
     This function loads and outputs the session objects that have to be loaded.
     session_list is a 2D np array with animal_id and session_id pairs (each row one session)
@@ -26,7 +26,7 @@ def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdat
     # iterate over sessions in requested array:
     for i,ses in enumerate(session_list):
         ses = Session(protocol=protocol,animal_id=session_list[i,0],session_id=session_list[i,1])
-        ses.load_data(load_behaviordata, load_calciumdata)
+        ses.load_data(load_behaviordata, load_calciumdata,load_videodata,calciumversion)
         
         sessions.append(ses)
       
@@ -35,6 +35,7 @@ def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdat
     return sessions
 
 def filter_sessions(protocol,load_behaviordata=False, load_calciumdata=False,
+                    load_videodata=False, calciumversion='dF',
                     only_animal_id=None,min_cells=None, min_trials=None):
         #             only_correct=False, min_units=None,
         #             min_units_per_layer=None, min_channels_per_layer=None,
@@ -54,7 +55,7 @@ def filter_sessions(protocol,load_behaviordata=False, load_calciumdata=False,
         for session_id in os.listdir(os.path.join(get_data_folder(),protocol,animal_id)):
             
             ses = Session(protocol=protocol,animal_id=animal_id,session_id=session_id)
-            ses.load_data(load_behaviordata, load_calciumdata)
+            ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
             
             ## go through specified conditions that have to be met for the session to be included:
             sesflag = True
@@ -94,9 +95,8 @@ def report_sessions(sessions):
         # celldata        = celldata.append(ses.celldata)
 
         sessiondata     = pd.concat([sessiondata,ses.sessiondata])
-        trialdata     = pd.concat([trialdata,ses.trialdata])
-        celldata     = pd.concat([celldata,ses.celldata])
-
+        trialdata       = pd.concat([trialdata,ses.trialdata])
+        celldata        = pd.concat([celldata,ses.celldata])
 
     
     print("{protocol} dataset: {nsessions} sessions, {ntrials} trials".format(
@@ -104,7 +104,6 @@ def report_sessions(sessions):
 
     print("Neurons in area:")
     print(celldata.groupby('roi_name')['roi_name'].count())
-    
     
     # print("{nneurons} dataset: {nsessions} sessions, {ntrials} trials".format(
         # protocol = sessions[0].sessiondata.protocol,nsessions = len(sessiondata),ntrials = len(trialdata))

@@ -35,10 +35,21 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     sessiondata         = sessiondata.assign(preprocessdate = [datetime.now().strftime("%Y_%m_%d")])
     sessiondata         = sessiondata.assign(protocol = [protocol])
 
-    if protocol in ['IM','GR','RF','SP']:
-        sessions_overview = pd.read_excel(os.path.join(rawdatadir,'VISTA_Sessions_Overview.xlsx'))
-    elif protocol in ['VR']: 
-        sessions_overview = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
+
+    sessions_overview_VISTA = pd.read_excel(os.path.join(rawdatadir,'VISTA_Sessions_Overview.xlsx'))
+    sessions_overview_VR    = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
+
+    if np.any(np.logical_and(sessions_overview_VISTA["sessiondate"] == sessiondate,sessions_overview_VISTA["protocol"] == protocol)):
+        sessions_overview = sessions_overview_VISTA
+    elif np.any(np.logical_and(sessions_overview_VR["sessiondate"] == sessiondate,sessions_overview_VR["protocol"] == protocol)):
+        sessions_overview = sessions_overview_VR
+    else: 
+        print('Session not found in excel session overview')
+
+    # if protocol in ['IM','GR','RF','SP']:
+    #     sessions_overview = pd.read_excel(os.path.join(rawdatadir,'VISTA_Sessions_Overview.xlsx'))
+    # elif protocol in ['VR']: 
+    #     sessions_overview = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
 
     idx = np.where(np.logical_and(sessions_overview["sessiondate"] == sessiondate,sessions_overview["protocol"] == protocol))[0]
     if np.any(idx):
@@ -47,6 +58,8 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
         age_in_days = (datetime.strptime(sessiondata['sessiondate'][0], "%Y_%m_%d") - datetime.strptime(sessiondata['DOB'][0], "%Y_%m_%d")).days
     
         sessiondata         = sessiondata.assign(age_in_days = [age_in_days])
+    else: 
+        print('Session not found in excel session overview')
 
     return sessiondata
 
@@ -250,7 +263,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     nts             = len(csvdata)
     ts              = csvdata['Item2'].to_numpy()
 
-    videodata       = pd.DataFrame(data = ts, columns = 'timestamps')
+    videodata       = pd.DataFrame(data = ts, columns = ['timestamps'])
 
     #Check that the number of frames is ballpark range of what it should be based on framerate and session duration:
     framerate       = 30
@@ -259,11 +272,11 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     #Check that frame rate matches interframe interval:
     assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
     #Check that inter frame interval does not take on crazy values:
-    assert ~np.any(np.logical_or(np.diff(ts)<0.01,np.diff(ts)>0.06))
+    assert ~np.any(np.logical_or(np.diff(ts[1:-1])<0.01,np.diff(ts[1:-1])>0.06))
 
     #Load FaceMap data: 
     facemapfile =  list(filter(lambda a: '_proc' in a, filenames)) #find the processed facemap file
-    if os.path.exists(facemapfile):
+    if facemapfile and os.path.exists(facemapfile):
         # facemapfile = "W:\\Users\\Matthijs\\Rawdata\\NSH07422\\2023_03_13\\SP\\Behavior\\SP_NSH07422_camera_2023-03-13T16_44_07_proc.npy"
         facemapfile = "W:\\Users\\Matthijs\\Rawdata\\LPE09829\\2023_03_29\\VR\\Behavior\\VR_LPE09829_camera_2023-03-29T15_32_29_proc.npy"
         
@@ -274,7 +287,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
         PC_labels           = list('videoPC_' + '%s' % k for k in range(0,keepPCs))
         videodata = pd.concat([videodata,pd.DataFrame(proc['motSVD'][iROI][:,:keepPCs],columns=PC_labels)],axis=1)
     else:
-        print('Could not locate facemapdata')
+        print('#######################  Could not locate facemapdata...')
 
     return videodata
 
@@ -442,20 +455,21 @@ def proc_imaging(sesfolder, sessiondata):
  
         #construct dataframe with activity by cells: give unique cell_id as label:
         cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
-        # calciumdata_plane   = pd.DataFrame(F, columns=cell_ids)
-        calciumdata_plane   = pd.DataFrame(spks, columns=cell_ids)
-        calciumdata_plane['timestamps']   = ts_master    #add timestamps
-
         
-        if iplane == 0:
-            calciumdata = calciumdata_plane.copy()
-        else:
-            calciumdata = calciumdata.merge(calciumdata_plane)
-            
-    #Finally set which cells are labeled with tdTomato: 
-    # celldata["labeled"] = celldata['chan2_prob'] > 0.75
+        #Save both deconvolved and fluorescence data:
+        dFdata_plane                    = pd.DataFrame(dF, columns=cell_ids)
+        dFdata_plane['timestamps']      = ts_master    #add timestamps
+        deconvdata_plane                = pd.DataFrame(spks, columns=cell_ids)   
+        deconvdata_plane['timestamps']  = ts_master    #add timestamps
 
-    return sessiondata,celldata,calciumdata
+        if iplane == 0:
+            dFdata = dFdata_plane.copy()
+            deconvdata = deconvdata_plane.copy()
+        else:
+            dFdata = dFdata.merge(dFdata_plane)
+            deconvdata = deconvdata.merge(deconvdata_plane)
+            
+    return sessiondata,celldata,dFdata,deconvdata
 
 def align_timestamps(sessiondata, ops, triggerdata):
     # get idx of frames belonging to this protocol:

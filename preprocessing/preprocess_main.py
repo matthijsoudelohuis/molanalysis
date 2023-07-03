@@ -9,27 +9,26 @@ Preprocesses behavioral data, task and trial data, imaging data etc.
 
 import os, sys
 import numpy as np
-# sys.path.append('T:/Python/molanalysis/preprocessing')
-os.chdir('E:\\Python\\molanalysis\\')
+# os.chdir('E:\\Python\\molanalysis\\')
+os.chdir('T:\\Python\\molanalysis\\')
 
 from preprocessing.preprocesslib import *
 
-# rawdatadir      = "X:\\Rawdata\\"
-# procdatadir     = "V:\\Procdata\\"
+rawdatadir      = "X:\\Rawdata\\"
+procdatadir     = "V:\\Procdata\\"
 
-rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
-procdatadir     = "E:\\Procdata\\"
+# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+# procdatadir     = "E:\\Procdata\\"
 
-
-# animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-# sessiondates        = ['2023_04_10']
+animal_ids          = ['LPE09667'] #If empty than all animals in folder will be processed
+sessiondates        = ['2023_03_29','2023_03_30']
+# sessiondates        = []
 animal_ids          = ['LPE09829'] #If empty than all animals in folder will be processed
-# sessiondates        = ['2023_03_30']
-sessiondates        = ['2023_03_29']
+sessiondates        = ['2023_03_29','2023_03_31']
 
 # protocols           = ['IM','GR','RF','SP']
 # protocols           = ['RF']
-protocols           = ['VR']
+protocols           = ['VR', 'RF']
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -77,38 +76,16 @@ for animal_id in animal_ids: #for each animal
                     trialdata = proc_IM(rawdatadir,sessiondata)
                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
                 
-                
-                videodata         = proc_videodata(rawdatadir,animal_id,sessiondate,protocol)
-                
-                sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
-
-                filenames       = os.listdir(sesfolder)
-    
-                avi_file        = list(filter(lambda a: '.avi' in a, filenames)) #find the trialdata file
-                csv_file        = list(filter(lambda a: 'cameracsv' in a, filenames)) #find the trialdata file
-
-                csvdata       = pd.read_csv(os.path.join(sesfolder,csv_file[0]))
-                nts = len(csvdata)
-                ts = csvdata['Item2'].to_numpy()
-
-                framerate = 30
-
-                #Check that the number of frames is ballpark range of what it should be based on framerate and session duration:
-                sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
-                assert np.isclose(nts,sesdur * framerate,rtol=3)
-                #Check that frame rate matches interframe interval:
-                assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
-                #Check that inter frame interval does not take on crazy values:
-                assert ~np.any(np.logical_or(np.diff(ts)<0.01,np.diff(ts)>0.06))
-
-                videodata = pd.DataFrame(data = ts, columns = 'timestamps')
+                videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
+                videodata.to_csv(os.path.join(outdir,"videodata.csv"), sep=',')
 
                 if os.path.exists(os.path.join(sesfolder,"suite2p")):
                     print('Detected imaging data\n')
-                    [sessiondata,celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
+                    [sessiondata,celldata,dFdata,deconvdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
                     print('Saving imaging data\n')
                     celldata.to_csv(os.path.join(outdir,"celldata.csv"), sep=',')
-                    calciumdata.to_csv(os.path.join(outdir,"calciumdata.csv"), sep=',')
+                    dFdata.to_csv(os.path.join(outdir,"dFdata.csv"), sep=',')
+                    deconvdata.to_csv(os.path.join(outdir,"deconvdata.csv"), sep=',')
                 
                 #Save sessiondata:
                 sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')
