@@ -16,7 +16,8 @@ from datetime import datetime
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
 # from twoplib import get_meta
 from utils.twoplib import get_meta
-        
+import scipy.stats as st
+
 def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     """ preprocess general information about this mouse and session """
     
@@ -422,20 +423,24 @@ def proc_imaging(sesfolder, sessiondata):
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
 
-        if iplane == 0: #if first plane then init dataframe, otherwise append
-            celldata = celldata_plane.copy()
-        else:
-            celldata = celldata.append(celldata_plane)
-            
-        #load suite2p activity outputs:
+        ##################### load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
         Fneu                = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
         spks                = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
-        # Compute dF/F:
-        dF              = F - 0.7*Fneu
-        dF              = calc_dF(dF, ops['baseline'], ops['win_baseline'], 
-                                ops['sig_baseline'], ops['fs'], ops['prctile_baseline'])
         
+        # Compute dF/F:
+        dF     = calculate_dff(F, Fneu,prc=20) #see function below
+
+        # Calculate the noise level of the cells ##### Rupprecht et al. 2021 Nat Neurosci.
+        noise_level         = np.median(np.abs(np.diff(dF,axis=1)),axis=1)/np.sqrt(ops['fs'])
+        celldata['noise_level'] = noise_level
+
+        #Count the number of events by taking stretches with z-scored activity above 2:
+        zF              = st.zscore(dF.copy(),axis=1)
+        nEvents         = np.sum(np.diff(np.ndarray.astype(zF > 2,dtype='uint8'))==1,axis=1)
+        event_rate      = nEvents / (ops['nframes'] / ops['fs'])
+        celldata['event_rate'] = event_rate
+
         F = F[:,protocol_frame_idx_plane==1].transpose()
         Fneu = Fneu[:,protocol_frame_idx_plane==1].transpose()
         spks = spks[:,protocol_frame_idx_plane==1].transpose()
@@ -453,6 +458,12 @@ def proc_imaging(sesfolder, sessiondata):
         else:
             print("Problem with timestamps and imaging frames")
  
+ 
+        if iplane == 0: #if first plane then init dataframe, otherwise append
+            celldata = celldata_plane.copy()
+        else:
+            celldata = celldata.append(celldata_plane)
+            
         #construct dataframe with activity by cells: give unique cell_id as label:
         cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
         
@@ -520,6 +531,16 @@ def list_tifs(dir):
                 r.append(os.path.join(root, name))
     return r
 
+# Helper function for delta F/F0:
+def calculate_dff(F, Fneu, prc=20): #Rupprecht et al. 2021
+    # correct trace for neuropil contamination:
+    Fc = F - 0.7 * Fneu + np.median(Fneu,axis=1,keepdims=True)
+    # Establish baseline as percentile of corrected trace (50 is median)
+    F0 = np.percentile(Fc,prc,axis=1,keepdims=True)
+    #Compute dF / F0: 
+    dFF = (Fc - F0) / F0
+    return dFF
+
 def calc_dF(F: np.ndarray, baseline: str, win_baseline: float,
                sig_baseline: float, fs: float, prctile_baseline: float = 8) -> np.ndarray:
     """ preprocesses fluorescence traces for spike deconvolution
@@ -571,3 +592,7 @@ def calc_dF(F: np.ndarray, baseline: str, win_baseline: float,
     F = F - Flow
 
     return F
+
+ # dF              = F - 0.7*Fneu
+        # dF              = calc_dF(dF, ops['baseline'], ops['win_baseline'], 
+        #                         ops['sig_baseline'], ops['fs'], ops['prctile_baseline'])

@@ -20,7 +20,13 @@ plt.show()
 plt.figure(figsize=(15, 8))
 for i in range(15):
     ax = plt.subplot(3, 5, i + 1)
-    ax.imshow(proc['motMask_reshape'][0][:, :, i] / proc['motMask_reshape'][0][:, :, i].std(), vmin=-2, vmax=2)
+    ax.imshow(proc['motMask_reshape'][1][:, :, i] / proc['motMask_reshape'][1][:, :, i].std(), vmin=-2, vmax=2)
     ax.axis("off")
 plt.show()
 
+plt.figure(figsize=(15, 8))
+for i in range(15):
+    ax = plt.subplot(3, 5, i + 1)
+    ax.imshow(proc['motMask_reshape'][1][:, :, i] / proc['motMask_reshape'][1][:, :, i].std(), vmin=-2, vmax=2)
+    ax.axis("off")
+plt.show()
