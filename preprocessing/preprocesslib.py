@@ -277,9 +277,9 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
 
     #Load FaceMap data: 
     facemapfile =  list(filter(lambda a: '_proc' in a, filenames)) #find the processed facemap file
-    if facemapfile and os.path.exists(facemapfile):
+    if facemapfile and len(facemapfile)==1 and os.path.exists(facemapfile[0]):
         # facemapfile = "W:\\Users\\Matthijs\\Rawdata\\NSH07422\\2023_03_13\\SP\\Behavior\\SP_NSH07422_camera_2023-03-13T16_44_07_proc.npy"
-        facemapfile = "W:\\Users\\Matthijs\\Rawdata\\LPE09829\\2023_03_29\\VR\\Behavior\\VR_LPE09829_camera_2023-03-29T15_32_29_proc.npy"
+        # facemapfile = "W:\\Users\\Matthijs\\Rawdata\\LPE09829\\2023_03_29\\VR\\Behavior\\VR_LPE09829_camera_2023-03-29T15_32_29_proc.npy"
         
         proc = np.load(facemapfile,allow_pickle=True).item()
         

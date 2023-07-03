@@ -9,22 +9,22 @@ Preprocesses behavioral data, task and trial data, imaging data etc.
 
 import os, sys
 import numpy as np
-# os.chdir('E:\\Python\\molanalysis\\')
-os.chdir('T:\\Python\\molanalysis\\')
+os.chdir('E:\\Python\\molanalysis\\')
+# os.chdir('T:\\Python\\molanalysis\\')
 
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "X:\\Rawdata\\"
-procdatadir     = "V:\\Procdata\\"
+# rawdatadir      = "X:\\Rawdata\\"
+# procdatadir     = "V:\\Procdata\\"
 
-# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
-# procdatadir     = "E:\\Procdata\\"
+rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+procdatadir     = "E:\\Procdata\\"
 
 animal_ids          = ['LPE09667'] #If empty than all animals in folder will be processed
 sessiondates        = ['2023_03_29','2023_03_30']
 # sessiondates        = []
 animal_ids          = ['LPE09829'] #If empty than all animals in folder will be processed
-sessiondates        = ['2023_03_29','2023_03_31']
+sessiondates        = ['2023_03_29']
 
 # protocols           = ['IM','GR','RF','SP']
 # protocols           = ['RF']
