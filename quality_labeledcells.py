@@ -44,6 +44,17 @@ sns.lineplot(data=celldata, x="depth",y=celldata['skew'],estimator='mean')
 
 ##### 
 
+#Show total counts across all planes:
+fig = plt.figure(figsize=[5, 4])
+sns.histplot(data=celldata,x="redcell_prob",hue='redcell',stat='count',linestyle='solid',binwidth=0.025,element='step')
+
+#Show for each plane separately, hack = split by depths assuming each plane has different micrometer of depth
+fig = plt.figure(figsize=[5, 4])
+
+for i,depth in enumerate(np.unique(celldata['depth'])):
+    sns.kdeplot(data=celldata[celldata['depth'] == depth],x="redcell_prob",hue='redcell',linestyle='solid')
+
+
 #################### 
 
 plt.figure(figsize=(5,4))
