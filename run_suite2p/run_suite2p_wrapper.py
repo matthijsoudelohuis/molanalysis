@@ -6,8 +6,10 @@ This script run the suite2p analysis pipeline, but in separate steps.
 3) run suite2p calcium trace extraction
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 
-# VISTA 1: LPE09829, NSH07422
+# VISTA 1:  NSH07430,  NSH07435,  LPE10190, 
+# LPE09829, NSH07422
 # VISTA 2: LPE09830, 
+# X: 
 """
 
 # TODO:
@@ -23,13 +25,13 @@ os.chdir('t:\\Python\\molanalysis\\')
 import suite2p
 from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 
-rawdatadir          ='X:\\RawData\\'
+rawdatadir          ='O:\\RawData\\'
 animal_ids          = ['LPE09667'] 
 sessiondates        = ['2023_03_30']
 
-animal_ids          = ['LPE09829'] 
-sessiondates        = ['2023_03_30']
-
+animal_ids          = ['LPE09830'] 
+sessiondates        = ['2023_04_12']
+ 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
 
 ###################################################################
