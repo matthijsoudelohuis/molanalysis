@@ -36,7 +36,6 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     sessiondata         = sessiondata.assign(preprocessdate = [datetime.now().strftime("%Y_%m_%d")])
     sessiondata         = sessiondata.assign(protocol = [protocol])
 
-
     sessions_overview_VISTA = pd.read_excel(os.path.join(rawdatadir,'VISTA_Sessions_Overview.xlsx'))
     sessions_overview_VR    = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
 
@@ -54,11 +53,9 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
 
     idx = np.where(np.logical_and(sessions_overview["sessiondate"] == sessiondate,sessions_overview["protocol"] == protocol))[0]
     if np.any(idx):
-        sessiondata = pd.merge(sessiondata,sessions_overview.loc[idx])
-
+        sessiondata = pd.merge(sessiondata,sessions_overview.loc[idx]) #Copy all the data from the excel to sessiondata dataframe
         age_in_days = (datetime.strptime(sessiondata['sessiondate'][0], "%Y_%m_%d") - datetime.strptime(sessiondata['DOB'][0], "%Y_%m_%d")).days
-    
-        sessiondata         = sessiondata.assign(age_in_days = [age_in_days])
+        sessiondata         = sessiondata.assign(age_in_days = [age_in_days]) #Store the age in days at time of the experiment
     else: 
         print('Session not found in excel session overview')
 
@@ -78,8 +75,44 @@ def proc_behavior_passive(rawdatadir,sessiondata):
     #Get data, construct dataframe and modify a bit:
     behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
     behaviordata.columns = ["rawvoltage","ts","zpos","runspeed"] #rename the columns
-    behaviordata = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
-    behaviordata = behaviordata.iloc[::10, :].reset_index(drop=True) #subsample data 10 times (to 100 Hz)
+    behaviordata        = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
+
+    #Remove segments with double sampling (here something went wrong)
+    #Remove that piece that has timestamps overlapping, find by finding first timestamp again greater than reset
+    idx = np.where(np.diff(behaviordata['ts'])<0)[0]
+    restartidx = []
+    for i in idx:
+        restartidx.append(np.where(behaviordata['ts'] > behaviordata['ts'][i])[0][0])
+
+    for i,r in zip(idx,restartidx):
+        # print(i,r)
+        behaviordata.drop(behaviordata.loc[i:r].index,inplace=True)
+        print('Removed double sampled harp data with duration %1.2f seconds' % ((r-i)/1000))
+
+    behaviordata = behaviordata.reset_index(drop=True)
+
+    # Piece of debug code for chunks
+    # prepost = 900 #sometimes data is saved double: delete ths overlapping part
+    # import matplotlib.pyplot as plt
+    # for i in idx:
+    #     plt.figure()
+    #     plt.plot(behaviordata['ts'][i-prepost:i+prepost].to_numpy())
+    #     plt.plot(behaviordata['ts'][i],'k.')
+    #     # plt.plot(behaviordata['runspeed'][i-prepost:i+prepost])
+    #     plt.plot(behaviordata['ts'][i-prepost:i+prepost],behaviordata['runspeed'][i-prepost:i+prepost]) 
+    #     plt.plot(behaviordata['ts'][i],behaviordata['runspeed'][i],'k.') 
+
+    #subsample data 10 times (to 100 Hz)
+    behaviordata = behaviordata.iloc[::10, :].reset_index(drop=True) 
+
+    #some checks:
+    # if sessiondata['session_id'][0] not in ['LPE09665_2023_03_15','LPE09665_2023_03_20']:
+    # assert(np.allclose(np.diff(behaviordata['ts']),1/100,rtol=0.1)) #timestamps ascending and around sampling rate
+    runspeed = behaviordata['runspeed'][1000:].to_numpy()
+    assert(np.all(runspeed > -50) and all(runspeed < 100)) #running speed (after initial phase) within reasonable range
+
+
+    behaviordata['session_id']     = sessiondata['session_id'][0]
 
     return behaviordata
 
@@ -92,6 +125,17 @@ def proc_GR(rawdatadir,sessiondata):
     trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
     trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=0)
     
+    #Checks:
+    nOris = len(pd.unique(trialdata['Orientation']))
+    assert(nOris==8 or nOris == 16) #8 or 16 distinct orientations
+    ori_counts = trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
+    assert(all(ori_counts > 50) and all(ori_counts < 400)) #between 50 and 400 repetitions
+
+    assert(np.allclose(trialdata['tOffset'] - trialdata['tOnset'],0.75,atol=0.1)) #stimulus duration all around 0.75s
+    assert(np.allclose(np.diff(trialdata['tOnset']),2,atol=0.1)) #total trial duration all around 2s
+
+    trialdata['session_id']     = sessiondata['session_id'][0]
+
     return trialdata
 
 def proc_IM(rawdatadir,sessiondata):
@@ -103,6 +147,8 @@ def proc_IM(rawdatadir,sessiondata):
     trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
     trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=0)
     
+    trialdata['session_id']     = sessiondata['session_id'][0]
+
     return trialdata
 
 def proc_RF(rawdatadir,sessiondata):
@@ -123,6 +169,14 @@ def proc_RF(rawdatadir,sessiondata):
     yGrid           = 13
     nGrids          = 1800
     
+    nGrids_emp = int(len(grid_array)/xGrid/yGrid)
+    if nGrids_emp != nGrids:
+        if np.isclose(len(grid_array)/xGrid/yGrid,nGrids,atol=1):
+            nGrids          = nGrids_emp
+            print('\n####### One grid too many or too few.... Correcting for it.\n')
+        else:
+            print('\n####### Problem with number of grids in receptive field mapping\n')
+
     grid_array                      = np.reshape(grid_array, [nGrids,xGrid,yGrid])
     grid_array                      = np.transpose(grid_array, [1,2,0])
     grid_array = np.rot90(grid_array, k=1, axes=(0,1))
@@ -132,7 +186,8 @@ def proc_RF(rawdatadir,sessiondata):
     grid_array[grid_array==-128]    = 0
     
     # fig, ax = plt.subplots(figsize=(7, 3))
-    # ax.imshow(grid_array[:,:,0].transpose(), aspect='auto',cmap='gray')
+    # ax.imshow(grid_array[:,:,0], aspect='auto',cmap='gray')
+    # ax.imshow(grid_array[:,:,-1], aspect='auto',cmap='gray')
     
     trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
 
@@ -158,7 +213,6 @@ def proc_task(rawdatadir,sessiondata):
     #Init output dataframes:
     trialdata       = pd.DataFrame()
     behaviordata    = pd.DataFrame()
-
 
     #Process behavioral data:
     filenames       = os.listdir(sesfolder)
@@ -248,6 +302,9 @@ def proc_task(rawdatadir,sessiondata):
     # print("%d rewards" % len(reward_ts)) #Give output to check if reasonable
     print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
 
+    behaviordata['session_id']  = sessiondata['session_id'][0]
+    trialdata['session_id']     = sessiondata['session_id'][0]
+    
     return sessiondata, trialdata, behaviordata
 
 
@@ -267,14 +324,25 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     videodata       = pd.DataFrame(data = ts, columns = ['timestamps'])
 
     #Check that the number of frames is ballpark range of what it should be based on framerate and session duration:
-    framerate       = 30
-    sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
-    assert np.isclose(nts,sesdur * framerate,rtol=3)
-    #Check that frame rate matches interframe interval:
-    assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
-    #Check that inter frame interval does not take on crazy values:
-    assert ~np.any(np.logical_or(np.diff(ts[1:-1])<0.01,np.diff(ts[1:-1])>0.06))
-
+    
+    if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") > datetime(2023, 3, 30):
+        
+        framerate = 30
+        sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
+        assert np.isclose(nts,sesdur * framerate,rtol=3)
+        #Check that frame rate matches interframe interval:
+        assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
+        #Check that inter frame interval does not take on crazy values:
+        assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
+    else:
+        framerate = np.round(1/np.mean(np.diff(ts)))
+        idx = np.where(np.diff(ts[1:-1])<1/framerate/3)[0] + 2
+        for i in idx:
+            ts[i] = np.mean((ts[i-1],ts[i+1]))
+        idx = np.where(np.diff(ts[1:-1])>1/framerate*2)[0] + 2
+        for i in idx:
+            ts[i] = np.mean((ts[i-1],ts[i+1]))
+    
     #Load FaceMap data: 
     facemapfile =  list(filter(lambda a: '_proc' in a, filenames)) #find the processed facemap file
     if facemapfile and len(facemapfile)==1 and os.path.exists(facemapfile[0]):
@@ -284,11 +352,13 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
         proc = np.load(facemapfile,allow_pickle=True).item()
         
         iROI = 0
-        videodata['motionenergy'] = proc['motion'][iROI]
-        PC_labels           = list('videoPC_' + '%s' % k for k in range(0,keepPCs))
+        videodata['motionenergy']   = proc['motion'][iROI]
+        PC_labels                   = list('videoPC_' + '%s' % k for k in range(0,keepPCs))
         videodata = pd.concat([videodata,pd.DataFrame(proc['motSVD'][iROI][:,:keepPCs],columns=PC_labels)],axis=1)
     else:
         print('#######################  Could not locate facemapdata...')
+
+    videodata['session_id']  = sessiondata['session_id'][0]
 
     return videodata
 
@@ -433,13 +503,13 @@ def proc_imaging(sesfolder, sessiondata):
 
         # Calculate the noise level of the cells ##### Rupprecht et al. 2021 Nat Neurosci.
         noise_level         = np.median(np.abs(np.diff(dF,axis=1)),axis=1)/np.sqrt(ops['fs'])
-        celldata['noise_level'] = noise_level
+        celldata_plane['noise_level'] = noise_level
 
         #Count the number of events by taking stretches with z-scored activity above 2:
         zF              = st.zscore(dF.copy(),axis=1)
         nEvents         = np.sum(np.diff(np.ndarray.astype(zF > 2,dtype='uint8'))==1,axis=1)
         event_rate      = nEvents / (ops['nframes'] / ops['fs'])
-        celldata['event_rate'] = event_rate
+        celldata_plane['event_rate'] = event_rate
 
         F = F[:,protocol_frame_idx_plane==1].transpose()
         Fneu = Fneu[:,protocol_frame_idx_plane==1].transpose()
@@ -480,6 +550,10 @@ def proc_imaging(sesfolder, sessiondata):
             dFdata = dFdata.merge(dFdata_plane)
             deconvdata = deconvdata.merge(deconvdata_plane)
             
+    celldata['session_id']      = sessiondata['session_id'][0]
+    dFdata['session_id']        = sessiondata['session_id'][0]
+    deconvdata['session_id']    = sessiondata['session_id'][0]
+
     return sessiondata,celldata,dFdata,deconvdata
 
 def align_timestamps(sessiondata, ops, triggerdata):
