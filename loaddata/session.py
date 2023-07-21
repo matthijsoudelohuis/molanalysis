@@ -64,6 +64,8 @@ class Session():
             if load_calciumdata:
                 # print('Loading calcium data at {}'.format(self.calciumdata_path))
                 self.calciumdata         = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
+                self.calciumdata         = self.calciumdata.drop('session_id',axis=1)
+
                 self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[pd.concat([~goodcells,pd.Series([True])],ignore_index = True)],axis=1)
 
                 self.ts_F                = self.calciumdata['timestamps']

@@ -103,7 +103,7 @@ fa_scores_V1_spont_std = scipy.stats.sem(fa_scores_V1_spont, axis = 1)
 
 fig = plt.figure(figsize=(12, 8))
 
-plt.suptitle('V1 stimulus period - session ' + sess)
+plt.suptitle('V1 stimulus period - session ' + sess.session_id)
 
 for i in range(n_ori):
     
@@ -125,13 +125,13 @@ for i in range(n_ori):
 plt.tight_layout()
 manager = plt.get_current_fig_manager()
 manager.window.showMaximized()
-plt.savefig('/media/storage2/joana/PhD/V1-V2_analysis/FA_analysis/FA_LL_V1_stimulus_' + sess + '.svg', format = 'svg')
+# plt.savefig('/media/storage2/joana/PhD/V1-V2_analysis/FA_analysis/FA_LL_V1_stimulus_' + sess + '.svg', format = 'svg')
 
     # V1 spontaneous period for all orientations
 
 fig = plt.figure(figsize=(12, 8))
 
-plt.suptitle('V1 spontaneous period - session' + sess)
+plt.suptitle('V1 spontaneous period - session' + sess.session_id)
 
 for i in range(n_ori):
     
@@ -153,7 +153,7 @@ for i in range(n_ori):
 plt.tight_layout()
 manager = plt.get_current_fig_manager()
 manager.window.showMaximized()
-plt.savefig('/media/storage2/joana/PhD/V1-V2_analysis/FA_analysis/FA_LL_V1_spontaneous_' + sess + '.svg', format = 'svg')
+# plt.savefig('/media/storage2/joana/PhD/V1-V2_analysis/FA_analysis/FA_LL_V1_spontaneous_' + sess + '.svg', format = 'svg')
         
 #%% Scatter plots of V1 and V2 dimensionalities
 

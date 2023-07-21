@@ -6,7 +6,6 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 ####################################################
-# import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -21,79 +20,80 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from sklearn.decomposition import PCA
 
-%matplotlib inline
+# %matplotlib inline
 
 ##################################################
 session_list        = np.array([['LPE09830','2023_04_10']])
-sessions            = load_sessions(protocol = 'GR',session_list=session_list)
+sessions            = load_sessions(protocol = 'GR',session_list=session_list,
+                                    load_behaviordata=True, load_calciumdata=True, load_videodata=False, calciumversion='deconv')
 
-sessions[0].load_data(load_behaviordata=True,load_calciumdata=True)
-
-sessiondata         = sessions[0].sessiondata
-celldata            = sessions[0].celldata
-calciumdata         = sessions[0].calciumdata
-trialdata           = sessions[0].trialdata
-behaviordata        = sessions[0].behaviordata
-
-
-#Get timestamps and remove from dataframe:
-ts_F                = np.array(calciumdata['timestamps'])
-calciumdata         = calciumdata.drop(columns=['timestamps'],axis=1)
-
-calciumdata         = calciumdata.drop(calciumdata.columns[100:],axis=1)
+#Get n neurons from V1 and from PM:
+n                   = 100
+V1_selec            = np.random.choice(np.where(sessions[0].celldata['roi_name']=='V1')[0],n)
+PM_selec            = np.random.choice(np.where(sessions[0].celldata['roi_name']=='PM')[0],n)
+sessions[0].calciumdata     = sessions[0].calciumdata.iloc[:,np.concatenate((V1_selec,PM_selec))]
+sessions[0].celldata        = sessions[0].celldata.iloc[np.concatenate((V1_selec,PM_selec)),:]
 
 # zscore all the calcium traces:
-calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
+# calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
 
 ######################################
 #Show some traces and some stimuli to see responses:
 
-example_cells = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
-
-example_cells = [6,23,130,99,361,177,153,413,435]
-
-trialsel = np.array([50,90])
-
-example_tstart = trialdata['tOnset'][trialsel[0]-1]
-
-example_tstop = trialdata['tOnset'][trialsel[1]-1]
-
-excerpt = np.array(calciumdata.loc[np.logical_and(ts_F>example_tstart,ts_F<example_tstop)])
-excerpt = excerpt[:,example_cells]
-
-min_max_scaler = preprocessing.MinMaxScaler()
-excerpt = min_max_scaler.fit_transform(excerpt)
-
-# spksselec = spksselec 
-[nframes,ncells] = np.shape(excerpt)
-
-for i in range(ncells):
-    excerpt[:,i] =  excerpt[:,i] + i
-
-oris = np.unique(trialdata['Orientation'])
-rgba_color = plt.get_cmap('hsv',lut=16)(np.linspace(0, 1, len(oris)))  
-  
-fig, ax = plt.subplots(figsize=[12, 6])
-plt.plot(ts_F[np.logical_and(ts_F>example_tstart,ts_F<example_tstop)],excerpt,linewidth=0.5,color='black')
-plt.show()
-
-for i in np.arange(trialsel[0],trialsel[1]):
-    ax.add_patch(plt.Rectangle([trialdata['tOnset'][i],0],1,ncells,alpha=0.3,linewidth=0,
-                               facecolor=rgba_color[np.where(oris==trialdata['Orientation'][i])]))
+def show_excerpt_traces_gratings(Session,example_cells=None,trialsel=None):
     
-handles= []
-for i,ori in enumerate(oris):
-    handles.append(ax.add_patch(plt.Rectangle([0,0],1,ncells,alpha=0.3,linewidth=0,facecolor=rgba_color[i])))
+    if example_cells is None:
+        example_cells = np.random.choice(Session.calciumdata.shape[1],10)
 
-pos = ax.get_position()
-ax.set_position([pos.x0, pos.y0, pos.width * 0.9, pos.height])
-ax.legend(handles,oris,loc='center right', bbox_to_anchor=(1.25, 0.5))
+    if trialsel is None:
+        trialsel = [np.random.randint(low=0,high=len(Session.trialdata)-400)]
+        trialsel.append(trialsel[0]+40)
 
-ax.set_xlim([example_tstart,example_tstop])
+    example_tstart = Session.trialdata['tOnset'][trialsel[0]-1]
+    example_tstop = Session.trialdata['tOnset'][trialsel[1]-1]
 
-ax.add_artist(AnchoredSizeBar(ax.transData, 10, "10 Sec",loc=4,frameon=False))
-ax.axis('off')
+    excerpt         = np.array(Session.calciumdata.loc[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)])
+    excerpt         = excerpt[:,example_cells]
 
+    min_max_scaler = preprocessing.MinMaxScaler()
+    excerpt = min_max_scaler.fit_transform(excerpt)
+
+    # spksselec = spksselec 
+    [nframes,ncells] = np.shape(excerpt)
+
+    for i in range(ncells):
+        excerpt[:,i] =  excerpt[:,i] + i
+
+    oris        = np.unique(Session.trialdata['Orientation'])
+    rgba_color  = plt.get_cmap('hsv',lut=16)(np.linspace(0, 1, len(oris)))  
+    
+    fig, ax = plt.subplots(figsize=[12, 6])
+    plt.plot(Session.ts_F[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)],excerpt,linewidth=0.5,color='black')
+    # plt.show()
+
+    for i in np.arange(trialsel[0],trialsel[1]):
+        ax.add_patch(plt.Rectangle([Session.trialdata['tOnset'][i],0],1,ncells,alpha=0.3,linewidth=0,
+                                facecolor=rgba_color[np.where(oris==Session.trialdata['Orientation'][i])]))
+
+    handles= []
+    for i,ori in enumerate(oris):
+        handles.append(ax.add_patch(plt.Rectangle([0,0],1,ncells,alpha=0.3,linewidth=0,facecolor=rgba_color[i])))
+
+    pos = ax.get_position()
+    ax.set_position([pos.x0, pos.y0, pos.width * 0.9, pos.height])
+    ax.legend(handles,oris,loc='center right', bbox_to_anchor=(1.25, 0.5))
+
+    ax.set_xlim([example_tstart,example_tstop])
+
+    ax.add_artist(AnchoredSizeBar(ax.transData, 10, "10 Sec",loc=4,frameon=False))
+    ax.axis('off')
+
+
+example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
+example_cells   = [6,23,130,99,361,177,153,413,435]
+
+show_excerpt_traces_gratings(sessions[0],example_cells=example_cells,trialsel=[50,90])
+show_excerpt_traces_gratings(sessions[0])
 
 # plt.close('all')
 
@@ -104,28 +104,31 @@ t_pre       = -1    #pre s
 t_post      = 2     #post s
 binsize     = 0.2   #temporal binsize in s
 
-# [tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='binmean')
+# [tensor,t_axis] = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], t_pre, t_post, binsize,method='binmean')
 
-[tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='interp_lin')
-respmat         = tensor[:,:,np.logical_and(t_axis > 0,t_axis < 1)].mean(axis=2)
+# [tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='interp_lin')
+[tensor,t_axis] = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], 
+                                 t_pre, t_post, binsize,method='interp_lin')
 [K,N,T]         = np.shape(tensor) #get dimensions of tensor
+respmat         = tensor[:,:,np.logical_and(t_axis > 0,t_axis < 1)].mean(axis=2)
 
 #Alternative method, much faster:
-respmat         = compute_respmat(calciumdata, ts_F, trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
-
+respmat         = compute_respmat(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'],
+                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
 [K,N]           = np.shape(respmat) #get dimensions of response matrix
 
 #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
-temp = pd.DataFrame(np.reshape(np.array(behaviordata['runspeed']),(len(behaviordata['runspeed']),1)))
-respmat_runspeed = compute_respmat(temp, behaviordata['ts'], trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean')
+temp = pd.DataFrame(np.reshape(np.array(sessions[0].behaviordata['runspeed']),(len(sessions[0].behaviordata['runspeed']),1)))
+respmat_runspeed = compute_respmat(temp, sessions[0].behaviordata['ts'], sessions[0].trialdata['tOnset'],
+                                   t_resp_start=0,t_resp_stop=1,method='mean')
 
 #############################################################################
 resp_meanori = np.empty([N,16])
-oris = np.sort(pd.Series.unique(trialdata['Orientation']))
+oris = np.sort(pd.Series.unique(sessions[0].trialdata['Orientation']))
 
 for n in range(N):
     for i,ori in enumerate(oris):
-        resp_meanori[n,i] = np.nanmean(respmat[trialdata['Orientation']==ori,n],axis=0)
+        resp_meanori[n,i] = np.nanmean(respmat[sessions[0].trialdata['Orientation']==ori,n],axis=0)
 
 prefori  = np.argmax(resp_meanori,axis=1)
 # prefori  = np.argmax(resp_meanori_z,axis=1)
@@ -164,8 +167,8 @@ respmat_zsc   = z_score(respmat)
 pca         = PCA(n_components=15) #construct PCA object with specified number of components
 Xp          = pca.fit_transform(respmat_zsc) #fit pca to response matrix
 
-ori         = trialdata['Orientation']
-oris        = np.sort(pd.Series.unique(trialdata['Orientation']))
+ori         = sessions[0].trialdata['Orientation']
+oris        = np.sort(pd.Series.unique(sessions[0].trialdata['Orientation']))
 
 ori_ind      = [np.argwhere(np.array(ori) == iori)[:, 0] for iori in oris]
 
@@ -190,23 +193,27 @@ ax.legend(oris,title='Ori')
 
 ##############################
 # PCA on trial-concatenated matrix:
+# Reorder such that tensor is N by K x T (not K by N by T)
+# then reshape to N by KxT (each row is now the activity of all trials over time concatenated for one neuron)
 
-
-#reorder such that tensor is K by T y N (not K by N by T
- # then reshape to KxT by N (each column is now the activity of all trials over time concatenated for one neuron)
-mat_zsc     = tensor.transpose((0,2,1)).reshape(K*T,N,order='F') 
+mat_zsc     = tensor.transpose((1,0,2)).reshape(N,K*T,order='F') 
 mat_zsc     = z_score(mat_zsc)
 
 pca               = PCA(n_components=100) #construct PCA object with specified number of components
-Xp                = pca.fit_transform(respmat_zsc) #fit pca to response matrix
+Xp                = pca.fit_transform(mat_zsc) #fit pca to response matrix
 
-[U,S,Vt]          = pca._fit_full(respmat_zsc,100) #fit pca to response matrix
+# [U,S,Vt]          = pca._fit_full(mat_zsc,100) #fit pca to response matrix
 
-[U,S,Vt]          = pca._fit_truncated(respmat_zsc,100,"arpack") #fit pca to response matrix
+# [U,S,Vt]          = pca._fit_truncated(mat_zsc,100,"arpack") #fit pca to response matrix
 
-sns.lineplot(data=pca.explained_variance_ratio_, x="components", y="EV")
 plt.figure()
 sns.lineplot(data=pca.explained_variance_ratio_)
+plt.xlim([-1,100])
+plt.ylim([0,0.15])
+
+################################################################
+
+
 
 ##############################
 ## Make dataframe of tensor with all trial, time information etc.
@@ -218,7 +225,6 @@ tracedata = pd.DataFrame(data=mat_zsc, columns=calciumdata.columns)
 
 tracedata['time']   = np.tile(t_axis,K)
 tracedata['ori']    = np.repeat(trialdata['Orientation'].to_numpy(),T)
-
 
 sns.lineplot(
     data=tracedata, x="time", y=tracedata.columns[2], hue="ori", 

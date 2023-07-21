@@ -25,7 +25,6 @@ def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpol
     binedges    = np.arange(t_pre-binsize/2,t_post+binsize+binsize/2,binsize)
     bincenters  = np.arange(t_pre,t_post+binsize,binsize)
     
-    
     N           = np.shape(data)[1]
     K           = len(ts_T)
     T           = len(bincenters)
@@ -41,7 +40,6 @@ def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpol
                 tensor[k,n,:]       = binned_statistic(ts_F-ts_T[k],data.iloc[:,n], statistic='mean', bins=binedges)[0]
             
             elif method == 'interp_lin':
-                
                 tensor[k,n,:]       = np.interp(bincenters, ts_F-ts_T[k], data.iloc[:,n])
                 
             elif method == 'interp_cub':
