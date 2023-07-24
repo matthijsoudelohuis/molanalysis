@@ -34,7 +34,7 @@ def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdat
     
     return sessions
 
-def filter_sessions(protocol,load_behaviordata=False, load_calciumdata=False,
+def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     load_videodata=False, calciumversion='dF',
                     only_animal_id=None,min_cells=None, min_trials=None):
         #             only_correct=False, min_units=None,
@@ -49,31 +49,34 @@ def filter_sessions(protocol,load_behaviordata=False, load_calciumdata=False,
     :param min_trials: To restrict to sessions which have minimum trials
     """
     sessions = []
+    if protocols is None:
+        protocols = ['VR','IM','GR','RF','SP']
     
     # iterate over files in that directory
-    for animal_id in os.listdir(os.path.join(get_data_folder(),protocol)):
-        for session_id in os.listdir(os.path.join(get_data_folder(),protocol,animal_id)):
-            
-            ses = Session(protocol=protocol,animal_id=animal_id,session_id=session_id)
-            ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
-            
-            ## go through specified conditions that have to be met for the session to be included:
-            sesflag = True
-            
-            # SELECT BASED ON # TRIALS
-            if only_animal_id is not None:
-                sesflag = sesflag and animal_id in only_animal_id
-
-            # SELECT BASED ON # TRIALS
-            if min_trials is not None:
-                sesflag = sesflag and len(ses.trialdata) >= min_trials
-            
-            # SELECT BASED ON # CELLS
-            if sesflag and min_cells is not None:
-                sesflag = sesflag and len(ses.celldata) >= min_cells
+    for protocol in protocols:
+        for animal_id in os.listdir(os.path.join(get_data_folder(),protocol)):
+            for session_id in os.listdir(os.path.join(get_data_folder(),protocol,animal_id)):
                 
-            if sesflag:
-                sessions.append(ses)
+                ses = Session(protocol=protocol,animal_id=animal_id,session_id=session_id)
+                ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
+                
+                ## go through specified conditions that have to be met for the session to be included:
+                sesflag = True
+                
+                # SELECT BASED ON # TRIALS
+                if only_animal_id is not None:
+                    sesflag = sesflag and animal_id in only_animal_id
+
+                # SELECT BASED ON # TRIALS
+                if min_trials is not None:
+                    sesflag = sesflag and len(ses.trialdata) >= min_trials
+                
+                # SELECT BASED ON # CELLS
+                if sesflag and min_cells is not None:
+                    sesflag = sesflag and len(ses.celldata) >= min_cells
+                    
+                if sesflag:
+                    sessions.append(ses)
       
     report_sessions(sessions)            
     
@@ -98,9 +101,11 @@ def report_sessions(sessions):
         trialdata       = pd.concat([trialdata,ses.trialdata])
         celldata        = pd.concat([celldata,ses.celldata])
 
-    
-    print("{protocol} dataset: {nsessions} sessions, {ntrials} trials".format(
-        protocol = pd.unique(sessiondata['protocol']),nsessions = len(sessiondata),ntrials = len(trialdata)))
+    print("{protocol} dataset: {nmice} mice, {nsessions} sessions, {ntrials} trials".format(
+        protocol    = pd.unique(sessiondata['protocol']),
+        nmice       = len(pd.unique(sessiondata['animal_id'])),
+        nsessions   = len(sessiondata),
+        ntrials     = len(trialdata)))
 
     print("Neurons in area:")
     print(celldata.groupby('roi_name')['roi_name'].count())

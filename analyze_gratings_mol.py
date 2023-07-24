@@ -9,12 +9,9 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import scipy.stats as st
-from scipy.stats import binned_statistic
 from sklearn import preprocessing
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import seaborn as sns
-from sklearn.preprocessing import StandardScaler
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
@@ -156,7 +153,7 @@ ax.set_ylabel('Neuron')
 
 def z_score(X):
     # X: ndarray, shape (n_features, n_samples)
-    ss = StandardScaler(with_mean=True, with_std=True)
+    ss = preprocessing.StandardScaler(with_mean=True, with_std=True)
     Xz = ss.fit_transform(X)
     return Xz
 

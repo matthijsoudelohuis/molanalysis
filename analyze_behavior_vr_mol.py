@@ -1,58 +1,92 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Dec 12 15:55:07 2022
-
-@author: USER
+This script analyzes the behavior of mice performing a virtual reality
+navigation task while headfixed in a visual tunnel with landmarks. 
+Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 import math
+import pandas as pd
 import os
+import seaborn as sns
 import numpy as np
-from pynwb import NWBHDF5IO
 import matplotlib.pyplot as plt
 import matplotlib.patches
 import scipy.stats as st
 from scipy.ndimage import gaussian_filter
 from scipy.stats import binned_statistic
+from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 
 from utils import compute_dprime
 
-procdatadir     = "V:\\Procdata\\"
+############## Load the data ####################################
+protocol            = ['VR']
+sessions            = filter_sessions(protocol)
 
-animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
-sessiondates        = ['2022_12_8']
-sessiondates        = ['2022_12_9']
-sessiondates        = ['2022_12_1']
 
-sessiondates        = ['2022_11_30',
- '2022_12_1',
- '2022_12_2',
- '2022_12_5',
- '2022_12_6',
- '2022_12_7',
- '2022_12_8'] #If empty than all animals in folder will be processed
-
-## Loop over all selected animals and folders
-if len(animal_ids) == 0:
-    animal_ids = os.listdir(procdatadir)
-
-for animal_id in animal_ids: #for each animal
+def compute_dprime(signal,response):
     
-    if len(sessiondates) == 0:
-        sessiondates = os.listdir(os.path.join(procdatadir,animal_id)) 
+    ntrials             = len(signal)
+    hit_rate            = sum((signal == 1) & (response == True)) / ntrials
+    falsealarm_rate     = sum((signal == 0) & (response == True)) / ntrials
     
-    for sessiondate in sessiondates: #for each of the sessions for this animal
-        savefilename    = animal_id + "_" + sessiondate + "_VR.nwb" #define save file name
-        savefilename    = os.path.join(procdatadir,animal_id,savefilename) #construct output save directory string
+    dprime             = st.norm.ppf(hit_rate) - st.norm.ppf(falsealarm_rate)
+    return dprime
 
-        # Open the file in read mode "r"
-        io = NWBHDF5IO(savefilename, mode="r")
-        nwbfile = io.read()
-        
+compute_dprime(sessions[0].trialdata['trialType']=='G',sessions[0].trialdata['lickResponse'])
 
-trd = nwbfile.trials.to_dataframe() #convert trials from dynamic table with vector to pandas dataframe
+signal = sessions[3].trialdata['trialType']=='G'
+response = sessions[3].trialdata['lickResponse']
 
-# assert np.all(stimulus_presentation.timestamps[:] == trials_df.stim_on_time[:])
+compute_dprime(signal,response)
+
+sessions[3].trialdata.head(25)
+sessions[3].sessiondata.head()
+
+nsessions = len(sessions)
+
+### Show the overall dprime for each animal across sessions:
+
+dp_ses = np.zeros([nsessions])
+for i,ses in enumerate(sessions):
+    dp_ses[i] = compute_dprime(ses.trialdata['trialType']=='G',ses.trialdata['lickResponse'])
+
+sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessiondata['dprime'] = dp_ses
+
+plt.figure(figsize=(4,5))
+ax = sns.stripplot(data = sessiondata,x='animal_id',y='dprime',palette='Dark2',size=10)
+
+# plot the mean line
+sns.boxplot(showmeans=True,
+            meanline=True,
+            meanprops={'color': 'k', 'ls': '-', 'lw': 2},
+            medianprops={'visible': False},
+            whiskerprops={'visible': False},
+            zorder=10,
+            x="animal_id",
+            y="dprime",
+            data=sessiondata,
+            showfliers=False,
+            showbox=False,
+            showcaps=False,
+            palette='Dark2',
+            ax=ax)
+
+
+### The dprime for left vs right context blocks:
+
+dp_blocks = np.zeros((nsessions,2))
+for i,ses in enumerate(sessions):
+    dp_blocks[i,0] = compute_dprime(ses.trialdata['trialType'][ses.trialdata['context']==0]=='G',ses.trialdata['lickResponse'])
+    dp_blocks[i,1] = compute_dprime(ses.trialdata['trialType']=='G',ses.trialdata['lickResponse'])
+
+trialdata   = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
+
+### The hit rate as function of trial in block:
+sns.lineplot(data=trialdata,x='n_in_block',y='lickResponse',hue='trialType',palette='Set1')
+
+
 
 
 ntrials             = len(trd)
