@@ -12,7 +12,7 @@ from scipy.interpolate import CubicSpline
 
 def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpolate'):
     """
-    This function constructs a tensor: a 3D 'matrix' of K trials by N neurons by T time bins
+    This function constructs a tensor: a 3D 'matrix' of N neurons by K trials by T time bins
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
     It further needs the timestamps (ts_T) to align to (the trials) and the parameters for 
     temporal binning to construct a time axis. The function returns the tensor and the time axis. 
@@ -31,21 +31,21 @@ def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpol
     
         # N = 10 #for debug only
 
-    tensor      = np.empty([K,N,T])
+    tensor      = np.empty([N,K,T])
     
     for n in range(N):
         print(f"\rComputing tensor for neuron {n+1} / {N}",end='\r')
         for k in range(K):
             if method=='binmean':
-                tensor[k,n,:]       = binned_statistic(ts_F-ts_T[k],data.iloc[:,n], statistic='mean', bins=binedges)[0]
+                tensor[n,k,:]       = binned_statistic(ts_F-ts_T[k],data.iloc[:,n], statistic='mean', bins=binedges)[0]
             
             elif method == 'interp_lin':
-                tensor[k,n,:]       = np.interp(bincenters, ts_F-ts_T[k], data.iloc[:,n])
+                tensor[n,k,:]       = np.interp(bincenters, ts_F-ts_T[k], data.iloc[:,n])
                 
             elif method == 'interp_cub':
                 spl = CubicSpline(ts_F-ts_T[k], data.iloc[:,n])
                 spl(bincenters)
-                tensor[k,n,:]       = spl(bincenters)
+                tensor[n,k,:]       = spl(bincenters)
 
             else:
                 print('method to bin is unknown')
@@ -58,7 +58,7 @@ def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpol
 
 def compute_tensor_space(data,ts_F,ts_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,binsize=5,method='interpolate'):
     """
-    This function constructs a tensor: a 3D 'matrix' of K trials by N neurons by S spatial bins
+    This function constructs a tensor: a 3D 'matrix' of N neurons by K trials by S spatial bins
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
     It further needs the z-position of the animal in the linear VR track (zpos_F) in centimeters at calcium frame times
     and the spatial position to to align to (ts_T, e.g. stimulus start location per trial)
@@ -79,7 +79,8 @@ def compute_tensor_space(data,ts_F,ts_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,
     
     # N = 10 #for debug only
 
-    tensor      = np.empty([K,N,S])
+    # tensor      = np.empty([K,N,S])
+    tensor      = np.empty([N,K,S])
     
     for n in range(N):
         print(f"\rComputing tensor for neuron {n+1} / {N}",end='\r')
@@ -88,17 +89,16 @@ def compute_tensor_space(data,ts_F,ts_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,
                 # tensor[k,n,:]       = binned_statistic(ts_F-ts_T[k],data.iloc[:,n], statistic='mean', bins=binedges)[0]
 
                 idx = trialnum_F==k+1
-                tensor[k,n,:] = binned_statistic(zpos_F[idx]-ts_T[k],data[idx,n], statistic='mean', bins=binedges)[0]
+                tensor[n,k,:] = binned_statistic(zpos_F[idx]-ts_T[k],data[idx,n], statistic='mean', bins=binedges)[0]
 
-            
             elif method == 'interp_lin':
                 
-                tensor[k,n,:]       = np.interp(bincenters, ts_F-ts_T[k], data.iloc[:,n])
+                tensor[n,k,:]       = np.interp(bincenters, ts_F-ts_T[k], data.iloc[:,n])
                 
             elif method == 'interp_cub':
                 spl = CubicSpline(ts_F-ts_T[k], data.iloc[:,n])
                 spl(bincenters)
-                tensor[k,n,:]       = spl(bincenters)
+                tensor[n,k,:]       = spl(bincenters)
 
             else:
                 print('method to bin is unknown')
@@ -111,7 +111,7 @@ def compute_tensor_space(data,ts_F,ts_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,
 def compute_respmat(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
                     t_base_start=-1,t_base_stop=0,subtr_baseline=False,method='mean'):
     """
-    This function constructs a 2D matrix of K trials by N neurons
+    This function constructs a 2D matrix of N neurons by K trials
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
     It further needs the timestamps (ts_T) to align to (the trials) and the response window
     Different ways of measuring the response can be specified such as 'mean','max'
@@ -124,22 +124,22 @@ def compute_respmat(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
     N               = np.shape(data)[1] #get number of neurons from shape of datamatrix (number of columns)
     K               = len(ts_T)         #get number of trials from the number of timestamps given 
     
-    respmat         = np.empty([K,N])   #init output matrix
+    respmat         = np.empty([N,K])   #init output matrix
 
     for k in range(K): #loop across trials, for every trial, slice through activity matrix and compute response across neurons:
         print(f"\rComputing response for trial {k+1} / {K}",end='\r')
-        respmat[k,:]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop)].to_numpy().mean(axis=0)
+        respmat[:,k]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop)].to_numpy().mean(axis=0)
 
         if subtr_baseline: #subtract baseline activity if requested:
             base                = data[np.logical_and(ts_F>ts_T[k]+t_base_start,ts_F<ts_T[k]+t_base_stop)].to_numpy().mean(axis=0)
-            respmat[k,:]        = np.subtract(respmat[k,:],base)
+            respmat[:,k]        = np.subtract(respmat[:,k],base)
     
     return respmat
 
 def compute_respmat_space(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
                     t_base_start=-1,t_base_stop=0,subtr_baseline=False,method='mean'):
     """
-    This function constructs a 2D matrix of K trials by N neurons
+    This function constructs a 2D matrix of N neurons by K trials
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
     It further needs the timestamps (ts_T) to align to (the trials) and the response window
     Different ways of measuring the response can be specified such as 'mean','max'
@@ -152,14 +152,14 @@ def compute_respmat_space(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
     N               = np.shape(data)[1] #get number of neurons from shape of datamatrix (number of columns)
     K               = len(ts_T)         #get number of trials from the number of timestamps given 
     
-    respmat         = np.empty([K,N])   #init output matrix
+    respmat         = np.empty([N,K])   #init output matrix
 
     for k in range(K): #loop across trials, for every trial, slice through activity matrix and compute response across neurons:
         print(f"\rComputing response for trial {k+1} / {K}",end='\r')
-        respmat[k,:]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop)].to_numpy().mean(axis=0)
+        respmat[:,k]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop)].to_numpy().mean(axis=0)
 
         if subtr_baseline: #subtract baseline activity if requested:
             base                = data[np.logical_and(ts_F>ts_T[k]+t_base_start,ts_F<ts_T[k]+t_base_stop)].to_numpy().mean(axis=0)
-            respmat[k,:]        = np.subtract(respmat[k,:],base)
+            respmat[:,k]        = np.subtract(respmat[:,k],base)
     
     return respmat
