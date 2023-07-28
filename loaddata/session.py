@@ -9,7 +9,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 import os
-# import numpy as np
+import numpy as np
 import pandas as pd
 from loaddata.get_data_folder import get_data_folder
 
@@ -66,10 +66,12 @@ class Session():
                 self.calciumdata         = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
                 self.calciumdata         = self.calciumdata.drop('session_id',axis=1)
 
-                self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[pd.concat([~goodcells,pd.Series([True])],ignore_index = True)],axis=1)
-
                 self.ts_F                = self.calciumdata['timestamps']
                 self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
+
+                self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells],axis=1)
+                
+                assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
 
             else:
                 self.calciumdata = None

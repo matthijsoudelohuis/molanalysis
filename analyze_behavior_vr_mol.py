@@ -15,33 +15,26 @@ import matplotlib.patches
 import scipy.stats as st
 from scipy.ndimage import gaussian_filter
 from scipy.stats import binned_statistic
+from scipy.interpolate import interp1d
 from loaddata.session_info import filter_sessions,load_sessions,report_sessions
+from utils.psth import compute_tensor_space,compute_respmat_space
 
-from utils import compute_dprime
+# from utils import compute_dprime
 
 ############## Load the data ####################################
 protocol            = ['VR']
-sessions            = filter_sessions(protocol)
+sessions            = filter_sessions(protocol,load_behaviordata=True)
 
 
 def compute_dprime(signal,response):
-    
+    assert(len(signal)==len(response))
     ntrials             = len(signal)
-    hit_rate            = sum((signal == 1) & (response == True)) / ntrials
-    falsealarm_rate     = sum((signal == 0) & (response == True)) / ntrials
+    hit_rate            = sum((signal == 1) & (response == True)) / sum(signal==1)
+    falsealarm_rate     = sum((signal == 0) & (response == True)) / sum(signal==0)
     
     dprime             = st.norm.ppf(hit_rate) - st.norm.ppf(falsealarm_rate)
     return dprime
 
-compute_dprime(sessions[0].trialdata['trialType']=='G',sessions[0].trialdata['lickResponse'])
-
-signal = sessions[3].trialdata['trialType']=='G'
-response = sessions[3].trialdata['lickResponse']
-
-compute_dprime(signal,response)
-
-sessions[3].trialdata.head(25)
-sessions[3].sessiondata.head()
 
 nsessions = len(sessions)
 
@@ -73,98 +66,138 @@ sns.boxplot(showmeans=True,
             palette='Dark2',
             ax=ax)
 
-
 ### The dprime for left vs right context blocks:
-
 dp_blocks = np.zeros((nsessions,2))
+for ises,ses in enumerate(sessions):
+    for iblock in pd.unique(ses.trialdata['context']):
+        df = ses.trialdata[ses.trialdata['context']==iblock]
+        dp_blocks[ises,iblock] = compute_dprime(df['Reward'],df['lickResponse'])
+
+### Plotting:
+df = pd.DataFrame({'dprime' : dp_blocks.flatten(), 'context' : np.repeat([1,2],nsessions)})
+sns.stripplot(data=df,x='context',y='dprime',color='k',size=10)
+sns.barplot(data=df,x='context',y='dprime',palette='Set1')
+
+#### construct concatenated trialdata DataFrame by appending all sessions:
+trialdata   = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
+
+# ### The lick rate as function of trial in session:
+# sns.lineplot(data=trialdata,x='TrialNumber',y='lickResponse',hue='trialType',palette='Set1')
+
+#### 
+sigma = 40
+
 for i,ses in enumerate(sessions):
-    dp_blocks[i,0] = compute_dprime(ses.trialdata['trialType'][ses.trialdata['context']==0]=='G',ses.trialdata['lickResponse'])
-    dp_blocks[i,1] = compute_dprime(ses.trialdata['trialType']=='G',ses.trialdata['lickResponse'])
+
+    a = np.empty((len(ses.trialdata)))
+    a[:] = np.nan
+    x = np.where(ses.trialdata['trialType']=='G')[0]
+    y = ses.trialdata['lickResponse'][x]
+    f = interp1d(x,y,fill_value="extrapolate")
+    xnew = np.arange(len(ses.trialdata))
+    ynew = f(xnew)   # use interpolation function returned by `interp1d`
+
+    ses.trialdata['smooth_hitrate'] = gaussian_filter(ynew,sigma=sigma)
+
+    a = np.empty((len(ses.trialdata)))
+    a[:] = np.nan
+    x = np.where(ses.trialdata['trialType']=='N')[0]
+    y = ses.trialdata['lickResponse'][x]
+    f = interp1d(x,y,fill_value="extrapolate")
+    xnew = np.arange(len(ses.trialdata))
+    ynew = f(xnew)   # use interpolation function returned by `interp1d`
+
+    ses.trialdata['smooth_farate'] = gaussian_filter(ynew,sigma=15)
+
+    ses.trialdata['smooth_dprime'] = [st.norm.ppf(ses.trialdata['smooth_hitrate'][t]) - st.norm.ppf(ses.trialdata['smooth_farate'][t]) 
+      for t in range(len(ses.trialdata))]
 
 trialdata   = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
 
+### The hit rate as function of trial in session:
+sns.lineplot(data=trialdata,x='TrialNumber',y='smooth_hitrate',color='g')
+sns.lineplot(data=trialdata,x='TrialNumber',y='smooth_farate',color='r')
+sns.lineplot(data=trialdata,x='TrialNumber',y='smooth_dprime',color='k')
+
+plt.figure(figsize=(8,5))
+for i,ses in enumerate(sessions):
+    plt.plot(ses.trialdata['TrialNumber'],ses.trialdata['smooth_hitrate'],color='g')
+    plt.plot(ses.trialdata['TrialNumber'],ses.trialdata['smooth_farate'],color='r')
+plt.ylabel('HIT / FA rate')
+plt.xlabel('Trial Number')
+
+plt.figure(figsize=(8,5))
+for i,ses in enumerate(sessions):
+    plt.plot(ses.trialdata['TrialNumber'],ses.trialdata['smooth_dprime'],color='k')
+plt.ylabel('Dprime')
+plt.xlabel('Trial Number')
+
 ### The hit rate as function of trial in block:
-sns.lineplot(data=trialdata,x='n_in_block',y='lickResponse',hue='trialType',palette='Set1')
+ax = sns.lineplot(data=trialdata,x='n_in_block',y='lickResponse',hue='trialType',palette='Set1',
+                           legend=['FA rate','HIT rate'])
+# h, l = ax.get_legend_handles_labels()
+plt.legend(labels=['FA rate','HIT rate'])
+plt.legend(h,labels=['FA rate','HIT rate'])
+
+### The dprime as function of trial in block:
+sns.lineplot(data=trialdata,x='n_in_block',y='smooth_dprime')
+plt.ylim([0,2.5])
 
 
-
-
-ntrials             = len(trd)
-hit_rate            = sum((trd.rewardtrial == 1) & (trd.lickresponse == True)) / ntrials
-falsealarm_rate     = sum((trd.rewardtrial == 0) & (trd.lickresponse == True)) / ntrials
-
-d_prime             = st.norm.ppf(hit_rate) - st.norm.ppf(falsealarm_rate)
-
-hit_rate_L          = sum((trd.rewardtrial == 1) & (trd.lickresponse == True) & (trd.stimleft=='stimA')) / ntrials
-falsealarm_rate_L   = sum((trd.rewardtrial == 0) & (trd.lickresponse == True) & (trd.stimleft=='stimB')) / ntrials
-hit_rate_R          = sum((trd.rewardtrial == 1) & (trd.lickresponse == True) & (trd.stimright=='stimA')) / ntrials
-falsealarm_rate_R   = sum((trd.rewardtrial == 0) & (trd.lickresponse == True) & (trd.stimright=='stimB')) / ntrials
-
-d_prime_L           = st.norm.ppf(hit_rate_L) - st.norm.ppf(falsealarm_rate_L)
-d_prime_R           = st.norm.ppf(hit_rate_R) - st.norm.ppf(falsealarm_rate_R)
-
-
-
-temp        = trd['lickresponse'].astype(float)
-tempfilt    = gaussian_filter(temp, sigma=15)
-
-plt.plot(trd['trialnum'],tempfilt)
-plt.xlabel('trial number')
-plt.ylabel('lickresponse')
-plt.show()
+################ Spatial plots ##############################################
+# Behavior as a function of distance within the corridor:
 
 ## Parameters for spatial binning
-s_pre       = -100 #pre cm
+s_pre       = -100  #pre cm
 s_post      = 100   #post cm
-
-binsize     = 2 #spatial binning in cm
+binsize     = 5     #spatial binning in cm
 
 binedges    = np.arange(s_pre-binsize/2,s_post+binsize+binsize/2,binsize)
 bincenters  = np.arange(s_pre,s_post+binsize,binsize)
 
-harptrialtemp   = nwbfile.acquisition['TrialNumber'].data[:]
-runspeedtemp    = nwbfile.acquisition['RunningSpeed'].data[:]
-zpostemp        = nwbfile.acquisition['CorridorPosition'].data[:]
-ts              = nwbfile.acquisition['CorridorPosition'].timestamps[:]
+trialdata   = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
 
-runPSTH     = np.empty(shape=(ntrials, len(bincenters)))
+runPSTH     = np.empty((len(trialdata),len(bincenters)))
+lickPSTH     = np.empty((len(trialdata),len(bincenters)))
+                   
+# ts_harp     = sessions[0].behaviordata['ts'].to_numpy()
 
-for itrial in range(ntrials):
-    idx = harptrialtemp==itrial+1
-    runPSTH[itrial,:] = binned_statistic(zpostemp[idx]-trd.loc[0, 'stimstart'],runspeedtemp[idx], statistic='mean', bins=binedges)[0]
+for ises,ses in enumerate(sessions):
 
-    
-licks_ts        = nwbfile.processing["behavior"]["Licks"]["Licks"].timestamps[:]
+    ntrials     = len(ses.trialdata)
 
-lickhistses     = np.histogram(licks_ts,np.append(ts,ts[-1]))[0]
+    runPSTH_ses     = np.empty(shape=(ntrials, len(bincenters)))
 
-lickPSTH        = np.empty(shape=(ntrials, len(bincenters)))
+    for itrial in range(ntrials):
+        idx = ses.behaviordata['trialnum']==itrial+1
+        runPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['StimStart'][0],
+                                            ses.behaviordata['runspeed'][idx], statistic='mean', bins=binedges)[0]
 
-for itrial in range(ntrials-1):
-    idx = harptrialtemp==itrial+1
-    lickPSTH[itrial,:] = binned_statistic(zpostemp[idx]-trd.loc[0, 'stimstart'],lickhistses[idx], statistic='sum', bins=binedges)[0]
+    runPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = runPSTH_ses
+
+    lickPSTH_ses    = np.empty(shape=(ntrials, len(bincenters)))
+
+    for itrial in range(ntrials-1):
+        idx = ses.behaviordata['trialnum']==itrial+1
+        lickPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['StimStart'][0],
+                                            ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
+    lickPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = lickPSTH_ses
 
 
-idx_gonogo          = np.empty(shape=(ntrials, 4),dtype=bool)
-idx_gonogo[:,0]     = (trd['rewardtrial'] == 1) & (trd.lickresponse == True)
-idx_gonogo[:,1]     = (trd['rewardtrial'] == 1) & (trd.lickresponse == False)
-idx_gonogo[:,2]     = (trd['rewardtrial'] == 0) & (trd.lickresponse == True)
-idx_gonogo[:,3]     = (trd['rewardtrial'] == 0) & (trd.lickresponse == False)
+### Plot running speed as a function of trial type:
 
-idx_gonogo
-
-labels_gonogo       = ['HIT', 'MISS', 'FA', 'CR']
-
-###
 fig, ax = plt.subplots()
 
-for i in range(4):
-    # ax.plot(bincenters,np.nanmean(runPSTH[idx_gonogo[:,i],:],axis=0))
-    data_mean = np.nanmean(runPSTH[idx_gonogo[:,i] & (trd.trialnum<300),:],axis=0)
-    data_error = np.nanstd(runPSTH[idx_gonogo[:,i] & (trd.trialnum<300),:],axis=0) / math.sqrt(sum(idx_gonogo[:,i] & (trd.trialnum<300)))
-    ax.plot(bincenters,data_mean,label=labels_gonogo[i])
-    ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.5, linewidth=0)
+ttypes = pd.unique(trialdata['trialOutcome'])
+ttypes = ['CR', 'MISS', 'HIT','FA']
 
+for i,ttype in enumerate(ttypes):
+    # ax.plot(bincenters,np.nanmean(runPSTH[idx_gonogo[:,i],:],axis=0))
+    idx = np.logical_and(trialdata['trialOutcome']==ttype,trialdata['TrialNumber']<300)
+    data_mean = np.nanmean(runPSTH[idx,:],axis=0)
+    data_error = np.nanstd(runPSTH[idx,:],axis=0) / math.sqrt(sum(idx))
+    ax.plot(bincenters,data_mean,label=ttype)
+    ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.5, linewidth=0)
 
 ax.legend()
 ax.set_ylim(0,50)
@@ -184,57 +217,43 @@ ax.add_patch(matplotlib.patches.Rectangle((30,0),30,50,
 plt.text(5, 45, 'Stim',fontsize=12)
 plt.text(35, 45, 'Reward',fontsize=12)
 
-##### 
+
+
+################################################################
+### Plot licking rate as a function of trial type:
 
 fig, ax = plt.subplots()
 
-for i in range(4):
-    # ax.plot(bincenters,np.nanmean(runPSTH[idx_gonogo[:,i],:],axis=0))
-    data_mean   = np.nanmean(lickPSTH[idx_gonogo[:,i] & (trd.trialnum<300),:],axis=0)
-    data_error  = np.nanstd(lickPSTH[idx_gonogo[:,i] & (trd.trialnum<300),:],axis=0) / math.sqrt(sum(idx_gonogo[:,i] & (trd.trialnum<300)))
-    ax.plot(bincenters,data_mean,label=labels_gonogo[i])
+ttypes = pd.unique(trialdata['trialOutcome'])
+ttypes = ['CR', 'MISS', 'HIT','FA']
+
+for i,ttype in enumerate(ttypes):
+    idx = np.logical_and(trialdata['trialOutcome']==ttype,trialdata['TrialNumber']<300)
+    data_mean = np.nanmean(lickPSTH[idx,:],axis=0)
+    data_error = np.nanstd(lickPSTH[idx,:],axis=0) / math.sqrt(sum(idx))
+    ax.plot(bincenters,data_mean,label=ttype)
     ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.5, linewidth=0)
 
 ax.legend()
-ax.set_ylim(0,1.6)
+ax.set_ylim(0,5.6)
 ax.set_xlim(-80,80)
 ax.set_xlabel('Position rel. to stimulus onset (cm)')
 ax.set_ylabel('Lick Rate (Hz)')
-ax.add_patch(matplotlib.patches.Rectangle((0,0),30,1.6, 
+# ax.fill_between([0,30], [0,50], [0,50],alpha=0.5)
+ax.add_patch(matplotlib.patches.Rectangle((0,0),30,5.6, 
                         fill = True, alpha=0.2,
                         color = "blue",
                         linewidth = 0))
-ax.add_patch(matplotlib.patches.Rectangle((30,0),30,1.6, 
+ax.add_patch(matplotlib.patches.Rectangle((30,0),30,5.6, 
                         fill = True, alpha=0.2,
                         color = "green",
                         linewidth = 0))
 
-plt.text(5, 1.4, 'Stim',fontsize=12)
-plt.text(35, 1.4, 'Reward',fontsize=12)
+plt.text(5, 5.2, 'Stim',fontsize=12)
+plt.text(35, 5.2, 'Reward',fontsize=12)
 
-#####
+################################ 
 
-idx_gonogo          = np.empty(shape=(ntrials, 4),dtype=bool)
-idx_gonogo[:,0]     = (trd['rewardtrial'] == 1) & (trd.lickresponse == True)
-idx_gonogo[:,1]     = (trd['rewardtrial'] == 1) & (trd.lickresponse == False)
-idx_gonogo[:,2]     = (trd['rewardtrial'] == 0) & (trd.lickresponse == True)
-idx_gonogo[:,3]     = (trd['rewardtrial'] == 0) & (trd.lickresponse == False)
-
-smooth_hitrate        = np.empty(shape=(ntrials, 1))
-smooth_farate         = np.empty(shape=(ntrials, 1))
-
-window_size = 30;
-
-for itrial in range(window_size,ntrials):
-    smooth_hitrate[itrial,0] = sum(idx_gonogo[itrial-window_size:itrial,0]) / (sum(idx_gonogo[itrial-window_size:itrial,0]) + sum(idx_gonogo[itrial-window_size:itrial,1]))
-    smooth_farate[itrial,0] = sum(idx_gonogo[itrial-window_size:itrial,2]) / (sum(idx_gonogo[itrial-window_size:itrial,2]) + sum(idx_gonogo[itrial-window_size:itrial,3]))
-
-smooth_hitrate[smooth_hitrate<0.001] = 0.001
-smooth_hitrate[smooth_hitrate>0.999] = 0.999
-smooth_farate[smooth_farate<0.001] = 0.001
-smooth_farate[smooth_farate>0.999] = 0.999
-
-smooth_d_prime           = st.norm.ppf(smooth_hitrate) - st.norm.ppf(smooth_farate)
 
 fig, ax = plt.subplots()
 

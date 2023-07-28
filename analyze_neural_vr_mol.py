@@ -43,9 +43,9 @@ sessions[0].calciumdata = sessions[0].calciumdata.drop(sessions[0].calciumdata.c
 F               = sessions[0].calciumdata
 F_Z             = zscore(F.copy(),axis=0)
 
-ts_F = sessions[0].ts_F.to_numpy()
+ts_F            = sessions[0].ts_F.to_numpy()
 
-ts_harp = sessions[0].behaviordata['ts'].to_numpy()
+ts_harp         = sessions[0].behaviordata['ts'].to_numpy()
 
 ## Get interpolated values for behavioral variables at imaging frame rate:
 zpos_F      = np.interp(x=ts_F,xp=ts_harp,

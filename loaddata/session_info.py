@@ -29,7 +29,7 @@ def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdat
         ses.load_data(load_behaviordata, load_calciumdata,load_videodata,calciumversion)
         
         sessions.append(ses)
-      
+    
     report_sessions(sessions)            
     
     return sessions
