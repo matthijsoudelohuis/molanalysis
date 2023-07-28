@@ -225,10 +225,13 @@ def proc_task(rawdatadir,sessiondata):
     
     #Code stimuli simply as A, B, C, etc.:
     trialdata = trialdata.replace('stim','', regex=True)
+
+    trialdata['lickResponse'] = trialdata['lickResponse'].astype(int)
+    trialdata.rename(columns={'Reward':'rewardAvailable'})
     
     #If rewarded stimulus is on the left, context = 1, right = 0
     blocklen = 50
-    temp = np.repeat(np.concatenate([np.ones(blocklen),np.zeros(blocklen)]),100).astype('int')
+    temp = np.tile(np.concatenate([np.ones(blocklen),np.zeros(blocklen)]),100).astype('int')
     if np.argmax(trialdata['stimLeft'] == sessiondata['gostim'][0])<blocklen:    #identify first block left or right:
         trialdata['context'] = temp[:len(trialdata)]
     else:
@@ -272,6 +275,8 @@ def proc_task(rawdatadir,sessiondata):
     # print("%d licks" % len(lick_ts)) #Give output to check if reasonable
     print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
 
+    trialdata['tStart'] = np.concatenate(([behaviordata['ts'][0]],trialdata['tEnd'][1:]))
+
     #Add the timestamps of entering and exiting stimulus zone:
     trialdata['tStimStart'] = ''
     trialdata['tStimEnd'] = ''
@@ -297,10 +302,17 @@ def proc_task(rawdatadir,sessiondata):
         # behaviordata['reward'][np.argmax(reward<behaviordata['ts'])] = True
         behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
     
-    # trialdata['tReward'] = 
+    trialdata['tReward'] = np.nan
+    for t in range(len(trialdata)-1):
+        idx = np.argmax(np.all((behaviordata['ts']>trialdata['tStart'][t],
+               behaviordata['ts']<trialdata['tStart'][t+1],
+               behaviordata['reward']),axis=0))
+        if idx:
+            trialdata.loc[trialdata.index[t],'tReward'] = behaviordata['ts'].iloc[idx]
 
     # print("%d rewards" % len(reward_ts)) #Give output to check if reasonable
     print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
+    print("%d rewards in unique trials" % trialdata['tReward'].count()) #Give output to check if reasonable
 
     behaviordata['session_id']  = sessiondata['session_id'][0]
     trialdata['session_id']     = sessiondata['session_id'][0]

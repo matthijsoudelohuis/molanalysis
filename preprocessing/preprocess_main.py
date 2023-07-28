@@ -14,30 +14,30 @@ os.chdir('T:\\Python\\molanalysis\\')
 
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "O:\\Rawdata\\"
+rawdatadir      = "X:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
 # procdatadir     = "E:\\Procdata\\"
 
 animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
-date_filter        = []
+animal_ids          = ['NSH07422','NSH07429'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE09829'] #If empty than all animals in folder will be processed
+date_filter        = ['2023_03_29','2023_03_30']
 
-# animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-
-# animal_ids          = ['LPE09667'] #If empty than all animals in folder will be processed
-# sessiondates        = ['2023_03_29','2023_03_30']
+animal_ids          = ['LPE09829','LPE09667'] #If empty than all animals in folder will be processed
+date_filter        = ['2023_03_29','2023_03_30','2023_03_31']
 
 protocols           = ['IM','GR','RF','SP']
-# protocols           = ['GR']
-# protocols           = ['VR', 'RF']
+# protocols           = ['SP']
+protocols           = ['VR']
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
     animal_ids = os.listdir(rawdatadir)
 
 for animal_id in animal_ids: #for each animal
-    
+
     sessiondates = os.listdir(os.path.join(rawdatadir,animal_id)) 
     
     if any(date_filter): #If dates specified, then process only those:
@@ -84,13 +84,13 @@ for animal_id in animal_ids: #for each animal
                 videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
                 videodata.to_csv(os.path.join(outdir,"videodata.csv"), sep=',')
 
-                if os.path.exists(os.path.join(sesfolder,"suite2p")):
-                    print('Detected imaging data')
-                    [sessiondata,celldata,dFdata,deconvdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
-                    print('\nSaving imaging data\n')
-                    celldata.to_csv(os.path.join(outdir,"celldata.csv"), sep=',')
-                    dFdata.to_csv(os.path.join(outdir,"dFdata.csv"), sep=',')
-                    deconvdata.to_csv(os.path.join(outdir,"deconvdata.csv"), sep=',')
+                # if os.path.exists(os.path.join(sesfolder,"suite2p")):
+                #     print('Detected imaging data')
+                #     [sessiondata,celldata,dFdata,deconvdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
+                #     print('\nSaving imaging data\n')
+                #     celldata.to_csv(os.path.join(outdir,"celldata.csv"), sep=',')
+                #     dFdata.to_csv(os.path.join(outdir,"dFdata.csv"), sep=',')
+                #     deconvdata.to_csv(os.path.join(outdir,"deconvdata.csv"), sep=',')
                 
                 #Save sessiondata:
                 sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')

@@ -30,7 +30,7 @@ animal_ids          = ['LPE09667']
 sessiondates        = ['2023_03_30']
 
 animal_ids          = ['LPE09830'] 
-sessiondates        = ['2023_04_12']
+sessiondates        = ['2023_04_11']
  
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
 
