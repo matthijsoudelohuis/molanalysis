@@ -7,6 +7,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 import numpy as np
+import pandas as pd
 from scipy.stats import binned_statistic
 from scipy.interpolate import CubicSpline
 
@@ -70,6 +71,8 @@ def compute_tensor_space(data,ts_F,ts_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,
     assert np.shape(data)[0] > np.shape(data)[1], 'the data matrix appears to have more neurons than timepoints'
     assert np.shape(data)[0] == np.shape(ts_F)[0], 'the amount of datapoints does not seem to match the timestamps'
     
+    # if isinstance(data, pd.DataFrame): data = data.to_numpy()
+    
     binedges    = np.arange(s_pre-binsize/2,s_post+binsize+binsize/2,binsize)
     bincenters  = np.arange(s_pre,s_post+binsize,binsize)
     
@@ -89,15 +92,23 @@ def compute_tensor_space(data,ts_F,ts_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,
                 # tensor[k,n,:]       = binned_statistic(ts_F-ts_T[k],data.iloc[:,n], statistic='mean', bins=binedges)[0]
 
                 idx = trialnum_F==k+1
-                tensor[n,k,:] = binned_statistic(zpos_F[idx]-ts_T[k],data[idx,n], statistic='mean', bins=binedges)[0]
+                tensor[n,k,:] = binned_statistic(zpos_F[idx]-ts_T[k],data.iloc[idx,n], statistic='mean', bins=binedges)[0]
+                # tensor[n,k,:] = binned_statistic(zpos_F[idx]-ts_T[k],data[idx,n], statistic='mean', bins=binedges)[0]
 
             elif method == 'interp_lin':
-                
-                tensor[n,k,:]       = np.interp(bincenters, ts_F-ts_T[k], data.iloc[:,n])
+                idx = trialnum_F==k+1
+                tensor[n,k,:]       = np.interp(bincenters, zpos_F[idx]-ts_T[k], data.iloc[idx,n],left=np.nan,right=np.nan)
                 
             elif method == 'interp_cub':
-                spl = CubicSpline(ts_F-ts_T[k], data.iloc[:,n])
-                spl(bincenters)
+                print('method to bin is not recommended for spatial tensor due to small changes in space with large calcium fluctuations')
+
+                idx = trialnum_F==k+1
+                x = zpos_F[idx]-ts_T[k]
+                y = data.iloc[idx,n]
+                x_idx = np.argsort(x)
+                x  = x[x_idx]
+                y  = y[x_idx]
+                spl = CubicSpline(x,y,extrapolate=False)
                 tensor[n,k,:]       = spl(bincenters)
 
             else:

@@ -73,6 +73,15 @@ class Session():
                 
                 assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
 
+            if load_calciumdata and load_behaviordata:
+                ## Get interpolated values for behavioral variables at imaging frame rate:
+                self.zpos_F      = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
+                                        fp=self.behaviordata['zpos'])
+                self.runspeed_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
+                                        fp=self.behaviordata['runspeed'])
+                self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
+                                        fp=self.behaviordata['trialnum'])
+
             else:
                 self.calciumdata = None
         except FileNotFoundError:
