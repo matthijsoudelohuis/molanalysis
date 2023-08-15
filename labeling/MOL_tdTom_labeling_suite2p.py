@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Mon Apr 24 11:16:24 2023
-
 @author: USER
 """
 
@@ -21,7 +20,6 @@ direc = 'X:\\RawData\\LPE09830\\2023_04_10\\suite2p\\plane0'
 # direc = 'X:\\RawData\\LPE09830\\2023_04_10\\suite2p\\plane4'
 
 direc = 'X:\\RawData\\LPE09665\\2023_03_14\\suite2p\\plane4'
-
 
 direc = 'X:\\RawData\\LPE09829\\2023_03_30\\suite2p\\combined'
 
@@ -151,7 +149,12 @@ direc = 'O:\\RawData\\LPE09665\\2023_03_21\\suite2p\\'
 direc = 'X:\\RawData\\LPE09667\\2023_03_29\\suite2p\\'
 direc = 'X:\\RawData\\LPE09667\\2023_03_30\\suite2p\\'
 
-for iplane in range(8):
+direc = 'X:\\RawData\\LPE09667\\2023_03_30\\suite2p\\'
+
+direc = 'F:\\RawData\\LPE10190\\2023_05_04\\suite2p\\'
+direc = 'F:\\RawData\\LPE10191\\2023_05_04\\suite2p\\'
+
+for iplane in range(4):
 
     mimg,mimg2,tempdf = proc_labeling_plane(os.path.join(direc,"plane%s" % iplane),show_plane=True)
     tempdf['iplane'] = iplane
