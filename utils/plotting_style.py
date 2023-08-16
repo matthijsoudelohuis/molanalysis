@@ -1,10 +1,52 @@
 import pandas as pd
 import seaborn as sns
-from matplotlib.lines import Line2D
+# from matplotlib.lines import Line2D
+from operator import itemgetter
 
 desired_width = 600
 pd.set_option('display.width', desired_width)
 pd.set_option("display.max_columns", 14)
+
+################################################################
+## Series of function that spit out lists of colors for different combinations of 
+## areas, protocols, mice, stimuli, etc. 
+
+def get_clr_areas(areas):
+    palette       = {'V1'  : sns.xkcd_rgb['bright blue'],
+                    'PM' : sns.xkcd_rgb['coral'],
+                    'AL' : sns.xkcd_rgb['emerald'],
+                    'RSP' : sns.xkcd_rgb['maroon']}
+    return itemgetter(*areas)(palette)
+
+def get_clr_protocols(protocols):
+    palette       = {'GR': sns.xkcd_rgb['bright blue'],
+                    'SP' : sns.xkcd_rgb['coral'],
+                    'RF' : sns.xkcd_rgb['emerald'],
+                    'VR' : sns.xkcd_rgb['emerald'],
+                    'IM' : sns.xkcd_rgb['maroon']}
+    return itemgetter(*protocols)(palette)
+
+def get_clr_stimuli_vr(stimuli):
+    stims           = ['A','B','C','D']
+    clrs            = sns.color_palette('husl', 4)
+    palette         = {stims[i]: clrs[i] for i in range(len(stims))}
+    return itemgetter(*stimuli)(palette)
+
+def get_clr_stimuli_vr_norm(stimuli):
+    stims           = [0,1,2,3]
+    clrs            = sns.color_palette('husl', 4)
+    palette         = {stims[i]: clrs[i] for i in range(len(stims))}
+    return itemgetter(*stimuli)(palette)
+
+def get_clr_stimuli_vr(stimuli):
+    stims           = ['A','B','C','D']
+    clrs            = sns.color_palette('husl', 4)
+    palette         = {stims[i]: clrs[i] for i in range(len(stims))}
+    return itemgetter(*stimuli)(palette)
+
+def get_clr_blocks(stimuli):
+    clrs            = ['#ff8274','#74f1ff']
+    return clrs
 
 # decoding_inputs = ['rate', 'phase', 'energy', 'rate+lfp', 'rate+energy']
 # decoding_inputs_control = ['shuffled_rate', 'rate+shuffled_phase']

@@ -11,6 +11,17 @@ import pandas as pd
 from scipy.stats import binned_statistic
 from scipy.interpolate import CubicSpline
 
+"""
+ ####### ####### #     #  #####  ####### ######  
+    #    #       ##    # #     # #     # #     # 
+    #    #       # #   # #       #     # #     # 
+    #    #####   #  #  #  #####  #     # ######  
+    #    #       #   # #       # #     # #   #   
+    #    #       #    ## #     # #     # #    #  
+    #    ####### #     #  #####  ####### #     # 
+"""
+                                                 
+
 def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpolate'):
     """
     This function constructs a tensor: a 3D 'matrix' of N neurons by K trials by T time bins
@@ -118,6 +129,17 @@ def compute_tensor_space(data,ts_F,ts_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,
                 return tensor,bincenters
             
     return tensor,bincenters
+
+"""
+ ######  #######  #####  ######     #     #    #    ####### ######  ### #     # 
+ #     # #       #     # #     #    ##   ##   # #      #    #     #  #   #   #  
+ #     # #       #       #     #    # # # #  #   #     #    #     #  #    # #   
+ ######  #####    #####  ######     #  #  # #     #    #    ######   #     #    
+ #   #   #             # #          #     # #######    #    #   #    #    # #   
+ #    #  #       #     # #          #     # #     #    #    #    #   #   #   #  
+ #     # #######  #####  #          #     # #     #    #    #     # ### #     # 
+                                                  
+"""
 
 def compute_respmat(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
                     t_base_start=-1,t_base_stop=0,subtr_baseline=False,method='mean'):

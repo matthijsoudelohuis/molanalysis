@@ -11,24 +11,28 @@ This script contains a series of functions that analyze activity in visual VR ta
 # set ts of entering reward zone and stim zone in preprocessing
 
 import os
-# os.chdir('T:\\Python\\molanalysis\\')
-os.chdir('E:\\Python\\molanalysis\\')
+os.chdir('T:\\Python\\molanalysis\\')
+# os.chdir('E:\\Python\\molanalysis\\')
 
 import numpy as np
 import pandas as pd
+
+from loaddata import *
+# from loaddata.session_info import filter_sessions,load_sessions
+
+from scipy import stats
+from scipy.stats import zscore
+from utils.psth import compute_tensor,compute_respmat,compute_tensor_space
+from sklearn.decomposition import PCA
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import roc_auc_score as AUC
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches
-from scipy.stats import zscore
-from sklearn.decomposition import PCA
-from sklearn.impute import SimpleImputer
-from loaddata.session_info import filter_sessions,load_sessions
-from utils.psth import compute_tensor,compute_respmat,compute_tensor_space
+from utils.plotting_style import *
 from matplotlib.lines import Line2D
-from sklearn.metrics import roc_auc_score as AUC
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
-from scipy import stats
-
 plt.rcParams['svg.fonttype'] = 'none'
 
 protocol            = 'VR'

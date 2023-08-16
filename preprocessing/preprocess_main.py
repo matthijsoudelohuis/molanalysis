@@ -11,7 +11,7 @@ import os, sys
 import numpy as np
 # os.chdir('E:\\Python\\molanalysis\\')
 os.chdir('T:\\Python\\molanalysis\\')
-
+import suite2p
 from preprocessing.preprocesslib import *
 
 rawdatadir      = "X:\\Rawdata\\"

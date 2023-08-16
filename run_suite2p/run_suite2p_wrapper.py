@@ -21,12 +21,11 @@ import os
 os.chdir('t:\\Python\\molanalysis\\')
 
 import suite2p
-from run_suite2p.mol_suite2p_funcs import init_ops, get_bleedthrough_coeff, run_bleedthrough_corr
+from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 
 rawdatadir          ='X:\\RawData\\'
 animal_ids          = ['LPE09667'] 
 sessiondates        = ['2023_03_29']
-
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
 
@@ -36,8 +35,6 @@ suite2p.run_s2p(ops=ops, db=db)
 
 ###################################################################
 ## tdTomato bleedthrough correction:
-
-# coeff = get_bleedthrough_coeff(rawdatadir,animal_ids[0],sessiondates[0])
 
 # coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
 coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
