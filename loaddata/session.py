@@ -79,7 +79,8 @@ class Session():
                                         fp=self.behaviordata['zpos'])
                 self.runspeed_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
                                         fp=self.behaviordata['runspeed'])
-                self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
+                if 'trialnum' in self.behaviordata:
+                    self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
                                         fp=self.behaviordata['trialnum'])
 
             else:
