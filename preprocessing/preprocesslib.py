@@ -18,6 +18,16 @@ from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
 from utils.twoplib import get_meta
 import scipy.stats as st
 
+"""
+  #####  #######  #####   #####  ### ####### #     # ######     #    #######    #    
+ #     # #       #     # #     #  #  #     # ##    # #     #   # #      #      # #   
+ #       #       #       #        #  #     # # #   # #     #  #   #     #     #   #  
+  #####  #####    #####   #####   #  #     # #  #  # #     # #     #    #    #     # 
+       # #             #       #  #  #     # #   # # #     # #######    #    ####### 
+ #     # #       #     # #     #  #  #     # #    ## #     # #     #    #    #     # 
+  #####  #######  #####   #####  ### ####### #     # ######  #     #    #    #     # 
+"""
+
 def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     """ preprocess general information about this mouse and session """
     
@@ -60,6 +70,16 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
         print('Session not found in excel session overview')
 
     return sessiondata
+
+"""
+ ######  ####### #     #    #    #     # ### ####### ######  ######     #    #######    #    
+ #     # #       #     #   # #   #     #  #  #     # #     # #     #   # #      #      # #   
+ #     # #       #     #  #   #  #     #  #  #     # #     # #     #  #   #     #     #   #  
+ ######  #####   ####### #     # #     #  #  #     # ######  #     # #     #    #    #     # 
+ #     # #       #     # #######  #   #   #  #     # #   #   #     # #######    #    ####### 
+ #     # #       #     # #     #   # #    #  #     # #    #  #     # #     #    #    #     # 
+ ######  ####### #     # #     #    #    ### ####### #     # ######  #     #    #    #     # 
+"""
 
 def proc_behavior_passive(rawdatadir,sessiondata):
     """ preprocess all the behavior data for one session: running """
@@ -116,6 +136,16 @@ def proc_behavior_passive(rawdatadir,sessiondata):
 
     return behaviordata
 
+"""
+  #####  ######     #    ####### ### #     #  #####   #####  
+ #     # #     #   # #      #     #  ##    # #     # #     # 
+ #       #     #  #   #     #     #  # #   # #       #       
+ #  #### ######  #     #    #     #  #  #  # #  ####  #####  
+ #     # #   #   #######    #     #  #   # # #     #       # 
+ #     # #    #  #     #    #     #  #    ## #     # #     # 
+  #####  #     # #     #    #    ### #     #  #####   #####  
+  """
+
 def proc_GR(rawdatadir,sessiondata):
     sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
     sesfolder       = Path(sesfolder)
@@ -138,6 +168,17 @@ def proc_GR(rawdatadir,sessiondata):
 
     return trialdata
 
+"""
+ ### #     #    #     #####  #######  #####  
+  #  ##   ##   # #   #     # #       #     # 
+  #  # # # #  #   #  #       #       #       
+  #  #  #  # #     # #  #### #####    #####  
+  #  #     # ####### #     # #             # 
+  #  #     # #     # #     # #       #     # 
+ ### #     # #     #  #####  #######  #####  
+                                             
+"""
+
 def proc_IM(rawdatadir,sessiondata):
     sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
     sesfolder       = Path(sesfolder)
@@ -150,6 +191,16 @@ def proc_IM(rawdatadir,sessiondata):
     trialdata['session_id']     = sessiondata['session_id'][0]
 
     return trialdata
+
+"""
+ ######  #######    #     #    #    ######  ######  ### #     #  #####  
+ #     # #          ##   ##   # #   #     # #     #  #  ##    # #     # 
+ #     # #          # # # #  #   #  #     # #     #  #  # #   # #       
+ ######  #####      #  #  # #     # ######  ######   #  #  #  # #  #### 
+ #   #   #          #     # ####### #       #        #  #   # # #     # 
+ #    #  #          #     # #     # #       #        #  #    ## #     # 
+ #     # #          #     # #     # #       #       ### #     #  #####  
+"""
 
 def proc_RF(rawdatadir,sessiondata):
     sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
@@ -203,6 +254,16 @@ def proc_RF(rawdatadir,sessiondata):
         RF_timestamps = np.linspace(triggerdata[-1,1]-nGrids*0.5, triggerdata[-1,1], num=nGrids, endpoint=True)
     
     return grid_array,RF_timestamps
+
+"""
+ #     # ######     #######    #     #####  #    # 
+ #     # #     #       #      # #   #     # #   #  
+ #     # #     #       #     #   #  #       #  #   
+ #     # ######        #    #     #  #####  ###    
+  #   #  #   #         #    #######       # #  #   
+   # #   #    #        #    #     # #     # #   #  
+    #    #     #       #    #     #  #####  #    # 
+"""
 
 def proc_task(rawdatadir,sessiondata):
     """ preprocess all the trial, stimulus and behavior data for one behavior VR session """
@@ -319,6 +380,15 @@ def proc_task(rawdatadir,sessiondata):
     
     return sessiondata, trialdata, behaviordata
 
+"""
+ #     # ### ######  ####### ####### ######     #    #######    #    
+ #     #  #  #     # #       #     # #     #   # #      #      # #   
+ #     #  #  #     # #       #     # #     #  #   #     #     #   #  
+ #     #  #  #     # #####   #     # #     # #     #    #    #     # 
+  #   #   #  #     # #       #     # #     # #######    #    ####### 
+   # #    #  #     # #       #     # #     # #     #    #    #     # 
+    #    ### ######  ####### ####### ######  #     #    #    #     # 
+"""
 
 def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     
@@ -373,6 +443,16 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     videodata['session_id']  = sessiondata['session_id'][0]
 
     return videodata
+
+"""
+ ### #     #    #     #####  ### #     #  #####  
+  #  ##   ##   # #   #     #  #  ##    # #     # 
+  #  # # # #  #   #  #        #  # #   # #       
+  #  #  #  # #     # #  ####  #  #  #  # #  #### 
+  #  #     # ####### #     #  #  #   # # #     # 
+  #  #     # #     # #     #  #  #    ## #     # 
+ ### #     # #     #  #####  ### #     #  #####  
+"""
 
 def proc_imaging(sesfolder, sessiondata):
     """ integrate preprocessed calcium imaging data """
@@ -567,6 +647,17 @@ def proc_imaging(sesfolder, sessiondata):
     deconvdata['session_id']    = sessiondata['session_id'][0]
 
     return sessiondata,celldata,dFdata,deconvdata
+
+
+"""
+ #     # ####### #       ######  ####### ######  ####### #     # #     #  #####   #####  
+ #     # #       #       #     # #       #     # #       #     # ##    # #     # #     # 
+ #     # #       #       #     # #       #     # #       #     # # #   # #       #       
+ ####### #####   #       ######  #####   ######  #####   #     # #  #  # #        #####  
+ #     # #       #       #       #       #   #   #       #     # #   # # #             # 
+ #     # #       #       #       #       #    #  #       #     # #    ## #     # #     # 
+ #     # ####### ####### #       ####### #     # #        #####  #     #  #####   #####  
+"""
 
 def align_timestamps(sessiondata, ops, triggerdata):
     # get idx of frames belonging to this protocol:

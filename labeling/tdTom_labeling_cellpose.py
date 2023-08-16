@@ -44,45 +44,24 @@ def normalize8(I):
     
     return I.astype(np.uint8)
 
-def proc_labeling_plane(direc_folder,show_plane=False):
-    stats = np.load(os.path.join(direc_folder,'stat.npy'), allow_pickle=True)
-    ops =  np.load(os.path.join(direc_folder,'ops.npy'), allow_pickle=True).item()
-    iscell = np.load(os.path.join(direc_folder,'iscell.npy'), allow_pickle=True)
-    redcell = np.load(os.path.join(direc_folder,'redcell.npy'), allow_pickle=True)
+def proc_labeling_plane(plane_folder,show_plane=False):
+    stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
+    ops         = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
+    iscell      = np.load(os.path.join(plane_folder,'iscell.npy'), allow_pickle=True)
+    redcell     = np.load(os.path.join(plane_folder,'redcell.npy'), allow_pickle=True)
 
     #Filter good cells: 
-    stats = stats[iscell[:,0]==1]
-    redcell = redcell[iscell[:,0]==1,:]
-    # iscell = iscell[iscell[:,0]==1]
+    stats       = stats[iscell[:,0]==1]
+    redcell     = redcell[iscell[:,0]==1,:]
+    # iscell    = iscell[iscell[:,0]==1]
 
-    Ncells = np.shape(redcell)[0]
+    Nsuite2pcells      = np.shape(redcell)[0]
 
     # From cell masks create outlines:
     masks_suite2p = np.zeros((512,512), np.float32)
     for i,s in enumerate(stats):
         masks_suite2p[s['ypix'],s['xpix']] = i+1
     outl_green = utils.outlines_list(masks_suite2p)
-
-
-
-    #####Compute intensity ratio (code taken from Suite2p):
-            #redstats = intensity_ratio(ops, stats)
-
-    # Ly, Lx = ops['Ly'], ops['Lx']
-    # cell_pix = masks.create_cell_pix(stats, Ly=ops['Ly'], Lx=ops['Lx'])
-    # cell_masks0 = [masks.create_cell_mask(stat, Ly=ops['Ly'], Lx=ops['Lx'], allow_overlap=ops['allow_overlap']) for stat in stats]
-    # neuropil_ipix = masks.create_neuropil_masks(
-    #     ypixs=[stat['ypix'] for stat in stats],
-    #     xpixs=[stat['xpix'] for stat in stats],
-    #     cell_pix=cell_pix,
-    #     inner_neuropil_radius=ops['inner_neuropil_radius'],
-    #     min_neuropil_pixels=ops['min_neuropil_pixels'],
-    # )
-    # cell_masks = np.zeros((len(stats), Ly * Lx), np.float32)
-    # neuropil_masks = np.zeros((len(stats), Ly * Lx), np.float32)
-    # for cell_mask, cell_mask0, neuropil_mask, neuropil_mask0 in zip(cell_masks, cell_masks0, neuropil_masks, neuropil_ipix):
-    #     cell_mask[cell_mask0[0]] = cell_mask0[1]
-    #     neuropil_mask[neuropil_mask0.astype(np.int64)] = 1. / len(neuropil_mask0)
 
     mimg = ops['meanImg']
     # mimg = np.zeros([512,512])
@@ -91,8 +70,6 @@ def proc_labeling_plane(direc_folder,show_plane=False):
 
     mimg2 = ops['meanImg_chan2']
     # mimg2 = ops['meanImg_chan2_corrected']
-    # mimg2 = correct_bleedthrough(Ly, Lx, 3, mimg, mimg2)
-
 
     # img_green = np.zeros((512, 512, 3), dtype=np.uint8)
     # img_green[:,:,1] = normalize8(mimg)
@@ -105,29 +82,36 @@ def proc_labeling_plane(direc_folder,show_plane=False):
 
     masks_cp_red, flows, styles = model_red.eval(img_red, diameter=diam, channels=chan)
     outl_red = utils.outlines_list(masks_cp_red)
+    Ncellpose_redcells      = np.shape(outl_red)[0]
 
-    mask_overlap = np.empty(Ncells)
-    # Compute overlap in masks:
-    for i in range(Ncells):
-        # mask_overlap[i] = np.sum(masks_cp_red[masks_suite2p==i+1] != 0) / np.sum()
-        mask_overlap[i] = np.sum(masks_cp_red[masks_suite2p==i+1] != 0) / np.sum(masks_suite2p ==i+1)
-        # print(np.sum(masks_cp_red[masks_suite2p==i+1] != 0))
-    
-    mask_overlap = mask_overlap.round(2)
-    # inpix = cell_masks @ mimg2.flatten()
-    # extpix = neuropil_masks @ mimg2.flatten()
-    # # extpix = np.mean(extpix)
-    # inpix = np.maximum(1e-3, inpix)
-    # redprob = inpix / (inpix + extpix)
-    # redcell = redprob > ops['chan2_thres']
+    mask_overlap_green_with_red = np.empty(Nsuite2pcells)
+    for i in range(Nsuite2pcells):    # Compute overlap in masks:
+        overlap = np.sum(masks_cp_red[masks_suite2p==i+1] != 0) / np.sum(masks_suite2p ==i+1)
+        mask_overlap_green_with_red[i] = overlap
+        # if mask_overlap_green_with_red[i]>0:
+            # mask_overlap_red_with_green[np.unique(masks_cp_red[masks_suite2p==i+1])[1]-1] = overlap
 
-    # redcell = inpix > 130
+    mask_overlap_red_with_green = np.zeros(Ncellpose_redcells)
+    for i in range(Ncellpose_redcells):    # Compute overlap in masks:
+        overlap = np.sum(masks_suite2p[masks_cp_red==i+1] != 0) / np.sum(masks_cp_red ==i+1)
+        mask_overlap_red_with_green[i] = overlap
 
-    df = pd.DataFrame()
-    # df['inpix'] = inpix
-    # df['extpix'] = extpix
-    df['redprob'] = mask_overlap
-    df['redcell'] = mask_overlap > 0.1
+    df_green = pd.DataFrame({'overlap': mask_overlap_green_with_red})
+
+    df_red  = pd.DataFrame({'overlap': mask_overlap_red_with_green})
+
+    # # nOnlyRedCells   = np.sum(mask_overlap_red_with_green==0)
+    # nOverlapCells   = np.sum(mask_overlap_green_with_red>0)
+    # nOnlyGreenCells = Nsuite2pcells - nOverlapCells
+    # nOnlyRedCells   = Ncellpose_redcells - nOverlapCells
+
+    # nTotalCells     = nOnlyGreenCells + nOnlyRedCells + nOverlapCells
+
+    # df = pd.DataFrame()
+    # df['suite2p']       = np.concatenate((np.full((Nsuite2pcells), True), np.full((nOnlyRedCells), False)))
+    # df['cellpose_red']  = np.concatenate((np.full((nOnlyGreenCells), False), np.full((Ncellpose_redcells), True)))
+    # df['overlap']       = np.zeros(nTotalCells)
+    # df['overlap'][np.logical_and(df['suite2p'],df['cellpose_red'])] = mask_overlap_green_with_red[mask_overlap_green_with_red>0]
 
     if show_plane:
         ######
@@ -164,6 +148,125 @@ def proc_labeling_plane(direc_folder,show_plane=False):
             ax2.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
             ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
         
+        ax1.set_axis_off()
+        ax1.set_aspect('auto')
+        ax1.set_title('GCaMP', fontsize=12, color='black', fontweight='bold',loc='center')
+        ax2.set_axis_off()
+        ax2.set_aspect('auto')
+        ax2.set_title('tdTomato', fontsize=12, color='black', fontweight='bold',loc='center')
+        ax3.set_axis_off()
+        ax3.set_aspect('auto')
+        ax3.set_title('Merge', fontsize=12, color='black', fontweight='bold',loc='center')
+
+        plt.tight_layout(rect=[0, 0, 1, 1])
+
+        # fig.savefig(os.path.join(plane_folder,'labeling.jpg'),dpi=600)
+
+    return df_green,df_red
+
+
+direc = 'X:\\RawData\\LPE09829\\2023_03_31\\suite2p\\'
+direc = 'X:\\RawData\\LPE09830\\2023_04_10\\suite2p\\'
+direc = 'O:\\RawData\\LPE09830\\2023_04_12\\suite2p\\'
+direc = 'O:\\RawData\\LPE09665\\2023_03_15\\suite2p\\'
+
+for iplane in range(8):
+
+    # tempdf              = proc_labeling_plane(os.path.join(direc,"plane%s" % iplane),show_plane=False)
+
+    tempdf_green,tempdf_red              = proc_labeling_plane(os.path.join(direc,"plane%s" % iplane),show_plane=False)
+    tempdf_green['iplane']              = iplane
+    tempdf_red['iplane']                = iplane
+    if iplane == 0:
+        df_green = tempdf_green
+        df_red = tempdf_red
+    else:
+        df_green = df_green.append(tempdf_green)
+        df_red = df_red.append(tempdf_red)
+
+from matplotlib_venn import venn2
+import matplotlib.pyplot as plt
+
+overlap_threshold = 0.2
+
+# Use the venn2 function
+G = np.sum(df_green['overlap']<=overlap_threshold)
+GR = np.sum(df_green['overlap']>overlap_threshold)
+R = np.sum(df_red['overlap']<=overlap_threshold)
+venn2(subsets = (G, R, GR), set_labels = ('Suite2p', 'cellpose'))
+
+fig = plt.figure(figsize=[5, 4])
+sns.histplot(data=df_green, x="overlap",stat='probability',binwidth=0.025)
+plt.ylim([0,0.02])
+plt.xlabel("Overlap gcamp with tdtomato")
+
+fig = plt.figure(figsize=[5, 4])
+sns.histplot(data=df_red, x="overlap",stat='probability',binwidth=0.025)
+plt.ylim([0,0.15])
+plt.xlabel("Overlap tdtomato with gcamp")
+
+# # Use the venn2 function
+# G = np.sum(np.logical_and(df['suite2p'],~df['cellpose_red']))
+# GR = np.sum(np.logical_and(df['suite2p'],df['cellpose_red']))
+# R = np.sum(np.logical_and(~df['suite2p'],df['cellpose_red']))
+# venn2(subsets = (G, R, GR), set_labels = ('Suite2p', 'cellpose'))
+
+# # df2 = df.copy()
+
+# # df2.loc[df2.index[np.logical_and(df2['overlap']<0.1,df2['suite2p'])],'cellpose_red'] = False
+
+
+# fig = plt.figure(figsize=[5, 4])
+# sns.histplot(data=df, x="overlap",stat='probability',binwidth=0.025)
+# plt.ylim([0,0.02])
+
+# overlap_threshold = 0.2
+# # Use the venn2 function
+# G = np.sum(np.logical_and(df['suite2p'],df['overlap']<overlap_threshold))
+# GR = np.sum(df['overlap']>overlap_threshold)
+# R = np.sum(np.logical_and(df['cellpose_red'],df['overlap']<overlap_threshold))
+# venn2(subsets = (G, R, GR), set_labels = ('Suite2p', 'cellpose'))
+
+
+# x, batch_size=8, channels=None, channel_axis=None, 
+#              z_axis=None, normalize=True, invert=False, 
+#              rescale=None, diameter=None, do_3D=False, anisotropy=None, net_avg=False, 
+#              augment=False, tile=True, tile_overlap=0.1,
+#              resample=True, interp=True,
+#              flow_threshold=0.4, cellprob_threshold=0.0,
+#              compute_masks=True, min_size=15, stitch_threshold=0.0, progress=None,  
+#              loop_run=False, model_loaded=False):
+
+# masks, flows, styles, diams = model.eval(img, diameter=diam, channels=chan)
+
+# masks, flows, styles, diams = model.eval(img_numpy, diameter=diam, channels=chan)
+
+# save results so you can load in gui
+# io.masks_flows_to_seg(imgs, masks, flows, diams, filename, channels)
+
+
+
+
+    #####Compute intensity ratio (code taken from Suite2p):
+            #redstats = intensity_ratio(ops, stats)
+
+    # Ly, Lx = ops['Ly'], ops['Lx']
+    # cell_pix = masks.create_cell_pix(stats, Ly=ops['Ly'], Lx=ops['Lx'])
+    # cell_masks0 = [masks.create_cell_mask(stat, Ly=ops['Ly'], Lx=ops['Lx'], allow_overlap=ops['allow_overlap']) for stat in stats]
+    # neuropil_ipix = masks.create_neuropil_masks(
+    #     ypixs=[stat['ypix'] for stat in stats],
+    #     xpixs=[stat['xpix'] for stat in stats],
+    #     cell_pix=cell_pix,
+    #     inner_neuropil_radius=ops['inner_neuropil_radius'],
+    #     min_neuropil_pixels=ops['min_neuropil_pixels'],
+    # )
+    # cell_masks = np.zeros((len(stats), Ly * Lx), np.float32)
+    # neuropil_masks = np.zeros((len(stats), Ly * Lx), np.float32)
+    # for cell_mask, cell_mask0, neuropil_mask, neuropil_mask0 in zip(cell_masks, cell_masks0, neuropil_masks, neuropil_ipix):
+    #     cell_mask[cell_mask0[0]] = cell_mask0[1]
+    #     neuropil_mask[neuropil_mask0.astype(np.int64)] = 1. / len(neuropil_mask0)
+
+
 
 
         # redcells        = np.where(np.logical_and(iscell[:,0],redcell))[0]
@@ -191,69 +294,14 @@ def proc_labeling_plane(direc_folder,show_plane=False):
         #     ax2.scatter(x[notredcells],y[notredcells],s=25,facecolors='none', edgecolors='g',linewidths=0.4)
         #     ax3.scatter(x[notredcells],y[notredcells],s=25,facecolors='none', edgecolors='w',linewidths=0.4)
 
-        ax1.set_axis_off()
-        ax1.set_aspect('auto')
-        ax1.set_title('GCaMP', fontsize=12, color='black', fontweight='bold',loc='center')
-        ax2.set_axis_off()
-        ax2.set_aspect('auto')
-        ax2.set_title('tdTomato', fontsize=12, color='black', fontweight='bold',loc='center')
-        ax3.set_axis_off()
-        ax3.set_aspect('auto')
-        ax3.set_title('Merge', fontsize=12, color='black', fontweight='bold',loc='center')
-
-        plt.tight_layout(rect=[0, 0, 1, 1])
-
-        # fig.savefig('labeling.jpg',dpi=600)
-
-
-    return mimg, mimg2, df
-
-
-direc = 'X:\\RawData\\LPE09829\\2023_03_31\\suite2p\\'
-
-# direc = 'O:\\RawData\\LPE09665\\2023_03_14\\suite2p\\'
-
-for iplane in range(8):
-
-    mimg,mimg2,tempdf = proc_labeling_plane(os.path.join(direc,"plane%s" % iplane),show_plane=True)
-    tempdf['iplane'] = iplane
-    if iplane == 0:
-        df = tempdf
-    else:
-        df = df.append(tempdf)
 
 
 
-# x, batch_size=8, channels=None, channel_axis=None, 
-#              z_axis=None, normalize=True, invert=False, 
-#              rescale=None, diameter=None, do_3D=False, anisotropy=None, net_avg=False, 
-#              augment=False, tile=True, tile_overlap=0.1,
-#              resample=True, interp=True,
-#              flow_threshold=0.4, cellprob_threshold=0.0,
-#              compute_masks=True, min_size=15, stitch_threshold=0.0, progress=None,  
-#              loop_run=False, model_loaded=False):
+ # inpix = cell_masks @ mimg2.flatten()
+    # extpix = neuropil_masks @ mimg2.flatten()
+    # # extpix = np.mean(extpix)
+    # inpix = np.maximum(1e-3, inpix)
+    # redprob = inpix / (inpix + extpix)
+    # redcell = redprob > ops['chan2_thres']
 
-# masks, flows, styles, diams = model.eval(img, diameter=diam, channels=chan)
-
-# masks, flows, styles, diams = model.eval(img_numpy, diameter=diam, channels=chan)
-
-
-
-# plt.imshow(outlines)
-# plt.imshow(img,vmin=0,vmax=255)
-
-
-# save results so you can load in gui
-io.masks_flows_to_seg(imgs, masks, flows, diams, filename, channels)
-
-# redstats = {'redcell': redcell[iscell[:,0]==1],'redcellprob': redprob[iscell[:,0]==1]}
-# redstats = pd.DataFrame(data=redstats)
-
-fig = plt.figure(figsize=[5, 4])
-sns.histplot(data=df, x="redprob",hue='redcell',stat='count',binwidth=0.025)
-
-sns.scatterplot(data=df, y="redprob",x='inpix',hue='redcell')
-plt.xscale('log')
-sns.scatterplot(data=df, y="extpix",x='inpix',hue='redcell')
-
-sns.histplot(data=df,x='inpix', stat='count',hue='redcell',log_scale=True)
+    # redcell = inpix > 130
