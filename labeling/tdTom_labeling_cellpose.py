@@ -1,4 +1,9 @@
 
+"""
+Analyzes labeling of tdtomato expressing cells using cellpose software (Pachitariu & Stringer)
+optimized for green + red channel mesoscopic 2p Ca2+ imaging recordings
+Matthijs Oude Lohuis, 2023, Champalimaud Foundation
+"""
 
 import os
 import numpy as np
@@ -204,9 +209,9 @@ def proc_labeling_plane(direc_folder,show_plane=False):
     return mimg, mimg2, df
 
 
-direc = 'X:\\RawData\\LPE09829\\2023_03_30\\suite2p\\'
+direc = 'X:\\RawData\\LPE09829\\2023_03_31\\suite2p\\'
 
-direc = 'O:\\RawData\\LPE09665\\2023_03_14\\suite2p\\'
+# direc = 'O:\\RawData\\LPE09665\\2023_03_14\\suite2p\\'
 
 for iplane in range(8):
 

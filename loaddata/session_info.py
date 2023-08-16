@@ -1,7 +1,7 @@
 """
 This script has data loading functions used to get dirs, filter and select sessions
 Actual loading happens as method of instances of sessions (session.py)
-Matthijs Oude Lohuis, 2023, Champalimaud Center
+Matthijs Oude Lohuis, 2023, Champalimaud Foundation
 """
 
 import numpy as np

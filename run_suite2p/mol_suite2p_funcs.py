@@ -1,21 +1,75 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu May 11 12:09:29 2023
-
-@author: USER
+Suite2p functions that are necessary for automatic ROI detection pipeline of 
+mesoscopic 2p Ca2+ imaging recordings
+Matthijs Oude Lohuis, 2023, Champalimaud Foundation
 """
 
 import os, shutil
 import numpy as np
-# import suite2p
+import suite2p
 from suite2p.io.binary import BinaryFile
 from suite2p.extraction import extract
 from utils.twoplib import get_meta
+import pandas as pd
+
+# set your options for running
+def gen_ops():
+    """
+    Script to generate parameters for suite2p pipeline with mesoscope recordings in 8 planes
+    Matthijs Oude Lohuis, Champalimaud 2023
+    """
+    ops = suite2p.default_ops() # populates ops with the default options
+
+    ops['look_one_level_down']          = True
+
+    ops['nplanes']          = 8
+    ops['nchannels']        = 2
+    ops['functional_chan']  = 1
+    ops['tau']              = 0.7
+    ops['fs']               = 42.857/8
+    ops['save_mat']         = False
+    ops['save_NWB']         = False
+    ops['reg_tif']          = False
+    ops['reg_tif_chan2']    = False
+    ops['delete_bin']       = False
+    ops['align_by_chan']    = 2
+    ops['nimg_init']        = 500
+    ops['batch_size']       = 500
+    ops['nonrigid']         = True
+    ops['block_size']       = [128,128]
+    # ops['maxregshiftNR']    = 5
+    ops['maxregshift']      = 0.15
+    ops['1Preg']            = False
+
+    ops['denoise']              = True
+    ops['spatial_scale']        = 4
+    ops['threshold_scaling']    = 0.5
+    ops['max_overlap']          = 0.75
+    ops['max_iterations']       = 50
+    ops['high_pass']            = 100
+    ops['spatial_hp_detect']    = 25
+    ops['anatomical_only']      = 0
+    ops['neuropil_extract']     = True
+    ops['allow_overlap']        = True
+    ops['soma_crop']            = True
+    ops['win_baseline']         = 60
+    ops['sig_baseline']         = 10
+    ops['neucoeff']             = 0.7
+
+    ops['do_registration']      = False
+    ops['roidetect']            = False
+    # np.save('T:/Python/ops_8planes.npy',ops)
+    # np.save('E:/Python/ops_8planes.npy',ops)
+
+    return ops
+
 
 def init_ops(sesfolder):
     
-    ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
-    
+    # ops = np.load('T:/Python/ops_8planes.npy',allow_pickle='TRUE').item()
+    ops = gen_ops()
+
     ops['do_registration']      = True
     ops['roidetect']            = False #only do registration in this part
     
@@ -28,7 +82,6 @@ def init_ops(sesfolder):
     }
     #Find all protocols
     db['subfolders'] = [os.path.join(sesfolder,f,'Imaging') for f in os.listdir(db['data_path'][0]) if f in protocols]
-        
     
     #identify number of planes in the session:
     firsttiff = [x for x in os.listdir(db['subfolders'][0]) if x.endswith(".tif")][0] #get first tif in first dir to read nplanes:
@@ -40,17 +93,21 @@ def init_ops(sesfolder):
     for line in meta_si:
         meta_dict[line.split(' = ')[0]] = line.split(' = ')[1]
  
-    nROIs = len(meta['RoiGroups']['imagingRoiGroup']['rois'])
-    roi_area    = [meta['RoiGroups']['imagingRoiGroup']['rois'][i]['name'] for i in range(nROIs)]
-    # roi_planes  = [len(meta['RoiGroups']['imagingRoiGroup']['rois'][i]['scanfields']) for i in range(nROIs)]
+    ops['nROIs']        = len(meta['RoiGroups']['imagingRoiGroup']['rois'])
+    ops['roi_names']    = [meta['RoiGroups']['imagingRoiGroup']['rois'][i]['name'] for i in range(ops['nROIs'])]
     
-    # ops['nplanes'] = len(roi_area)
-    ops['nplanes'] = 8
+    ops['nplanes'] = 0
+    for i in range(ops['nROIs']):
+        # print(type(meta['RoiGroups']['imagingRoiGroup']['rois'][i]['scanfields']))
+        if type(meta['RoiGroups']['imagingRoiGroup']['rois'][i]['scanfields'])==list:
+            ops['nplanes'] += len(meta['RoiGroups']['imagingRoiGroup']['rois'][i]['scanfields'])
+        elif type(meta['RoiGroups']['imagingRoiGroup']['rois'][i]['scanfields'])==dict:
+            ops['nplanes'] += 1
+        # ops['nplanes']      = 8
 
     ops['fs'] = float(meta_dict['SI.hRoiManager.scanFrameRate']) / ops['nplanes']
     
     return db, ops
-
 
 def run_bleedthrough_corr(db,ops,coeff):
 
@@ -103,3 +160,31 @@ def run_bleedthrough_corr(db,ops,coeff):
     
     return ops
 
+
+
+# def get_bleedthrough_coeff(rawdatadir,animal_id,sessiondate):
+
+
+#     sessions_overview_VISTA = pd.read_excel(os.path.join(rawdatadir,'VISTA_Sessions_Overview.xlsx'))
+#     sessions_overview_VR    = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
+
+#     if np.any(np.logical_and(sessions_overview_VISTA["sessiondate"] == sessiondate,sessions_overview_VISTA["protocol"] == protocol)):
+#         sessions_overview = sessions_overview_VISTA
+#     elif np.any(np.logical_and(sessions_overview_VR["sessiondate"] == sessiondate,sessions_overview_VR["protocol"] == protocol)):
+#         sessions_overview = sessions_overview_VR
+#     else: 
+#         print('Session not found in excel session overview')
+
+#     # if protocol in ['IM','GR','RF','SP']:
+#     #     sessions_overview = pd.read_excel(os.path.join(rawdatadir,'VISTA_Sessions_Overview.xlsx'))
+#     # elif protocol in ['VR']: 
+#     #     sessions_overview = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
+
+#     idx = np.where(np.logical_and(sessions_overview["sessiondate"] == sessiondate,sessions_overview["protocol"] == protocol))[0]
+#     if np.any(idx):
+#         sessiondata = pd.merge(sessiondata,sessions_overview.loc[idx]) #Copy all the data from the excel to sessiondata dataframe
+#     else: 
+#         print('Session not found in excel session overview')
+
+
+#     return coeff

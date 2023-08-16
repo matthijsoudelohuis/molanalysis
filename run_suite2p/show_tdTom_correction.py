@@ -18,18 +18,20 @@ from suite2p.detection.chan2detect import correct_bleedthrough
 def load_data(directory,nplanes): 
     data_green      = np.empty([0,512,512])
     data_red        = np.empty([0,512,512])
-    maxtifs = 20
+    maxtifs         = 20
     
     # iterate over files in that directory
-    for filename in os.listdir(directory)[:maxtifs]:
+    randfiles = os.listdir(directory)
+    randfiles = np.random.choice(randfiles,maxtifs)
+    for filename in randfiles:
         f = os.path.join(directory, filename)
-        # checking if it is a file
-        if f.endswith(".tif"):
+        
+        if f.endswith(".tif"): # checking if it is a tiff file
             print(f)
-            reader = imread(f)
-            Data = reader.data()
-            data_green = np.append(data_green, Data[0::(2*nplanes),:,:],axis=0)
-            data_red = np.append(data_red, Data[1::(2*nplanes),:,:],axis=0)
+            reader      = imread(f)
+            Data        = reader.data()
+            data_green  = np.append(data_green, Data[0::(2*nplanes),:,:],axis=0)
+            data_red    = np.append(data_red, Data[1::(2*nplanes),:,:],axis=0)
     
     return data_green,data_red
 
@@ -81,13 +83,16 @@ directory = 'O:\\RawData\\LPE10192\\2023_05_04\\SP\\Imaging\\'
 directory = 'X:\\RawData\\LPE09665\\2023_03_14\\GR\\Imaging\\'
 [data_green,data_red] = load_data(directory,nplanes=8)
 
+directory = 'X:\\RawData\\NSH07422\\2023_03_14\\IM\\Imaging\\'
+[data_green,data_red] = load_data(directory,nplanes=8)
+
 directory = 'V:\\Rawdata\\PILOTS\\20230308_LPE09832_tdTomato_Bleedthrough\\Gain1_0.6_Gain2_0.6\\'
 [data_green,data_red] = load_data(directory,nplanes=1)
 
 # directory = 'C:\\TempData\\LPE09665\\2023_03_14\\GR\\Imaging\\'
 
-greenchanim = np.average(data_green,axis=0)
-redchanim = np.average(data_red,axis=0)
+greenchanim     = np.average(data_green,axis=0)
+redchanim       = np.average(data_red,axis=0)
 
 # greenchanim = np.average(data_green[:,256:,:256],axis=0)
 # redchanim = np.average(data_red[:,256:,:256],axis=0)
@@ -97,10 +102,11 @@ b, a = np.polyfit(redchanim.flatten(), greenchanim.flatten(), deg=1)
 plot_correlation(greenchanim,redchanim)
 plot_correction(greenchanim,redchanim,greenchanim - b * redchanim)
 
-plot_correction(greenchanim,redchanim,greenchanim - 0.068 * redchanim)
-plot_correction(greenchanim,redchanim,greenchanim - 1.54 * redchanim)
-plot_correction(greenchanim,redchanim,greenchanim - 1.6 * redchanim)
+plot_correction(greenchanim,redchanim,greenchanim - 0.068 * redchanim) #0.6 0.6
+plot_correction(greenchanim,redchanim,greenchanim - 0.32 * redchanim) #0.6 0.5
+plot_correction(greenchanim,redchanim,greenchanim - 1.54 * redchanim) #0.6 0.4
 
+# plt.plot(np.log([0.068,0.32,1.54]))
 ######################################
 
 # subtract bleedthrough of green into red channel
@@ -289,7 +295,6 @@ def seqtogif(data,savedir,savefilename):
         plt.savefig(os.path.join(savedir, filename))
         plt.close()
         
-    
     # Load each file into a list
     frames = []
     for filename in filenames:
