@@ -853,3 +853,6 @@ plt.savefig(os.path.join(savedir,'LDA_proj_deconv_corr_interarea_' + sessions[0]
 # plt.figure(figsize=(12,5))
 # # plt.imshow(np.nanmean(A,axis=1),interpolation='nearest',aspect='auto',vmin=-0.25,vmax=1.25)
 # plt.imshow(np.nanmean(result,axis=1),interpolation='nearest',aspect='auto',vmin=-0.25,vmax=1.25)
+
+
+

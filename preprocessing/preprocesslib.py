@@ -40,7 +40,6 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     sessiondata         = sessiondata.assign(session_id = [animal_id + '_' + sessiondate])
     sessiondata         = sessiondata.assign(experimenter = ["Matthijs Oude Lohuis"])
     sessiondata         = sessiondata.assign(species = ["Mus musculus"])
-    sessiondata         = sessiondata.assign(sex = ["Male"])
     sessiondata         = sessiondata.assign(lab = ["Petreanu Lab"])
     sessiondata         = sessiondata.assign(institution = ["Champalimaud Research"])
     sessiondata         = sessiondata.assign(preprocessdate = [datetime.now().strftime("%Y_%m_%d")])
@@ -55,16 +54,13 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
         sessions_overview = sessions_overview_VR
     else: 
         print('Session not found in excel session overview')
-
-    # if protocol in ['IM','GR','RF','SP']:
-    #     sessions_overview = pd.read_excel(os.path.join(rawdatadir,'VISTA_Sessions_Overview.xlsx'))
-    # elif protocol in ['VR']: 
-    #     sessions_overview = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
-
-    idx = np.where(np.logical_and(sessions_overview["sessiondate"] == sessiondate,sessions_overview["protocol"] == protocol))[0]
+    
+    idx =   (sessions_overview["sessiondate"] == sessiondate) & \
+            (sessions_overview["animal_id"] == animal_id) & \
+            (sessions_overview["protocol"] == protocol)
     if np.any(idx):
-        sessiondata = pd.merge(sessiondata,sessions_overview.loc[idx]) #Copy all the data from the excel to sessiondata dataframe
-        age_in_days = (datetime.strptime(sessiondata['sessiondate'][0], "%Y_%m_%d") - datetime.strptime(sessiondata['DOB'][0], "%Y_%m_%d")).days
+        sessiondata         = pd.merge(sessiondata,sessions_overview.loc[idx],'inner') #Copy all the data from the excel to sessiondata dataframe
+        age_in_days         = (datetime.strptime(sessiondata['sessiondate'][0], "%Y_%m_%d") - datetime.strptime(sessiondata['DOB'][0], "%Y_%m_%d")).days
         sessiondata         = sessiondata.assign(age_in_days = [age_in_days]) #Store the age in days at time of the experiment
     else: 
         print('Session not found in excel session overview')
@@ -288,8 +284,9 @@ def proc_task(rawdatadir,sessiondata):
     trialdata = trialdata.replace('stim','', regex=True)
 
     trialdata['lickResponse'] = trialdata['lickResponse'].astype(int)
-    trialdata.rename(columns={'Reward':'rewardAvailable'})
-    
+    trialdata = trialdata.rename(columns={'Reward': 'rewardAvailable'})
+    trialdata['rewardGiven']  = np.logical_and(trialdata['rewardAvailable'],trialdata['lickResponse']).astype('int')
+
     #If rewarded stimulus is on the left, context = 1, right = 0
     blocklen = 50
     temp = np.tile(np.concatenate([np.ones(blocklen),np.zeros(blocklen)]),100).astype('int')
@@ -322,18 +319,31 @@ def proc_task(rawdatadir,sessiondata):
     rewardactivity = np.diff(behaviordata['reward'])
     reward_ts      = behaviordata['ts'][np.append(rewardactivity>0,False)].to_numpy()
     
+    ## Reconstruct total position:
+    trialdata['TrialEnd'] = 0
+    for t in range(len(trialdata)):
+        trialdata.loc[trialdata.index[trialdata['TrialNumber']==t+1],'TrialEnd'] = max(behaviordata.loc[behaviordata.index[behaviordata['trialnum']==t],'zpos'])
+
+    behaviordata['zpos_tot'] = behaviordata['zpos']
+    for t in range(len(trialdata)):
+        behaviordata.loc[behaviordata.index[behaviordata['trialnum']==t+1],'zpos_tot'] += np.cumsum(trialdata['TrialEnd'])[t]
+
+    trialdata['StimStart_tot']          = trialdata['StimStart'] + np.cumsum(trialdata['TrialEnd'])
+    trialdata['StimEnd_tot']            = trialdata['StimEnd'] + np.cumsum(trialdata['TrialEnd'])
+    trialdata['RewardZoneStart_tot']    = trialdata['RewardZoneStart'] + np.cumsum(trialdata['TrialEnd'])
+    trialdata['RewardZoneEnd_tot']      = trialdata['RewardZoneEnd'] + np.cumsum(trialdata['TrialEnd'])
+    
     #Subsample the data, don't need this resolution
     behaviordata = behaviordata.iloc[::10, :].copy().reset_index(drop=True) #subsample data 10 times (to 100 Hz)
     
-    behaviordata['lick'] = False
-    behaviordata['reward'] = False
+    behaviordata['lick']    = False #init to false and set to true for sample of first lick or rew
+    behaviordata['reward']  = False
     
     #Now add the lick times and reward times again to the subsampled dataframe:
     for lick in lick_ts:
         # behaviordata['lick'][np.argmax(lick<behaviordata['ts'])] = True
         behaviordata.loc[behaviordata.index[np.argmax(lick<behaviordata['ts'])],'lick'] = True
-        
-    # print("%d licks" % len(lick_ts)) #Give output to check if reasonable
+    
     print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
 
     trialdata['tStart'] = np.concatenate(([behaviordata['ts'][0]],trialdata['tEnd'][1:]))
@@ -342,9 +352,9 @@ def proc_task(rawdatadir,sessiondata):
     trialdata['tStimStart'] = ''
     trialdata['tStimEnd'] = ''
     for t in range(len(trialdata)):
-        IDX             = behaviordata['trialnum']==t+1
-        z_temp          = behaviordata.loc[behaviordata.index[IDX],'zpos'].to_numpy()
-        ts_temp         = behaviordata.loc[behaviordata.index[IDX],'ts'].to_numpy()
+        idx             = behaviordata['trialnum']==t+1
+        z_temp          = behaviordata.loc[behaviordata.index[idx],'zpos'].to_numpy()
+        ts_temp         = behaviordata.loc[behaviordata.index[idx],'ts'].to_numpy()
         try:
             tStimStart      = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'StimStart'])[0][0]]
         except:
@@ -359,23 +369,36 @@ def proc_task(rawdatadir,sessiondata):
             print('Stimulus end later than trial end')
         trialdata.loc[trialdata.index[t], 'tStimEnd'] = tStimEnd
 
-    for reward in reward_ts:
-        # behaviordata['reward'][np.argmax(reward<behaviordata['ts'])] = True
+    for reward in reward_ts: #set only the first timestamp of reward to True, to have single indices
         behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
     
+    #Compute the timestamp and spatial location of the reward being given and store in trialdata:
     trialdata['tReward'] = np.nan
+    trialdata['sReward'] = np.nan
     for t in range(len(trialdata)-1):
-        idx = np.argmax(np.all((behaviordata['ts']>trialdata['tStart'][t],
-               behaviordata['ts']<trialdata['tStart'][t+1],
-               behaviordata['reward']),axis=0))
-        if idx:
-            trialdata.loc[trialdata.index[t],'tReward'] = behaviordata['ts'].iloc[idx]
+        idx = np.logical_and(behaviordata['reward'],[behaviordata['trialnum']==t+1]).flatten()
+        if np.any(idx):
+            trialdata.loc[trialdata.index[t],'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
+            trialdata.loc[trialdata.index[t],'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]
+
+    #Compute reward rate (fraction of GO trials rewarded) with sliding window for engagement index:
+    sliding_window = 24
+    rewardrate_thr = 0.3
+    trialdata['engaged'] = 1
+    # for t in range(sliding_window,len(trialdata)):
+    for t in range(len(trialdata)):
+        idx = np.intersect1d(np.arange(len(trialdata)),np.arange(t-sliding_window/2,t+sliding_window/2))
+        hitrate = np.sum(trialdata['rewardGiven'][idx]) / np.sum(trialdata['rewardAvailable'][idx])
+        if hitrate < rewardrate_thr:
+            trialdata.loc[trialdata.index[t],'engaged'] = 0
+
+    assert(np.all(~np.isnan(trialdata['tReward'][trialdata['rewardGiven']==1]))) #check all rewarded trials have timestamp of reward
 
     # print("%d rewards" % len(reward_ts)) #Give output to check if reasonable
     print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
     print("%d rewards in unique trials" % trialdata['tReward'].count()) #Give output to check if reasonable
 
-    behaviordata['session_id']  = sessiondata['session_id'][0]
+    behaviordata['session_id']  = sessiondata['session_id'][0] #Store unique session_id
     trialdata['session_id']     = sessiondata['session_id'][0]
     
     return sessiondata, trialdata, behaviordata

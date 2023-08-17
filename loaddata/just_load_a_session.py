@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 This script shows you how to load one session (shallow load)
 It creates an instance of a session which by default loads information about

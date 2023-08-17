@@ -23,9 +23,9 @@ os.chdir('t:\\Python\\molanalysis\\')
 import suite2p
 from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 
-rawdatadir          ='X:\\RawData\\'
-animal_ids          = ['LPE09667'] 
-sessiondates        = ['2023_03_29']
+rawdatadir          ='O:\\RawData\\'
+animal_ids          = ['NSH07422'] 
+sessiondates        = ['2023_03_13']
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
 
