@@ -18,7 +18,7 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from sklearn.decomposition import PCA
 from scipy.stats import zscore, pearsonr,spearmanr
-from rastermap import Rastermap, utils
+# from rastermap import Rastermap, utils
 
 # %matplotlib inline
 
@@ -27,6 +27,7 @@ sessions            = filter_sessions(protocols = ['IM'])
 
 ##################################################
 session_list        = np.array([['LPE09830','2023_04_10']])
+session_list        = np.array([['NSH07422','2023_03_13']])
 sessions            = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
 
@@ -163,7 +164,7 @@ ax.set_ylabel('Neuron')
 ########### PCA on trial-averaged responses ############
 ######### plot result as scatter by orientation ########
 
-respmat_zsc   = zscore(respmat,axis=0)
+respmat_zsc = zscore(respmat,axis=1) # zscore for each neuron across trial responses
 
 pca         = PCA(n_components=15) #construct PCA object with specified number of components
 Xp          = pca.fit_transform(respmat_zsc.T).T #fit pca to response matrix (n_samples by n_features)
@@ -206,7 +207,7 @@ Xp          = pca.fit_transform(X) #fit pca to response matrix (n_samples by n_f
 runspeed_F  = np.interp(x=sessions[0].ts_F,xp=sessions[0].behaviordata['ts'],
                         fp=sessions[0].behaviordata['runspeed'])
 
-plotncomps = 5
+plotncomps  = 5
 Xp_norm     = preprocessing.MinMaxScaler().fit_transform(Xp)
 Rs_norm     = preprocessing.MinMaxScaler().fit_transform(runspeed_F.reshape(-1,1))
 
@@ -219,9 +220,9 @@ for icomp in range(plotncomps):
     sns.lineplot(x=sessions[0].ts_F,y=Xp_norm[:,icomp]+icomp,linewidth=0.5)
 sns.lineplot(x=sessions[0].ts_F,y=Rs_norm.reshape(-1)+plotncomps,linewidth=0.5,color='k')
 
-plt.xlim([sessions[0].trialdata['tOnset'][1000],sessions[0].trialdata['tOnset'][1300]])
+plt.xlim([sessions[0].trialdata['tOnset'][500],sessions[0].trialdata['tOnset'][800]])
 for icomp in range(plotncomps):
-    plt.text(x=sessions[0].trialdata['tOnset'][1200],y=icomp+0.25,s='r=%1.3f' %cmat[icomp])
+    plt.text(x=sessions[0].trialdata['tOnset'][700],y=icomp+0.25,s='r=%1.3f' %cmat[icomp])
 
 plt.ylim([0,plotncomps+1])
 

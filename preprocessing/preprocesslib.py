@@ -531,15 +531,11 @@ def proc_imaging(sesfolder, sessiondata):
     sessiondata = sessiondata.assign(SI_actualNumSlices         = int(meta_dict['SI.hStackManager.actualNumSlices']))
     sessiondata = sessiondata.assign(SI_numFramesPerVolume      = int(meta_dict['SI.hStackManager.numFramesPerVolume']))
 
-    #lists, not really necessary:
-    # sessiondata = sessiondata.assign(SI_zdepths                 = meta_dict['SI.hStackManager.zs'])
-    # sessiondata = sessiondata.assign(SI_axesPosition            = meta_dict['SI.hMotors.axesPosition'])
-
     ## Get trigger data to align timestamps:
-    filenames           = os.listdir(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior'))
+    filenames         = os.listdir(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior'))
     triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
     triggerdata       = pd.read_csv(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior',triggerdata_file[0]),skiprows=2).to_numpy()
-
+    #skip two rows because the first is init of the variable, and the second????
     [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
 
     # getting numer of ROIs
@@ -684,9 +680,9 @@ def proc_imaging(sesfolder, sessiondata):
 
 def align_timestamps(sessiondata, ops, triggerdata):
     # get idx of frames belonging to this protocol:
-    protocol_tifs       = list(filter(lambda x: sessiondata['protocol'][0] in x, ops['filelist']))
-    protocol_tif_idx    = np.array([i for i, x in enumerate(ops['filelist']) if x in protocol_tifs])
-    
+    protocol_tifs           = list(filter(lambda x: sessiondata['protocol'][0] in x, ops['filelist']))
+    protocol_tif_idx        = np.array([i for i, x in enumerate(ops['filelist']) if x in protocol_tifs])
+    #get the number of frames for each of the files belonging to this protocol:
     protocol_tif_nframes    = ops['frames_per_file'][protocol_tif_idx]
     
     protocol_frame_idx = []
@@ -696,13 +692,15 @@ def align_timestamps(sessiondata, ops, triggerdata):
         else:
            protocol_frame_idx = np.append(protocol_frame_idx,np.repeat(False,ops['frames_per_file'][i]))
     
-    protocol_nframes = sum(protocol_frame_idx).astype('int')
+    protocol_nframes = sum(protocol_frame_idx).astype('int') #the number of frames acquired in this protocol
     
     ## Get trigger information:
     nTriggers = np.shape(triggerdata)[0]
-    # timestamps = np.empty([ops['nframes'],1]) #init empty array for the timestamps
+    assert np.shape(protocol_tif_nframes)[0]==nTriggers,"Not the same number of tiffs as triggers"
+
     timestamps = np.empty([protocol_nframes,1]) #init empty array for the timestamps
 
+    #set the timestamps by interpolating the timestamps from the trigger moment to the next:
     for i in np.arange(nTriggers):
         startidx    = sum(protocol_tif_nframes[0:i]) 
         endidx      = startidx + protocol_tif_nframes[i]
@@ -711,7 +709,7 @@ def align_timestamps(sessiondata, ops, triggerdata):
         timestamps[startidx:endidx,0] = tempts
         
     #Verification of alignment:
-    idx = np.append([0],np.cumsum(protocol_tif_nframes[:]).astype('int64')-1)
+    idx         = np.append([0],np.cumsum(protocol_tif_nframes[:]).astype('int64')-1)
     reconstr    = timestamps[idx,0]
     target      = triggerdata[:,1]
     diffvec     = reconstr[0:len(target)] - target

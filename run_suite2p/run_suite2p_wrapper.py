@@ -13,19 +13,21 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 # TODO:
-# auto detect folder for molanalysis
 # auto detect raw data folder
 # learn right way of module and folders etc.
 
 import os
-os.chdir('t:\\Python\\molanalysis\\')
+try:
+    os.chdir('t:\\Python\\molanalysis\\')
+except:
+    os.chdir('e:\\Python\\molanalysis\\')
 
 import suite2p
 from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 
-rawdatadir          ='O:\\RawData\\'
+rawdatadir          = 'O:\\RawData\\'
 animal_ids          = ['NSH07422'] 
-sessiondates        = ['2023_03_13']
+sessiondates        = ['2023_03_14']
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
 
