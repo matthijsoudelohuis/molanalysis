@@ -9,4 +9,7 @@ def get_data_folder():
     elif user == 'PCMatthijs':
         DATA_FOLDER = 'E:/Procdata'
 
+    elif user == 'MOL-MACHINE':
+        DATA_FOLDER = 'C:/Procdata'
+
     return DATA_FOLDER
