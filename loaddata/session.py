@@ -83,10 +83,11 @@ class Session():
                     self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
                                         fp=self.behaviordata['trialnum'])
 
-            else:
-                self.calciumdata = None
         except FileNotFoundError:
-            print('Could not find session data in {}'.format(self.sessiondata_path))
+            print('Could not find data in {}'.format(self.sessiondata_path))
+        except:
+            print('Another error occurred')
+
             
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,
 #                    center_lfp=True):
