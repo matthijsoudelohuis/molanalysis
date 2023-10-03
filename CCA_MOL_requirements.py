@@ -27,13 +27,6 @@ session_list        = np.array([['LPE09830','2023_04_12']])
 sessions            = load_sessions(protocol = 'GR',session_list=session_list,
                                     load_behaviordata=False, load_calciumdata=True, load_videodata=False, calciumversion='dF')
 
-#Get n neurons from V1 and from PM:
-# n                   = 500
-# V1_selec            = np.random.choice(np.where(sessions[0].celldata['roi_name']=='V1')[0],n)
-# PM_selec            = np.random.choice(np.where(sessions[0].celldata['roi_name']=='PM')[0],n)
-# sessions[0].calciumdata     = sessions[0].calciumdata.iloc[:,np.concatenate((V1_selec,PM_selec))]
-# sessions[0].celldata        = sessions[0].celldata.iloc[np.concatenate((V1_selec,PM_selec)),:]
-
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of K trials by N neurons by T time bins
 ## Parameters for temporal binning
@@ -42,23 +35,59 @@ t_post      = 2     #post s
 binsize     = 0.2   #temporal binsize in s
 
 # [tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='interp_lin')
-[tensor,t_axis]     = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], 
+[tensor,t_axis]     = compute_tensor(zscore(sessions[0].calciumdata,axis=0),sessions[0].ts_F, sessions[0].trialdata['tOnset'], 
                                  t_pre, t_post, binsize,method='nearby')
 
 tensor              = tensor.transpose((0,2,1))
-# [N,T,allK]          = np.shape(tensor) #get dimensions of tensor
+[N,T,allK]          = np.shape(tensor) #get dimensions of tensor
 
 oris        = sorted(sessions[0].trialdata['Orientation'].unique())
 ori_counts  = sessions[0].trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
 assert(len(ori_counts) == 16 or len(ori_counts) == 8)
 assert(np.all(ori_counts == 200) or np.all(ori_counts == 400))
 
+
 #%% Compute residuals:
 tensor_res = tensor.copy()
 for ori in oris:
-    ori_idx = np.where(sessions[0].trialdata['Orientation']==ori)[0]
-    temp = np.mean(tensor_res[:,:,ori_idx],axis=2)
+    ori_idx     = np.where(sessions[0].trialdata['Orientation']==ori)[0]
+    temp        = np.mean(tensor_res[:,:,ori_idx],axis=2)
     tensor_res[:,:,ori_idx] = tensor_res[:,:,ori_idx] - np.repeat(temp[:, :, np.newaxis], len(ori_idx), axis=2)
+
+
+#%% 
+tensor_ori      = np.zeros([N,T,len(oris),np.max(ori_counts)])
+tensor_mean     = np.zeros([N,T,len(oris),np.max(ori_counts)])
+tensor_ori_res  = np.zeros([N,T,len(oris),np.max(ori_counts)])
+for iori,ori in enumerate(oris):
+    ori_idx                     = np.where(sessions[0].trialdata['Orientation']==ori)[0]
+    tensor_ori[:,:,iori,:]      = tensor[:,:,ori_idx]
+    temp                        = np.mean(tensor_ori[:,:,iori,:],axis=2)
+    tensor_mean[:,:,iori,:]     = np.repeat(temp[:, :, np.newaxis], len(ori_idx), axis=2)
+    tensor_ori_res[:,:,iori,:]  = tensor_ori[:,:,iori,:] - tensor_mean[:,:,iori,:]
+
+#%%  Show residuals:
+
+for example_neuron in range(1000,1100):
+
+    fig_1,(ax1,ax2,ax3) = plt.subplots(1,3,figsize=(8,5))
+    # orig = np.reshape(tensor_ori[example_neuron,:,:,:],(T,-1),order='F')
+    origtoplot = tensor_ori[example_neuron,:,:,:].transpose((0,2,1))
+    origtoplot = np.reshape(origtoplot,(T,-1),order='F')
+    ax1.imshow(origtoplot.T, aspect='auto',extent=[-1,2.17,3200,0],vmin=-0.5, vmax=2)
+
+    meantoplot = tensor_mean[example_neuron,:,:,:].transpose((0,2,1))
+    meantoplot = np.reshape(meantoplot,(T,-1),order='F')
+    ax2.imshow(meantoplot.T, aspect='auto',extent=[-1,2.17,3200,0],vmin=-0.5, vmax=2)
+
+    residtoplot = tensor_ori_res[example_neuron,:,:,:].transpose((0,2,1))
+    residtoplot = np.reshape(residtoplot,(T,-1),order='F')
+    ax3.imshow(residtoplot.T, aspect='auto',extent=[-1,2.17,3200,0],vmin=-0.5, vmax=2)
+                                                       
+# ax.set_xlabel('#Trials')
+# ax.set_ylabel('Corr CCA Dim 1')
+# ax.legend(['Train', 'Test','Train_PCA25', 'Test_PCA25'])
+
 
 
 #%%  
@@ -67,20 +96,12 @@ for ori in oris:
 idx_V1 = np.where(sessions[0].celldata['roi_name']=='V1')[0]
 idx_PM = np.where(sessions[0].celldata['roi_name']=='PM')[0]
 
-# Data format: 
-    
-    #  X is the source data (number of source neurons x number of time points x number of trials)
-    #  Y is the target data (number of target neurons x number of time points x number of trials)
-
 # Time selection:
 idx_time = np.logical_and(t_axis>=0,t_axis<=1)
-idx_time = np.logical_and(t_axis>=0,t_axis<=0.2)
+# idx_time = np.logical_and(t_axis>=0,t_axis<=0.2)
 
 DATA1 = tensor_res[np.ix_(idx_V1,idx_time,range(np.shape(tensor_res)[2]))]
 DATA2 = tensor_res[np.ix_(idx_PM,idx_time,range(np.shape(tensor_res)[2]))]
-
-# X = tensor_res[idx_V1,:,:]
-# Y = tensor_res[idx_PM,:,:]
 
 # Define neural data parameters
 N1,T,K      = np.shape(DATA1)
@@ -88,17 +109,13 @@ N2          = np.shape(DATA2)[0]
 
 minN        = np.min((N1,N2)) #find common minimum number of neurons recorded
 
-# Intialize variables to store CCA results
-# (first canonical pair)
-
-nNeurons_samples    = [1,2,5,10,20,50,100,200,500,750,1000,1500,2000,5000]
-
-nResamples          = 5
-kFold               = 5
 
 # Vary levels of regularization?
 
-def CCA_sample_2areas(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=False):
+def CCA_sample_2areas(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=None):
+    # Data format: 
+    #  DATA1 is the source data (number of source neurons x number of time points x number of trials)
+    #  DATA2 is the target data (number of target neurons x number of time points x number of trials)
     N1,T,K = np.shape(DATA1)
     N2 = np.shape(DATA2)[0]
     
@@ -122,8 +139,8 @@ def CCA_sample_2areas(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=False):
         X = zscore(X,axis=0)  #Z score activity for each neuron
         Y = zscore(Y,axis=0)
 
-        if prePCA and nN>25:
-            pca         = PCA(n_components=25)
+        if prePCA and nN>prePCA:
+            pca         = PCA(n_components=prePCA)
             X           = pca.fit_transform(X)
             Y           = pca.fit_transform(Y)
 
@@ -153,7 +170,10 @@ def CCA_sample_2areas(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=False):
     return corr_test,corr_train
 
 
-def CCA_sample_2areas_v2(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=False):
+def CCA_sample_2areas_v2(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=None):
+    # Data format: 
+    #  DATA1 is the source data (number of source neurons x number of time points x number of trials)
+    #  DATA2 is the target data (number of target neurons x number of time points x number of trials)
     N1,T,K = np.shape(DATA1)
     N2 = np.shape(DATA2)[0]
     
@@ -170,8 +190,8 @@ def CCA_sample_2areas_v2(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=False):
         X = zscore(X,axis=0)  #Z score activity for each neuron
         Y = zscore(Y,axis=0)
 
-        if prePCA and nN>25:
-            pca         = PCA(n_components=25)
+        if prePCA and nN>prePCA:
+            pca         = PCA(n_components=prePCA)
             X           = pca.fit_transform(X)
             Y           = pca.fit_transform(Y)
 
@@ -211,7 +231,15 @@ def CCA_sample_2areas_v2(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=False):
 
     return corr_test,corr_train
 
-#%% Apply CCA (using Python's built in function)
+#%% Apply CCA for different numbers of neurons in the two areas: 
+
+# Intialize variables to store CCA results
+# (first canonical pair)
+
+nNeurons_samples    = [1,2,5,10,20,50,100,200,500,750,1000,1500,2000,5000]
+
+nResamples          = 5
+kFold               = 5
 
 # With all trials, at how many neurons do you get optimal crossvalidated prediction?
 CCA_nNeurons_test   = np.zeros((len(nNeurons_samples)))
@@ -223,8 +251,8 @@ nK = 3200
 for inNs,nN in enumerate(nNeurons_samples):
     if nN<N1 and nN<N2: #only if #sampled neurons is lower than smallest number of recorded neurons 
         print(nN)
-        [CCA_nNeurons_test[inNs],CCA_nNeurons_train[inNs]] = CCA_sample_2areas(DATA1,DATA2,nN,nK,nResamples,kFold)
-        # [CCA_nNeurons_test[inNs],CCA_nNeurons_train[inNs]] = CCA_sample_2areas_v2(DATA1,DATA2,nN,nK,nResamples,kFold)
+        # [CCA_nNeurons_test[inNs],CCA_nNeurons_train[inNs]] = CCA_sample_2areas(DATA1,DATA2,nN,nK,nResamples,kFold)
+        [CCA_nNeurons_test[inNs],CCA_nNeurons_train[inNs]] = CCA_sample_2areas_v2(DATA1,DATA2,nN,nK,nResamples,kFold)
 
 fig_1 = plt.figure(figsize=(8,5))
 plt.plot(nNeurons_samples,CCA_nNeurons_train,color='r')
@@ -253,6 +281,30 @@ ax.plot(nNeurons_samples,CCA_nNeurons_wPCA_test,color='b',linestyle=':')
 ax.set_xlabel('#Neurons')
 ax.set_ylabel('Corr CCA Dim 1')
 ax.legend(['Train', 'Test','Train_PCA25', 'Test_PCA25'])
+
+
+#%% With PCA dim reduc and various numbers of PCs:
+
+nPCs_samples = [1,2,5,10,20,50,100,200,500]
+
+CCA_nPCs_test   = np.zeros((len(nPCs_samples)))
+CCA_nPCs_test.fill(np.nan)
+CCA_nPCs_train  = np.zeros((len(nPCs_samples)))
+CCA_nPCs_train.fill(np.nan)
+
+nK = 3200
+nN = 500
+for inPCs,nPC in enumerate(nPCs_samples):
+    print(nPC)
+    [CCA_nPCs_test[inPCs],CCA_nPCs_train[inPCs]] = CCA_sample_2areas(DATA1,DATA2,nN,nK,nResamples,kFold,prePCA=nPC)
+
+fig_1,ax = plt.subplots(figsize=(8,5))
+ax.plot(nPCs_samples,CCA_nPCs_train,color='r',linestyle=':')
+ax.plot(nPCs_samples,CCA_nPCs_test,color='b',linestyle=':')
+ax.set_xlabel('#PCs')
+ax.set_ylabel('Corr CCA Dim 1')
+ax.legend(['Train', 'Test'])
+
 
 #%% For different numbers of trials:
 nTrials_samples     = [5,10,20,50,100,200,500,1000,2000,3200]
