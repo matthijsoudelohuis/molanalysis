@@ -34,36 +34,56 @@ def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpol
     assert np.shape(data)[0] > np.shape(data)[1], 'the data matrix appears to have more neurons than timepoints'
     assert np.shape(data)[0] == np.shape(ts_F)[0], 'the amount of datapoints does not seem to match the timestamps'
     
-    binedges    = np.arange(t_pre-binsize/2,t_post+binsize+binsize/2,binsize)
-    bincenters  = np.arange(t_pre,t_post+binsize,binsize)
     
-    N           = np.shape(data)[1]
-    K           = len(ts_T)
-    T           = len(bincenters)
-    
-    # N = 10 #for debug only
+    if method == 'nearby':
+        print('Binsize parameter ignored - set by imaging frame rate in nearby method\n')
+        
+        binsize     = np.mean(np.diff(ts_F))
 
-    tensor      = np.empty([N,K,T])
-    
-    for n in range(N):
-        print(f"\rComputing tensor for neuron {n+1} / {N}",end='\r')
+        binedges    = np.arange(t_pre-binsize/2,t_post+binsize+binsize/2,binsize)
+        bincenters  = np.arange(t_pre,t_post+binsize,binsize)
+        
+        N           = np.shape(data)[1]
+        K           = len(ts_T)
+        T           = len(bincenters)
+        
+        tensor      = np.empty([N,K,T])
+        
         for k in range(K):
-            if method=='binmean':
-                tensor[n,k,:]       = binned_statistic(ts_F-ts_T[k],data.iloc[:,n], statistic='mean', bins=binedges)[0]
-            
-            elif method == 'interp_lin':
-                tensor[n,k,:]       = np.interp(bincenters, ts_F-ts_T[k], data.iloc[:,n])
-                
-            elif method == 'interp_cub':
-                spl = CubicSpline(ts_F-ts_T[k], data.iloc[:,n])
-                spl(bincenters)
-                tensor[n,k,:]       = spl(bincenters)
+            print(f"\rComputing tensor for trial {k+1} / {K}",end='\r')
+            firstframe = np.where(ts_F > ts_T[k] + t_pre - binsize/2)[0][0]
+            tensor[:,k,:]       = data.iloc[firstframe:firstframe+T,:].T
+    else: 
+        binedges    = np.arange(t_pre-binsize/2,t_post+binsize+binsize/2,binsize)
+        bincenters  = np.arange(t_pre,t_post+binsize,binsize)
+        
+        N           = np.shape(data)[1]
+        K           = len(ts_T)
+        T           = len(bincenters)
+        
+        # N = 10 #for debug only
 
-            else:
-                print('method to bin is unknown')
-                tensor = None
-                bincenters = None
-                return tensor,bincenters
+        tensor      = np.empty([N,K,T])
+
+        for n in range(N):
+            print(f"\rComputing tensor for neuron {n+1} / {N}",end='\r')
+            for k in range(K):
+                if method == 'binmean':
+                    tensor[n,k,:]       = binned_statistic(ts_F-ts_T[k],data.iloc[:,n], statistic='mean', bins=binedges)[0]
+                
+                elif method == 'interp_lin':
+                    tensor[n,k,:]       = np.interp(bincenters, ts_F-ts_T[k], data.iloc[:,n])
+                    
+                elif method == 'interp_cub':
+                    spl = CubicSpline(ts_F-ts_T[k], data.iloc[:,n])
+                    spl(bincenters)
+                    tensor[n,k,:]       = spl(bincenters)
+
+                else:
+                    print('method to bin is unknown')
+                    tensor = None
+                    bincenters = None
+                    return tensor,bincenters
             
     return tensor,bincenters
 
