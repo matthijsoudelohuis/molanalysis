@@ -44,8 +44,9 @@ def get_clr_stimuli_vr(stimuli):
     palette         = {stims[i]: clrs[i] for i in range(len(stims))}
     return itemgetter(*stimuli)(palette)
 
-def get_clr_blocks(stimuli):
-    clrs            = ['#ff8274','#74f1ff']
+def get_clr_blocks(blocks):
+    # clrs            = ['#ff8274','#74f1ff']
+    clrs            = sns.color_palette('Greys', 2)
     return clrs
 
 # decoding_inputs = ['rate', 'phase', 'energy', 'rate+lfp', 'rate+energy']

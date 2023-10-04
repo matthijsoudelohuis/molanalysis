@@ -38,8 +38,8 @@ suite2p.run_s2p(ops=ops, db=db)
 ###################################################################
 ## tdTomato bleedthrough correction:
 
-# coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
-coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
+coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
+# coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
 # coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
 
 ops = run_bleedthrough_corr(db,ops,coeff)

@@ -25,7 +25,7 @@ direc = 'X:\\RawData\\LPE09829\\2023_03_30\\suite2p\\combined'
 
 
 
-def proc_labeling_plane(direc,show_plane=False):
+def proc_labeling_plane(direc,show_plane=False,showcells=True):
     os.chdir(direc)
     stats = np.load('stat.npy', allow_pickle=True)
     ops =  np.load('ops.npy', allow_pickle=True).item()
@@ -52,8 +52,10 @@ def proc_labeling_plane(direc,show_plane=False):
     for cell_mask, cell_mask0, neuropil_mask, neuropil_mask0 in zip(cell_masks, cell_masks0, neuropil_masks, neuropil_ipix):
         cell_mask[cell_mask0[0]] = cell_mask0[1]
         neuropil_mask[neuropil_mask0.astype(np.int64)] = 1. / len(neuropil_mask0)
-
-    # mimg = ops['meanImg']
+    
+    #standard mean image:
+    # mimg = ops['meanImg'] 
+    #max projection:
     mimg = np.zeros([512,512])
     mimg[ops['yrange'][0]:ops['yrange'][1],
         ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
@@ -77,6 +79,10 @@ def proc_labeling_plane(direc,show_plane=False):
     df['redprob'] = redprob
     df['redcell'] = redcell
 
+    from PIL import ImageColor
+    clr_rchan = np.array(ImageColor.getcolor('#ff0040', "RGB")) / 255
+    clr_gchan = np.array(ImageColor.getcolor('#00ffbf', "RGB")) / 255
+
     if show_plane:
         ######
         lowprc = 2.5
@@ -89,37 +95,40 @@ def proc_labeling_plane(direc,show_plane=False):
 
         ax1.imshow(gchan,cmap='gray',vmin=np.percentile(gchan,lowprc),vmax=np.percentile(gchan,uppprc))
         ax2.imshow(rchan,cmap='gray',vmin=np.percentile(rchan,lowprc),vmax=np.percentile(rchan,uppprc))
-        ax3.imshow(np.dstack((rchan,gchan,bchan)))
-        # ax3.imshow(np.dstack((rchan,bchan,bchan)))
-        # ax3.imshow(np.dstack((rchan,bchan,bchan)),cmap='gray',vmin=np.percentile(mimg2,3),vmax=np.percentile(mimg2,99))
+        
+        im3 = rchan[:,:,np.newaxis] * clr_rchan + gchan[:,:,np.newaxis] * clr_gchan
+        
+        ax3.imshow(im3)
+
+        # ax3.imshow(np.dstack((rchan,gchan,bchan)))
 
         x =  np.array([stats[i]['med'][1] for i in range(Ncells)])
         y =  np.array([stats[i]['med'][0] for i in range(Ncells)])
+        if showcells:
+            redcells        = np.where(np.logical_and(iscell[:,0],redcell))[0]
+            if any(redcells):
+                nmsk_red        = np.reshape(cell_masks[redcells,:],[len(redcells),512,512])
+                nmsk_red        = np.max(nmsk_red,axis=0) > 0
+                # ax2.imshow(nmsk_red,cmap='Reds',alpha=nmsk_red/np.max(nmsk_red)*0.5)
+                # ax3.imshow(nmsk_red,cmap='Reds',alpha=nmsk_red/np.max(nmsk_red)*0.5)
 
-        redcells        = np.where(np.logical_and(iscell[:,0],redcell))[0]
-        if any(redcells):
-            nmsk_red        = np.reshape(cell_masks[redcells,:],[len(redcells),512,512])
-            nmsk_red        = np.max(nmsk_red,axis=0) > 0
-            # ax2.imshow(nmsk_red,cmap='Reds',alpha=nmsk_red/np.max(nmsk_red)*0.5)
-            # ax3.imshow(nmsk_red,cmap='Reds',alpha=nmsk_red/np.max(nmsk_red)*0.5)
+                ax1.scatter(x[redcells],y[redcells],s=25,facecolors='none', edgecolors='r',linewidths=0.6)
+                ax2.scatter(x[redcells],y[redcells],s=25,facecolors='none', edgecolors='r',linewidths=0.6)
+                ax3.scatter(x[redcells],y[redcells],s=25,facecolors='none', edgecolors='w',linewidths=0.6)
+                # ax3.arrow(x[redcells],y[redcells],10,10,color='yellow',head_starts_at_zero=True)
+                ax3.quiver(x[redcells]+2,y[redcells]-2,-4,-4,color='yellow',width=0.007,headlength=4,headwidth=2,pivot='tip')
 
-            ax1.scatter(x[redcells],y[redcells],s=25,facecolors='none', edgecolors='r',linewidths=0.6)
-            ax2.scatter(x[redcells],y[redcells],s=25,facecolors='none', edgecolors='r',linewidths=0.6)
-            ax3.scatter(x[redcells],y[redcells],s=25,facecolors='none', edgecolors='w',linewidths=0.6)
-            # ax3.arrow(x[redcells],y[redcells],10,10,color='yellow',head_starts_at_zero=True)
-            ax3.quiver(x[redcells]+2,y[redcells]-2,-4,-4,color='yellow',width=0.007,headlength=4,headwidth=2,pivot='tip')
+            notredcells     = np.where(np.logical_and(iscell[:,0],np.logical_not(redcell)))[0]
+            if any(notredcells):
+                nmsk_notred     = np.reshape(cell_masks[notredcells,:],[len(notredcells),512,512])
+                nmsk_notred     = np.max(nmsk_notred,axis=0) > 0
 
-        notredcells     = np.where(np.logical_and(iscell[:,0],np.logical_not(redcell)))[0]
-        if any(notredcells):
-            nmsk_notred     = np.reshape(cell_masks[notredcells,:],[len(notredcells),512,512])
-            nmsk_notred     = np.max(nmsk_notred,axis=0) > 0
+                # ax2.imshow(nmsk_notred,cmap='Greens',alpha=nmsk_notred/np.max(nmsk_notred)*0.5)
+                # ax3.imshow(nmsk_notred,cmap='Greens',alpha=nmsk_notred/np.max(nmsk_notred)*0.5)
 
-            # ax2.imshow(nmsk_notred,cmap='Greens',alpha=nmsk_notred/np.max(nmsk_notred)*0.5)
-            # ax3.imshow(nmsk_notred,cmap='Greens',alpha=nmsk_notred/np.max(nmsk_notred)*0.5)
-
-            ax1.scatter(x[notredcells],y[notredcells],s=25,facecolors='none', edgecolors='g',linewidths=0.4)
-            ax2.scatter(x[notredcells],y[notredcells],s=25,facecolors='none', edgecolors='g',linewidths=0.4)
-            ax3.scatter(x[notredcells],y[notredcells],s=25,facecolors='none', edgecolors='w',linewidths=0.4)
+                ax1.scatter(x[notredcells],y[notredcells],s=25,facecolors='none', edgecolors='g',linewidths=0.4)
+                ax2.scatter(x[notredcells],y[notredcells],s=25,facecolors='none', edgecolors='g',linewidths=0.4)
+                ax3.scatter(x[notredcells],y[notredcells],s=25,facecolors='none', edgecolors='w',linewidths=0.4)
 
         ax1.set_axis_off()
         ax1.set_aspect('auto')
@@ -133,10 +142,7 @@ def proc_labeling_plane(direc,show_plane=False):
 
         plt.tight_layout(rect=[0, 0, 1, 1])
 
-        fig.savefig('labeling.jpg',dpi=600)
-
-
-    return mimg, mimg2, df
+    return mimg, mimg2, df, fig
 
 
 direc = 'X:\\RawData\\LPE09829\\2023_03_30\\suite2p\\'
@@ -154,9 +160,12 @@ direc = 'X:\\RawData\\LPE09667\\2023_03_30\\suite2p\\'
 direc = 'F:\\RawData\\LPE10190\\2023_05_04\\suite2p\\'
 direc = 'F:\\RawData\\LPE10191\\2023_05_04\\suite2p\\'
 
-for iplane in range(4):
+direc = 'O:\\RawData\\NSH07422\\2023_03_14\\suite2p\\'
 
-    mimg,mimg2,tempdf = proc_labeling_plane(os.path.join(direc,"plane%s" % iplane),show_plane=True)
+for iplane in range(8):
+
+    mimg,mimg2,tempdf,fig = proc_labeling_plane(os.path.join(direc,"plane%s" % iplane),show_plane=True,showcells=True)
+    fig.savefig('Labeling_Plane%d.jpg' % iplane,dpi=600)
     tempdf['iplane'] = iplane
     if iplane == 0:
         df = tempdf

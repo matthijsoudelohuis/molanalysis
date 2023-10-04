@@ -1,19 +1,22 @@
 import os
+os.chdir('T:\\Python\\molanalysis\\')
 import numpy as np
 import tifffile
-from twoplib import split_mROIs
+from utils.twoplib import split_mROIs
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
 # rawdatadir      = "X:\\Rawdata\\"
-# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
-rawdatadir      = "O:\\Rawdata\\"
-outputdir      = "V:\\Procdata\\OV\\"
+rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\PILOTS\\"
+# rawdatadir          = "O:\\Rawdata\\"
+outputdir           = "V:\\Procdata\\OV\\"
 
-animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE09830','LPE09831'] #If empty than all animals in folder will be processed
-animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE10189','LPE10190','LPE10191','LPE10192'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10882'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE09662'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE09830','LPE09831'] #If empty than all animals in folder will be processed
+# animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE10189','LPE10190','LPE10191','LPE10192'] #If empty than all animals in folder will be processed
 
 cmred = LinearSegmentedColormap.from_list(
         "Custom", [(0, 0, 0), (1, 0, 0)], N=100)

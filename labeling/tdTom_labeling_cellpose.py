@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from cellpose import models
 from cellpose.io import imread
+from PIL import ImageColor
 
 from cellpose import utils, io
 
@@ -44,7 +45,7 @@ def normalize8(I):
     
     return I.astype(np.uint8)
 
-def proc_labeling_plane(plane_folder,show_plane=False):
+def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
     stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
     ops         = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
     iscell      = np.load(os.path.join(plane_folder,'iscell.npy'), allow_pickle=True)
@@ -63,10 +64,10 @@ def proc_labeling_plane(plane_folder,show_plane=False):
         masks_suite2p[s['ypix'],s['xpix']] = i+1
     outl_green = utils.outlines_list(masks_suite2p)
 
-    mimg = ops['meanImg']
-    # mimg = np.zeros([512,512])
-    # mimg[ops['yrange'][0]:ops['yrange'][1],
-        # ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
+    # mimg = ops['meanImg']
+    mimg = np.zeros([512,512])
+    mimg[ops['yrange'][0]:ops['yrange'][1],
+        ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
 
     mimg2 = ops['meanImg_chan2']
     # mimg2 = ops['meanImg_chan2_corrected']
@@ -100,6 +101,9 @@ def proc_labeling_plane(plane_folder,show_plane=False):
 
     df_red  = pd.DataFrame({'overlap': mask_overlap_red_with_green})
 
+    clr_rchan = np.array(ImageColor.getcolor('#ff0040', "RGB")) / 255
+    clr_gchan = np.array(ImageColor.getcolor('#00ffbf', "RGB")) / 255
+
     # # nOnlyRedCells   = np.sum(mask_overlap_red_with_green==0)
     # nOverlapCells   = np.sum(mask_overlap_green_with_red>0)
     # nOnlyGreenCells = Nsuite2pcells - nOverlapCells
@@ -125,7 +129,12 @@ def proc_labeling_plane(plane_folder,show_plane=False):
 
         ax1.imshow(gchan,cmap='gray',vmin=np.percentile(gchan,lowprc),vmax=np.percentile(gchan,uppprc))
         ax2.imshow(rchan,cmap='gray',vmin=np.percentile(rchan,lowprc),vmax=np.percentile(rchan,uppprc))
-        ax3.imshow(np.dstack((rchan,gchan,bchan)))
+        
+        # .imshow(np.dstack((rchan,gchan,bchan)))
+        
+        im3 = rchan[:,:,np.newaxis] * clr_rchan + gchan[:,:,np.newaxis] * clr_gchan
+        
+        ax3.imshow(im3)
         # ax3.imshow(np.dstack((rchan,bchan,bchan)))
         # ax3.imshow(np.dstack((rchan,bchan,bchan)),cmap='gray',vmin=np.percentile(mimg2,3),vmax=np.percentile(mimg2,99))
 
@@ -138,15 +147,18 @@ def proc_labeling_plane(plane_folder,show_plane=False):
         # plt.imshow(ops['meanImgE'])
         # plt.imshow(ops['max_proj'])
 
-        for o in outl_green:
-            ax1.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
-            ax2.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
-            ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+        if showcells:
+            for o in outl_green:
+                ax1.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
+                ax2.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
+                ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+                ax3.plot(o[:,0], o[:,1], color='#011aff',linewidth=0.6)
 
-        for o in outl_red:
-            ax1.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
-            ax2.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
-            ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
+            for o in outl_red:
+                ax1.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
+                ax2.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
+                # ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
+                ax3.plot(o[:,0], o[:,1], color='#ffe601',linewidth=0.6)
         
         ax1.set_axis_off()
         ax1.set_aspect('auto')
@@ -160,21 +172,22 @@ def proc_labeling_plane(plane_folder,show_plane=False):
 
         plt.tight_layout(rect=[0, 0, 1, 1])
 
-        # fig.savefig(os.path.join(plane_folder,'labeling.jpg'),dpi=600)
 
-    return df_green,df_red
+    return df_green,df_red,fig
 
 
 direc = 'X:\\RawData\\LPE09829\\2023_03_31\\suite2p\\'
 direc = 'X:\\RawData\\LPE09830\\2023_04_10\\suite2p\\'
 direc = 'O:\\RawData\\LPE09830\\2023_04_12\\suite2p\\'
 direc = 'O:\\RawData\\LPE09665\\2023_03_15\\suite2p\\'
+direc = 'X:\\RawData\\LPE09667\\2023_03_30\\suite2p\\'
 
 for iplane in range(8):
 
     # tempdf              = proc_labeling_plane(os.path.join(direc,"plane%s" % iplane),show_plane=False)
-
-    tempdf_green,tempdf_red              = proc_labeling_plane(os.path.join(direc,"plane%s" % iplane),show_plane=False)
+    plane_folder = os.path.join(direc,"plane%s" % iplane)
+    tempdf_green,tempdf_red,fig              = proc_labeling_plane(plane_folder,show_plane=True)
+    fig.savefig(os.path.join(plane_folder,'Labeling_Plane%d.jpg' % iplane),dpi=600)
     tempdf_green['iplane']              = iplane
     tempdf_red['iplane']                = iplane
     if iplane == 0:

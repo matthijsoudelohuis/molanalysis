@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os 
 from suite2p.detection.chan2detect import correct_bleedthrough
+import pandas as pd
+import seaborn as sns
 
 # import imageio
 
@@ -81,6 +83,9 @@ directory = 'O:\\RawData\\LPE10192\\2023_05_04\\SP\\Imaging\\'
 [data_green,data_red] = load_data(directory,nplanes=4)
 
 directory = 'X:\\RawData\\LPE09665\\2023_03_14\\GR\\Imaging\\'
+[data_green,data_red] = load_data(directory,nplanes=8)
+
+directory = 'X:\\RawData\\LPE09667\\2023_03_29\\VR\\Imaging\\'
 [data_green,data_red] = load_data(directory,nplanes=8)
 
 directory = 'X:\\RawData\\NSH07422\\2023_03_14\\IM\\Imaging\\'
@@ -320,4 +325,84 @@ seqtogif(data_green_corr,savedir,savefilename = 'green_corr.gif')
 temp = np.repeat(np.average(data_red,axis=0)[np.newaxis,:, :], np.shape(data_green)[0], axis=0)
 data_green_corr_v2 = data_green - b * temp
 seqtogif(data_green_corr_v2,savedir,savefilename = 'green_corr_v2.gif')
+
+#######     
+
+#TODO:
+# -Loop over planes, because why not
+# -do for multiple sessions, not just example session
+#- 
+
+dir_corrected = 'X:\\RawData\\LPE09667\\2023_03_29\\suite2p_corrected\\'
+dir_uncorrected = 'X:\\RawData\\LPE09667\\2023_03_29\\suite2p_uncorrected\\'
+
+iplane = 5
+# Load the data of this plane:
+F_corr       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F.npy'))
+F2_corr      = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F_chan2.npy'))
+Fneu_corr    = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'Fneu.npy'))
+spks_corr    = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'spks.npy'))
+ops_corr     = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'ops.npy'), allow_pickle=True).item()
+iscell_corr  = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'iscell.npy'))
+stat_corr    = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'stat.npy'), allow_pickle=True)
+redcell_corr = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'redcell.npy'))
+
+dir_corrected = 'V:\\RawData\\tdTom_correction\\LPE09667\\2023_03_29\\suite2p_corrected\\'
+dir_uncorrected = 'V:\\RawData\\tdTom_correction\\LPE09667\\2023_03_29\\suite2p_uncorrected\\'
+# Load the data of this plane:
+F_corr       = np.load(os.path.join(dir_corrected,'F.npy'))
+F2_corr      = np.load(os.path.join(dir_corrected,'F_chan2.npy'))
+Fneu_corr    = np.load(os.path.join(dir_corrected,'Fneu.npy'))
+spks_corr    = np.load(os.path.join(dir_corrected,'spks.npy'))
+ops_corr     = np.load(os.path.join(dir_corrected,'ops.npy'), allow_pickle=True).item()
+iscell_corr  = np.load(os.path.join(dir_corrected,'iscell.npy'))
+stat_corr    = np.load(os.path.join(dir_corrected,'stat.npy'), allow_pickle=True)
+redcell_corr = np.load(os.path.join(dir_corrected,'redcell.npy'))
+
+F_corr  = np.array([])
+F2_corr = []
+redcell_corr = []
+
+for iplane in range(8): 
+    F       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F.npy'))
+    # F_corr.append(np.mean(F,axis=1))
+    F_corr = np.append(F_corr,np.mean(F,axis=1))
+    F2       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F_chan2.npy'))
+    # F2_corr.append(np.mean(F2,axis=1))
+    F2_corr = np.append(F2_corr,np.mean(F2,axis=1))
+
+    redcell       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'redcell.npy'))
+    # redcell_corr.append(redcell[:,0])
+    redcell_corr = np.append(redcell_corr,redcell[:,0])
+
+df_corr = pd.DataFrame({'F_corr': F_corr, 'F2_corr' : F2_corr, 'redcell_corr' : redcell_corr})
+fig,(ax1,ax2) = plt.subplots(1,2,figsize=(5,3))
+sns.barplot(data=df_corr,y='F_corr',x='redcell_corr',ax=ax1)
+
+sns.barplot(data=df_corr,y='F2_corr',x='redcell_corr',ax=ax2)
+
+# F2_corr_neuronmean = np.mean(F2_corr,axis=0)
+# plt.figure()
+# # plt.plot(F2_corr_neuronmean)
+# plt.plot(F2_corr_neuronmean.T,linewidth=0.2)
+
+
+# np.mean(F2_corr[redcell_corr[:,0]==1,:],axis=1)
+
+F_corr_tracemean = np.mean(F_corr,axis=1)
+F2_corr_tracemean = np.mean(F2_corr,axis=1)
+
+df_corr = pd.DataFrame({'F_corr': F_corr_tracemean, 'F2_corr' : F2_corr_tracemean, 'redcell_corr' : redcell_corr[:,0]})
+
+fig,(ax1,ax2) = plt.subplots(1,2,figsize=(5,3))
+sns.barplot(data=df_corr,y='F_corr',x='redcell_corr',ax=ax1)
+
+sns.barplot(data=df_corr,y='F2_corr',x='redcell_corr',ax=ax2)
+
+F2_diff = np.abs(np.diff(F2,n=1,axis=1))
+
+F2_diff_mean = np.mean(F2_diff,axis=0)
+
+fig = plt.subplots(1,1,figsize=(15,5))
+plt.plot(F2_diff_mean,linewidth=0.1)
 

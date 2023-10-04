@@ -111,7 +111,6 @@ def init_ops(sesfolder):
 
 def run_bleedthrough_corr(db,ops,coeff):
 
-    
     #Write new binary file with corrected data per plane:
     for iplane in np.arange(ops['nplanes']):
         print('Correcting tdTomato bleedthrough for plane %s / %s' % (iplane+1,ops['nplanes']))
