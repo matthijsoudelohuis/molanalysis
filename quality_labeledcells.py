@@ -15,9 +15,10 @@ from statannotations.Annotator import Annotator
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from sklearn import preprocessing
 
-protocol            = 'VR'
-protocol            = ['GR']
-# protocol            = ['GR','VR']
+# protocol            = 'VR'
+# protocol            = ['GR']
+protocol            = ['GR','VR','IM','RF','SP']
+protocol            = ['GR','VR','IM']
 
 # sessions            = filter_sessions(protocol,only_animal_id=['LPE09830','LPE09665'])
 # sessions            = filter_sessions(protocol,only_animal_id=['LPE09829'])
@@ -26,28 +27,57 @@ sessions            = filter_sessions(protocol)
 ## Combine cell data from all loaded sessions to one dataframe:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-###################### Calcium trace skewness for labeled vs unlabeled cells:
-# sns.violinplot(data = celldata,y = "skew",x="redcell")
+## remove any double cells (for example recorded in both GR and RF)
+celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
-order = [0,1]
+###################### Calcium trace skewness for labeled vs unlabeled cells:
+order = [0,1] #for statistical testing purposes
 pairs = [(0,1)]
 
-ax = sns.violinplot(data=celldata,y="skew",x="redcell",palette='Accent')
-annotator = Annotator(ax, pairs, data=celldata, x="redcell", y="skew", order=order)
-annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
-annotator.apply_and_annotate()
+fields = ["skew","noise_level","event_rate","radius","npix_soma","meanF","meanF_chan2"]
+fields = ["skew","noise_level","event_rate","radius","npix_soma"]
 
-###################### Calcium trace noise level for labeled vs unlabeled cells:
-ax = sns.violinplot(y = celldata[celldata["noise_level"]<1.5]["noise_level"],x = celldata["redcell"],palette='Accent')
-annotator = Annotator(ax, pairs, data=celldata, x="redcell", y="noise_level", order=order)
-annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
-annotator.apply_and_annotate()
+nfields = len(fields)
+fig,axes   = plt.subplots(1,nfields,figsize=(12,4))
 
-###################### Calcium trace skewness for labeled vs unlabeled cells:
-ax = sns.violinplot(data=celldata,y="event_rate",x = "redcell",palette='Accent')
-annotator = Annotator(ax, pairs, data=celldata, x="redcell", y="event_rate", order=order)
-annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
-annotator.apply_and_annotate()
+for i in range(nfields):
+    sns.violinplot(data=celldata,y=fields[i],x="redcell",palette=['gray','red'],ax=axes[i])
+    axes[i].set_ylim(np.nanpercentile(celldata[fields[i]],[0.1,99.9]))
+
+    annotator = Annotator(axes[i], pairs, data=celldata, x="redcell", y=fields[i], order=order)
+    annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
+    annotator.apply_and_annotate()
+
+    axes[i].set_xlabel('labeled')
+    axes[i].set_ylabel('')
+    axes[i].set_title(fields[i])
+
+df2 = celldata.groupby(['redcell'])['redcell'].count()
+
+labelcounts = celldata.groupby(['redcell'])['redcell'].count().to_numpy()
+plt.suptitle('Quality comparison labeled ({0}) vs unlabeled ({1}) cells'.format(labelcounts[1],labelcounts[0]))
+plt.tight_layout()
+
+
+# ###################### Calcium trace skewness for labeled vs unlabeled cells:
+# sns.violinplot(data=celldata,y="skew",x="redcell",palette='Accent',ax=ax1)
+# annotator = Annotator(ax1, pairs, data=celldata, x="redcell", y="skew", order=order)
+# annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
+# annotator.apply_and_annotate()
+
+# ###################### Calcium trace noise level for labeled vs unlabeled cells:
+# sns.violinplot(y = celldata[celldata["noise_level"]<1.5]["noise_level"],x = celldata["redcell"],palette='Accent',ax=ax2)
+# annotator = Annotator(ax2, pairs, data=celldata, x="redcell", y="noise_level", order=order)
+# annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
+# annotator.apply_and_annotate()
+
+# ###################### Calcium trace skewness for labeled vs unlabeled cells:
+# sns.violinplot(data=celldata,y="event_rate",x = "redcell",palette='Accent',ax=ax3)
+# annotator = Annotator(ax3, pairs, data=celldata, x="redcell", y="event_rate", order=order)
+# annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
+# annotator.apply_and_annotate()
+
+
 
 ###################### Noise level for labeled vs unlabeled cells:
 

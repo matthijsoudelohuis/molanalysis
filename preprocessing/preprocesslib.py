@@ -14,7 +14,6 @@ import numpy as np
 from natsort import natsorted 
 from datetime import datetime
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
-# from twoplib import get_meta
 from utils.twoplib import get_meta
 import scipy.stats as st
 
@@ -647,15 +646,17 @@ def proc_imaging(sesfolder, sessiondata):
         else:
             print("Problem with timestamps and imaging frames")
  
- 
+         #construct dataframe with activity by cells: give unique cell_id as label:
+        cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
+        
+        #store cell_ids in celldata:
+        celldata['cell_id']         = cell_ids
+
         if iplane == 0: #if first plane then init dataframe, otherwise append
             celldata = celldata_plane.copy()
         else:
             celldata = celldata.append(celldata_plane)
             
-        #construct dataframe with activity by cells: give unique cell_id as label:
-        cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
-        
         #Save both deconvolved and fluorescence data:
         dFdata_plane                    = pd.DataFrame(dF, columns=cell_ids)
         dFdata_plane['timestamps']      = ts_master    #add timestamps
@@ -668,7 +669,7 @@ def proc_imaging(sesfolder, sessiondata):
         else:
             dFdata = dFdata.merge(dFdata_plane)
             deconvdata = deconvdata.merge(deconvdata_plane)
-            
+    
     celldata['session_id']      = sessiondata['session_id'][0]
     dFdata['session_id']        = sessiondata['session_id'][0]
     deconvdata['session_id']    = sessiondata['session_id'][0]
