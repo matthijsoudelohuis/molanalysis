@@ -454,12 +454,20 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
         # facemapfile = "W:\\Users\\Matthijs\\Rawdata\\NSH07422\\2023_03_13\\SP\\Behavior\\SP_NSH07422_camera_2023-03-13T16_44_07_proc.npy"
         # facemapfile = "W:\\Users\\Matthijs\\Rawdata\\LPE09829\\2023_03_29\\VR\\Behavior\\VR_LPE09829_camera_2023-03-29T15_32_29_proc.npy"
         
-        proc = np.load(facemapfile,allow_pickle=True).item()
+        proc = np.load(facemapfile[0],allow_pickle=True).item()
         
-        iROI = 0
-        videodata['motionenergy']   = proc['motion'][iROI]
+        assert(len(proc['motion'][0])==0,'multivideo performed, should not be done')
+        assert(len(proc['rois'])==2,'designed to analyze 2 rois, pupil and motion svd, _proc file contains a different #rois')
+        assert(all(x in [proc['rois'][i]['rtype'] for i in range(2)] for x in ['motion SVD', 'Pupil']),'roi type error')
+
+        videodata['motionenergy']   = proc['motion'][1]
         PC_labels                   = list('videoPC_' + '%s' % k for k in range(0,keepPCs))
-        videodata = pd.concat([videodata,pd.DataFrame(proc['motSVD'][iROI][:,:keepPCs],columns=PC_labels)],axis=1)
+        videodata = pd.concat([videodata,pd.DataFrame(proc['motSVD'][1][:,:keepPCs],columns=PC_labels)],axis=1)
+        
+        #Pupil data:
+        videodata['pupil_area']   = proc['pupil'][0]['area_smooth']
+        videodata['pupil_ypos']   = proc['pupil'][0]['com'][:,0]
+        videodata['pupil_xpos']   = proc['pupil'][0]['com'][:,1]
     else:
         print('#######################  Could not locate facemapdata...')
 
