@@ -35,58 +35,53 @@ class Session():
         self.videodata_path     = os.path.join(self.data_folder, 'videodata.csv')
         self.calciumdata_path   = os.path.join(self.data_folder, '%sdata.csv' % calciumversion)
 
-        try: 
-            # print('Loading session data at {}'.format(self.sessiondata_path))
-            self.sessiondata  = pd.read_csv(self.sessiondata_path, sep=',', index_col=0)
-    
-            # print('Loading trial data at {}'.format(self.trialdata_path))
+        assert(os.path.exists(self.sessiondata_path),'Could not find data in {}'.format(self.sessiondata_path))
+
+        self.sessiondata  = pd.read_csv(self.sessiondata_path, sep=',', index_col=0)
+
+        if not self.protocol in ['SP','RF']:
             self.trialdata  = pd.read_csv(self.trialdata_path, sep=',', index_col=0)
-            
-            # print('Loading cell data at {}'.format(self.celldata_path))
+        else:
+            self.trialdata = None
+    
+        if os.path.exists(self.celldata_path):
             self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
-            
-            #get only good cells:
+            #get only good cells (selected ROIs by suite2p):
             goodcells               = self.celldata['iscell'] == 1
             self.celldata           = self.celldata[goodcells].reset_index(drop=True)
+        
+        if load_behaviordata:
+            # print('Loading behavior data at {}'.format(self.behaviordata_path))
+            self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
+        else:
+            self.behaviordata = None
+
+        if load_videodata:
+            self.videodata  = pd.read_csv(self.videodata_path, sep=',', index_col=0)
+        else:
+            self.videodata = None
+
+        if load_calciumdata:
+            print('Loading calcium data at {}'.format(self.calciumdata_path))
+            self.calciumdata         = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
+            self.calciumdata         = self.calciumdata.drop('session_id',axis=1)
+
+            self.ts_F                = self.calciumdata['timestamps']
+            self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
+
+            self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells],axis=1)
             
-            if load_behaviordata:
-                # print('Loading behavior data at {}'.format(self.behaviordata_path))
-                self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
-            else:
-                self.behaviordata = None
+            assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
 
-            if load_videodata:
-                # print('Loading video data at {}'.format(self.videodata_path))
-                self.videodata  = pd.read_csv(self.videodata_path, sep=',', index_col=0)
-            else:
-                self.videodata = None
-    
-            if load_calciumdata:
-                # print('Loading calcium data at {}'.format(self.calciumdata_path))
-                self.calciumdata         = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
-                self.calciumdata         = self.calciumdata.drop('session_id',axis=1)
-
-                self.ts_F                = self.calciumdata['timestamps']
-                self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
-
-                self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells],axis=1)
-                
-                assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
-
-            if load_calciumdata and load_behaviordata:
-                ## Get interpolated values for behavioral variables at imaging frame rate:
-                self.zpos_F      = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
-                                        fp=self.behaviordata['zpos'])
-                self.runspeed_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
-                                        fp=self.behaviordata['runspeed'])
-                if 'trialnum' in self.behaviordata:
-                    self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
-                                        fp=self.behaviordata['trialnum'])
-
-        except FileNotFoundError:
-            print('Could not find data in {}'.format(self.sessiondata_path))
-        except:
-            print('Another error occurred')
+        if load_calciumdata and load_behaviordata:
+            ## Get interpolated values for behavioral variables at imaging frame rate:
+            self.zpos_F      = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
+                                    fp=self.behaviordata['zpos'])
+            self.runspeed_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
+                                    fp=self.behaviordata['runspeed'])
+            if 'trialnum' in self.behaviordata:
+                self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
+                                    fp=self.behaviordata['trialnum'])
 
             
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,

@@ -93,10 +93,6 @@ def report_sessions(sessions):
     celldata        = pd.DataFrame()
     
     for ses in sessions:
-        # sessiondata     = sessiondata.append(ses.sessiondata)
-        # trialdata       = trialdata.append(ses.trialdata)
-        # celldata        = celldata.append(ses.celldata)
-
         sessiondata     = pd.concat([sessiondata,ses.sessiondata])
         trialdata       = pd.concat([trialdata,ses.trialdata])
         celldata        = pd.concat([celldata,ses.celldata])
