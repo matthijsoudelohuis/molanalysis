@@ -25,9 +25,12 @@ except:
 import suite2p
 from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 
-rawdatadir          = 'O:\\RawData\\'
+rawdatadir          = 'X:\\RawData\\'
 animal_ids          = ['NSH07422'] 
 sessiondates        = ['2023_03_14']
+
+animal_ids          = ['LPE09667'] 
+sessiondates        = ['2023_03_29']
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
 
@@ -42,7 +45,7 @@ coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
 # coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
 # coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
 
-ops = run_bleedthrough_corr(db,ops,coeff)
+# ops = run_bleedthrough_corr(db,ops,coeff)
 
 ###################################################################
 ## ROI detection: 

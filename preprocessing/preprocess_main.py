@@ -16,24 +16,27 @@ os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "O:\\Rawdata\\"
+rawdatadir      = "X:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
 # procdatadir     = "E:\\Procdata\\"
 
-animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
-animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
-# animal_ids          = [] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
+# animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
+animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 
-# animal_ids          = ['LPE09829','LPE09667'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE09829','LPE09667'] #If empty than all animals in folder will be processed
 date_filter        = ['2023_03_29','2023_03_30','2023_03_31']
 
-protocols           = ['IM','GR','RF','SP']
+# animal_ids          = ['LPE09667'] #If empty than all animals in folder will be processed
+# date_filter        = ['2023_03_29']
+
+# protocols           = ['IM','GR','RF','SP']
 # protocols           = ['SP']
 # protocols           = ['GR']
-# protocols           = ['VR']
+protocols           = ['VR']
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -102,35 +105,3 @@ print(f'\n\nPreprocessing Completed')
 
 
 # [celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
-
-
-# ## Loop over all selected animals and folders
-# if len(animal_ids) == 0:
-#     animal_ids = os.listdir(rawdatadir)
-
-# for animal_id in animal_ids: #for each animal
-    
-#     if len(sessiondates) == 0:
-#         sessiondates = os.listdir(os.path.join(rawdatadir,animal_id)) 
-
-#     for sessiondate in sessiondates: #for each of the sessions for this animal
-#         nwbfile         = proc_behavior(rawdatadir,animal_id,sessiondate,"VR") #main processing function
-#         sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate,"VR")
-
-#         if os.path.exists(os.path.join(sesfolder,"Imaging")):
-#             print('Detected imaging data\n')
-#             nwbfile         = proc_imaging(sesfolder,nwbfile) #main processing function for imaging data
-        
-#         savefilename    = animal_id + "_" + sessiondate + "_VR.nwb" #define save file name
-#         outdir          = os.path.join(procdatadir,animal_id) #construct output save directory string
-
-#         if not os.path.exists(outdir): #check if output directory already exists, otherwise make
-#             os.mkdir(outdir)
-            
-#         io = NWBHDF5IO(os.path.join(outdir,savefilename), mode="w") #save the NWB file
-#         io.write(nwbfile)
-#         io.close()
-
-# F           = nwbfile.processing['ophys']['Fluorescence']['Fluorescence'].data[:]
-# ts          = nwbfile.processing['ophys']['Fluorescence']['Fluorescence'].timestamps[:]
-

@@ -35,7 +35,7 @@ protocol            = 'VR'
 
 # session_list = np.array([['LPE09829', '2023_03_31']])
 # session_list = np.array([['LPE09829', '2023_03_30']])
-# session_list = np.array([['LPE09667', '2023_03_30']])
+session_list = np.array([['LPE09667', '2023_03_29']])
 session_list = np.array([['LPE09829', '2023_03_29'],
                         ['LPE09829', '2023_03_30'],
                         ['LPE09829', '2023_03_31']])

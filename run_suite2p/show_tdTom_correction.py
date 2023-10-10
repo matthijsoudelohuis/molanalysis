@@ -12,6 +12,7 @@ import os
 from suite2p.detection.chan2detect import correct_bleedthrough
 import pandas as pd
 import seaborn as sns
+from scipy.stats import zscore
 
 # import imageio
 
@@ -336,44 +337,62 @@ seqtogif(data_green_corr_v2,savedir,savefilename = 'green_corr_v2.gif')
 dir_corrected = 'X:\\RawData\\LPE09667\\2023_03_29\\suite2p_corrected\\'
 dir_uncorrected = 'X:\\RawData\\LPE09667\\2023_03_29\\suite2p_uncorrected\\'
 
-iplane = 5
-# Load the data of this plane:
-F_corr       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F.npy'))
-F2_corr      = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F_chan2.npy'))
-Fneu_corr    = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'Fneu.npy'))
-spks_corr    = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'spks.npy'))
-ops_corr     = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'ops.npy'), allow_pickle=True).item()
-iscell_corr  = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'iscell.npy'))
-stat_corr    = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'stat.npy'), allow_pickle=True)
-redcell_corr = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'redcell.npy'))
+# iplane = 5
+# # Load the data of this plane:
+# F_corr       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F.npy'))
+# F2_corr      = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F_chan2.npy'))
+# Fneu_corr    = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'Fneu.npy'))
+# spks_corr    = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'spks.npy'))
+# ops_corr     = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'ops.npy'), allow_pickle=True).item()
+# iscell_corr  = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'iscell.npy'))
+# stat_corr    = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'stat.npy'), allow_pickle=True)
+# redcell_corr = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'redcell.npy'))
 
-dir_corrected = 'V:\\RawData\\tdTom_correction\\LPE09667\\2023_03_29\\suite2p_corrected\\'
-dir_uncorrected = 'V:\\RawData\\tdTom_correction\\LPE09667\\2023_03_29\\suite2p_uncorrected\\'
-# Load the data of this plane:
-F_corr       = np.load(os.path.join(dir_corrected,'F.npy'))
-F2_corr      = np.load(os.path.join(dir_corrected,'F_chan2.npy'))
-Fneu_corr    = np.load(os.path.join(dir_corrected,'Fneu.npy'))
-spks_corr    = np.load(os.path.join(dir_corrected,'spks.npy'))
-ops_corr     = np.load(os.path.join(dir_corrected,'ops.npy'), allow_pickle=True).item()
-iscell_corr  = np.load(os.path.join(dir_corrected,'iscell.npy'))
-stat_corr    = np.load(os.path.join(dir_corrected,'stat.npy'), allow_pickle=True)
-redcell_corr = np.load(os.path.join(dir_corrected,'redcell.npy'))
+# dir_corrected = 'V:\\RawData\\tdTom_correction\\LPE09667\\2023_03_29\\suite2p_corrected\\'
+# dir_uncorrected = 'V:\\RawData\\tdTom_correction\\LPE09667\\2023_03_29\\suite2p_uncorrected\\'
+# # Load the data of this plane:
+# F_corr       = np.load(os.path.join(dir_corrected,'F.npy'))
+# F2_corr      = np.load(os.path.join(dir_corrected,'F_chan2.npy'))
+# Fneu_corr    = np.load(os.path.join(dir_corrected,'Fneu.npy'))
+# spks_corr    = np.load(os.path.join(dir_corrected,'spks.npy'))
+# ops_corr     = np.load(os.path.join(dir_corrected,'ops.npy'), allow_pickle=True).item()
+# iscell_corr  = np.load(os.path.join(dir_corrected,'iscell.npy'))
+# stat_corr    = np.load(os.path.join(dir_corrected,'stat.npy'), allow_pickle=True)
+# redcell_corr = np.load(os.path.join(dir_corrected,'redcell.npy'))
 
 F_corr  = np.array([])
-F2_corr = []
-redcell_corr = []
+F2_corr = np.array([])
+redcell_corr = np.array([])
 
-for iplane in range(8): 
-    F       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F.npy'))
-    # F_corr.append(np.mean(F,axis=1))
-    F_corr = np.append(F_corr,np.mean(F,axis=1))
-    F2       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F_chan2.npy'))
-    # F2_corr.append(np.mean(F2,axis=1))
-    F2_corr = np.append(F2_corr,np.mean(F2,axis=1))
+F_uncorr  = np.array([])
+Fmax_uncorr  = np.array([])
+F2_uncorr = np.array([])
+redcell_uncorr = np.array([])
 
-    redcell       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'redcell.npy'))
-    # redcell_corr.append(redcell[:,0])
-    redcell_corr = np.append(redcell_corr,redcell[:,0])
+for iplane in range(8):
+    iscell       = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'iscell.npy'))
+
+    F           = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F.npy'))
+    F_corr      = np.append(F_corr,np.mean(F[iscell[:,0]==1],axis=1))
+
+    F2          = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F_chan2.npy'))
+    F2_corr     = np.append(F2_corr,np.mean(F2[iscell[:,0]==1],axis=1))
+
+    redcell      = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'redcell.npy'))
+    redcell_corr = np.append(redcell_corr,redcell[iscell[:,0]==1,0])
+
+    #Uncorrected run:
+    iscell       = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'iscell.npy'))
+
+    F           = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'F.npy'))
+    F_uncorr    = np.append(F_uncorr,np.mean(F[iscell[:,0]==1],axis=1))
+    Fmax_uncorr = np.append(Fmax_uncorr,np.max(F[iscell[:,0]==1],axis=1))
+
+    F2          = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'F_chan2.npy'))
+    F2_uncorr   = np.append(F2_uncorr,np.mean(F2[iscell[:,0]==1],axis=1))
+
+    redcell       = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'redcell.npy'))
+    redcell_uncorr = np.append(redcell_uncorr,redcell[iscell[:,0]==1,0])
 
 df_corr = pd.DataFrame({'F_corr': F_corr, 'F2_corr' : F2_corr, 'redcell_corr' : redcell_corr})
 fig,(ax1,ax2) = plt.subplots(1,2,figsize=(5,3))
@@ -381,10 +400,46 @@ sns.barplot(data=df_corr,y='F_corr',x='redcell_corr',ax=ax1)
 
 sns.barplot(data=df_corr,y='F2_corr',x='redcell_corr',ax=ax2)
 
-# F2_corr_neuronmean = np.mean(F2_corr,axis=0)
-# plt.figure()
-# # plt.plot(F2_corr_neuronmean)
-# plt.plot(F2_corr_neuronmean.T,linewidth=0.2)
+df_uncorr = pd.DataFrame({'F_uncorr': F_uncorr, 'F2_uncorr' : F2_uncorr, 'redcell_uncorr' : redcell_uncorr})
+fig,(ax1,ax2) = plt.subplots(1,2,figsize=(5,3))
+sns.barplot(data=df_uncorr,y='F_uncorr',x='redcell_uncorr',ax=ax1)
+
+sns.barplot(data=df_uncorr,y='F2_uncorr',x='redcell_uncorr',ax=ax2)
+
+## How much of the fluorescence of labeled cells is due to red bleedthrough?
+
+# What is the fluorescence in the red channel of the labeled cells?
+# F2_uncorr[redcell_uncorr==1]
+# What is the fluorescence in the green channel of the labeled cells?
+# F_uncorr[redcell_uncorr==1]
+# What is bleedthrough (with pmt1 0.6 gain and pmt2 0.4 gain)?
+# F2_uncorr[redcell_uncorr==1] * 1.54
+
+frac_bleedthrough_uncorrected   = (F2_uncorr * 1.54) / F_uncorr * 100
+frac_bleedthrough_uncorrected   = (F2_uncorr * 1.54) / Fmax_uncorr * 100
+frac_bleedthrough_corrected     = (F2_corr * 1.54) / F_corr * 100
+
+# frac_bleedthrough_uncorrected = (F2_uncorr * 1.54) / F_uncorr * 100
+
+# frac_bleedthrough_uncorrected = F2_corr * 1.54 / (F_corr + F2_corr * 1.54) * 100
+
+
+fig,(ax1,ax2) = plt.subplots(1,2,figsize=(5,3))
+# sns.scatterplot(x=F_uncorr[redcell_uncorr==1],y=frac_bleedthrough_uncorrected[redcell_uncorr==1],ax=ax1)
+sns.scatterplot(x=F_uncorr,y=frac_bleedthrough_uncorrected,hue=redcell_uncorr,ax=ax1,size=5)
+# sns.scatterplot(x=F_corr,y=frac_bleedthrough_uncorrected,hue=redcell_corr,ax=ax1,size=5)
+# sns.scatterplot(x=F_uncorr,y=frac_bleedthrough_uncorrected,ax=ax1,size=5)
+ax1.set_xlim(left=0)
+ax1.set_ylim(bottom=0)
+# sns.scatterplot(x=F_corr[redcell_corr==1],y=frac_bleedthrough_corrected[redcell_corr==1],ax=ax2)
+sns.scatterplot(x=F_corr,y=frac_bleedthrough_corrected,hue=redcell_corr,size=5,ax=ax2)
+ax2.set_xlim(left=0)
+ax2.set_ylim(bottom=0)
+
+
+
+
+
 
 
 # np.mean(F2_corr[redcell_corr[:,0]==1,:],axis=1)
@@ -405,4 +460,52 @@ F2_diff_mean = np.mean(F2_diff,axis=0)
 
 fig = plt.subplots(1,1,figsize=(15,5))
 plt.plot(F2_diff_mean,linewidth=0.1)
+
+F2_diff = np.abs(np.diff(F2,n=1,axis=1))
+
+F2_diff_mean = np.mean(F2_diff,axis=0)
+
+fig = plt.subplots(1,1,figsize=(15,5))
+plt.plot(F2_diff_mean,linewidth=0.1)
+
+
+
+# F2   = [np.vstack(np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F_chan2.npy')) for iplane in range(8))]
+
+###### F2 trace over time: 
+# Store as proxy for movement 
+iplane = 0
+nframes = np.shape(np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F_chan2.npy')))[1]
+F2 = np.empty((0,nframes))
+
+for iplane in range(8):
+    F           = np.load(os.path.join(dir_corrected,'plane%d' %iplane,'F_chan2.npy'))
+
+    # if imaging was aborted during scanning of a volume, later planes have less frames
+    # if so, compensate by duplicating value last frame
+    if np.shape(F)[1]==nframes:
+        pass       #do nothing, shapes match
+    elif np.shape(F)[1]==nframes-1: #copy last timestamp of array
+        F           = np.hstack((F, np.tile(F[:,[-1]], 1)))
+
+    F2          = np.vstack((F2,F))
+
+## tdTomato fluorescence change across planes is correlated:
+g   = np.abs(zscore(F2,axis=1))
+h   = zscore(np.mean(g,axis=0))
+
+fig,(ax1,ax2) = plt.subplots(2,1,figsize=(10,4))
+ax1.imshow(g,aspect='auto',vmin=0,vmax=2)
+ax2.plot(h,linewidth=0.2)
+ax2.set_xlim([0,np.shape(F2)[1]])
+
+# plt.imshow(F2,aspect='auto',vmin=np.percentile(F2,5),vmax=np.percentile(F2,95))
+
+# plt.figure(figsize=(10,3))
+# h  = zscore(np.mean(F2,axis=0))
+# plt.plot(h,linewidth=0.2)
+
+# plt.plot(h[:1000],linewidth=0.2)
+
+
 
