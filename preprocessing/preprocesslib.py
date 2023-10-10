@@ -613,11 +613,16 @@ def proc_imaging(sesfolder, sessiondata):
 
         ##################### load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
+        F_chan2             = np.load(os.path.join(plane_folder, 'F_chan2.npy'), allow_pickle=True)
         Fneu                = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
         spks                = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
         
         # Compute dF/F:
-        dF     = calculate_dff(F, Fneu,prc=20) #see function below
+        dF     = calculate_dff(F, Fneu,prc=10) #see function below
+
+        # Compute average fluorescence on green and red channels:
+        celldata_plane['meanF']         = np.mean(F, axis=1)
+        celldata_plane['meanF_chan2']   = np.mean(F_chan2, axis=1)
 
         # Calculate the noise level of the cells ##### Rupprecht et al. 2021 Nat Neurosci.
         noise_level         = np.median(np.abs(np.diff(dF,axis=1)),axis=1)/np.sqrt(ops['fs'])
@@ -629,11 +634,11 @@ def proc_imaging(sesfolder, sessiondata):
         event_rate      = nEvents / (ops['nframes'] / ops['fs'])
         celldata_plane['event_rate'] = event_rate
 
-        F = F[:,protocol_frame_idx_plane==1].transpose()
-        Fneu = Fneu[:,protocol_frame_idx_plane==1].transpose()
-        spks = spks[:,protocol_frame_idx_plane==1].transpose()
-        dF = dF[:,protocol_frame_idx_plane==1].transpose()
-        
+        F       = F[:,protocol_frame_idx_plane==1].transpose()
+        Fneu    = Fneu[:,protocol_frame_idx_plane==1].transpose()
+        spks    = spks[:,protocol_frame_idx_plane==1].transpose()
+        dF      = dF[:,protocol_frame_idx_plane==1].transpose()
+
         # if imaging was aborted during scanning of a volume, later planes have less frames
         # Compensate by duplicating last value
         if np.shape(F)[0]==len(ts_master):
@@ -646,7 +651,7 @@ def proc_imaging(sesfolder, sessiondata):
         else:
             print("Problem with timestamps and imaging frames")
  
-         #construct dataframe with activity by cells: give unique cell_id as label:
+        #construct dataframe with activity by cells: give unique cell_id as label:
         cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
         
         #store cell_ids in celldata:
@@ -670,6 +675,26 @@ def proc_imaging(sesfolder, sessiondata):
             dFdata = dFdata.merge(dFdata_plane)
             deconvdata = deconvdata.merge(deconvdata_plane)
     
+    ###### F2 trace over time, store variability as proxy for movement 
+    F_chan2 = np.empty((0,len(ts_master)))
+    for iplane,plane_folder in enumerate(plane_folders):
+        F             = np.load(os.path.join(plane_folder, 'F_chan2.npy'), allow_pickle=True)
+        # if imaging was aborted during scanning of a volume, later planes have less frames
+        # if so, compensate by duplicating value last frame
+        if np.shape(F)[1]==len(ts_master):
+            pass       #do nothing, shapes match
+        elif np.shape(F)[1]==len(ts_master)-1: #copy last timestamp of array
+            F           = np.hstack((F, np.tile(F[:,[-1]], 1)))
+
+        F_chan2          = np.vstack((F_chan2,F))
+
+    ## identify moments of large tdTomato fluorescence change across the session:
+    tdTom_absROI    = np.abs(st.zscore(F_chan2,axis=1)) #get zscored tdtom fluo for rois and take absolute
+    tdTom_meanZ     = st.zscore(np.mean(tdTom_absROI,axis=0)) #average across ROIs and zscore again
+    
+    dFdata['F_chan2']           = tdTom_meanZ #store in dFdata and deconvdata
+    deconvdata['F_chan2']       = tdTom_meanZ
+
     celldata['session_id']      = sessiondata['session_id'][0]
     dFdata['session_id']        = sessiondata['session_id'][0]
     deconvdata['session_id']    = sessiondata['session_id'][0]

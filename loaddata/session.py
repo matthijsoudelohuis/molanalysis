@@ -69,6 +69,9 @@ class Session():
             self.ts_F                = self.calciumdata['timestamps']
             self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
 
+            self.F_chan2             = self.calciumdata['F_chan2']
+            self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
+
             self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells],axis=1)
             
             assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
