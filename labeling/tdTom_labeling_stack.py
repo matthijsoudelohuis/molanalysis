@@ -109,7 +109,6 @@ for i in range(nslices):
     nTdTomCells_PM[i]      = len(np.unique(masks_cp_red))-1 #zero is counted as unique
 
 
-
 #Show multiple planes along the stack: 
 plt.figure()
 plt.imshow(masks_cp_red)
@@ -123,16 +122,23 @@ meanF1_V1       = [np.mean(greenstack_V1[:,:,i]) for i in range(nslices)]
 meanF2_PM       = [np.mean(redstack_PM[:,:,i]) for i in range(nslices)]
 meanF1_PM       = [np.mean(greenstack_PM[:,:,i]) for i in range(nslices)]
 
-fig,ax = plt.subplots(figsize=(3,8))
-plt.plot(meanF2_V1,slicedepths,c='darkviolet')
-plt.plot(meanF2_PM,slicedepths,c='lightseagreen')
-# plt.plot(meanF,slicedepths,'g')
-ax.invert_yaxis()
-ax.set_ylabel('Cortical Depth')
-ax.set_xlabel('Fluorescence')
-ax.legend(['V1','PM'],frameon=False)
+fig,(ax1,ax2) = plt.subplots(1,2,figsize=(3,5))
+ax1.plot(meanF2_V1,slicedepths,c='darkviolet')
+ax1.plot(meanF2_PM,slicedepths,c='lightseagreen')
+ax1.invert_yaxis()
+ax1.set_ylabel('Cortical Depth')
+ax1.set_xlabel('Fluorescence')
+# ax1.legend(['V1','PM'],frameon=False)
+ax1.set_title('Fluorescence')
 
-
+ax2.plot(nTdTomCells_V1,slicedepths,c='darkviolet')
+ax2.plot(nTdTomCells_PM,slicedepths,c='lightseagreen')
+ax2.invert_yaxis()
+ax2.set_ylabel('')
+ax2.set_xlabel('#Labeled cells')
+ax2.legend(['V1','PM'],frameon=False)
+ax2.set_title('#Labeled cells')
+plt.tight_layout()
 
 
 # greenstackre = greenstack.reshape(512,512,350,2)
