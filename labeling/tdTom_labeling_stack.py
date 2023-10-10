@@ -12,15 +12,21 @@ from PIL import ImageColor
 from PIL import Image
 from ScanImageTiffReader import ScanImageTiffReader as imread
 from pathlib import Path
+from matplotlib.patches import Rectangle
 
 from cellpose import models
 from cellpose import utils, io
 # from cellpose.io import imread
 
+# import matplotlib as mpl
+# mpl.rcParams["figure.facecolor"] = 'w'
+# mpl.rcParams["axes.facecolor"]  = 'w'
+# mpl.rcParams["savefig.facecolor"]  = 'w'
 
 # from suite2p.extraction import extract, masks
 # from suite2p.detection.chan2detect import detect,correct_bleedthrough
 
+savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - Labeling\\Stack\\'
 
 chan = [[1,0]] # grayscale=0, R=1, G=2, B=3 # channels = [cytoplasm, nucleus]
 diam = 12
@@ -109,20 +115,16 @@ for i in range(nslices):
     nTdTomCells_PM[i]      = len(np.unique(masks_cp_red))-1 #zero is counted as unique
 
 
-#Show multiple planes along the stack: 
-plt.figure()
-plt.imshow(masks_cp_red)
-# plt.imshow(greenstack[:,:,15])
-# plt.imshow(redstack_PM[:,:,15])
-plt.imshow(redstack_V1[:,:,15])
-
+### Get the mean fluorescence for each plane:
 meanF2_V1       = [np.mean(redstack_V1[:,:,i]) for i in range(nslices)]
 meanF1_V1       = [np.mean(greenstack_V1[:,:,i]) for i in range(nslices)]
 
 meanF2_PM       = [np.mean(redstack_PM[:,:,i]) for i in range(nslices)]
 meanF1_PM       = [np.mean(greenstack_PM[:,:,i]) for i in range(nslices)]
 
-fig,(ax1,ax2) = plt.subplots(1,2,figsize=(3,5))
+
+### Figure with depth profile: 
+fig,(ax1,ax2) = plt.subplots(1,2,figsize=(6,7))
 ax1.plot(meanF2_V1,slicedepths,c='darkviolet')
 ax1.plot(meanF2_PM,slicedepths,c='lightseagreen')
 ax1.invert_yaxis()
@@ -138,6 +140,58 @@ ax2.set_ylabel('')
 ax2.set_xlabel('#Labeled cells')
 ax2.legend(['V1','PM'],frameon=False)
 ax2.set_title('#Labeled cells')
+plt.tight_layout()
+
+
+##### + Show example planes alongside it:
+
+explanes_depths = [70,180,320,450]
+vmin = 0
+vmax = 200
+
+fig,axes = plt.subplots(4,4,figsize=(9,7))
+ax1 = plt.subplot(141)
+
+ax1.plot(meanF2_V1,slicedepths,c='darkviolet')
+ax1.plot(meanF2_PM,slicedepths,c='lightseagreen')
+ax1.invert_yaxis()
+ax1.set_ylabel('Cortical Depth')
+ax1.set_xlabel('Fluorescence')
+# ax1.legend(['V1','PM'],frameon=False)
+ax1.set_title('Fluorescence')
+for d in explanes_depths:
+    ax1.axhline(d,color='k',linestyle=':',linewidth=1)
+
+ax2 = plt.subplot(142)
+ax2.plot(nTdTomCells_V1,slicedepths,c='darkviolet')
+ax2.plot(nTdTomCells_PM,slicedepths,c='lightseagreen')
+ax2.invert_yaxis()
+ax2.set_ylabel('')
+ax2.set_xlabel('#Labeled cells')
+ax2.legend(['V1','PM'],frameon=False)
+ax2.set_title('#Labeled cells')
+
+for d in explanes_depths:
+    ax2.axhline(d,color='k',linestyle=':',linewidth=1)
+
+for i,d in enumerate(explanes_depths):
+    ax = plt.subplot(4,4,i*4+3)
+    ax.imshow(redstack_V1[:,:,slicedepths==d],cmap='gray',vmin=vmin,vmax=vmax)
+    ax.set_axis_off()
+    ax.set_aspect('auto')
+    ax.add_patch(Rectangle((0,0),512,512,edgecolor = 'darkviolet',
+             linewidth = 3, fill=False))
+    if i==0: 
+         ax.set_title('V1')
+
+    ax = plt.subplot(4,4,i*4+4)
+    ax.imshow(redstack_PM[:,:,slicedepths==d],cmap='gray',vmin=vmin,vmax=vmax)
+    ax.set_axis_off()
+    ax.set_aspect('auto')
+    ax.add_patch(Rectangle((0,0),512,512,edgecolor = 'lightseagreen',
+            linewidth = 3, fill=False))
+    if i==0: 
+         ax.set_title('PM')
 plt.tight_layout()
 
 
