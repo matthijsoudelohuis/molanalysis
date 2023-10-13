@@ -9,7 +9,7 @@ facemapfile = 'E:\\OneDrive\\PostDoc\\Analysis\\PupilMotSVD\\testvid\\RF_NSH0742
 
 proc = np.load(facemapfile,allow_pickle=True).item()
 
-fig = plt.subplots(1,7,figsize=(14, 2))
+fig = plt.subplots(1,7,figsize=(14, 2)) 
 ax = plt.subplot(1, 7, 1)
 plt.imshow(proc['avgframe_reshape'],cmap='gray',aspect='auto')
 plt.title("average frame",fontsize=12)

@@ -496,7 +496,12 @@ def proc_imaging(sesfolder, sessiondata):
     
     # read metadata from tiff (just take first tiff from the filelist
     # metadata should be same for all if settings haven't changed during differernt protocols
-    meta, meta_si   = get_meta(ops['filelist'][0])
+    localtif = os.path.join(sesfolder,sessiondata.protocol[0],'Imaging',
+                             os.listdir(os.path.join(sesfolder,sessiondata.protocol[0],'Imaging'))[0])
+    if os.path.exists(ops['filelist'][0]):
+        meta, meta_si   = get_meta(ops['filelist'][0])
+    elif os.path.exists(localtif):
+        meta, meta_si   = get_meta(localtif)
     meta_dict       = dict() #convert to dictionary:
     for line in meta_si:
         meta_dict[line.split(' = ')[0]] = line.split(' = ')[1]
@@ -635,6 +640,7 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['event_rate'] = event_rate
 
         F       = F[:,protocol_frame_idx_plane==1].transpose()
+        F_chan2 = F_chan2[:,protocol_frame_idx_plane==1].transpose()
         Fneu    = Fneu[:,protocol_frame_idx_plane==1].transpose()
         spks    = spks[:,protocol_frame_idx_plane==1].transpose()
         dF      = dF[:,protocol_frame_idx_plane==1].transpose()
@@ -645,6 +651,7 @@ def proc_imaging(sesfolder, sessiondata):
             pass       #do nothing, shapes match
         elif np.shape(F)[0]==len(ts_master)-1: #copy last timestamp of array
             F           = np.vstack((F, np.tile(F[[-1],:], 1)))
+            F_chan2     = np.vstack((F_chan2, np.tile(F_chan2[[-1],:], 1)))
             Fneu        = np.vstack((Fneu, np.tile(Fneu[[-1],:], 1)))
             spks        = np.vstack((spks, np.tile(spks[[-1],:], 1)))
             dF          = np.vstack((dF, np.tile(dF[[-1],:], 1)))
@@ -655,7 +662,7 @@ def proc_imaging(sesfolder, sessiondata):
         cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
         
         #store cell_ids in celldata:
-        celldata['cell_id']         = cell_ids
+        celldata_plane['cell_id']         = cell_ids
 
         if iplane == 0: #if first plane then init dataframe, otherwise append
             celldata = celldata_plane.copy()
@@ -667,33 +674,28 @@ def proc_imaging(sesfolder, sessiondata):
         dFdata_plane['timestamps']      = ts_master    #add timestamps
         deconvdata_plane                = pd.DataFrame(spks, columns=cell_ids)   
         deconvdata_plane['timestamps']  = ts_master    #add timestamps
-
+        Fchan2data_plane                = pd.DataFrame(F_chan2, columns=cell_ids)
+        Fchan2data_plane['timestamps']  = ts_master    #add timestamps
+        #Fchan2data is not saved but average across neurons, see below
+        
         if iplane == 0:
             dFdata = dFdata_plane.copy()
             deconvdata = deconvdata_plane.copy()
+            Fchan2data = Fchan2data_plane.copy()
         else:
             dFdata = dFdata.merge(dFdata_plane)
             deconvdata = deconvdata.merge(deconvdata_plane)
+            Fchan2data = Fchan2data.merge(Fchan2data_plane)
     
-    ###### F2 trace over time, store variability as proxy for movement 
-    F_chan2 = np.empty((0,len(ts_master)))
-    for iplane,plane_folder in enumerate(plane_folders):
-        F             = np.load(os.path.join(plane_folder, 'F_chan2.npy'), allow_pickle=True)
-        # if imaging was aborted during scanning of a volume, later planes have less frames
-        # if so, compensate by duplicating value last frame
-        if np.shape(F)[1]==len(ts_master):
-            pass       #do nothing, shapes match
-        elif np.shape(F)[1]==len(ts_master)-1: #copy last timestamp of array
-            F           = np.hstack((F, np.tile(F[:,[-1]], 1)))
-
-        F_chan2          = np.vstack((F_chan2,F))
+    # Correct for suite2p artefact if never opened suite2p to set 0th cell to not iscell based on npix size:
+    celldata.iloc[np.where(celldata['npix']==1)[0],celldata.columns.get_loc('iscell')] = 0
 
     ## identify moments of large tdTomato fluorescence change across the session:
-    tdTom_absROI    = np.abs(st.zscore(F_chan2,axis=1)) #get zscored tdtom fluo for rois and take absolute
-    tdTom_meanZ     = st.zscore(np.mean(tdTom_absROI,axis=0)) #average across ROIs and zscore again
+    tdTom_absROI    = np.abs(st.zscore(Fchan2data,axis=0)) #get zscored tdtom fluo for rois and take absolute
+    tdTom_meanZ     = st.zscore(np.mean(tdTom_absROI,axis=1)) #average across ROIs and zscore again
     
-    dFdata['F_chan2']           = tdTom_meanZ #store in dFdata and deconvdata
-    deconvdata['F_chan2']       = tdTom_meanZ
+    dFdata['F_chan2']           = tdTom_meanZ.to_numpy() #store in dFdata and deconvdata
+    deconvdata['F_chan2']       = tdTom_meanZ.to_numpy()
 
     celldata['session_id']      = sessiondata['session_id'][0]
     dFdata['session_id']        = sessiondata['session_id'][0]

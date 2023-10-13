@@ -15,7 +15,7 @@ from statannotations.Annotator import Annotator
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from sklearn import preprocessing
 
-# protocol            = 'VR'
+protocol            = ['VR']
 # protocol            = ['GR']
 protocol            = ['GR','VR','IM','RF','SP']
 protocol            = ['GR','VR','IM']
@@ -57,6 +57,13 @@ df2 = celldata.groupby(['redcell'])['redcell'].count()
 labelcounts = celldata.groupby(['redcell'])['redcell'].count().to_numpy()
 plt.suptitle('Quality comparison labeled ({0}) vs unlabeled ({1}) cells'.format(labelcounts[1],labelcounts[0]))
 plt.tight_layout()
+
+
+df = celldata[["skew","noise_level","npix_soma",
+               "meanF","meanF_chan2","event_rate","redcell"]]
+sns.pairplot(data=df, hue="redcell")
+
+sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap='bwr')
 
 
 # ###################### Calcium trace skewness for labeled vs unlabeled cells:

@@ -46,7 +46,7 @@ class Session():
     
         if os.path.exists(self.celldata_path):
             self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
-            #get only good cells (selected ROIs by suite2p):
+            # get only good cells (selected ROIs by suite2p):
             goodcells               = self.celldata['iscell'] == 1
             self.celldata           = self.celldata[goodcells].reset_index(drop=True)
         

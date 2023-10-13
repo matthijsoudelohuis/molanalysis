@@ -16,27 +16,27 @@ os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "X:\\Rawdata\\"
+rawdatadir      = "O:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
 # procdatadir     = "E:\\Procdata\\"
 
-# animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
 # animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
-animal_ids          = [] #If empty than all animals in folder will be processed
+# animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 
-animal_ids          = ['LPE09829','LPE09667'] #If empty than all animals in folder will be processed
-date_filter        = ['2023_03_29','2023_03_30','2023_03_31']
+# animal_ids          = ['LPE09829','LPE09667'] #If empty than all animals in folder will be processed
+# date_filter        = ['2023_03_29','2023_03_30','2023_03_31']
 
 # animal_ids          = ['LPE09667'] #If empty than all animals in folder will be processed
 # date_filter        = ['2023_03_29']
 
 # protocols           = ['IM','GR','RF','SP']
-# protocols           = ['SP']
+protocols           = ['RF']
 # protocols           = ['GR']
-protocols           = ['VR']
+# protocols           = ['VR']
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -103,5 +103,3 @@ for animal_id in animal_ids: #for each animal
 
 print(f'\n\nPreprocessing Completed')
 
-
-# [celldata,calciumdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
