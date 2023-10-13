@@ -242,6 +242,7 @@ def proc_RF(rawdatadir,sessiondata):
         RF_timestamps   = trialdata.iloc[:,1].to_numpy()
 
     else: ## Get trigger data to align ts_master:
+        print('Interpolating timestamps because trigger data is missing for the receptive field stimuli')
         triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
         triggerdata       = pd.read_csv(os.path.join(sesfolder,triggerdata_file[0]),skiprows=2).to_numpy()
         
