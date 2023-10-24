@@ -85,7 +85,7 @@ labelmat    = np.empty((N,N),dtype=object)
 
 for i in range(N):
     for j in range(N):
-        distmat[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i]],
+        problem also z distmat[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i]],
                 [sessions[0].celldata['xloc'][j],sessions[0].celldata['yloc'][j]])
         areamat[i,j] = sessions[0].celldata['roi_name'][i] + '-' + sessions[0].celldata['roi_name'][j]
         labelmat[i,j] = str(int(sessions[0].celldata['redcell'][i])) + '-' + str(int(sessions[0].celldata['redcell'][j]))

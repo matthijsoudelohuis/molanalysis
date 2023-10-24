@@ -2,8 +2,7 @@
 """
 Author: Matthijs Oude Lohuis, Champalimaud Research
 2022-2025
-
-
+Locate receptive field following squared checkerboard noise for individual neurons
 """
 
 import os

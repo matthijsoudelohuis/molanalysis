@@ -11,16 +11,16 @@ Preprocesses behavioral data, task and trial data, imaging data etc.
 
 import os, sys
 import numpy as np
-# os.chdir('E:\\Python\\molanalysis\\')
-os.chdir('T:\\Python\\molanalysis\\')
+os.chdir('E:\\Python\\molanalysis\\')
+# os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
 rawdatadir      = "O:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
-# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
-# procdatadir     = "E:\\Procdata\\"
+rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+procdatadir     = "E:\\Procdata\\"
 
 animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
 # animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
@@ -30,11 +30,11 @@ date_filter         = []
 # animal_ids          = ['LPE09829','LPE09667'] #If empty than all animals in folder will be processed
 # date_filter        = ['2023_03_29','2023_03_30','2023_03_31']
 
-# animal_ids          = ['LPE09667'] #If empty than all animals in folder will be processed
-# date_filter        = ['2023_03_29']
+animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
+date_filter        = ['2023_04_10']
 
-protocols           = ['IM','GR','RF','SP']
-# protocols           = ['RF']
+# protocols           = ['IM','GR','RF','SP']
+protocols           = ['SP']
 # protocols           = ['GR']
 # protocols           = ['VR']
 

@@ -456,9 +456,9 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
         
         proc = np.load(facemapfile[0],allow_pickle=True).item()
         
-        assert(len(proc['motion'][0])==0,'multivideo performed, should not be done')
-        assert(len(proc['rois'])==2,'designed to analyze 2 rois, pupil and motion svd, _proc file contains a different #rois')
-        assert(all(x in [proc['rois'][i]['rtype'] for i in range(2)] for x in ['motion SVD', 'Pupil']),'roi type error')
+        assert len(proc['motion'][0])==0,'multivideo performed, should not be done'
+        assert len(proc['rois'])==2,'designed to analyze 2 rois, pupil and motion svd, _proc file contains a different #rois'
+        assert all(x in [proc['rois'][i]['rtype'] for i in range(2)] for x in ['motion SVD', 'Pupil']),'roi type error'
 
         videodata['motionenergy']   = proc['motion'][1]
         PC_labels                   = list('videoPC_' + '%s' % k for k in range(0,keepPCs))
@@ -618,10 +618,10 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
 
         if os.path.exists(os.path.join(plane_folder, 'RF.npy')):
-            RF = np.load(os.path.join(plane_folder, 'F.npy'))
-            celldata_plane['rf_azimuth']    = RF[:,0]
-            celldata_plane['rf_elevation']  = RF[:,1]
-            celldata_plane['rf_size']       = RF[:,2]
+            RF = np.load(os.path.join(plane_folder, 'RF.npy'))
+            celldata_plane['rf_azimuth']    = RF[0,:]
+            celldata_plane['rf_elevation']  = RF[1,:]
+            celldata_plane['rf_size']       = RF[2,:]
 
         ##################### load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
@@ -633,7 +633,7 @@ def proc_imaging(sesfolder, sessiondata):
 
         if np.shape(F_chan2)[0] < np.shape(F)[0]:
             F_chan2     = np.vstack((F_chan2, np.tile(F_chan2[[-1],:], 1))).sleknf()
-#!#!@#!$!#%#%#!$@!#%!^%@!$!#$ 
+        #!#!@#!$!#%#%#!$@!#%!^%@!$!#$ 
 
         # Compute dF/F:
         dF     = calculate_dff(F, Fneu,prc=10) #see function below
@@ -680,7 +680,7 @@ def proc_imaging(sesfolder, sessiondata):
         if iplane == 0: #if first plane then init dataframe, otherwise append
             celldata = celldata_plane.copy()
         else:
-            celldata = celldata.append(celldata_plane)
+            celldata = pd.concat([celldata,celldata_plane])
             
         #Save both deconvolved and fluorescence data:
         dFdata_plane                    = pd.DataFrame(dF, columns=cell_ids)
@@ -701,7 +701,7 @@ def proc_imaging(sesfolder, sessiondata):
             Fchan2data = Fchan2data.merge(Fchan2data_plane)
     
     # Correct for suite2p artefact if never opened suite2p to set 0th cell to not iscell based on npix size:
-    celldata.iloc[np.where(celldata['npix']==1)[0],celldata.columns.get_loc('iscell')] = 0
+    celldata.iloc[np.where(celldata['npix_soma']==1)[0],celldata.columns.get_loc('iscell')] = 0
 
     ## identify moments of large tdTomato fluorescence change across the session:
     tdTom_absROI    = np.abs(st.zscore(Fchan2data,axis=0)) #get zscored tdtom fluo for rois and take absolute
