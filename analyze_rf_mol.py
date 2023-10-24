@@ -20,10 +20,11 @@ from preprocessing.preprocesslib import proc_RF, align_timestamps
 
 
 rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
+rawdatadir          = 'X:\\Rawdata\\'
 
 # animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
-# animal_ids          = [] #If empty than all animals in folder will be processed
-# date_filter         = []
+animal_ids          = [] #If empty than all animals in folder will be processed
+date_filter         = []
 
 animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
 date_filter         = ['2023_04_10']
