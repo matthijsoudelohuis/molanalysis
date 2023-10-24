@@ -617,12 +617,24 @@ def proc_imaging(sesfolder, sessiondata):
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
 
+        if os.path.exists(os.path.join(plane_folder, 'RF.npy')):
+            RF = np.load(os.path.join(plane_folder, 'F.npy'))
+            celldata_plane['rf_azimuth']    = RF[:,0]
+            celldata_plane['rf_elevation']  = RF[:,1]
+            celldata_plane['rf_size']       = RF[:,2]
+
         ##################### load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
         F_chan2             = np.load(os.path.join(plane_folder, 'F_chan2.npy'), allow_pickle=True)
         Fneu                = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
         spks                = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
         
+        #!#!@#!$!#%#%#!$@!#%!^%@!$!#$ 
+
+        if np.shape(F_chan2)[0] < np.shape(F)[0]:
+            F_chan2     = np.vstack((F_chan2, np.tile(F_chan2[[-1],:], 1))).sleknf()
+#!#!@#!$!#%#%#!$@!#%!^%@!$!#$ 
+
         # Compute dF/F:
         dF     = calculate_dff(F, Fneu,prc=10) #see function below
 
@@ -640,11 +652,11 @@ def proc_imaging(sesfolder, sessiondata):
         event_rate      = nEvents / (ops['nframes'] / ops['fs'])
         celldata_plane['event_rate'] = event_rate
 
-        F       = F[:,protocol_frame_idx_plane==1].transpose()
-        F_chan2 = F_chan2[:,protocol_frame_idx_plane==1].transpose()
-        Fneu    = Fneu[:,protocol_frame_idx_plane==1].transpose()
-        spks    = spks[:,protocol_frame_idx_plane==1].transpose()
-        dF      = dF[:,protocol_frame_idx_plane==1].transpose()
+        F           = F[:,protocol_frame_idx_plane==1].transpose()
+        F_chan2     = F_chan2[:,protocol_frame_idx_plane==1].transpose()
+        Fneu        = Fneu[:,protocol_frame_idx_plane==1].transpose()
+        spks        = spks[:,protocol_frame_idx_plane==1].transpose()
+        dF          = dF[:,protocol_frame_idx_plane==1].transpose()
 
         # if imaging was aborted during scanning of a volume, later planes have less frames
         # Compensate by duplicating last value
