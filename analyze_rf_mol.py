@@ -28,19 +28,12 @@ rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
 animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
 date_filter         = ['2023_04_10']
 
-
 ## Mapping of RF on/off blocks to elevation and azimuth:
 nblockselevation    = 13
 nblocksazimuth      = 52
 
 vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
 vec_azimuth         = [-135,135] #left and right of screen displays
-
-# vec_elevation       = np.linspace(-16.7,50.2,nblockselevation+1) #
-# vec_elevation       = (vec_elevation[:-1] + vec_elevation[1:]) / 2
-
-# vec_azimuth         = np.linspace(-135,135,nblocksazimuth+1) #
-# vec_azimuth         = (vec_azimuth[:-1] + vec_azimuth[1:]) / 2
 
 ## Parameters:
 showFig     = True
@@ -88,154 +81,157 @@ for animal_id in animal_ids: #for each animal
         sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
 
         sessiondata = pd.DataFrame({'protocol': ['RF']})
-        sessiondata['animal_id'] = 'LPE09830'
-        sessiondata['sessiondate'] = '2023_04_10'
+        sessiondata['animal_id'] = animal_id
+        sessiondata['sessiondate'] = sessiondate
 
-        suite2p_folder = os.path.join(sesfolder,"suite2p")
+        suite2p_folder  = os.path.join(sesfolder,"suite2p")
+        rf_folder       = os.path.join(sesfolder,'RF','Behavior')
 
-        plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
-        # load ops of plane0:
-        ops                = np.load(os.path.join(plane_folders[0], 'ops.npy'), allow_pickle=True).item()
+        if os.path.exists(suite2p_folder) and os.path.exists(rf_folder): 
+            plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
+            # load ops of plane0:
+            ops                = np.load(os.path.join(plane_folders[0], 'ops.npy'), allow_pickle=True).item()
 
-        ## Get trigger data to align timestamps:
-        filenames         = os.listdir(os.path.join(sesfolder,'RF','Behavior'))
-        triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
-        triggerdata       = pd.read_csv(os.path.join(sesfolder,'RF','Behavior',triggerdata_file[0]),skiprows=2).to_numpy()
+            ## Get trigger data to align timestamps:
+            filenames         = os.listdir(rf_folder)
+            triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
+            triggerdata       = pd.read_csv(os.path.join(rf_folder,triggerdata_file[0]),skiprows=2).to_numpy()
 
-        [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
+            [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
 
-        # # Init output var (each plane is then appended):
-        # RF_azim      = np.array([])
-        # RF_elev      = np.array([])
-        # RF_size      = np.array([])
+            # # Init output var (each plane is then appended):
+            # RF_azim      = np.array([])
+            # RF_elev      = np.array([])
+            # RF_size      = np.array([])
 
-        for iplane,plane_folder in enumerate(plane_folders):
-        # for iplane,plane_folder in enumerate(plane_folders[1:]):
-            print('processing plane %s / %s' % (iplane+1,ops['nplanes']))
+            for iplane,plane_folder in enumerate(plane_folders):
+            # for iplane,plane_folder in enumerate(plane_folders[1:]):
+                print('processing plane %s / %s' % (iplane+1,ops['nplanes']))
 
-            iscell             = np.load(os.path.join(plane_folder, 'iscell.npy'))
-            ops                = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
+                iscell             = np.load(os.path.join(plane_folder, 'iscell.npy'))
+                ops                = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
 
-            [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
-            ts_plane = np.squeeze(ts_plane) #make 1-dimensional
+                [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
+                ts_plane = np.squeeze(ts_plane) #make 1-dimensional
 
-            ##################### load suite2p deconvolved activity output:
-            # F     = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
-            # F     = F[:,protocol_frame_idx_plane==1].transpose()
-            spks    = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
-            spks    = spks[:,protocol_frame_idx_plane==1].transpose()
+                ##################### load suite2p deconvolved activity output:
+                # F     = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
+                # F     = F[:,protocol_frame_idx_plane==1].transpose()
+                spks    = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
+                spks    = spks[:,protocol_frame_idx_plane==1].transpose()
 
-            # # if imaging was aborted during scanning of a volume, later planes have less frames
-            # # Compensate by duplicating last value
-            # if np.shape(spks)[0]==len(ts_master):
-            #     pass       #do nothing, shapes match
-            # elif np.shape(spks)[0]==len(ts_master)-1: #copy last timestamp of array
-            #     # F           = np.vstack((F, np.tile(F[[-1],:], 1)))
-            #     spks        = np.vstack((spks, np.tile(spks[[-1],:], 1)))
-            #     spks        = np.hstack((spks, np.tile(spks[[-1],:], 1)))
-            # else:
-            #     print("Problem with timestamps and imaging frames")
+                # # if imaging was aborted during scanning of a volume, later planes have less frames
+                # # Compensate by duplicating last value
+                # if np.shape(spks)[0]==len(ts_master):
+                #     pass       #do nothing, shapes match
+                # elif np.shape(spks)[0]==len(ts_master)-1: #copy last timestamp of array
+                #     # F           = np.vstack((F, np.tile(F[[-1],:], 1)))
+                #     spks        = np.vstack((spks, np.tile(spks[[-1],:], 1)))
+                #     spks        = np.hstack((spks, np.tile(spks[[-1],:], 1)))
+                # else:
+                #     print("Problem with timestamps and imaging frames")
 
-            # Get the receptive field stimuli shown and their timestamps
-            grid_array,RF_timestamps = proc_RF(rawdatadir,sessiondata)
-            
-            ### get parameters
-            [xGrid , yGrid , nGrids] = np.shape(grid_array)
-
-            N               = spks.shape[1]
-
-            t_resp_start    = 0.1        #pre s
-            t_resp_stop     = 0.6      #post s
-            t_base_start    = -2       #pre s
-            t_base_stop     = 0        #post s
-
-            rfmaps_on        = np.empty([xGrid,yGrid,N])
-            rfmaps_off       = np.empty([xGrid,yGrid,N])
-
-            rfmaps_on_p      = np.empty([xGrid,yGrid,N])
-            rfmaps_off_p     = np.empty([xGrid,yGrid,N])
-
-            for n in range(N):
-                print(f"\rComputing RF for neuron {n+1} / {N}",end='\r')
-                resps = np.empty(nGrids)
-                for g in range(nGrids):
-
-                    temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
-                    resp = spks[temp,n].mean()
-                    temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
-                    base = spks[temp,n].mean()
+                # Get the receptive field stimuli shown and their timestamps
+                grid_array,RF_timestamps = proc_RF(rawdatadir,sessiondata)
                 
-                    resps[g] = np.max([resp-base,0])
-                    # resps[g] = resp-base
+                ### get parameters
+                [xGrid , yGrid , nGrids] = np.shape(grid_array)
 
-                for i in range(xGrid):
-                    for j in range(yGrid):
-                        rfmaps_on[i,j,n] = np.mean(resps[grid_array[i,j,:]==1])
-                        rfmaps_off[i,j,n] = np.mean(resps[grid_array[i,j,:]==-1])
-                        
-                        rfmaps_on_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
-                        rfmaps_off_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+                N               = spks.shape[1]
 
-            RF_x            = np.empty(N)
-            RF_y            = np.empty(N)
-            RF_size         = np.empty(N)
+                t_resp_start    = 0.1        #pre s
+                t_resp_stop     = 0.6      #post s
+                t_base_start    = -2       #pre s
+                t_base_stop     = 0        #post s
 
-            clusters_on      = np.empty([xGrid,yGrid,N])
-            clusters_off     = np.empty([xGrid,yGrid,N])
+                rfmaps_on        = np.empty([xGrid,yGrid,N])
+                rfmaps_off       = np.empty([xGrid,yGrid,N])
 
-            rfmaps_on_p_filt  = rfmaps_on_p.copy() #this is only for visualization purposes
-            rfmaps_off_p_filt = rfmaps_off_p.copy()
+                rfmaps_on_p      = np.empty([xGrid,yGrid,N])
+                rfmaps_off_p     = np.empty([xGrid,yGrid,N])
 
-            for n in range(N):
+                for n in range(N):
+                    print(f"\rComputing RF for neuron {n+1} / {N}",end='\r')
+                    resps = np.empty(nGrids)
+                    for g in range(nGrids):
 
-                clusters_on     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
-                clusters_off    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
-                
-                rfmaps_on_p_filt[~clusters_on,n]    = 1 #set to 1 for all noncluster p values
-                rfmaps_off_p_filt[~clusters_off,n]  = 1
-                
-                clusters        = np.logical_or(clusters_on,clusters_off)
-                
-                RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters)
+                        temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
+                        resp = spks[temp,n].mean()
+                        temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
+                        base = spks[temp,n].mean()
+                    
+                        resps[g] = np.max([resp-base,0])
+                        # resps[g] = resp-base
 
-            RF_azim = RF_x/nblocksazimuth * np.diff(vec_azimuth) + vec_azimuth[0]
-            RF_elev = RF_y/nblockselevation * np.diff(vec_elevation) + vec_elevation[0]
+                    for i in range(xGrid):
+                        for j in range(yGrid):
+                            rfmaps_on[i,j,n] = np.mean(resps[grid_array[i,j,:]==1])
+                            rfmaps_off[i,j,n] = np.mean(resps[grid_array[i,j,:]==-1])
+                            
+                            rfmaps_on_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
+                            rfmaps_off_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
 
-            np.save(os.path.join(plane_folder,'RF.npy'),np.vstack((RF_azim,RF_elev,RF_size)))
+                RF_x            = np.empty(N)
+                RF_y            = np.empty(N)
+                RF_size         = np.empty(N)
 
-            if showFig: 
-                example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
+                clusters_on      = np.empty([xGrid,yGrid,N])
+                clusters_off     = np.empty([xGrid,yGrid,N])
 
-                Tot         = len(example_cells)
-                Rows        = int(np.floor(np.sqrt(Tot)))
-                Cols        = Tot // Rows # Compute Rows required
-                if Tot % Rows != 0: #If one additional row is necessary -> add one:
-                    Cols += 1
-                Position = range(1,Tot + 1) # Create a Position index
+                rfmaps_on_p_filt  = rfmaps_on_p.copy() #this is only for visualization purposes
+                rfmaps_off_p_filt = rfmaps_off_p.copy()
 
-                fig = plt.figure(figsize=[18, 9])
-                for i,n in enumerate(example_cells):
-                    # add every single subplot to the figure with a for loop
-                    ax = fig.add_subplot(Rows,Cols,Position[i])
+                for n in range(N):
 
-                    data = np.ones((nblockselevation,nblocksazimuth,3))
+                    clusters_on     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+                    clusters_off    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+                    
+                    rfmaps_on_p_filt[~clusters_on,n]    = 1 #set to 1 for all noncluster p values
+                    rfmaps_off_p_filt[~clusters_off,n]  = 1
+                    
+                    clusters        = np.logical_or(clusters_on,clusters_off)
+                    
+                    RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters)
 
-                    R = np.divide(-np.log10(rfmaps_on_p_filt[:,:,n]),-np.log10(0.000001)) #red intensity
-                    B = np.divide(-np.log10(rfmaps_off_p_filt[:,:,n]),-np.log10(0.000001)) #blue intenstiy
-                    data[:,:,0] = 1 - B #red intensity is one minus blue
-                    data[:,:,1] = 1 - B - R #green channel is one minus blue and red
-                    data[:,:,2] = 1 - R #blue channel is one minus red
+                RF_azim = RF_x/nblocksazimuth * np.diff(vec_azimuth) + vec_azimuth[0]
+                RF_elev = RF_y/nblockselevation * np.diff(vec_elevation) + vec_elevation[0]
 
-                    data[data<0] = 0 #lower trim to zero
+                np.save(os.path.join(plane_folder,'RF.npy'),np.vstack((RF_azim,RF_elev,RF_size)))
 
-                    ax.imshow(data)
-                    ax.scatter(RF_x[n],RF_y[n],marker='+',c='k',s=35) #show RF center location
-                    ax.set_xticks([])
-                    ax.set_yticks([])
-                    ax.set_aspect('auto')
-                    ax.set_title("%d" % n)
-                
-                plt.tight_layout(rect=[0, 0, 1, 1])
+                if showFig: 
+                    example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
+
+                    Tot         = len(example_cells)
+                    Rows        = int(np.floor(np.sqrt(Tot)))
+                    Cols        = Tot // Rows # Compute Rows required
+                    if Tot % Rows != 0: #If one additional row is necessary -> add one:
+                        Cols += 1
+                    Position = range(1,Tot + 1) # Create a Position index
+
+                    fig = plt.figure(figsize=[18, 9])
+                    for i,n in enumerate(example_cells):
+                        # add every single subplot to the figure with a for loop
+                        ax = fig.add_subplot(Rows,Cols,Position[i])
+
+                        data = np.ones((nblockselevation,nblocksazimuth,3))
+
+                        R = np.divide(-np.log10(rfmaps_on_p_filt[:,:,n]),-np.log10(0.000001)) #red intensity
+                        B = np.divide(-np.log10(rfmaps_off_p_filt[:,:,n]),-np.log10(0.000001)) #blue intenstiy
+                        data[:,:,0] = 1 - B #red intensity is one minus blue
+                        data[:,:,1] = 1 - B - R #green channel is one minus blue and red
+                        data[:,:,2] = 1 - R #blue channel is one minus red
+
+                        data[data<0] = 0 #lower trim to zero
+
+                        ax.imshow(data)
+                        ax.scatter(RF_x[n],RF_y[n],marker='+',c='k',s=35) #show RF center location
+                        ax.set_xticks([])
+                        ax.set_yticks([])
+                        ax.set_aspect('auto')
+                        ax.set_title("%d" % n)
+                    
+                    plt.tight_layout(rect=[0, 0, 1, 1])
+                    fig.savefig(os.path.join(plane_folder,'RF_Plane%d.jpg' % iplane),dpi=600)
 
 
 
