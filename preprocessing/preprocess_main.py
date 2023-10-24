@@ -33,8 +33,8 @@ date_filter         = []
 # animal_ids          = ['LPE09667'] #If empty than all animals in folder will be processed
 # date_filter        = ['2023_03_29']
 
-# protocols           = ['IM','GR','RF','SP']
-protocols           = ['RF']
+protocols           = ['IM','GR','RF','SP']
+# protocols           = ['RF']
 # protocols           = ['GR']
 # protocols           = ['VR']
 
