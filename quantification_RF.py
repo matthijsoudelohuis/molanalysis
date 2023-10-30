@@ -24,7 +24,8 @@ savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - RF\\RF_quantification\\'
 # sessions            = filter_sessions(protocols = ['SP'])
 
 session_list        = np.array([['LPE09830','2023_04_10']])
-sessions            = load_sessions(protocol = 'SP',session_list=session_list,load_behaviordata=True, 
+session_list        = np.array([['LPE10885','2023_10_20']])
+sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
 
 
@@ -38,6 +39,7 @@ idx_filter = (sessions[0].celldata['npix']>5) & (sessions[0].celldata['skew']>0.
 celldata = sessions[0].celldata[idx_filter]
 calciumdata = sessions[0].calciumdata.iloc[:,np.where(idx_filter)[0]]
 
+celldata.iloc[celldata['roi_name']=='ROI 2',celldata.columns=='roi_name'] = 'V1'
 # ## remove any double cells (for example recorded in both GR and RF)
 # celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
@@ -52,7 +54,7 @@ vars            = ['rf_azimuth','rf_elevation']
 for i in range(2):
      for j in range(2):
         sns.scatterplot(data = celldata[celldata['roi_name']==areas[j]],x='xloc',y='yloc',hue=vars[i],ax=axes[i,j],palette='gist_rainbow')
-                         
+        
         box = axes[i,j].get_position()
         axes[i,j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
         axes[i,j].legend(loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis

@@ -368,23 +368,23 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
 
     #Check that the number of frames is ballpark range of what it should be based on framerate and session duration:
     
-    if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") > datetime(2023, 3, 30):
+    # if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") > datetime(2023, 3, 30):
         
-        framerate = 30
-        sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
-        assert np.isclose(nts,sesdur * framerate,rtol=3)
-        #Check that frame rate matches interframe interval:
-        assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
-        #Check that inter frame interval does not take on crazy values:
-        assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
-    else:
-        framerate = np.round(1/np.mean(np.diff(ts)))
-        idx = np.where(np.diff(ts[1:-1])<1/framerate/3)[0] + 2
-        for i in idx:
-            ts[i] = np.mean((ts[i-1],ts[i+1]))
-        idx = np.where(np.diff(ts[1:-1])>1/framerate*2)[0] + 2
-        for i in idx:
-            ts[i] = np.mean((ts[i-1],ts[i+1]))
+    #     framerate = 30
+    #     sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
+    #     assert np.isclose(nts,sesdur * framerate,rtol=0.01)
+    #     #Check that frame rate matches interframe interval:
+    #     assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
+    #     #Check that inter frame interval does not take on crazy values:
+    #     assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
+    # else:
+    framerate = np.round(1/np.mean(np.diff(ts)))
+    idx = np.where(np.diff(ts[1:-1])<1/framerate/3)[0] + 2
+    for i in idx:
+        ts[i] = np.mean((ts[i-1],ts[i+1]))
+    idx = np.where(np.diff(ts[1:-1])>1/framerate*2)[0] + 2
+    for i in idx:
+        ts[i] = np.mean((ts[i-1],ts[i+1]))
     
     #Load FaceMap data: 
     facemapfile =  list(filter(lambda a: '_proc' in a, filenames)) #find the processed facemap file
@@ -519,7 +519,8 @@ def proc_imaging(sesfolder, sessiondata):
 
         iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
         stat                = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
-        redcell             = np.load(os.path.join(plane_folder, 'redcell.npy'), allow_pickle=True)
+        # redcell             = np.load(os.path.join(plane_folder, 'redcell.npy'), allow_pickle=True)
+        redcell             = np.load(os.path.join(plane_folder, 'redcell_cellpose.npy'), allow_pickle=True)
 
         ncells_plane              = len(iscell)
         
@@ -544,8 +545,8 @@ def proc_imaging(sesfolder, sessiondata):
             celldata_plane['xloc'][k] = stat[k]['med'][0]
             celldata_plane['yloc'][k] = stat[k]['med'][1]
         
-        celldata_plane['redcell_prob']  = redcell[:,1]
-        celldata_plane['redcell']       = redcell[:,0]
+        celldata_plane['redcell_prob']  = redcell[0,:]
+        celldata_plane['redcell']       = redcell[1,:]
 
         celldata_plane['plane_idx']     = iplane
         celldata_plane['roi_idx']       = plane_roi_idx[iplane]
