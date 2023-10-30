@@ -32,7 +32,6 @@ sessions            = load_sessions(protocol = 'IM',session_list=session_list,lo
 # ## Combine cell data from all loaded sessions to one dataframe:
 # celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-
 #stupid filters because suite2p sometimes outputs this first roi as a good cell:
 idx_filter = (sessions[0].celldata['npix']>5) & (sessions[0].celldata['skew']>0.01) & (sessions[0].celldata['xloc']<512) & (sessions[0].celldata['yloc']<512)
 
@@ -93,7 +92,8 @@ plt.savefig(os.path.join(savedir,'V1_PM_rf_size_' + sessions[0].sessiondata['ses
 noise_corr = np.corrcoef(calciumdata.to_numpy().T)
 
 ## Compute euclidean distance matrix based on soma center:
-distmat_loc     = np.zeros((N,N))
+distmat_xyz     = np.zeros((N,N))
+distmat_xy     = np.zeros((N,N))
 distmat_rf      = np.zeros((N,N))
 areamat         = np.empty((N,N),dtype=object)
 labelmat        = np.empty((N,N),dtype=object)
@@ -101,8 +101,10 @@ labelmat        = np.empty((N,N),dtype=object)
 for i in range(N):
     print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
     for j in range(N):
-        distmat_loc[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i],sessions[0].celldata['depth'][i]],
+        distmat_xyz[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i],sessions[0].celldata['depth'][i]],
                 [sessions[0].celldata['xloc'][j],sessions[0].celldata['yloc'][j],sessions[0].celldata['depth'][j]])
+        distmat_xy[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i]],
+                [sessions[0].celldata['xloc'][j],sessions[0].celldata['yloc'][j]])
         distmat_rf[i,j] = math.dist([sessions[0].celldata['rf_azimuth'][i],sessions[0].celldata['rf_elevation'][i]],
                 [sessions[0].celldata['rf_azimuth'][j],sessions[0].celldata['rf_elevation'][j]])
         areamat[i,j] = sessions[0].celldata['roi_name'][i] + '-' + sessions[0].celldata['roi_name'][j]
@@ -118,14 +120,15 @@ plt.imshow(noise_corr2,vmin=-0.1,vmax=0.1)
 idx_triu = np.tri(N,N,k=0)==0 #index only upper triangular part
 df = pd.DataFrame({'NoiseCorrelation': noise_corr[idx_triu].flatten(),
                 'AreaPair': areamat[idx_triu].flatten(),
-                'DistLocPair': distmat_loc[idx_triu].flatten(),
+                'DistXYPair': distmat_xy[idx_triu].flatten(),
+                'DistXYZPair': distmat_xyz[idx_triu].flatten(),
                 'DistRfPair': distmat_rf[idx_triu].flatten(),
                 'LabelPair': labelmat[idx_triu].flatten()})
 
 
 ############### Relationship anatomical distance and receptive field distance: ##################
 
-df_withinarea = df[(df['AreaPair'].isin(['V1-V1','PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistLocPair'] < 1000)]
+df_withinarea = df[(df['AreaPair'].isin(['V1-V1','PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
 
 g = sns.displot(df_withinarea, x="DistLocPair", y="DistRfPair", binwidth=(2, 2), cbar=True,col="AreaPair")
 plt.xlim([0,650])
@@ -141,8 +144,8 @@ sns.barplot(data=df,x='AreaPair',y='NoiseCorrelation')
 ###################### Noise correlations as a function of pairwise anatomical distance: ####################
 fig,axes   = plt.subplots(1,2,figsize=(8,6))
 
-sns.lineplot(x=np.round(df_withinarea['DistLocPair'],-1),y=df_withinarea['NoiseCorrelation'],hue=df_withinarea['AreaPair'],ax=axes[0])
-axes[0].set_xlabel="Pairwise distance (um)"
+sns.lineplot(x=np.round(df_withinarea['DistXYZPair'],-1),y=df_withinarea['NoiseCorrelation'],hue=df_withinarea['AreaPair'],ax=axes[0])
+axes[0].set_xlabel="Pairwise distance XYZ (um)"
 # plt.legend(labels=['V1-V1','PM-PM'])
 axes[0].set_xlim([-10,600])
 axes[0].set_ylim([0,0.13])
@@ -151,7 +154,7 @@ axes[0].set_ylabel("Noise Correlation")
 axes[0].set_title("Anatomical")
 
 sns.lineplot(x=np.round(df['DistRfPair'],-1),y=df['NoiseCorrelation'],hue=df['AreaPair'],ax=axes[1])
-axes[1].set_xlabel="Pairwise distance (um)"
+axes[1].set_xlabel="Pairwise RF distance (um)"
 axes[1].set_xlim([-10,300])
 axes[1].set_ylim([0,0.13])
 # axes[1].set_xlabel(['RF distance (ret deg)'])
