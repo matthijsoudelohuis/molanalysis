@@ -24,37 +24,43 @@ except:
 
 import suite2p
 from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
+from preprocessing.locate_rf import locate_rf_session
+from labeling.tdTom_labeling_cellpose import proc_labeling_session
 
-rawdatadir          = 'F:\\RawData\\'
-animal_ids          = ['LPE10885'] 
-sessiondates        = ['2023_10_12']
+rawdatadir          = 'H:\\RawData\\'
+animal_id           = 'LPE10885'
+sessiondate         = '2023_10_20'
 
-# animal_ids          = ['LPE09667'] 
-# sessiondates        = ['2023_03_29']
+[db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
-[db,ops] = init_ops(os.path.join(rawdatadir,animal_ids[0],sessiondates[0]))
+# ops['align_by_chan']    = 1
 
-ops['align_by_chan']    = 1
-
-###################################################################
-## Run registration:
+##################    Run registration:  ############################
 suite2p.run_s2p(ops=ops, db=db) 
 
-###################################################################
-## tdTomato bleedthrough correction:
-
+################# tdTomato bleedthrough correction: ################
 coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
 # coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
 # coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
 
 ops = run_bleedthrough_corr(db,ops,coeff)
 
-###################################################################
-## ROI detection: 
+########################## ROI detection ###########################
 ops['do_registration']      = False
 ops['roidetect']            = True
 
 ops = suite2p.run_s2p(ops=ops, db=db)
+
+#########################  tdTomato labeling   ######################
+proc_labeling_session(rawdatadir,animal_id,sessiondate)
+
+######################## Receptive field localization  ##############
+# Locate receptive field if RF protocol was run: 
+locate_rf_session(rawdatadir,animal_id,sessiondate)
+
+
+
+
 
 ############################
 # Debug / Verification code:

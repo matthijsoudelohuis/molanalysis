@@ -77,11 +77,11 @@ for animal_id in animal_ids: #for each animal
                      trialdata = proc_GR(rawdatadir,sessiondata)
                      trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
         
-                elif protocol == 'RF':
-                    [grid_array,RF_timestamps] = proc_RF(rawdatadir,sessiondata)
+                # elif protocol == 'RF':
+                    # [grid_array,RF_timestamps] = proc_RF(rawdatadir,sessiondata)
 
                     # np.save(os.path.join(outdir,"trialdata.npy"),grid_array,RF_timestamps)
-                    np.savez(os.path.join(outdir,"trialdata.npz"),x=grid_array,y=RF_timestamps)
+                    # np.savez(os.path.join(outdir,"trialdata.npz"),x=grid_array,y=RF_timestamps)
                 
                 elif protocol == 'IM':
                     trialdata = proc_IM(rawdatadir,sessiondata)
@@ -100,6 +100,8 @@ for animal_id in animal_ids: #for each animal
                 
                 #Save sessiondata:
                 sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')
+
+
 
 print(f'\n\nPreprocessing Completed')
 

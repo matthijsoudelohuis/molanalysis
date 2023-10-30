@@ -187,69 +187,7 @@ def proc_IM(rawdatadir,sessiondata):
 
     return trialdata
 
-"""
- ######  #######    #     #    #    ######  ######  ### #     #  #####  
- #     # #          ##   ##   # #   #     # #     #  #  ##    # #     # 
- #     # #          # # # #  #   #  #     # #     #  #  # #   # #       
- ######  #####      #  #  # #     # ######  ######   #  #  #  # #  #### 
- #   #   #          #     # ####### #       #        #  #   # # #     # 
- #    #  #          #     # #     # #       #        #  #    ## #     # 
- #     # #          #     # #     # #       #       ### #     #  #####  
-"""
 
-def proc_RF(rawdatadir,sessiondata):
-    sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
-    
-    filenames       = os.listdir(sesfolder)
-    
-    log_file        = list(filter(lambda a: 'log' in a, filenames)) #find the trialdata file
-    
-    #RF_log.bin
-    #The vector saved is long GridSize(1)xGridSize(2)x(RunTime/Duration)
-    #where RunTime is the total display time of the Bonsai programme.
-    #The file format is .binary data with int8 data format
-    with open(os.path.join(sesfolder,log_file[0]) , 'rb') as fid:
-        grid_array = np.fromfile(fid, np.int8)
-    
-    xGrid           = 52
-    yGrid           = 13
-    nGrids          = 1800
-    
-    nGrids_emp = int(len(grid_array)/xGrid/yGrid)
-    if nGrids_emp != nGrids:
-        if np.isclose(len(grid_array)/xGrid/yGrid,nGrids,atol=1):
-            nGrids          = nGrids_emp
-            print('\n####### One grid too many or too few.... Correcting for it.\n')
-        else:
-            print('\n####### Problem with number of grids in receptive field mapping\n')
-
-    grid_array                      = np.reshape(grid_array, [nGrids,xGrid,yGrid])
-    grid_array                      = np.transpose(grid_array, [1,2,0])
-    grid_array = np.rot90(grid_array, k=1, axes=(0,1))
-    
-    grid_array[grid_array==-1]       = 1
-    grid_array[grid_array==0]       = -1
-    grid_array[grid_array==-128]    = 0
-    
-    # fig, ax = plt.subplots(figsize=(7, 3))
-    # ax.imshow(grid_array[:,:,0], aspect='auto',cmap='gray')
-    # ax.imshow(grid_array[:,:,-1], aspect='auto',cmap='gray')
-    
-    trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
-
-    if not len(trialdata_file)==0 and os.path.exists(os.path.join(sesfolder,trialdata_file[0])):
-        trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=0)
-        RF_timestamps   = trialdata.iloc[:,1].to_numpy()
-
-    else: ## Get trigger data to align ts_master:
-        print('Interpolating timestamps because trigger data is missing for the receptive field stimuli')
-        triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
-        triggerdata       = pd.read_csv(os.path.join(sesfolder,triggerdata_file[0]),skiprows=2).to_numpy()
-        
-        #rework from last timestamp: triggerdata[1,-1]
-        RF_timestamps = np.linspace(triggerdata[-1,1]-nGrids*0.5, triggerdata[-1,1], num=nGrids, endpoint=True)
-    
-    return grid_array,RF_timestamps
 
 """
  #     # ######     #######    #     #####  #    # 
