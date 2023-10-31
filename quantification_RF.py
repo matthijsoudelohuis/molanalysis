@@ -35,7 +35,7 @@ sessions            = load_sessions(protocol = 'IM',session_list=session_list,lo
 #stupid filters because suite2p sometimes outputs this first roi as a good cell:
 idx_filter = (sessions[0].celldata['npix']>5) & (sessions[0].celldata['skew']>0.01) & (sessions[0].celldata['xloc']<512) & (sessions[0].celldata['yloc']<512)
 
-celldata = sessions[0].celldata[idx_filter]
+celldata = sessions[0].celldata[idx_filter].reset_index(drop=True)
 calciumdata = sessions[0].calciumdata.iloc[:,np.where(idx_filter)[0]]
 
 celldata.iloc[celldata['roi_name']=='ROI 2',celldata.columns=='roi_name'] = 'V1'
@@ -93,7 +93,7 @@ noise_corr = np.corrcoef(calciumdata.to_numpy().T)
 
 ## Compute euclidean distance matrix based on soma center:
 distmat_xyz     = np.zeros((N,N))
-distmat_xy     = np.zeros((N,N))
+distmat_xy      = np.zeros((N,N))
 distmat_rf      = np.zeros((N,N))
 areamat         = np.empty((N,N),dtype=object)
 labelmat        = np.empty((N,N),dtype=object)
@@ -101,14 +101,23 @@ labelmat        = np.empty((N,N),dtype=object)
 for i in range(N):
     print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
     for j in range(N):
-        distmat_xyz[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i],sessions[0].celldata['depth'][i]],
-                [sessions[0].celldata['xloc'][j],sessions[0].celldata['yloc'][j],sessions[0].celldata['depth'][j]])
-        distmat_xy[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i]],
-                [sessions[0].celldata['xloc'][j],sessions[0].celldata['yloc'][j]])
-        distmat_rf[i,j] = math.dist([sessions[0].celldata['rf_azimuth'][i],sessions[0].celldata['rf_elevation'][i]],
-                [sessions[0].celldata['rf_azimuth'][j],sessions[0].celldata['rf_elevation'][j]])
-        areamat[i,j] = sessions[0].celldata['roi_name'][i] + '-' + sessions[0].celldata['roi_name'][j]
-        labelmat[i,j] = str(int(sessions[0].celldata['redcell'][i])) + '-' + str(int(sessions[0].celldata['redcell'][j]))
+        distmat_xyz[i,j] = math.dist([celldata['xloc'][i],celldata['yloc'][i],celldata['depth'][i]],
+                [celldata['xloc'][j],celldata['yloc'][j],celldata['depth'][j]])
+        distmat_xy[i,j] = math.dist([celldata['xloc'][i],celldata['yloc'][i]],
+                [celldata['xloc'][j],celldata['yloc'][j]])
+        distmat_rf[i,j] = math.dist([celldata['rf_azimuth'][i],celldata['rf_elevation'][i]],
+                [celldata['rf_azimuth'][j],celldata['rf_elevation'][j]])
+        areamat[i,j] = celldata['roi_name'][i] + '-' + celldata['roi_name'][j]
+        labelmat[i,j] = str(int(celldata['redcell'][i])) + '-' + str(int(celldata['redcell'][j]))
+
+        # distmat_xyz[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i],sessions[0].celldata['depth'][i]],
+        #         [sessions[0].celldata['xloc'][j],sessions[0].celldata['yloc'][j],sessions[0].celldata['depth'][j]])
+        # distmat_xy[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i]],
+        #         [sessions[0].celldata['xloc'][j],sessions[0].celldata['yloc'][j]])
+        # distmat_rf[i,j] = math.dist([sessions[0].celldata['rf_azimuth'][i],sessions[0].celldata['rf_elevation'][i]],
+        #         [sessions[0].celldata['rf_azimuth'][j],sessions[0].celldata['rf_elevation'][j]])
+        # areamat[i,j] = sessions[0].celldata['roi_name'][i] + '-' + sessions[0].celldata['roi_name'][j]
+        # labelmat[i,j] = str(int(sessions[0].celldata['redcell'][i])) + '-' + str(int(sessions[0].celldata['redcell'][j]))
 
 
 #Just a check that this works: should only show values in upper triangle of noise corr matrix:
@@ -129,8 +138,9 @@ df = pd.DataFrame({'NoiseCorrelation': noise_corr[idx_triu].flatten(),
 ############### Relationship anatomical distance and receptive field distance: ##################
 
 df_withinarea = df[(df['AreaPair'].isin(['V1-V1','PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
+df_withinarea = df[(df['AreaPair'].isin(['PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
 
-g = sns.displot(df_withinarea, x="DistLocPair", y="DistRfPair", binwidth=(2, 2), cbar=True,col="AreaPair")
+g = sns.displot(df_withinarea, x="DistXYZPair", y="DistRfPair", binwidth=(2, 2), cbar=True,col="AreaPair")
 plt.xlim([0,650])
 plt.ylim([0,250])
 g.set_axis_labels("Anatomical distance \n (approx um)", "RF distance (deg)")
@@ -177,10 +187,9 @@ for i,iarea in enumerate(areas):
         # axes[i,j].set_xlabel="Pairwise distance (um)"
         axes[i,j].set_xlabel="Delta RF (deg)"
         axes[i,j].set_xlim([-10,200])
-        axes[i,j].set_ylim([-0.005,0.025])
+        axes[i,j].set_ylim([0,0.05])
         axes[i,j].set_title(iarea + '-' + jarea)
 
 plt.savefig(os.path.join(savedir,'NoiseCorr_labeled_RF_distance' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
-
 
 
