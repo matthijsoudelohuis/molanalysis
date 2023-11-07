@@ -571,21 +571,20 @@ def proc_imaging(sesfolder, sessiondata):
         #!#!@#!$!#%#%#!$@!#%!^%@!$!#$ 
 
         if np.shape(F_chan2)[0] < np.shape(F)[0]:
-            F_chan2     = np.vstack((F_chan2, np.tile(F_chan2[[-1],:], 1))).sleknf()
-        #!#!@#!$!#%#%#!$@!#%!^%@!$!#$ 
+            print('ROIs were manually added in suite2p, fabricating red channel data...')
+            F_chan2     = np.vstack((F_chan2, np.tile(F_chan2[[-1],:], 1)))
 
-        # Compute dF/F:
-        dF     = calculate_dff(F, Fneu,prc=10) #see function below
+        # Correct neuropil and compute dF/F: (Rupprecht et al. 2021)
+        dF     = calculate_dff(F, Fneu,coeff_Fneu=0.7,prc=10) #see function below
 
         # Compute average fluorescence on green and red channels:
         celldata_plane['meanF']         = np.mean(F, axis=1)
         celldata_plane['meanF_chan2']   = np.mean(F_chan2, axis=1)
 
         # Calculate the noise level of the cells ##### Rupprecht et al. 2021 Nat Neurosci.
-        noise_level         = np.median(np.abs(np.diff(dF,axis=1)),axis=1)/np.sqrt(ops['fs'])
-        celldata_plane['noise_level'] = noise_level
+        celldata_plane['noise_level'] = np.median(np.abs(np.diff(dF,axis=1)),axis=1)/np.sqrt(ops['fs'])
 
-        #Count the number of events by taking stretches with z-scored activity above 2:
+        #Count the number of events by taking number of stretches with z-scored activity above 2:
         zF              = st.zscore(dF.copy(),axis=1)
         nEvents         = np.sum(np.diff(np.ndarray.astype(zF > 2,dtype='uint8'))==1,axis=1)
         event_rate      = nEvents / (ops['nframes'] / ops['fs'])
@@ -611,8 +610,7 @@ def proc_imaging(sesfolder, sessiondata):
             print("Problem with timestamps and imaging frames")
  
         #construct dataframe with activity by cells: give unique cell_id as label:
-        cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%s' % k for k in range(0,ncells_plane))
-        
+        cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%04.0f' % k for k in range(0,ncells_plane))
         #store cell_ids in celldata:
         celldata_plane['cell_id']         = cell_ids
 
@@ -639,8 +637,17 @@ def proc_imaging(sesfolder, sessiondata):
             deconvdata = deconvdata.merge(deconvdata_plane)
             Fchan2data = Fchan2data.merge(Fchan2data_plane)
     
+    #If ROI is unnamed, replace if ROI_1/V1 combi, ROI_2/PM combi, otherwise error:
+    if celldata['roi_name'].str.contains('ROI').any():
+        print('An imaging area was not named in scanimage')
+        if celldata['roi_name'].isin(['PM']).any():
+            celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_2','V1')
+        if celldata['roi_name'].isin(['V1']).any():
+            celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_1','PM')
+        assert not celldata['roi_name'].str.contains('ROI').any(),'unknown area'
+
     # Correct for suite2p artefact if never opened suite2p to set 0th cell to not iscell based on npix size:
-    celldata.iloc[np.where(celldata['npix_soma']==1)[0],celldata.columns.get_loc('iscell')] = 0
+    celldata.iloc[np.where(celldata['npix_soma']<5)[0],celldata.columns.get_loc('iscell')] = 0
 
     ## identify moments of large tdTomato fluorescence change across the session:
     tdTom_absROI    = np.abs(st.zscore(Fchan2data,axis=0)) #get zscored tdtom fluo for rois and take absolute
@@ -718,67 +725,11 @@ def list_tifs(dir):
     return r
 
 # Helper function for delta F/F0:
-def calculate_dff(F, Fneu, prc=20): #Rupprecht et al. 2021
+def calculate_dff(F, Fneu, coeff_Fneu=0.7, prc=10): #Rupprecht et al. 2021
     # correct trace for neuropil contamination:
-    Fc = F - 0.7 * Fneu + np.median(Fneu,axis=1,keepdims=True)
+    Fc = F - coeff_Fneu * Fneu + np.median(Fneu,axis=1,keepdims=True)
     # Establish baseline as percentile of corrected trace (50 is median)
     F0 = np.percentile(Fc,prc,axis=1,keepdims=True)
-    #Compute dF / F0: 
+    #Compute dF / F0:
     dFF = (Fc - F0) / F0
     return dFF
-
-def calc_dF(F: np.ndarray, baseline: str, win_baseline: float,
-               sig_baseline: float, fs: float, prctile_baseline: float = 8) -> np.ndarray:
-    """ preprocesses fluorescence traces for spike deconvolution
-
-    baseline-subtraction with window 'win_baseline'
-    
-    Parameters
-    ----------------
-
-    F : float, 2D array
-        size [neurons x time], in pipeline uses neuropil-subtracted fluorescence
-
-    baseline : str
-        setting that describes how to compute the baseline of each trace
-
-    win_baseline : float
-        window (in seconds) for max filter
-
-    sig_baseline : float
-        width of Gaussian filter in seconds
-
-    fs : float
-        sampling rate per plane
-
-    prctile_baseline : float
-        percentile of trace to use as baseline if using `constant_prctile` for baseline
-    
-    Returns
-    ----------------
-
-    F : float, 2D array
-        size [neurons x time], baseline-corrected fluorescence
-
-    """
-    win = int(win_baseline*fs)
-    if baseline == 'maximin':
-        Flow = gaussian_filter(F,    [0., sig_baseline])
-        Flow = minimum_filter1d(Flow,    win)
-        Flow = maximum_filter1d(Flow,    win)
-    elif baseline == 'constant':
-        Flow = gaussian_filter(F,    [0., sig_baseline])
-        Flow = np.amin(Flow)
-    elif baseline == 'constant_prctile':
-        Flow = np.percentile(F, prctile_baseline, axis=1)
-        Flow = np.expand_dims(Flow, axis = 1)
-    else:
-        Flow = 0.
-
-    F = F - Flow
-
-    return F
-
- # dF              = F - 0.7*Fneu
-        # dF              = calc_dF(dF, ops['baseline'], ops['win_baseline'], 
-        #                         ops['sig_baseline'], ops['fs'], ops['prctile_baseline'])

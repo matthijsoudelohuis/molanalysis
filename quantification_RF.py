@@ -138,7 +138,7 @@ df = pd.DataFrame({'NoiseCorrelation': noise_corr[idx_triu].flatten(),
 ############### Relationship anatomical distance and receptive field distance: ##################
 
 df_withinarea = df[(df['AreaPair'].isin(['V1-V1','PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
-df_withinarea = df[(df['AreaPair'].isin(['PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
+# df_withinarea = df[(df['AreaPair'].isin(['PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
 
 g = sns.displot(df_withinarea, x="DistXYZPair", y="DistRfPair", binwidth=(2, 2), cbar=True,col="AreaPair")
 plt.xlim([0,650])
