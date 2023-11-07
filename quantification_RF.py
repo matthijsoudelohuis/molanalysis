@@ -27,6 +27,8 @@ session_list        = np.array([['LPE09830','2023_04_10']])
 session_list        = np.array([['LPE10885','2023_10_20']])
 sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
+sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
+                                    load_calciumdata=False, load_videodata=False, calciumversion='dF')
 
 
 # ## Combine cell data from all loaded sessions to one dataframe:
@@ -52,7 +54,8 @@ vars            = ['rf_azimuth','rf_elevation']
 
 for i in range(2):
      for j in range(2):
-        sns.scatterplot(data = celldata[celldata['roi_name']==areas[j]],x='xloc',y='yloc',hue=vars[i],ax=axes[i,j],palette='gist_rainbow')
+        sns.scatterplot(data = celldata[celldata['roi_name']==areas[j]],x='xloc',y='yloc',
+                        hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
         
         box = axes[i,j].get_position()
         axes[i,j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
@@ -64,7 +67,17 @@ for i in range(2):
         axes[i,j].set_xlim([0,512])
         axes[i,j].set_ylim([0,512])
         axes[i,j].set_title(areas[j] + ' - ' + vars[i],fontsize=15)
+        axes[i,j].set_facecolor("black")
 
+plt.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+###################### Retinotopic mapping within V1 and PM #####################
+
+fig        = plt.subplots(figsize=(12,12))
+
+fracs = celldata.groupby('roi_name').count()['rf_azimuth'] / celldata.groupby('roi_name').count()['iscell']
+
+sns.barplot(data = fracs),x = areas,y=fracs)
 plt.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ###################### RF size difference between V1 and PM #####################

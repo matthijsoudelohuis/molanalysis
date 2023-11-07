@@ -32,12 +32,12 @@ model_red = models.CellposeModel(pretrained_model = 'T:\\Python\\cellpose\\testd
 
 model_green = models.Cellpose(model_type='cyto')
 
-def normalize8(I):
+def normalize8(I,min=0,max=100):
     # mn = I.min()
     # mx = I.max()
 
-    mn = np.percentile(I,2)
-    mx = np.percentile(I,99.5)
+    mn = np.percentile(I,min)
+    mx = np.percentile(I,max)
 
     mx -= mn
 
@@ -52,7 +52,6 @@ def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
     ops         = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
     iscell      = np.load(os.path.join(plane_folder,'iscell.npy'), allow_pickle=True)
     # redcell     = np.load(os.path.join(plane_folder,'redcell.npy'), allow_pickle=True)
-
 
     Nsuite2pcells      = np.shape(stats)[0]
 

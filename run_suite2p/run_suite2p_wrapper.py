@@ -29,7 +29,7 @@ from labeling.tdTom_labeling_cellpose import proc_labeling_session
 
 rawdatadir          = 'H:\\RawData\\'
 animal_id           = 'LPE10885'
-sessiondate         = '2023_10_19'
+sessiondate         = '2023_10_23'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
