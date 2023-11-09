@@ -28,7 +28,7 @@ from preprocessing.locate_rf import locate_rf_session
 
 rawdatadir          = 'M:\\RawData\\'
 animal_id           = 'LPE10883'
-sessiondate         = '2023_10_31'
+sessiondate         = '2023_10_27'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
