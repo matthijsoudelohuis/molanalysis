@@ -14,7 +14,7 @@ from PIL import Image
 
 # os.chdir('T:\\Python\\molanalysis\\')
 
-rawdatadir      = "O:\\Rawdata\\"
+rawdatadir      = "X:\\Rawdata\\"
 procdatadir     = "T:\\Python\\cellpose\\"
 
 
@@ -63,18 +63,25 @@ for animal_id in animal_ids: #for each animal
                 img = Image.fromarray(img_numpy, "RGB")
 
                 # Save the Numpy array as Image
-                image_filename = "_".join([animal_id, sessiondate,str(iplane),'green.jpeg'])
-                img.save(os.path.join(procdatadir,'greenlib',image_filename))
+                image_filename = "_".join([animal_id, sessiondate,str(iplane),'green.tiff'])
+                img.save(os.path.join(procdatadir,'greenlib_tiff',image_filename))
 
                 img_numpy = np.zeros((512, 512, 3), dtype=np.uint8)
                 # img_numpy[:,:,0] = ops['meanImg_chan2']
-                img_numpy[:,:,0] = normalize8(ops['meanImg_chan2'])
+                
+                mimg2 = ops['meanImg_chan2']
+                mimg2 = np.log(mimg2 - np.min(mimg2))
+
+                img_numpy[:,:,0] = normalize8(mimg2)
 
                 img = Image.fromarray(img_numpy, "RGB")
 
                 # Save the Numpy array as Image
-                image_filename = "_".join([animal_id, sessiondate,str(iplane),'red.jpeg'])
-                img.save(os.path.join(procdatadir,'redlib',image_filename))
+                # image_filename = "_".join([animal_id, sessiondate,str(iplane),'red.jpeg'])
+                # img.save(os.path.join(procdatadir,'redlib_tiff',image_filename))
+
+                image_filename = "_".join([animal_id, sessiondate,str(iplane),'red.tiff'])
+                img.save(os.path.join(procdatadir,'redlib_tiff',image_filename))
 
                 # #Save sessiondata:
                 # sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')

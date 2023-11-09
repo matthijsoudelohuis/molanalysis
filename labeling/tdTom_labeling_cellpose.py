@@ -67,6 +67,14 @@ def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
 
     mimg2 = ops['meanImg_chan2']
 
+    ops['meanImg'] = ops['meanImg_chan2'].copy()
+    ops = extract.enhanced_mean_image(ops)
+    mimg2 = ops['meanImgE']
+
+    # mimg2 = np.log(mimg2 - np.min(mimg2))
+
+    # plt.figure()
+    # plt.imshow(mimg2)
     # img_green = np.zeros((512, 512, 3), dtype=np.uint8)
     # img_green[:,:,1] = normalize8(mimg)
 

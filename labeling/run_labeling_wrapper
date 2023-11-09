@@ -1,0 +1,33 @@
+# -*- coding: utf-8 -*-
+"""
+This script runs the labeling pipeline of tdTomato expressing cells:
+Matthijs Oude Lohuis, 2023, Champalimaud Center
+"""
+
+import os
+try:
+    os.chdir('t:\\Python\\molanalysis\\')
+except:
+    os.chdir('e:\\Python\\molanalysis\\')
+from labeling.tdTom_labeling_cellpose import proc_labeling_session
+
+
+rawdatadir          = 'M:\\RawData\\'
+animal_ids          = ['LPE10883'] #If empty than all animals in folder will be processed
+date_filter         = []
+
+## Loop over all selected animals and folders
+if len(animal_ids) == 0:
+    animal_ids = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
+
+for animal_id in animal_ids: #for each animal
+
+    sessiondates = os.listdir(os.path.join(rawdatadir,animal_id)) 
+    
+    if any(date_filter): #If dates specified, then process only those:
+        sessiondates = [x for x in sessiondates if x in date_filter]
+
+    for sessiondate in sessiondates: #for each of the sessions for this animal
+        
+        #########################  tdTomato labeling   ######################
+        proc_labeling_session(rawdatadir,animal_id,sessiondate)
