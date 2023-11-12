@@ -61,6 +61,10 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
         sessiondata         = pd.merge(sessiondata,sessions_overview.loc[idx],'inner') #Copy all the data from the excel to sessiondata dataframe
         age_in_days         = (datetime.strptime(sessiondata['sessiondate'][0], "%Y_%m_%d") - datetime.strptime(sessiondata['DOB'][0], "%Y_%m_%d")).days
         sessiondata         = sessiondata.assign(age_in_days = [age_in_days]) #Store the age in days at time of the experiment
+    
+        expr_in_days         = (datetime.strptime(sessiondata['sessiondate'][0], "%Y_%m_%d") - datetime.strptime(sessiondata['DOV'][0], "%Y_%m_%d")).days
+        sessiondata         = sessiondata.assign(expression_in_days = [expr_in_days]) #Store the age in days at time of the experiment
+
     else: 
         print('Session not found in excel session overview')
 
@@ -156,6 +160,50 @@ def proc_GR(rawdatadir,sessiondata):
     ori_counts = trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
     assert(all(ori_counts > 50) and all(ori_counts < 400)) #between 50 and 400 repetitions
 
+    assert(np.allclose(trialdata['tOffset'] - trialdata['tOnset'],0.75,atol=0.1)) #stimulus duration all around 0.75s
+    assert(np.allclose(np.diff(trialdata['tOnset']),2,atol=0.1)) #total trial duration all around 2s
+
+    trialdata['session_id']     = sessiondata['session_id'][0]
+
+    return trialdata
+
+
+def proc_GN(rawdatadir,sessiondata):
+    sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
+    sesfolder       = Path(sesfolder)
+    
+    filenames       = os.listdir(sesfolder)
+    
+    trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
+    trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=0)
+    
+    trialdata['Speed'] = trialdata['TF'] / trialdata['SF']
+
+    #Checks:
+    CenterOris  = np.array([30,90,150]); #orientations degrees
+    CenterTF    = np.array([1.5,3, 6]); #Hz
+    CenterSF    = np.array([0.12,0.06,0.03]); #cpd
+    CenterSpeed = CenterTF / CenterSF #speed is TF / SF
+
+    trialdata['centerOrientation'] = '' #add column with the center orientation for this stimulus (wiht noise around this)
+    trialdata['centerTF'] = ''
+    trialdata['centerSF'] = ''
+    for k in range(len(trialdata)): #for every trial get what center the ori, TF and SF where closest to:
+        trialdata.iloc[k,trialdata.columns.get_loc("centerOrientation")] = CenterOris[np.abs((CenterOris - trialdata.Orientation[k])).argmin()]
+        trialdata.iloc[k,trialdata.columns.get_loc("centerTF")] = CenterTF[np.abs((CenterTF - trialdata.TF[k])).argmin()]
+        trialdata.iloc[k,trialdata.columns.get_loc("centerSF")] = CenterSF[np.abs((CenterSF - trialdata.SF[k])).argmin()]
+    trialdata['centerSpeed'] = trialdata['centerTF'] / trialdata['centerSF']
+
+    # define the noise relative to the center:  
+    trialdata['deltaOrientation']   = trialdata['Orientation'] - trialdata['centerOrientation'] 
+    trialdata['deltaTF']            = trialdata['TF'] - trialdata['centerTF']
+    trialdata['deltaSF']            = trialdata['SF'] - trialdata['centerSF']
+    trialdata['deltaSpeed']         = trialdata['Speed'] - trialdata['centerSpeed']
+    
+    #Checks:
+    assert(all(np.isin(trialdata['centerSpeed'],CenterSpeed))),'grating speed not in originally programmed stimulus speeds'
+    ori_counts = trialdata.groupby(['centerOrientation','centerSpeed'])['centerOrientation'].count().to_numpy()
+    assert(all(ori_counts > 100) and all(ori_counts < 400)) #between 100 and 400 repetitions for each stimulus
     assert(np.allclose(trialdata['tOffset'] - trialdata['tOnset'],0.75,atol=0.1)) #stimulus duration all around 0.75s
     assert(np.allclose(np.diff(trialdata['tOnset']),2,atol=0.1)) #total trial duration all around 2s
 
@@ -555,6 +603,9 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['depth']         = plane_zs[iplane] - sessiondata['ROI%d_dura' % (plane_roi_idx[iplane]+1)][0]
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
+
+        temprecombinase =  roi_area[plane_roi_idx[iplane]] + '_recombinase'
+        celldata_plane['recombinase'] = sessiondata[temprecombinase].to_list()[0]
 
         if os.path.exists(os.path.join(plane_folder, 'RF.npy')):
             RF = np.load(os.path.join(plane_folder, 'RF.npy'))

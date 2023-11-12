@@ -6,6 +6,7 @@ Locate receptive field following squared checkerboard noise for individual neuro
 """
 
 import os
+import math
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -225,8 +226,8 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
             RF_y            = np.empty(N)
             RF_size         = np.empty(N)
 
-            clusters_on      = np.empty([xGrid,yGrid,N])
-            clusters_off     = np.empty([xGrid,yGrid,N])
+            # clusters_on      = np.empty([xGrid,yGrid,N])
+            # clusters_off     = np.empty([xGrid,yGrid,N])
 
             rfmaps_on_p_filt  = rfmaps_on_p.copy() #this is only for visualization purposes
             rfmaps_off_p_filt = rfmaps_off_p.copy()
@@ -236,6 +237,14 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
                 clusters_on     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
                 clusters_off    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
                 
+                #temporary calc of center of mass for each separately:
+                #if far apart then ignore this RF fit:
+                RF_x_on,RF_y_on     = com_clusters(clusters_on)[:2]
+                RF_x_off,RF_y_off   = com_clusters(clusters_off)[:2]
+                deltaRF = math.sqrt(sum((px - qx) ** 2.0 for px, qx in zip((RF_x_on,RF_y_on), (RF_x_off,RF_y_off))))
+                if deltaRF > 10:
+                    clusters_on = clusters_off = np.tile(False,(xGrid,yGrid))
+
                 rfmaps_on_p_filt[~clusters_on,n]    = 1 #set to 1 for all noncluster p values
                 rfmaps_off_p_filt[~clusters_off,n]  = 1
                 
@@ -249,39 +258,40 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
             np.save(os.path.join(plane_folder,'RF.npy'),np.vstack((RF_azim,RF_elev,RF_size)))
 
             if showFig: 
-                example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
+                example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:100] #get first twenty good cells
 
                 Tot         = len(example_cells)
-                Rows        = int(np.floor(np.sqrt(Tot)))
-                Cols        = Tot // Rows # Compute Rows required
-                if Tot % Rows != 0: #If one additional row is necessary -> add one:
-                    Cols += 1
-                Position = range(1,Tot + 1) # Create a Position index
+                if Tot: 
+                    Rows        = int(np.floor(np.sqrt(Tot)))
+                    Cols        = Tot // Rows # Compute Rows required
+                    if Tot % Rows != 0: #If one additional row is necessary -> add one:
+                        Cols += 1
+                    Position = range(1,Tot + 1) # Create a Position index
 
-                fig = plt.figure(figsize=[18, 9])
-                for i,n in enumerate(example_cells):
-                    # add every single subplot to the figure with a for loop
-                    ax = fig.add_subplot(Rows,Cols,Position[i])
+                    fig = plt.figure(figsize=[18, 9])
+                    for i,n in enumerate(example_cells):
+                        # add every single subplot to the figure with a for loop
+                        ax = fig.add_subplot(Rows,Cols,Position[i])
 
-                    data = np.ones((nblockselevation,nblocksazimuth,3))
+                        data = np.ones((nblockselevation,nblocksazimuth,3))
 
-                    R = np.divide(-np.log10(rfmaps_on_p_filt[:,:,n]),-np.log10(0.000001)) #red intensity
-                    B = np.divide(-np.log10(rfmaps_off_p_filt[:,:,n]),-np.log10(0.000001)) #blue intenstiy
-                    data[:,:,0] = 1 - B #red intensity is one minus blue
-                    data[:,:,1] = 1 - B - R #green channel is one minus blue and red
-                    data[:,:,2] = 1 - R #blue channel is one minus red
+                        R = np.divide(-np.log10(rfmaps_on_p_filt[:,:,n]),-np.log10(0.000001)) #red intensity
+                        B = np.divide(-np.log10(rfmaps_off_p_filt[:,:,n]),-np.log10(0.000001)) #blue intenstiy
+                        data[:,:,0] = 1 - B #red intensity is one minus blue
+                        data[:,:,1] = 1 - B - R #green channel is one minus blue and red
+                        data[:,:,2] = 1 - R #blue channel is one minus red
 
-                    data[data<0] = 0 #lower trim to zero
+                        data[data<0] = 0 #lower trim to zero
 
-                    ax.imshow(data)
-                    ax.scatter(RF_x[n],RF_y[n],marker='+',c='k',s=35) #show RF center location
-                    ax.set_xticks([])
-                    ax.set_yticks([])
-                    ax.set_aspect('auto')
-                    ax.set_title("%d" % n)
-                
-                plt.tight_layout(rect=[0, 0, 1, 1])
-                fig.savefig(os.path.join(plane_folder,'RF_Plane%d.jpg' % iplane),dpi=600)
+                        ax.imshow(data)
+                        ax.scatter(RF_x[n],RF_y[n],marker='+',c='k',s=35) #show RF center location
+                        ax.set_xticks([])
+                        ax.set_yticks([])
+                        ax.set_aspect('auto')
+                        ax.set_title("%d" % n)
+                    
+                    plt.tight_layout(rect=[0, 0, 1, 1])
+                    fig.savefig(os.path.join(plane_folder,'RF_Plane%d.jpg' % iplane),dpi=600)
     return 
 
 

@@ -16,26 +16,26 @@ os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "H:\\Rawdata\\"
+rawdatadir      = "M:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
-rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
-procdatadir     = "E:\\Procdata\\"
+# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+# procdatadir     = "E:\\Procdata\\"
 
 animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
 # animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 
-animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-date_filter        = ['2023_04_10']
+animal_ids          = ['LPE10883'] #If empty than all animals in folder will be processed
+date_filter        = ['2023_10_27']
 
 # animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
 # date_filter        = ['2023_10_19']
 
-protocols           = ['IM','RF','SP']
+# protocols           = ['GN','RF','SP']
 # protocols           = ['SP']
-# protocols           = ['GR']
+protocols           = ['GN']
 # protocols           = ['VR']
 
 ## Loop over all selected animals and folders
@@ -75,6 +75,10 @@ for animal_id in animal_ids: #for each animal
         
                 if protocol == 'GR':
                      trialdata = proc_GR(rawdatadir,sessiondata)
+                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
+        
+                if protocol == 'GN':
+                     trialdata = proc_GN(rawdatadir,sessiondata)
                      trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
         
                 # elif protocol == 'RF':

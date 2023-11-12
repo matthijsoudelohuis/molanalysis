@@ -81,7 +81,7 @@ def init_ops(sesfolder):
         'look_one_level_down': True, # whether to look in ALL subfolders when searching for tiffs
     }
     #Find all protocols
-    db['subfolders'] = [os.path.join(sesfolder,f,'Imaging') for f in os.listdir(db['data_path'][0]) if f in protocols]
+    db['subfolders'] = [os.path.join(sesfolder,f,'Imaging') for f in protocols if f in os.listdir(db['data_path'][0])]
     
     #identify number of planes in the session:
     firsttiff = [x for x in os.listdir(db['subfolders'][0]) if x.endswith(".tif")][0] #get first tif in first dir to read nplanes:
