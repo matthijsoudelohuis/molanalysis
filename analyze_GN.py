@@ -17,30 +17,22 @@ import seaborn as sns
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from sklearn.decomposition import PCA
-from scipy.stats import zscore, pearsonr,spearmanr
+from scipy.stats import zscore, pearsonr
+from sklearn import linear_model
+from sklearn.preprocessing import minmax_scale
+
 # from rastermap import Rastermap, utils
 
 # %matplotlib inline
 
-sessions            = filter_sessions(protocols = ['IM'])
+sessions            = filter_sessions(protocols = ['GN'])
 
 
-##################################################
-session_list        = np.array([['LPE09830','2023_04_10']])
-session_list        = np.array([['NSH07422','2023_03_13']])
-sessions            = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=False, calciumversion='dF')
+#################################################
+session_list        = np.array([['LPE10883','2023_10_27']])
+sessions            = load_sessions(protocol = 'GN',session_list=session_list,load_behaviordata=True, 
+                                    load_calciumdata=True, load_videodata=False, calciumversion='deconv')
 
-# session_list        = np.array([['LPE09665','2023_03_15']])
-# sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
-#                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
-
-# #Get n neurons from V1 and from PM:
-# n                   = 100
-# V1_selec            = np.random.choice(np.where(sessions[0].celldata['roi_name']=='V1')[0],n)
-# PM_selec            = np.random.choice(np.where(sessions[0].celldata['roi_name']=='PM')[0],n)
-# sessions[0].calciumdata     = sessions[0].calciumdata.iloc[:,np.concatenate((V1_selec,PM_selec))]
-# sessions[0].celldata        = sessions[0].celldata.iloc[np.concatenate((V1_selec,PM_selec)),:]
 
 # zscore all the calcium traces:
 # calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
@@ -72,7 +64,7 @@ def show_excerpt_traces_gratings(Session,example_cells=None,trialsel=None):
     for i in range(ncells):
         excerpt[:,i] =  excerpt[:,i] + i
 
-    oris        = np.unique(Session.trialdata['Orientation'])
+    oris        = np.unique(Session.trialdata['centerOrientation'])
     rgba_color  = plt.get_cmap('hsv',lut=16)(np.linspace(0, 1, len(oris)))  
     
     fig, ax = plt.subplots(figsize=[12, 6])
@@ -81,7 +73,7 @@ def show_excerpt_traces_gratings(Session,example_cells=None,trialsel=None):
 
     for i in np.arange(trialsel[0],trialsel[1]):
         ax.add_patch(plt.Rectangle([Session.trialdata['tOnset'][i],0],1,ncells,alpha=0.3,linewidth=0,
-                                facecolor=rgba_color[np.where(oris==Session.trialdata['Orientation'][i])]))
+                                facecolor=rgba_color[np.where(oris==Session.trialdata['centerOrientation'][i])]))
 
     handles= []
     for i,ori in enumerate(oris):
@@ -122,7 +114,7 @@ respmat         = tensor[:,:,np.logical_and(t_axis > 0,t_axis < 1)].mean(axis=2)
 
 #Alternative method, much faster:
 respmat         = compute_respmat(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'],
-                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
+                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
 [N,K]           = np.shape(respmat) #get dimensions of response matrix
 
 #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
@@ -131,12 +123,21 @@ respmat_runspeed = compute_respmat(temp, sessions[0].behaviordata['ts'], session
                                    t_resp_start=0,t_resp_stop=1,method='mean')
 respmat_runspeed = np.squeeze(respmat_runspeed)
 
+# #### 
+# np.mean(sessions[0].calciumdata,axis=0)
+# sns.histplot(np.mean(sessions[0].calciumdata,axis=0))
+
+# np.where(np.isnan(sessions[0].calciumdata))[0]
+
+# respmat_zsc[respmat_zsc>10] = 0
+# respmat_zsc[respmat_zsc<10] = 0
+
 #############################################################################
 resp_meanori    = np.empty([N,16])
-oris            = np.sort(pd.Series.unique(sessions[0].trialdata['Orientation']))
+oris            = np.sort(pd.Series.unique(sessions[0].trialdata['centerOrientation']))
 
 for i,ori in enumerate(oris):
-    resp_meanori[:,i] = np.nanmean(respmat[:,sessions[0].trialdata['Orientation']==ori],axis=1)
+    resp_meanori[:,i] = np.nanmean(respmat_zsc[:,sessions[0].trialdata['centerOrientation']==ori],axis=1)
 
 prefori  = np.argmax(resp_meanori,axis=1)
 
@@ -170,29 +171,141 @@ pca         = PCA(n_components=15) #construct PCA object with specified number o
 Xp          = pca.fit_transform(respmat_zsc.T).T #fit pca to response matrix (n_samples by n_features)
 #dimensionality is now reduced from N by K to ncomp by K
 
-ori         = sessions[0].trialdata['Orientation']
-oris        = np.sort(pd.Series.unique(sessions[0].trialdata['Orientation']))
+oris            = sessions[0].trialdata['centerOrientation']
+unique_oris     = np.sort(pd.Series.unique(sessions[0].trialdata['centerOrientation']))
+speeds          = sessions[0].trialdata['centerSpeed']
+unique_speeds   = np.sort(pd.Series.unique(sessions[0].trialdata['centerSpeed']))
 
-ori_ind      = [np.argwhere(np.array(ori) == iori)[:, 0] for iori in oris]
+ori_ind         = [np.argwhere(np.array(oris) == iori)[:, 0] for iori in unique_oris]
+speed_ind       = [np.argwhere(np.array(speeds) == ispeed)[:, 0] for ispeed in unique_speeds]
 
 shade_alpha      = 0.2
 lines_alpha      = 0.8
-pal = sns.color_palette('husl', len(oris))
-pal = np.tile(sns.color_palette('husl', int(len(oris)/2)),(2,1))
+pal             = sns.color_palette('husl', len(unique_oris)*len(unique_speeds))
+# pal = np.tile(sns.color_palette('husl', int(len(oris)/2)),(2,1))
 
 projections = [(0, 1), (1, 2), (0, 2)]
 fig, axes = plt.subplots(1, 3, figsize=[9, 3], sharey='row', sharex='row')
 for ax, proj in zip(axes, projections):
-    for t, t_type in enumerate(oris):                       #plot orientation separately with diff colors
-        x = Xp[proj[0],ori_ind[t]]                          #get all data points for this ori along first PC or projection pairs
-        y = Xp[proj[1],ori_ind[t]]                          #and the second
-        # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
-        ax.scatter(x, y, color=pal[t], s=respmat_runspeed[ori_ind[t]], alpha=0.8)     #each trial is one dot
-        ax.set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
-        ax.set_ylabel('PC {}'.format(proj[1]+1))
-        
+    for iO, ori in enumerate(unique_oris):                                #plot orientation separately with diff colors
+        for iS, speed in enumerate(unique_speeds):                       #plot speed separately with diff colors
+            idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
+            x = Xp[proj[0],idx]                          #get all data points for this ori along first PC or projection pairs
+            y = Xp[proj[1],idx]                          #get all data points for this ori along first PC or projection pairs
+
+            # x = Xp[proj[0],ori_ind[io]]                          #get all data points for this ori along first PC or projection pairs
+            # y = Xp[proj[1],ori_ind[io]]                          #and the second
+            # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
+            ax.scatter(x, y, color=pal[(iS-1)*len(unique_oris)+iO], s=respmat_runspeed[idx], alpha=0.8)     #each trial is one dot
+            ax.set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
+            ax.set_ylabel('PC {}'.format(proj[1]+1))
+
 sns.despine(fig=fig, top=True, right=True)
-ax.legend(oris,title='Ori')
+# ax.legend(['%d deg - %d deg/s' % (ori,speed) for ori in unique_oris for speed in unique_speeds],title='Conditions')
+
+################### PCA unsupervised dispaly of noise around center for each condition #################
+
+cmap1 = plt.colormaps['cool']
+cmap2 = plt.colormaps['hot']
+
+# cmap1 = plt.colormaps['PuOr']
+# cmap2 = plt.colormaps['PiYG']
+
+fig, axes = plt.subplots(3, 3, figsize=[9, 9])
+proj = (0, 1)
+
+for iO, ori in enumerate(unique_oris):                                #plot orientation separately with diff colors
+    for iS, speed in enumerate(unique_speeds):     
+        # ax = axes[iO,iS]
+        idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
+        x = Xp[proj[0],idx]                          #get all data points for this ori along first PC or projection pairs
+        y = Xp[proj[1],idx]                          #get all data points for this ori along first PC or projection pairs
+        
+        y_ori   = sessions[0].trialdata['deltaOrientation'][idx]
+        y_speed = sessions[0].trialdata['deltaSpeed'][idx]
+        y_runspeed = respmat_runspeed[idx]
+        
+        # c = np.mean((cmap1(minmax_scale(x, feature_range=(0, 1))),cmap2(minmax_scale(y, feature_range=(0, 1)))),axis=0)[:,:3]
+        c = np.mean((cmap1(minmax_scale(y_ori, feature_range=(0, 1))),cmap2(minmax_scale(y_speed, feature_range=(0, 1)))),axis=0)[:,:3]
+        # c = cmap1(minmax_scale(y_runspeed, feature_range=(0, 1)))[:,:3]
+        # c = cmap1(minmax_scale(y_ori, feature_range=(0, 1)))[:,:3]
+        c = cmap1(minmax_scale(y_speed, feature_range=(0, 1)))[:,:3]
+
+        # tip_rate = tips.eval("tip / total_bill").rename("tip_rate")
+        sns.scatterplot(x=x, y=y, color=c,ax = axes[iO,iS],legend = False)
+
+        # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
+        # ax.scatter(x, y, color=pal[(iS-1)*len(unique_oris)+iO], s=respmat_runspeed[idx], alpha=0.8)     #each trial is one dot
+        # ax.scatter(x, y, c=sessions[0].trialdata['deltaSpeed'], s=12, alpha=0.8,cmap='viridis')     #each trial is one dot
+        axes[iO,iS].set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
+        axes[iO,iS].set_ylabel('PC {}'.format(proj[1]+1))
+
+
+#### linear model explaining responses: 
+from numpy import linalg
+
+def LM(Y, X, lam=0):
+    """ (multiple) linear regression with regularization """
+    # ridge regression
+    I = np.diag(np.ones(X.shape[1]))
+    B_hat = linalg.pinv(X.T @ X + lam *I) @ X.T @ Y # ridge regression
+    Y_hat = X @ B_hat
+    return B_hat
+
+def Rss(Y, Y_hat, normed=True):
+    """ evaluate (normalized) model error """
+    e = Y_hat - Y
+    Rss = np.trace(e.T @ e)
+    if normed:
+        Rss /= Y.shape[0]
+    return Rss
+
+
+for iO, ori in enumerate(unique_oris):                                #plot orientation separately with diff colors
+    for iS, speed in enumerate(unique_speeds):     
+        # ax = axes[iO,iS]
+        idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
+
+        X_ori   = sessions[0].trialdata['deltaOrientation'][idx]
+        X_speed = sessions[0].trialdata['deltaSpeed'][idx]
+        X_runspeed = respmat_runspeed[idx]
+        
+        X = np.vstack((X_ori,X_speed,X_runspeed)).T
+        Y = respmat_zsc[:,idx].T
+        B_hat = LM(Y,X)
+        Y_hat = X @ B_hat
+        err = Rss(Y, Y_hat, normed=True)
+
+
+################### Show noise around center for each condition #################
+
+fig, axes = plt.subplots(3, 3, figsize=[9, 9])
+proj    = (0, 1)
+
+for iO, ori in enumerate(unique_oris):                                #plot orientation separately with diff colors
+    for iS, speed in enumerate(unique_speeds):     
+        
+        idx     = np.intersect1d(ori_ind[iO],speed_ind[iS])
+
+        X       = respmat[:,idx]
+        y_ori   = sessions[0].trialdata['deltaOrientation'][idx]
+        y_speed = sessions[0].trialdata['deltaSpeed'][idx]
+
+        regr = linear_model.LinearRegression()  
+        regr.fit(X.T, y_ori)
+        proj_ori    = X.T @ regr.coef_
+        regr.fit(X.T, y_speed)
+        proj_speed  = X.T @ regr.coef_
+
+        c = np.mean((cmap1(minmax_scale(proj_ori, feature_range=(0, 1))),cmap2(minmax_scale(proj_speed, feature_range=(0, 1)))),axis=0)[:,:3]
+
+        sns.scatterplot(x=proj_ori, y=proj_speed,color=c,ax = axes[iO,iS],legend = False)
+        axes[iO,iS].set_xlabel('delta Ori')            #give labels to axes
+        axes[iO,iS].set_ylabel('delta Speed')            #give labels to axes
+        axes[iO,iS].set_title('%d deg - %d deg/s' % (ori,speed))       
+
+sns.despine()
+plt.tight_layout()
 
 ################## PCA on full session neural data and correlate with running speed
 
@@ -228,95 +341,6 @@ plt.ylim([0,plotncomps+1])
 
 ########################################
 
-def show_excerpt_rastermap(Session,neuronsel=None,trialsel=None):
-    
-    if trialsel is None:
-        trialsel = [np.random.randint(low=0,high=len(Session.trialdata)-400)]
-        trialsel.append(trialsel[0]+40)
-
-    example_tstart  = Session.trialdata['tOnset'][trialsel[0]-1]
-    example_tstop   = Session.trialdata['tOnset'][trialsel[1]-1]
-
-    excerpt         = np.array(Session.calciumdata.loc[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)])
-
-    if neuronsel is None:
-        example_cells = np.random.choice(Session.calciumdata.shape[1],10)
-
-    datamat         = zscore(excerpt.T, axis=1)
-
-    # fit rastermap
-    model           = Rastermap(n_PCs=100, n_clusters=50, 
-                    locality=0.75, time_lag_window=5).fit(datamat)
-    y = model.embedding # neurons x 1
-    isort = model.isort
-
-    # bin over neurons
-    X_embedding = zscore(utils.bin1d(datamat, bin_size=10, axis=0), axis=1)
-
-    # plot
-    fig = plt.figure(figsize=(12,5))
-    ax = fig.add_subplot(111)
-    ax.imshow(X_embedding, vmin=0, vmax=1.5, cmap="gray_r", aspect="auto")
-
-    if Session.protocol == 'GR':
-        stims        = np.unique(Session.trialdata['Orientation'])
-        rgba_color  = plt.get_cmap('hsv',lut=16)(np.linspace(0, 1, len(stims)))  
-        
-        for i in np.arange(trialsel[0],trialsel[1]):
-            idx = np.where(Session.ts_F>Session.trialdata['tOnset'][i])[0][0] - np.where(Session.ts_F>example_tstart)[0][0]
-            ax.add_patch(plt.Rectangle([idx,0],3,np.shape(X_embedding)[0],alpha=0.3,linewidth=0,
-                                    facecolor=rgba_color[np.where(stims==Session.trialdata['Orientation'][i])]))
-
-        handles= []
-        for i,stim in enumerate(stims):
-            handles.append(ax.add_patch(plt.Rectangle([0,0],1,np.shape(X_embedding)[0],alpha=0.3,linewidth=0,facecolor=rgba_color[i])))
-
-        pos = ax.get_position()
-        ax.set_position([pos.x0, pos.y0, pos.width * 0.9, pos.height])
-        ax.legend(handles,stims,loc='center right', bbox_to_anchor=(1.25, 0.5))
-
-    elif Session.protocol == 'IM':
-        stims       = np.unique(Session.trialdata['ImageNumber'])
-        rgba_color  = plt.get_cmap('hsv',lut=16)(np.linspace(0, 1, len(stims)))  
-        
-        for i in np.arange(trialsel[0],trialsel[1]):
-            idx = np.where(Session.ts_F>Session.trialdata['tOnset'][i])[0][0] - np.where(Session.ts_F>example_tstart)[0][0]
-            ax.add_patch(plt.Rectangle([idx,0],3,np.shape(X_embedding)[0],alpha=0.3,linewidth=0,
-                                    facecolor=rgba_color[np.where(stims==Session.trialdata['ImageNumber'][i])]))
-
-        # handles= []
-        # for i,im in enumerate(stims):
-            # handles.append(ax.add_patch(plt.Rectangle([0,0],1,np.shape(X_embedding)[0],alpha=0.3,linewidth=0,facecolor=rgba_color[i])))
-
-
-    ax.add_artist(AnchoredSizeBar(ax.transData, 10, "10 Sec",loc=4,frameon=False))
-    ax.axis('off')
-
-trialsel = [100,150]
-trialsel = [1,5600]
-
-show_excerpt_rastermap(sessions[0],trialsel=trialsel)
-
-#### 
-
-# spks is neurons by time
-spks = np.load("W:\\Users\\Matthijs\\temp\\spks.npy").astype("float32")
-spks = zscore(spks, axis=1)
-
-# fit rastermap
-model = Rastermap(n_PCs=200, n_clusters=100, 
-                  locality=0.75, time_lag_window=5).fit(spks)
-y = model.embedding # neurons x 1
-isort = model.isort
-
-# bin over neurons
-X_embedding = zscore(utils.bin1d(spks, bin_size=25, axis=0), axis=1)
-
-# plot
-fig = plt.figure(figsize=(12,5))
-ax = fig.add_subplot(111)
-ax.imshow(X_embedding, vmin=0, vmax=1.5, cmap="gray_r", aspect="auto")
-ax.axis('off')
 
 ##############################
 # PCA on trial-concatenated matrix:
@@ -337,54 +361,4 @@ plt.figure()
 sns.lineplot(data=pca.explained_variance_ratio_)
 plt.xlim([-1,100])
 plt.ylim([0,0.15])
-
-##############################
-## Make dataframe of tensor with all trial, time information etc.
-
-mat_zsc     = tensor.transpose((0,2,1)).reshape(K*T,N,order='F') 
-mat_zsc     = zscore(mat_zsc,axis=4)
-
-tracedata = pd.DataFrame(data=mat_zsc, columns=calciumdata.columns)
-
-tracedata['time']   = np.tile(t_axis,K)
-tracedata['ori']    = np.repeat(trialdata['Orientation'].to_numpy(),T)
-
-sns.lineplot(
-    data=tracedata, x="time", y=tracedata.columns[2], hue="ori", 
-)
-
-h = 2
-
-
-# PCA on trial-averaged data: 
-
-
-# snakeselec = np.array(snakeplots[:,(bincenters>-60) & (bincenters<30),:])
-# nBins = np.shape(snakeselec)[1]
-# Xa = np.reshape(snakeselec, [N,nBins*4])
-
-# n_components = 15
-# pca = PCA(n_components=n_components)
-# Xa_p = pca.fit_transform(Xa).T
-
-# trial_size = nBins
-# space = bincenters[(bincenters>-60) & (bincenters<30)]
-
-# fig, axes = plt.subplots(1, 3, figsize=[10, 2.8], sharey='row')
-# for comp in range(3):
-#     ax = axes[comp]
-#     for kk, type in enumerate(trial_types):
-#         x = Xa_p[comp, kk * trial_size :(kk+1) * trial_size]
-#         # x = gaussian_filter1d(x, sigma=3)
-#         ax.plot(space, x, c=pal[kk])
-#     # add_stim_to_plot(ax)
-#     ax.set_ylabel('PC {}'.format(comp+1))
-# # add_orientation_legend(axes[2])
-# axes[1].set_xlabel('Time (s)')
-# sns.despine(fig=fig, right=True, top=True)
-# plt.tight_layout(rect=[0, 0, 0.9, 1])
-
-# plt.imshow(Xa)
-
-
 
