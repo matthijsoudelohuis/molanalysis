@@ -28,7 +28,7 @@ from preprocessing.locate_rf import locate_rf_session
 
 rawdatadir          = 'M:\\RawData\\'
 animal_id           = 'LPE10883'
-sessiondate         = '2023_10_27'
+sessiondate         = '2023_11_08'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
@@ -47,13 +47,13 @@ ops = run_bleedthrough_corr(db,ops,coeff)
 ########################## ROI detection ###########################
 ops['do_registration']      = False
 ops['roidetect']            = True
+# ops['nbinned']              = 2000
 
 ops = suite2p.run_s2p(ops=ops, db=db)
 
 ######################## Receptive field localization  ##############
 # Locate receptive field if RF protocol was run in this session: 
 locate_rf_session(rawdatadir,animal_id,sessiondate)
-
 
 
 
