@@ -1,7 +1,9 @@
 import pandas as pd
+import numpy as np
 import seaborn as sns
 # from matplotlib.lines import Line2D
 from operator import itemgetter
+import matplotlib.pyplot as plt
 
 desired_width = 600
 pd.set_option('display.width', desired_width)
@@ -48,6 +50,24 @@ def get_clr_blocks(blocks):
     # clrs            = ['#ff8274','#74f1ff']
     clrs            = sns.color_palette('Greys', 2)
     return clrs
+
+def get_clr_gratingnoise_stimuli():
+    # cmap1           = plt.colormaps['PuOr']((0,0.5,1))[:,:3]
+    # cmap2           = plt.colormaps['PiYG']((0,0.5,1))[:,:3]
+
+    cmap1           = plt.colormaps['tab10']((0,0.5,1))[:,:3]
+    cmap2           = plt.colormaps['Accent']((0,0.5,1))[:,:3]
+
+    clrs = np.empty((3,3,3))
+    for i in range(3):
+        for j in range(3):
+            clrs[i,j,:] = np.mean((cmap1[i,:],cmap2[j,:]),axis=0)
+
+    clrs = clrs - np.min(clrs)
+    clrs = clrs / np.max(clrs)
+    
+    return clrs
+
 
 # decoding_inputs = ['rate', 'phase', 'energy', 'rate+lfp', 'rate+energy']
 # decoding_inputs_control = ['shuffled_rate', 'rate+shuffled_phase']
