@@ -7,7 +7,7 @@ This script contains a series of functions that analyze activity in visual VR ta
 """
 
 import os
-os.chdir('T:\\Python\\molanalysis\\')
+os.chdir('C:\\Python\\molanalysis\\')
 # os.chdir('E:\\Python\\molanalysis\\')
 
 import numpy as np
@@ -33,7 +33,7 @@ plt.rcParams['svg.fonttype'] = 'none'
 
 protocol            = 'VR'
 
-# session_list = np.array([['LPE09829', '2023_03_31']])
+session_list = np.array([['LPE09829', '2023_03_31']])
 # session_list = np.array([['LPE09829', '2023_03_30']])
 session_list = np.array([['LPE09667', '2023_03_29']])
 session_list = np.array([['LPE09829', '2023_03_29'],
@@ -45,7 +45,8 @@ sessions = load_sessions(protocol,session_list,load_behaviordata=True,
 # sessions = filter_sessions(protocol) #load sessions that meet criteria:
 nSessions = len(sessions)
 
-savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
+# savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
+savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
 
 #Keep only first 100 cells to remain workable:
 # sessions[0].calciumdata = sessions[0].calciumdata.drop(sessions[0].calciumdata.columns[100:],axis=1)
@@ -154,7 +155,6 @@ for ises in range(nSessions):
     idx = celldata['session_id']==sessions[ises].sessiondata['session_id'][0]
     for iTT in range(len(stimtypes)):
         snakeplots[idx,:,iTT] = np.nanmean(sessions[ises].stensor[:,sessions[ises].trialdata['stimRight'] == stimtypes[iTT],:],axis=1)
-
 
 #Plot for all loaded sessions together:
 areas   = celldata['roi_name'].unique()
@@ -426,7 +426,7 @@ def pca_line_stimresp(data,trialdata,spatbins):
     plt.tight_layout(rect=[0,0,0.9,1])
 
 
-ises            = 1 #selected session to plot this for
+ises            = 0 #selected session to plot this for
 [N,K,S]         = np.shape(sessions[ises].stensor) #get dimensions of tensor
 
 #For all areas:
@@ -446,6 +446,95 @@ for iarea,area in enumerate(areas):
     # plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.svg'), format = 'svg')
     plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
     # plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_Left_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+
+##### PCA on different stimuli, conditioned on the other corridor stimulus:
+
+
+def pca_line_stimLR(data,trialdata,spatbins):
+    [N,K,S]         = np.shape(data) #get dimensions of tensor
+
+    # collapse to 2d: N x K*T (neurons by timebins of different trials concatenated)
+    X               = np.reshape(data,(N,-1))
+    
+    #Impute missing nan data, otherwise problems with PCA
+    imp_mean        = SimpleImputer(missing_values=np.nan, strategy='mean')
+    #apply imputation, replacing nan with mean of that neurons' activity
+    X               = imp_mean.fit_transform(X.T).T 
+
+    X               = zscore(X,axis=1) #score each neurons activity (along rows)
+
+    pca             = PCA(n_components=15) #construct PCA
+    Xp              = pca.fit_transform(X.T).T #PCA function assumes (samples x features)
+
+    Xp              = np.reshape(Xp,(15,K,S)) #reshape back to trials
+
+    #Get indices of trialtypes and responses:
+    stimtypes_R       = sorted(trialdata['stimRight'].unique()) # stim ['A','B','C','D']
+    stimtypes_L       = sorted(trialdata['stimLeft'].unique()) # 
+
+    # stimtypes_R       = ['A','B'] # stim ['A','B','C','D']
+    # stimtypes_L       = ['C','D']
+
+    stimtypes_R       = ['C','D'] # stim ['A','B','C','D']
+    stimtypes_L       = ['A','B']
+
+    sl_type_ind      = [np.argwhere(np.array(trialdata['stimRight']) == stimtype_R)[:, 0] for stimtype_R in stimtypes_R]
+    sr_type_ind      = [np.argwhere(np.array(trialdata['stimLeft']) == stimtype_L)[:, 0] for stimtype_L in stimtypes_L]
+
+    #For line make-up:
+    pal             = sns.color_palette('husl', 4)
+    sty             = [':','-']
+    patchcols       = ["cyan","green"]
+
+    nPlotPCs        = 5 #how many subplots to create for diff PC projections
+
+    fig, axes = plt.subplots(nPlotPCs, 1, figsize=[8, 7], sharey='row', sharex='row')
+    projections = np.arange(nPlotPCs)
+    for ax, proj in zip(axes, projections):
+        for sr in range(len(stimtypes_R)):
+            for sl in range(len(stimtypes_L)):
+                #Take the average PC projection across all indexed trials:
+                y   = np.mean(Xp[proj, np.intersect1d(sl_type_ind[sr],sr_type_ind[sl]),:],axis=0)
+                ax.plot(spatbins,y,c=pal[sr],linestyle=sty[sl])
+                if proj == nPlotPCs-1:
+                    ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
+                ax.set_ylabel('PC {}'.format(proj + 1))
+        
+        ax.set_xticks(np.linspace(-50,50,5))
+        ax.add_patch(matplotlib.patches.Rectangle((0,ax.get_xlim()[0]),25,np.diff(ax.get_xlim())[0], 
+                    fill = True, alpha=0.2,
+                    color = patchcols[0], linewidth = 0))
+        ax.add_patch(matplotlib.patches.Rectangle((25,ax.get_xlim()[0]),25,np.diff(ax.get_xlim())[0], 
+                    fill = True, alpha=0.2,
+                    color = patchcols[1], linewidth = 0))
+
+    sns.despine(fig=fig, top=True, right=True)
+
+
+    custom_lines = [Line2D([0], [0], color=pal[sr], lw=4,linestyle=sty[sl]) for
+                    sr in range(len(stimtypes_R)) for sl in range(len(stimtypes_R))]
+    labels = [sr + '-' + sl for sr in stimtypes_R for sl in stimtypes_L]
+   
+    # custom_lines = []
+    # for sr in range(len(stimtypes_R)):
+    #         for sl in range(len(stimtypes_L)):
+    #             custom_lines.append(Line2D([0], [0], color=pal[sr], lw=4,linestyle=sty[sl]))
+                                    
+    # labels = stimtypes_R
+    ax.legend(custom_lines, labels,title='Stim',
+            frameon=False, loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.tight_layout(rect=[0,0,0.9,1])
+
+
+#For each area:
+for iarea,area in enumerate(areas):
+    idx         = sessions[ises].celldata['roi_name'] == area
+    data        = sessions[ises].stensor[np.ix_(idx,range(K),binsubidx)]
+    pca_line_stimLR(data,sessions[ises].trialdata,binsub)
+    plt.suptitle(area,fontsize=14)
+    # plt.savefig(os.path.join(savedir,'PCA','PCA_Line_stimLR_AB_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+    plt.savefig(os.path.join(savedir,'PCA','PCA_Line_stimLR_CD_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ################################################ LDA ##################################################
 
@@ -477,8 +566,8 @@ def lda_line_stimresp(data,trialdata,spatbins):
     respmat_stim        = np.nanmean(data[:,:,(spatbins>0) & (spatbins<25)],axis=2) 
     respmat_dec         = np.nanmean(data[:,:,(spatbins>25) & (spatbins<50)],axis=2) 
 
-    vec_stim            = trialdata['stimRight'] == 'A'
-    vec_dec             = trialdata['lickResponse'] == 1
+    vec_stim            = trialdata['stimRight']     == 'A'
+    vec_dec             = trialdata['lickResponse']  == 1
 
     lda_stim            = LDA(n_components=1)
     lda_stim.fit(respmat_stim.T, vec_stim)
@@ -539,7 +628,7 @@ def lda_line_stimresp(data,trialdata,spatbins):
     plt.tight_layout(rect=[0,0,0.9,0.9])
 
 
-ises            = 2 #selected session to plot this for
+ises            = 0 #selected session to plot this for
 [N,K,S]         = np.shape(sessions[ises].stensor) #get dimensions of tensor
 
 ## For all areas:
