@@ -5,15 +5,16 @@ import tifffile
 from utils.twoplib import split_mROIs
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from labeling.label_lib import bleedthrough_correction
 
 # rawdatadir      = "X:\\Rawdata\\"
 rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
-rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\PILOTS\\"
+# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\PILOTS\\"
 # rawdatadir          = "O:\\Rawdata\\"
 outputdir           = "V:\\Procdata\\OV\\"
 
-animal_ids          = ['LPE10882'] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE09662'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE09662'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE09830','LPE09831'] #If empty than all animals in folder will be processed
 # animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE10189','LPE10190','LPE10191','LPE10192'] #If empty than all animals in folder will be processed
@@ -48,7 +49,6 @@ for animal_id in animal_ids: #for each animal
                     # for iframe in range(np.shape(mROI_data[0])[0])
                     c           = np.concatenate(mROI_data[:], axis=2) #reshape to full ROI (size frames by xpix by ypix)
                     
-                    
                     if np.shape(greenframe)[0]==0:
                         greenframe  = np.empty(np.shape(c)[1:])
                         redframe    = np.empty(np.shape(c)[1:])
@@ -59,7 +59,9 @@ for animal_id in animal_ids: #for each animal
                     cmax        = np.max(c[1::2,:,:], axis=0)
                     redframe    = np.stack([redframe,cmax],axis=2).max(axis=2)
 
-                    
+            
+            greenframe = bleedthrough_correction(greenframe,redframe)
+
             outpath = os.path.join(outputdir,animal_id + '_' + sessiondate + '_green.tif')
             fH = open(outpath,'wb') #as fH:
             tifffile.imwrite(fH,greenframe.astype('int16'), bigtiff=True)
@@ -70,11 +72,10 @@ for animal_id in animal_ids: #for each animal
             
             fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10,6.5))
 
-            ax1.imshow(greenframe,cmap=cmgreen,vmin=np.percentile(greenframe,1),vmax=np.percentile(greenframe,98))
+            ax1.imshow(greenframe,cmap=cmgreen,vmin=np.percentile(greenframe,1),vmax=np.percentile(greenframe,99))
             ax1.set_title('Mean Image Chan 1')
             ax2.imshow(redframe,cmap=cmred,vmin=np.percentile(redframe,15),vmax=np.percentile(redframe,99))
             ax2.set_title('Mean Image Chan 2')
-
             plt.setp(plt.gcf().get_axes(), xticks=[], yticks=[]);
             plt.tight_layout()
             

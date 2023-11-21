@@ -25,10 +25,11 @@ except:
 import suite2p
 from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
+from labeling.tdTom_labeling_cellpose import proc_labeling_session
 
-rawdatadir          = 'M:\\RawData\\'
-animal_id           = 'LPE10883'
-sessiondate         = '2023_11_08'
+rawdatadir          = 'r:\\RawData\\'
+animal_id           = 'LPE10919'
+sessiondate         = '2023_11_16'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
@@ -42,7 +43,7 @@ coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
 # coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
 # coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
 
-ops = run_bleedthrough_corr(db,ops,coeff)
+# ops = run_bleedthrough_corr(db,ops,coeff)
 
 ########################## ROI detection ###########################
 ops['do_registration']      = False
@@ -56,7 +57,7 @@ ops = suite2p.run_s2p(ops=ops, db=db)
 locate_rf_session(rawdatadir,animal_id,sessiondate)
 
 
-
+proc_labeling_session(rawdatadir,animal_id,sessiondate)
 
 ############################
 # Debug / Verification code:

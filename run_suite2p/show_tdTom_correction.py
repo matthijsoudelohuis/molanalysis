@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Feb 13 10:50:43 2023
-
-@author: USER
+(C) Matthijs oude Lohuis, 2023
 """
 
 from ScanImageTiffReader import ScanImageTiffReader as imread
@@ -13,7 +11,9 @@ from suite2p.detection.chan2detect import correct_bleedthrough
 import pandas as pd
 import seaborn as sns
 from scipy.stats import zscore
-
+import suite2p
+from suite2p.io.binary import BinaryFile
+from suite2p.extraction import extract
 # import imageio
 
 
@@ -86,14 +86,16 @@ directory = 'O:\\RawData\\LPE10192\\2023_05_04\\SP\\Imaging\\'
 directory = 'X:\\RawData\\LPE09665\\2023_03_14\\GR\\Imaging\\'
 [data_green,data_red] = load_data(directory,nplanes=8)
 
-directory = 'X:\\RawData\\LPE09667\\2023_03_29\\VR\\Imaging\\'
-[data_green,data_red] = load_data(directory,nplanes=8)
-
 directory = 'X:\\RawData\\NSH07422\\2023_03_14\\IM\\Imaging\\'
 [data_green,data_red] = load_data(directory,nplanes=8)
 
+#Pilot with only tdtomato:
 directory = 'V:\\Rawdata\\PILOTS\\20230308_LPE09832_tdTomato_Bleedthrough\\Gain1_0.6_Gain2_0.6\\'
 [data_green,data_red] = load_data(directory,nplanes=1)
+
+#session with suite2p corrected and uncorrected:
+directory = 'X:\\RawData\\LPE09667\\2023_03_29\\VR\\Imaging\\'
+[data_green,data_red] = load_data(directory,nplanes=8)
 
 # directory = 'C:\\TempData\\LPE09665\\2023_03_14\\GR\\Imaging\\'
 
@@ -104,8 +106,12 @@ redchanim       = np.average(data_red,axis=0)
 # redchanim = np.average(data_red[:,256:,:256],axis=0)
 
 b, a = np.polyfit(redchanim.flatten(), greenchanim.flatten(), deg=1)
-
 plot_correlation(greenchanim,redchanim)
+
+# b, a = np.polyfit(data_green.flatten(), data_red.flatten(), deg=1)
+plot_correlation(data_green,data_red)
+
+
 plot_correction(greenchanim,redchanim,greenchanim - b * redchanim)
 
 plot_correction(greenchanim,redchanim,greenchanim - 0.068 * redchanim) #0.6 0.6
@@ -509,3 +515,145 @@ ax2.set_xlim([0,np.shape(F2)[1]])
 
 
 
+from labeling.label_lib import *
+
+dir_uncorrected     = 'X:\\RawData\\LPE09667\\2023_03_29\\suite2p_uncorrected\\'
+
+iplane       = 4
+ops         = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'ops.npy'), allow_pickle=True).item()
+
+iplane      = 2
+ops         = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'ops.npy'), allow_pickle=True).item()
+
+plot_correction_images(ops['meanImg'],ops['meanImg_chan2'])
+
+
+dir_uncorrected     = 'R:\\RawData\\LPE10919\\2023_11_06\\suite2p\\'
+iplane      = 1
+ops         = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'ops.npy'), allow_pickle=True).item()
+plot_correction_images(ops['meanImg'],ops['meanImg_chan2'])
+
+dir_uncorrected     = 'F:\\RawData\\LPE10191\\2023_05_04\\suite2p\\'
+dir_uncorrected     = 'F:\\RawData\\LPE10192\\2023_05_04\\suite2p\\'
+iplane      = 0
+ops         = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'ops.npy'), allow_pickle=True).item()
+plot_correction_images(ops['meanImg'],ops['meanImg_chan2'])
+
+
+####################  ###############
+dir_corrected       = 'X:\\RawData\\LPE09667\\2023_03_29\\suite2p_corrected\\'
+dir_uncorrected     = 'X:\\RawData\\LPE09667\\2023_03_29\\suite2p_uncorrected\\'
+
+dir_uncorrected     = 'R:\\RawData\\LPE10919\\2023_11_06\\suite2p\\'
+
+iplane              = 4
+framestoload        = np.arange(5000)
+framestoload        = np.arange(24300,24700)
+framestoload        = np.arange(5000,10000)
+
+# data_green      = np.empty([nframestoload,512,512])
+# data_red        = np.empty([nframestoload,512,512])
+
+file_chan1       = os.path.join(dir_uncorrected,'plane%s' % iplane,'data.bin')
+file_chan2       = os.path.join(dir_uncorrected,'plane%s' % iplane,'data_chan2.bin')
+
+with BinaryFile(read_filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
+        data_green      = f1.ix(indices=framestoload)
+        data_red        = f2.ix(indices=framestoload)
+
+fig,ax1 = plt.subplots(1,1,figsize=(6,6))
+
+i = 5
+fig,(ax1,ax2) = plt.subplots(2,1,figsize=(4,8))
+
+ax1.scatter(data_red[i,:,:],data_green[i,:,:],s=5,c='k',marker='.',alpha=0.2)
+ax1.set_xlabel('Red Channel')
+ax1.set_ylabel('Green Channel')
+ax1.set_title('Single frame, pixel values, uncorrected')
+ax1.plot([-32000,32000],np.array([-32000,32000])*1.54,'k')
+# ax1.plot([-32000,32000],np.array([-32000,32000])*300,'k')
+ax1.set_xlim(extrema_np(data_red[i,:,:]))
+ax1.set_ylim(extrema_np(data_green[i,:,:]))
+
+ax2.scatter(data_red[i,:,:],data_green[i,:,:] - (data_red[i,:,:]-3000)*1.74,s=5,c='k',marker='.',alpha=0.2)
+ax2.set_xlabel('Red Channel')
+ax2.set_ylabel('Green Channel')
+ax2.set_title('Single frame, pixel values, corrected')
+plt.tight_layout()
+
+# Load the suite2p output data of this plane:
+F_uncorr       = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'F.npy'))
+F2_uncorr      = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'F_chan2.npy'))
+Fneu_uncorr    = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'Fneu.npy'))
+spks_uncorr    = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'spks.npy'))
+ops_uncorr     = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'ops.npy'), allow_pickle=True).item()
+iscell_uncorr  = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'iscell.npy'))
+stat_uncorr    = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'stat.npy'), allow_pickle=True)
+redcell_uncorr = np.load(os.path.join(dir_uncorrected,'plane%d' %iplane,'redcell.npy'))
+
+example_cell = 524
+example_cell = 469
+
+coeff = 1.54
+
+framestoplot = np.arange(5500,6700)
+framestoplot = np.arange(6700)
+framestoplot = framestoload
+
+fig,ax1 = plt.subplots(1,1,figsize=(7,4))
+ax1.plot(F_uncorr[example_cell,framestoplot],color='green',linewidth=0.5)
+ax1.plot(F2_uncorr[example_cell,framestoplot],color='red',linewidth=0.5)
+
+#################### Correct traces through unmixing matrix  ###############
+
+example_cell = 469
+framestoplot = np.arange(8000,10000)
+framestoplot = np.arange(0,5000)
+
+X = np.vstack((F_uncorr[example_cell,:],F2_uncorr[example_cell,:]))
+
+# Unmixing matrix:
+A = np.array([[1,-1.54],
+              [0,1]]) 
+
+X_ = A @ X
+
+fig,(ax1,ax2) = plt.subplots(2,1,figsize=(4,8))
+
+ax1.scatter(X[1,:],X[0,:],s=5,c='k',marker='.',alpha=0.2)
+ax1.set_xlabel('Red Channel')
+ax1.set_ylabel('Green Channel')
+ax1.set_title('Activity trace one example cell, pixel values, uncorrected')
+
+ax2.scatter(X_[1,:],X_[0,:],s=5,c='k',marker='.',alpha=0.2)
+ax2.set_xlabel('Red Channel')
+ax2.set_ylabel('Green Channel')
+ax2.set_title('Activity trace one example cell, pixel values, corrected')
+plt.tight_layout()
+
+fig,(ax1,ax2) = plt.subplots(2,1,figsize=(7,4))
+ax1.plot(X[0,framestoplot],color='green',linewidth=0.5)
+ax1.plot(X[1,framestoplot],color='red',linewidth=0.5)
+
+ax2.plot(X_[0,framestoplot],color='green',linewidth=0.5)
+ax2.plot(X_[1,framestoplot],color='red',linewidth=0.5)
+
+
+###### correction coefficient for red into green:
+coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
+# coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
+# coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
+
+
+diff = np.array([-0.2,-0.1,0,0.1,0.2])
+corr = np.array([0.02,0.05,0.0668,0.32,1.54])
+
+b, a = np.polyfit(diff[2:], np.log10(corr[2:]), deg=1)
+
+corr_pred = 10**(b*diff+a)
+
+fig = plt.figure()
+plt.plot(diff,corr)
+plt.scatter(diff,corr,s=20,color='r')
+plt.yscale('log')
+plt.scatter(diff,corr_pred,s=20,color='b')

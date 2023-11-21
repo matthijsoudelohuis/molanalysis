@@ -258,7 +258,7 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
             np.save(os.path.join(plane_folder,'RF.npy'),np.vstack((RF_azim,RF_elev,RF_size)))
 
             if showFig: 
-                example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:100] #get first twenty good cells
+                example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
 
                 Tot         = len(example_cells)
                 if Tot: 
