@@ -16,10 +16,10 @@ os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "R:\\Rawdata\\"
+# rawdatadir      = "R:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
-# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
 # procdatadir     = "E:\\Procdata\\"
 
 animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed

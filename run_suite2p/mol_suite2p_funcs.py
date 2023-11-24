@@ -12,6 +12,7 @@ from suite2p.io.binary import BinaryFile
 from suite2p.extraction import extract
 from utils.twoplib import get_meta
 import pandas as pd
+from labeling.label_lib import bleedthrough_correction
 
 # set your options for running
 def gen_ops():
@@ -126,8 +127,10 @@ def run_bleedthrough_corr(db,ops,coeff):
                   [ind,datagreen]      = f1.read(batch_size=1)
                   [ind,datared]        = f2.read(batch_size=1)
                   
-                  datagreencorr = datagreen - coeff * datared
+                #   datagreencorr = datagreen - coeff * datared
 
+                  datagreencorr = bleedthrough_correction(datagreen,datared)
+                  
                   f1.write(data=datagreencorr)
                 #   f3.write(data=datagreencorr)
             

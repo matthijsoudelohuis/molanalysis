@@ -29,6 +29,7 @@ sessions            = filter_sessions(protocols = ['GN'])
 
 #################################################
 session_list        = np.array([['LPE10883','2023_10_27']])
+session_list        = np.array([['LPE10919','2023_11_16']])
 sessions            = load_sessions(protocol = 'GN',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
 
@@ -135,9 +136,8 @@ respmat_runspeed = np.squeeze(respmat_runspeed)
 # sns.histplot(np.min(sessions[0].calciumdata,axis=0))
 # sns.histplot(np.max(sessions[0].calciumdata,axis=0))
 
-sns.histplot(np.min(respmat,axis=1))
+sns.histplot(data=np.min(respmat,axis=1))
 sns.histplot(np.max(respmat,axis=1))
-
 
 #############################################################################
 oris            = np.sort(pd.Series.unique(sessions[0].trialdata['centerOrientation']))
@@ -242,7 +242,7 @@ for iO, ori in enumerate(unique_oris):                                #plot orie
         # c = cmap1(minmax_scale(y_speed, feature_range=(0, 1)))[:,:3]
 
         # tip_rate = tips.eval("tip / total_bill").rename("tip_rate")
-        sns.scatterplot(x=x, y=y, color=c,ax = axes[iO,iS],s=10,legend = False,edgecolor =None)
+        sns.scatterplot(x=x, y=y, c=c,ax = axes[iO,iS],s=10,legend = False,edgecolor =None)
 
         # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
         # ax.scatter(x, y, color=pal[(iS-1)*len(unique_oris)+iO], s=respmat_runspeed[idx], alpha=0.8)     #each trial is one dot
@@ -308,7 +308,7 @@ for iO, ori in enumerate(unique_oris):
 
         c = np.mean((cmap1(minmax_scale(y_test['deltaOrientation'], feature_range=(0, 1))),
                      cmap2(minmax_scale(y_test['deltaSpeed'], feature_range=(0, 1)))),axis=0)[:,:3]
-        sns.scatterplot(x=Yhat_test[:,0], y=Yhat_test[:,1],color=c,ax = axes[iO,iS],legend = False)
+        sns.scatterplot(x=Yhat_test[:,0], y=Yhat_test[:,1],c=c,ax = axes[iO,iS],legend = False)
 
         # c = np.mean((cmap1(minmax_scale(y_train['deltaOrientation'], feature_range=(0, 1))),
         #              cmap2(minmax_scale(y_train['deltaSpeed'], feature_range=(0, 1)))),axis=0)[:,:3]
@@ -358,7 +358,7 @@ for iO, ori in enumerate(unique_oris):                                #plot orie
         # c = np.mean((cmap1(minmax_scale(proj_ori, feature_range=(0, 1))),cmap2(minmax_scale(proj_speed, feature_range=(0, 1)))),axis=0)[:,:3]
         c = np.mean((cmap1(minmax_scale(y_ori, feature_range=(0, 1))),cmap2(minmax_scale(y_speed, feature_range=(0, 1)))),axis=0)[:,:3]
 
-        sns.scatterplot(x=proj_ori, y=proj_speed,color=c,ax = axes[iO,iS],legend = False)
+        sns.scatterplot(x=proj_ori, y=proj_speed,c=c,ax = axes[iO,iS],legend = False)
         # sns.scatterplot(x=proj_ori, y=proj_speed,color=c,ax = axes[iO,iS],legend = False)
         axes[iO,iS].set_xlabel('delta Ori')            #give labels to axes
         axes[iO,iS].set_ylabel('delta Speed')            #give labels to axes
