@@ -35,7 +35,7 @@ class Session():
         self.videodata_path     = os.path.join(self.data_folder, 'videodata.csv')
         self.calciumdata_path   = os.path.join(self.data_folder, '%sdata.csv' % calciumversion)
 
-        assert(os.path.exists(self.sessiondata_path),'Could not find data in {}'.format(self.sessiondata_path))
+        assert(os.path.exists(self.sessiondata_path)), 'Could not find data in {}'.format(self.sessiondata_path)
 
         self.sessiondata  = pd.read_csv(self.sessiondata_path, sep=',', index_col=0)
 
