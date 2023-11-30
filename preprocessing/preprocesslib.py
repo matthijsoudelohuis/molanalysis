@@ -5,6 +5,9 @@ Author: Matthijs Oude Lohuis, Champalimaud Research
 This script contains a series of preprocessing functions that take raw data
 (behavior, task, microscope, video) and preprocess them. Is called by preprocess_main.
 Principally the data is integrated with additional info and stored for pandas dataframe usage
+
+Banners: https://textkool.com/en/ascii-art-generator?hl=default&vl=default&font=Old%20Banner&text=DETECTION%20TASK
+
 """
 
 import os, math
@@ -53,6 +56,7 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
         sessions_overview = sessions_overview_VR
     else: 
         print('Session not found in excel session overview')
+        return sessiondata
     
     idx =   (sessions_overview["sessiondate"] == sessiondate) & \
             (sessions_overview["animal_id"] == animal_id) & \
@@ -238,13 +242,13 @@ def proc_IM(rawdatadir,sessiondata):
 
 
 """
- #     # ######     #######    #     #####  #    # 
- #     # #     #       #      # #   #     # #   #  
- #     # #     #       #     #   #  #       #  #   
- #     # ######        #    #     #  #####  ###    
-  #   #  #   #         #    #######       # #  #   
-   # #   #    #        #    #     # #     # #   #  
-    #    #     #       #    #     #  #####  #    # 
+######  ####### ####### #######  #####  ####### ### ####### #     #    #######    #     #####  #    # 
+#     # #          #    #       #     #    #     #  #     # ##    #       #      # #   #     # #   #  
+#     # #          #    #       #          #     #  #     # # #   #       #     #   #  #       #  #   
+#     # #####      #    #####   #          #     #  #     # #  #  #       #    #     #  #####  ###    
+#     # #          #    #       #          #     #  #     # #   # #       #    #######       # #  #   
+#     # #          #    #       #     #    #     #  #     # #    ##       #    #     # #     # #   #  
+######  #######    #    #######  #####     #    ### ####### #     #       #    #     #  #####  #    # 
 """
 
 def proc_task(rawdatadir,sessiondata):
@@ -266,31 +270,28 @@ def proc_task(rawdatadir,sessiondata):
     trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
     trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]))
     
-    #Code stimuli simply as A, B, C, etc.:
-    trialdata = trialdata.replace('stim','', regex=True)
+    # trialdata.drop(trialdata.tail(1).index,inplace=True) # drop last row
 
     trialdata['lickResponse'] = trialdata['lickResponse'].astype(int)
     trialdata = trialdata.rename(columns={'Reward': 'rewardAvailable'})
     trialdata['rewardGiven']  = np.logical_and(trialdata['rewardAvailable'],trialdata['lickResponse']).astype('int')
+    trialdata = trialdata.rename(columns={'trialType': 'signal'})
 
-    #If rewarded stimulus is on the left, context = 1, right = 0
-    blocklen = 50
-    temp = np.tile(np.concatenate([np.ones(blocklen),np.zeros(blocklen)]),100).astype('int')
-    if np.argmax(trialdata['stimLeft'] == sessiondata['gostim'][0])<blocklen:    #identify first block left or right:
-        trialdata['context'] = temp[:len(trialdata)]
-    else:
-        trialdata['context'] = 1-temp[:len(trialdata)]
-        
-    #Add which trial number it is relative to block switch:
-    temp        = np.tile(range(blocklen),100).astype('int')
-    trialdata['n_in_block']         = temp[:len(trialdata)]
-    
-    #Add what the stimuli are normalized across mice: here 0 is the rewarded stimulus, 
-    # and the rest relative to that one (wrapped numbering, so with C=reward, C=0,D=1,A=2,B=3)
-    temp    = np.array([ord(trialdata['stimLeft'][itrial]) - 65 for itrial in range(len(trialdata))])
-    trialdata['stimLeft_norm'] = np.mod(temp - (ord(sessiondata['gostim'][0]) - 65),4)
-    temp    = np.array([ord(trialdata['stimRight'][itrial]) - 65 for itrial in range(len(trialdata))])
-    trialdata['stimRight_norm'] = np.mod(temp - (ord(sessiondata['gostim'][0]) - 65),4)
+    # Signal values: 
+    assert(np.all(np.logical_and(trialdata['signal'] >= 0,trialdata['signal'] <= 100))), 'not all signal values are between 0 and 100'
+    assert(np.any(trialdata['signal'] > 1)), 'signal values do not exceed 1'
+
+    if sessiondata.protocol[0] == 'DP':
+        print('psychometric specific processing')
+        nconds = len(np.unique(trialdata['signal']))
+        assert(nconds>3 and nconds<6), 'too many or too few conditions for psychometric protocol'
+
+    if sessiondata.protocol[0] == 'DN':
+        print('noise protocol specific processing')
+        sigs = trialdata[trialdata['signal'] > 0 and trialdata['signal'] < 100]
+        sessiondata['signal_center']        = np.mean(sigs).round()
+        sessiondata['signal_range']         = np.max(sigs) - np.min(sigs)
+        assert(len(np.unique(trialdata['signal']))>10), 'no signal jitter observed'
     
     #Get behavioral data, construct dataframe and modify a bit:
     behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
@@ -361,7 +362,7 @@ def proc_task(rawdatadir,sessiondata):
     #Compute the timestamp and spatial location of the reward being given and store in trialdata:
     trialdata['tReward'] = np.nan
     trialdata['sReward'] = np.nan
-    for t in range(len(trialdata)-1):
+    for t in range(len(trialdata)):
         idx = np.logical_and(behaviordata['reward'],[behaviordata['trialnum']==t+1]).flatten()
         if np.any(idx):
             trialdata.loc[trialdata.index[t],'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
@@ -378,7 +379,7 @@ def proc_task(rawdatadir,sessiondata):
         if hitrate < rewardrate_thr:
             trialdata.loc[trialdata.index[t],'engaged'] = 0
 
-    assert(np.all(~np.isnan(trialdata['tReward'][trialdata['rewardGiven']==1]))) #check all rewarded trials have timestamp of reward
+    assert(np.all(~np.isnan(trialdata['tReward'][trialdata['rewardGiven']==1]))), 'not all rewarded trials have timestamp of reward'
 
     # print("%d rewards" % len(reward_ts)) #Give output to check if reasonable
     print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable

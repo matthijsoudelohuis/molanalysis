@@ -1,0 +1,153 @@
+
+
+"""
+ #     # ######     #######    #     #####  #    # 
+ #     # #     #       #      # #   #     # #   #  
+ #     # #     #       #     #   #  #       #  #   
+ #     # ######        #    #     #  #####  ###    
+  #   #  #   #         #    #######       # #  #   
+   # #   #    #        #    #     # #     # #   #  
+    #    #     #       #    #     #  #####  #    # 
+"""
+
+def proc_task(rawdatadir,sessiondata):
+    """ preprocess all the trial, stimulus and behavior data for one behavior VR session """
+    
+    sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
+    sesfolder       = Path(sesfolder)
+    
+    #Init output dataframes:
+    trialdata       = pd.DataFrame()
+    behaviordata    = pd.DataFrame()
+
+    #Process behavioral data:
+    filenames       = os.listdir(sesfolder)
+    
+    harpdata_file   = list(filter(lambda a: 'harp' in a, filenames)) #find the harp files
+    harpdata_file   = list(filter(lambda a: 'csv'  in a, harpdata_file)) #take the csv file, not the rawharp bin
+    
+    trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
+    trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]))
+    
+    #Code stimuli simply as A, B, C, etc.:
+    trialdata = trialdata.replace('stim','', regex=True)
+
+    trialdata['lickResponse'] = trialdata['lickResponse'].astype(int)
+    trialdata = trialdata.rename(columns={'Reward': 'rewardAvailable'})
+    trialdata['rewardGiven']  = np.logical_and(trialdata['rewardAvailable'],trialdata['lickResponse']).astype('int')
+
+    #If rewarded stimulus is on the left, context = 1, right = 0
+    blocklen = 50
+    temp = np.tile(np.concatenate([np.ones(blocklen),np.zeros(blocklen)]),100).astype('int')
+    if np.argmax(trialdata['stimLeft'] == sessiondata['gostim'][0])<blocklen:    #identify first block left or right:
+        trialdata['context'] = temp[:len(trialdata)]
+    else:
+        trialdata['context'] = 1-temp[:len(trialdata)]
+        
+    #Add which trial number it is relative to block switch:
+    temp        = np.tile(range(blocklen),100).astype('int')
+    trialdata['n_in_block']         = temp[:len(trialdata)]
+    
+    #Add what the stimuli are normalized across mice: here 0 is the rewarded stimulus, 
+    # and the rest relative to that one (wrapped numbering, so with C=reward, C=0,D=1,A=2,B=3)
+    temp    = np.array([ord(trialdata['stimLeft'][itrial]) - 65 for itrial in range(len(trialdata))])
+    trialdata['stimLeft_norm'] = np.mod(temp - (ord(sessiondata['gostim'][0]) - 65),4)
+    temp    = np.array([ord(trialdata['stimRight'][itrial]) - 65 for itrial in range(len(trialdata))])
+    trialdata['stimRight_norm'] = np.mod(temp - (ord(sessiondata['gostim'][0]) - 65),4)
+    
+    #Get behavioral data, construct dataframe and modify a bit:
+    behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
+    behaviordata.columns = ["rawvoltage","ts","trialnum","zpos","runspeed","lick","reward"] #rename the columns
+    behaviordata = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
+    
+    ## Licks
+    lickactivity    = np.diff(behaviordata['lick'])
+    lick_ts         = behaviordata['ts'][np.append(lickactivity==1,False)].to_numpy()
+    
+    ## Rewards
+    rewardactivity = np.diff(behaviordata['reward'])
+    reward_ts      = behaviordata['ts'][np.append(rewardactivity>0,False)].to_numpy()
+    
+    ## Reconstruct total position:
+    trialdata['TrialEnd'] = 0
+    for t in range(len(trialdata)):
+        trialdata.loc[trialdata.index[trialdata['TrialNumber']==t+1],'TrialEnd'] = max(behaviordata.loc[behaviordata.index[behaviordata['trialnum']==t],'zpos'])
+
+    behaviordata['zpos_tot'] = behaviordata['zpos']
+    for t in range(len(trialdata)):
+        behaviordata.loc[behaviordata.index[behaviordata['trialnum']==t+1],'zpos_tot'] += np.cumsum(trialdata['TrialEnd'])[t]
+
+    trialdata['StimStart_tot']          = trialdata['StimStart'] + np.cumsum(trialdata['TrialEnd'])
+    trialdata['StimEnd_tot']            = trialdata['StimEnd'] + np.cumsum(trialdata['TrialEnd'])
+    trialdata['RewardZoneStart_tot']    = trialdata['RewardZoneStart'] + np.cumsum(trialdata['TrialEnd'])
+    trialdata['RewardZoneEnd_tot']      = trialdata['RewardZoneEnd'] + np.cumsum(trialdata['TrialEnd'])
+    
+    #Subsample the data, don't need this resolution
+    behaviordata = behaviordata.iloc[::10, :].copy().reset_index(drop=True) #subsample data 10 times (to 100 Hz)
+    
+    behaviordata['lick']    = False #init to false and set to true for sample of first lick or rew
+    behaviordata['reward']  = False
+    
+    #Now add the lick times and reward times again to the subsampled dataframe:
+    for lick in lick_ts:
+        # behaviordata['lick'][np.argmax(lick<behaviordata['ts'])] = True
+        behaviordata.loc[behaviordata.index[np.argmax(lick<behaviordata['ts'])],'lick'] = True
+    
+    print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
+
+    trialdata['tStart'] = np.concatenate(([behaviordata['ts'][0]],trialdata['tEnd'][1:]))
+
+    #Add the timestamps of entering and exiting stimulus zone:
+    trialdata['tStimStart'] = ''
+    trialdata['tStimEnd'] = ''
+    for t in range(len(trialdata)):
+        idx             = behaviordata['trialnum']==t+1
+        z_temp          = behaviordata.loc[behaviordata.index[idx],'zpos'].to_numpy()
+        ts_temp         = behaviordata.loc[behaviordata.index[idx],'ts'].to_numpy()
+        try:
+            tStimStart      = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'StimStart'])[0][0]]
+        except:
+            tStimStart        = trialdata.loc[trialdata.index[t], 'tStart']
+            print('Stimulus start later than trial end')
+        trialdata.loc[trialdata.index[t], 'tStimStart'] = tStimStart
+        
+        try:
+            tStimEnd        = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'StimEnd'])[0][0]]
+        except:
+            tStimEnd        = trialdata.loc[trialdata.index[t], 'tEnd']
+            print('Stimulus end later than trial end')
+        trialdata.loc[trialdata.index[t], 'tStimEnd'] = tStimEnd
+
+    for reward in reward_ts: #set only the first timestamp of reward to True, to have single indices
+        behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
+    
+    #Compute the timestamp and spatial location of the reward being given and store in trialdata:
+    trialdata['tReward'] = np.nan
+    trialdata['sReward'] = np.nan
+    for t in range(len(trialdata)-1):
+        idx = np.logical_and(behaviordata['reward'],[behaviordata['trialnum']==t+1]).flatten()
+        if np.any(idx):
+            trialdata.loc[trialdata.index[t],'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
+            trialdata.loc[trialdata.index[t],'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]
+
+    #Compute reward rate (fraction of GO trials rewarded) with sliding window for engagement index:
+    sliding_window = 24
+    rewardrate_thr = 0.3
+    trialdata['engaged'] = 1
+    # for t in range(sliding_window,len(trialdata)):
+    for t in range(len(trialdata)):
+        idx = np.intersect1d(np.arange(len(trialdata)),np.arange(t-sliding_window/2,t+sliding_window/2))
+        hitrate = np.sum(trialdata['rewardGiven'][idx]) / np.sum(trialdata['rewardAvailable'][idx])
+        if hitrate < rewardrate_thr:
+            trialdata.loc[trialdata.index[t],'engaged'] = 0
+
+    assert(np.all(~np.isnan(trialdata['tReward'][trialdata['rewardGiven']==1]))) #check all rewarded trials have timestamp of reward
+
+    # print("%d rewards" % len(reward_ts)) #Give output to check if reasonable
+    print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
+    print("%d rewards in unique trials" % trialdata['tReward'].count()) #Give output to check if reasonable
+
+    behaviordata['session_id']  = sessiondata['session_id'][0] #Store unique session_id
+    trialdata['session_id']     = sessiondata['session_id'][0]
+    
+    return sessiondata, trialdata, behaviordata

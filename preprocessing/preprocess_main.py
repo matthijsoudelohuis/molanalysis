@@ -11,8 +11,8 @@ Preprocesses behavioral data, task and trial data, imaging data etc.
 
 import os, sys
 import numpy as np
-# os.chdir('E:\\Python\\molanalysis\\')
-os.chdir('T:\\Python\\molanalysis\\')
+os.chdir('E:\\Python\\molanalysis\\')
+# os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
@@ -20,22 +20,23 @@ from preprocessing.preprocesslib import *
 procdatadir     = "V:\\Procdata\\"
 
 rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
-# procdatadir     = "E:\\Procdata\\"
+procdatadir     = "E:\\Procdata\\"
 
 animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
 # animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 
-# animal_ids          = ['LPE10883'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10884'] #If empty than all animals in folder will be processed
 # date_filter        = ['2023_11_08']
 
-animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
-date_filter        = ['2023_11_16']
+# animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
+# date_filter        = ['2023_11_16']
 
 # protocols           = ['GN','RF','SP']
 # protocols           = ['SP']
 protocols           = ['GN']
+protocols           = ['DM']
 # protocols           = ['VR']
 
 ## Loop over all selected animals and folders
@@ -65,19 +66,19 @@ for animal_id in animal_ids: #for each animal
                 sessiondata         = proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol)
                 print(f'Processing {animal_id} - {sessiondate} - {protocol}')
 
-                if protocol == 'VR':
+                if protocol in ['DM','DP','DN']: #VR Task detection max, psy or noise
                     [sessiondata,trialdata,behaviordata] = proc_task(rawdatadir,sessiondata)
                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
                     behaviordata.to_csv(os.path.join(outdir,"behaviordata.csv"), sep=',')
-                else: 
+                else: #If not in a task then process behavior data in standard way, runspeed, etc.
                     behaviordata        = proc_behavior_passive(rawdatadir,sessiondata) #main processing function for harp data
                     behaviordata.to_csv(os.path.join(outdir,"behaviordata.csv"), sep=',')
         
-                if protocol == 'GR':
+                if protocol == 'GR': # Grating Repetitions
                      trialdata = proc_GR(rawdatadir,sessiondata)
                      trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
         
-                if protocol == 'GN':
+                if protocol == 'GN': # Grating Noise
                      trialdata = proc_GN(rawdatadir,sessiondata)
                      trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
         
@@ -87,7 +88,7 @@ for animal_id in animal_ids: #for each animal
                     # np.save(os.path.join(outdir,"trialdata.npy"),grid_array,RF_timestamps)
                     # np.savez(os.path.join(outdir,"trialdata.npz"),x=grid_array,y=RF_timestamps)
                 
-                elif protocol == 'IM':
+                elif protocol == 'IM': #Natural Image Dataset
                     trialdata = proc_IM(rawdatadir,sessiondata)
                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
                 
