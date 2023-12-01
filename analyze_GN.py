@@ -96,11 +96,8 @@ def show_excerpt_traces_gratings(Session,example_cells=None,trialsel=None):
 example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
 example_cells   = [6,23,130,99,361,177,153,413,435]
 
-show_excerpt_traces_gratings(sessions[0],example_cells=example_cells,trialsel=[50,90])
-show_excerpt_traces_gratings(sessions[0])
-
-# plt.close('all')
-
+show_excerpt_traces_gratings(sessions[sesidx],example_cells=example_cells,trialsel=[50,90])
+show_excerpt_traces_gratings(sessions[sesidx])
 
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
