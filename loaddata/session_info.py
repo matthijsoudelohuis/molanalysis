@@ -50,7 +50,7 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
     """
     sessions = []
     if protocols is None:
-        protocols = ['VR','IM','GR','RF','SP']
+        protocols = ['VR','IM','GR','GN','RF','SP','DM','DN','DP']
     
     # iterate over files in that directory
     for protocol in protocols:
@@ -95,7 +95,8 @@ def report_sessions(sessions):
     for ses in sessions:
         sessiondata     = pd.concat([sessiondata,ses.sessiondata])
         trialdata       = pd.concat([trialdata,ses.trialdata])
-        celldata        = pd.concat([celldata,ses.celldata])
+        if hasattr(ses, 'celldata'):
+            celldata        = pd.concat([celldata,ses.celldata])
 
     print("{protocol} dataset: {nmice} mice, {nsessions} sessions, {ntrials} trials".format(
         protocol    = pd.unique(sessiondata['protocol']),
@@ -103,8 +104,9 @@ def report_sessions(sessions):
         nsessions   = len(sessiondata),
         ntrials     = len(trialdata)))
 
-    print("Neurons in area:")
-    print(celldata.groupby('roi_name')['roi_name'].count())
+    if np.any(celldata):
+        print("Neurons in area:")
+        print(celldata.groupby('roi_name')['roi_name'].count())
     
     # print("{nneurons} dataset: {nsessions} sessions, {ntrials} trials".format(
         # protocol = sessions[0].sessiondata.protocol,nsessions = len(sessiondata),ntrials = len(trialdata))
