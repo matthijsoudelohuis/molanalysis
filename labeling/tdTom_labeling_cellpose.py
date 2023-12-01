@@ -19,39 +19,14 @@ import seaborn as sns
 from suite2p.extraction import extract, masks
 from suite2p.detection.chan2detect import detect,correct_bleedthrough
 
+from utils.imagelib import im_norm,im_log
+
 from PIL import Image
 
-chan                = [[1,0]] # grayscale=0, R=1, G=2, B=3 # channels = [cytoplasm, nucleus]
-diam                = 12
-
-overlap_threshold   = 0.2
-
-# model_type='cyto' or 'nuclei' or 'cyto2'
-# model = models.Cellpose(model_type='cyto')
-model_red = models.CellposeModel(pretrained_model = 'T:\\Python\\cellpose\\testdir\\models\\MOL_20230814_redcells')
-
-model_green = models.Cellpose(model_type='cyto')
-
-def normalize8(I,min=0,max=100):
-    # mn = I.min()
-    # mx = I.max()
-
-    mn = np.percentile(I,min)
-    mx = np.percentile(I,max)
-
-    mx -= mn
-
-    I = ((I - mn)/mx) * 255
-    I[I<0] =0
-    I[I>255] = 255
-    
-    return I.astype(np.uint8)
-
-def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
+def proc_labeling_plane(plane_folder,show_plane=False,showcells=True,overlap_threshold=0.2):
     stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
     ops         = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
     iscell      = np.load(os.path.join(plane_folder,'iscell.npy'), allow_pickle=True)
-    # redcell     = np.load(os.path.join(plane_folder,'redcell.npy'), allow_pickle=True)
 
     Nsuite2pcells      = np.shape(stats)[0]
 
@@ -60,32 +35,13 @@ def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
     for i,s in enumerate(stats):
         masks_suite2p[s['ypix'],s['xpix']] = i+1
 
-    mimg = ops['meanImg']
-    # mimg = np.zeros([512,512])
-    # mimg[ops['yrange'][0]:ops['yrange'][1],
-        # ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
-
-    mimg2 = ops['meanImg_chan2']
-
-    # ops['meanImg'] = ops['meanImg_chan2'].copy()
-    # ops = extract.enhanced_mean_image(ops)
-    # mimg2 = ops['meanImgE']
-
-    # mimg2 = np.log(mimg2 - np.min(mimg2))
-
-    # plt.figure()
-    # plt.imshow(mimg2)
-    # img_green = np.zeros((512, 512, 3), dtype=np.uint8)
-    # img_green[:,:,1] = normalize8(mimg)
-
-    # masks_green, flows, styles, diams = model_green.eval(img_green, diameter=diam)
-    # outl_green = utils.outlines_list(masks_green)
-
-    img_red = np.zeros((512, 512, 3), dtype=np.uint8)
-    img_red[:,:,0] = normalize8(mimg2)
-
-    masks_cp_red, flows, styles = model_red.eval(img_red, diameter=diam, channels=chan)
-    Ncellpose_redcells      = len(np.unique(masks_cp_red))-1
+    # load red cell roi information from cellpose gui:
+    filenames       = os.listdir(plane_folder)
+    cellpose_file   = list(filter(lambda a: 'seg.npy' in a, filenames)) #find the harp files
+    redcell_seg     = np.load(os.path.join(plane_folder,cellpose_file[0]), allow_pickle=True).item()
+    masks_cp_red    = redcell_seg['masks']
+    
+    # Ncellpose_redcells      = len(np.unique(masks_cp_red))-1
 
     redcell_overlap = np.empty(Nsuite2pcells)
     for i in range(Nsuite2pcells):    # Compute overlap in masks:
@@ -97,47 +53,45 @@ def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
 
     redcell_cellpose    = np.vstack((redcell_overlap,redcell))
 
-    # df_green = pd.DataFrame({'overlap': mask_overlap_green_with_red})
+    #Show labeling results in green and red image:
+    mimg = ops['meanImg']
+    
+    mimg = im_norm(mimg,min=1,max=99).astype(np.uint8) #scale between 0 and 255
+    
+    mimg = np.zeros([512,512])
+    mimg[ops['yrange'][0]:ops['yrange'][1],
+    ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
+    mimg = im_norm(mimg,min=1,max=99).astype(np.uint8) #scale between 0 and 255
 
-    # df_red  = pd.DataFrame({'overlap': mask_overlap_red_with_green})
+    mimg2       = ops['meanImg_chan2']
+    mimg2       = im_norm(mimg2,min=2.5,max=99).astype(np.uint8) #scale between 0 and 255
+    # mimg2       = im_log(mimg2) #log transform to enhance weakly expressing cells
+    # mimg2       = im_norm(mimg2,min=0,max=100).astype(np.uint8) #scale between 0 and 255
 
-    clr_rchan = np.array(ImageColor.getcolor('#ff0040', "RGB")) / 255
-    clr_gchan = np.array(ImageColor.getcolor('#00ffbf', "RGB")) / 255
-
-    # nOnlyRedCells   = np.sum(mask_overlap_red_with_green==0)
-    # nOverlapCells   = np.sum(mask_overlap_green_with_red>0)
-    # nOnlyGreenCells = Nsuite2pcells - nOverlapCells
-    # nOnlyRedCells   = Ncellpose_redcells - nOverlapCells
-
-    # nTotalCells     = nOnlyGreenCells + nOnlyRedCells + nOverlapCells
-
-    # df = pd.DataFrame()
-    # df['suite2p']       = np.concatenate((np.full((Nsuite2pcells), True), np.full((nOnlyRedCells), False)))
-    # df['cellpose_red']  = np.concatenate((np.full((nOnlyGreenCells), False), np.full((Ncellpose_redcells), True)))
-    # df['overlap']       = np.zeros(nTotalCells)
-    # df['overlap'][np.logical_and(df['suite2p'],df['cellpose_red'])] = mask_overlap_green_with_red[mask_overlap_green_with_red>0]
+    # clr_rchan = np.array(ImageColor.getcolor('#ff0040', "RGB")) / 255
+    # clr_gchan = np.array(ImageColor.getcolor('#00ffbf', "RGB")) / 255
 
     if show_plane:
         ######
-        lowprc = 1
-        uppprc = 99
-        rchan = (mimg2 - np.percentile(mimg2,lowprc)) / np.percentile(mimg2 - np.percentile(mimg2,lowprc),uppprc)
-        gchan = (mimg - np.percentile(mimg,lowprc)) / np.percentile(mimg - np.percentile(mimg,lowprc),uppprc)
-        bchan = np.zeros(np.shape(mimg))
+        # rchan = (mimg2 - np.percentile(mimg2,lowprc)) / np.percentile(mimg2 - np.percentile(mimg2,lowprc),uppprc)
+        # gchan = (mimg - np.percentile(mimg,lowprc)) / np.percentile(mimg - np.percentile(mimg,lowprc),uppprc)
+        # bchan = np.zeros(np.shape(mimg))
 
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(18,6))
 
-        ax1.imshow(gchan,cmap='gray',vmin=np.percentile(gchan,lowprc),vmax=np.percentile(gchan,uppprc))
-        ax2.imshow(rchan,cmap='gray',vmin=np.percentile(rchan,lowprc),vmax=np.percentile(rchan,uppprc))
+        ax1.imshow(mimg,cmap='gray',vmin=0,vmax=255)
+        ax2.imshow(mimg2,cmap='gray',vmin=0,vmax=255)
         
-        im3 = rchan[:,:,np.newaxis] * clr_rchan + gchan[:,:,np.newaxis] * clr_gchan
         # im3 = rchan[:,:,np.newaxis] * clr_rchan + gchan[:,:,np.newaxis] * clr_gchan
-        ax3.imshow(im3)
+        im3 = np.dstack((mimg2,mimg,np.zeros(np.shape(mimg2)))).astype(np.uint8)
+        ax3.imshow(im3,vmin=0,vmax=255)
 
         if showcells:
             outl_green = utils.outlines_list(masks_suite2p)
             #Filter good cells for visualization laters: 
-            # outl_green = np.array(outl_green)[iscell[:,0]==1]
+            outl_green = np.array(outl_green)[iscell[:,0]==1]
+            
+            red_filtered = redcell_cellpose[1,iscell[:,0]==1]
 
             outl_red = utils.outlines_list(masks_cp_red)
             
@@ -145,14 +99,16 @@ def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
                 if iscell[i,0]: #show only good cells
                     ax1.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
                     # ax2.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
-                    # ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
-                    if redcell[i]:
-                        ax3.plot(o[:,0], o[:,1], color='#011aff',linewidth=0.6)
+                    if red_filtered[i]:
+                        ax3.plot(o[:,0], o[:,1], color='b',linewidth=0.6)
+                    else: 
+                        ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+
 
             for o in outl_red:
                 # ax1.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
                 ax2.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
-                # ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
+                ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
                 # ax3.plot(o[:,0], o[:,1], color='#ffe601',linewidth=0.6)
         
         ax1.set_axis_off()
@@ -168,6 +124,203 @@ def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
         plt.tight_layout(rect=[0, 0, 1, 1])
 
     return redcell_cellpose,fig
+
+def proc_labeling_session(rawdatadir,animal_id,sessiondate):
+    sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
+
+    suite2p_folder  = os.path.join(sesfolder,"suite2p")
+
+    assert os.path.exists(suite2p_folder), 'suite2p folders not found'
+    
+    plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
+
+    for iplane,plane_folder in enumerate(plane_folders):
+
+        redcell_cellpose,fig              = proc_labeling_plane(plane_folder,show_plane=True)
+        
+        np.save(os.path.join(plane_folder,'redcell_cellpose.npy'),redcell_cellpose)
+
+        fig.savefig(os.path.join(plane_folder,'labeling_Plane%d.jpg' % iplane),dpi=600)
+
+
+def gen_red_images(rawdatadir,animal_id,sessiondate):
+
+    sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
+
+    suite2p_folder  = os.path.join(sesfolder,"suite2p")
+
+    assert os.path.exists(suite2p_folder), 'suite2p folders not found'
+    
+    plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
+
+    for iplane,plane_folder in enumerate(plane_folders):
+    
+        ops = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
+        
+        mimg2 = ops['meanImg_chan2'] #get red channel image from ops
+        mimg2 = im_norm(mimg2,min=2.5,max=99) #scale between 0 and 255
+
+        mimg2_log = im_log(mimg2) #log transform to enhance weakly expressing cells
+
+        mimg2 = im_norm(mimg2,min=0,max=100) #scale between 0 and 255
+
+        mimg2 = np.dstack((mimg2,np.zeros(np.shape(mimg2)),np.zeros(np.shape(mimg2))))
+
+        img = Image.fromarray(mimg2.astype(np.uint8))
+
+        img.save(os.path.join(plane_folder,'redim_plane%d.png' % iplane))
+
+
+
+
+#piece of code to analyze how many red cells were labeled etc. overlap with suite2p bladiebla
+    # nOnlyRedCells   = np.sum(mask_overlap_red_with_green==0)
+    # nOverlapCells   = np.sum(mask_overlap_green_with_red>0)
+    # nOnlyGreenCells = Nsuite2pcells - nOverlapCells
+    # nOnlyRedCells   = Ncellpose_redcells - nOverlapCells
+
+    # nTotalCells     = nOnlyGreenCells + nOnlyRedCells + nOverlapCells
+
+    # df = pd.DataFrame()
+    # df['suite2p']       = np.concatenate((np.full((Nsuite2pcells), True), np.full((nOnlyRedCells), False)))
+    # df['cellpose_red']  = np.concatenate((np.full((nOnlyGreenCells), False), np.full((Ncellpose_redcells), True)))
+    # df['overlap']       = np.zeros(nTotalCells)
+    # df['overlap'][np.logical_and(df['suite2p'],df['cellpose_red'])] = mask_overlap_green_with_red[mask_overlap_green_with_red>0]
+
+# deprecated version with labeling by cellpose algorithm not GUI:
+
+# chan                = [[1,0]] # grayscale=0, R=1, G=2, B=3 # channels = [cytoplasm, nucleus]
+# diam                = 12
+# overlap_threshold   = 0.2
+# model_type='cyto' or 'nuclei' or 'cyto2'
+# model = models.Cellpose(model_type='cyto')
+# model_red = models.CellposeModel(pretrained_model = 'T:\\Python\\cellpose\\testdir\\models\\MOL_20230814_redcells')
+# model_green = models.Cellpose(model_type='cyto')
+
+
+# def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
+#     stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
+#     ops         = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
+#     iscell      = np.load(os.path.join(plane_folder,'iscell.npy'), allow_pickle=True)
+#     # redcell     = np.load(os.path.join(plane_folder,'redcell.npy'), allow_pickle=True)
+
+#     Nsuite2pcells      = np.shape(stats)[0]
+
+#     # From cell masks create outlines:
+#     masks_suite2p = np.zeros((512,512), np.float32)
+#     for i,s in enumerate(stats):
+#         masks_suite2p[s['ypix'],s['xpix']] = i+1
+
+#     mimg = ops['meanImg']
+#     # mimg = np.zeros([512,512])
+#     # mimg[ops['yrange'][0]:ops['yrange'][1],
+#         # ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
+
+#     mimg2 = ops['meanImg_chan2']
+
+#     mimg2 = im_norm(mimg2,min=2.5,max=99) #scale between 0 and 255
+
+#     mimg2_log = im_log(mimg2) #log transform to enhance weakly expressing cells
+
+#     mimg2 = im_norm(mimg2,min=0,max=100) #scale between 0 and 255
+
+#     # img_red = np.dstack((mimg2,np.zeros(np.shape(mimg2)),np.zeros(np.shape(mimg2))))
+
+#     # plt.figure()
+#     # plt.imshow(mimg2)
+#     # img_green = np.zeros((512, 512, 3), dtype=np.uint8)
+#     # img_green[:,:,1] = normalize8(mimg)
+
+#     # masks_green, flows, styles, diams = model_green.eval(img_green, diameter=diam)
+#     # outl_green = utils.outlines_list(masks_green)
+
+#     img_red = np.zeros((512, 512, 3), dtype=np.uint8)
+#     img_red[:,:,0] = normalize8(mimg2)
+
+#     masks_cp_red, flows, styles = model_red.eval(img_red, diameter=diam, channels=chan)
+#     Ncellpose_redcells      = len(np.unique(masks_cp_red))-1
+
+#     redcell_overlap = np.empty(Nsuite2pcells)
+#     for i in range(Nsuite2pcells):    # Compute overlap in masks:
+#         redcell_overlap[i] = np.sum(masks_cp_red[masks_suite2p==i+1] != 0) / np.sum(masks_suite2p ==i+1)
+#         # if mask_overlap_green_with_red[i]>0:
+#             # mask_overlap_red_with_green[np.unique(masks_cp_red[masks_suite2p==i+1])[1]-1] = overlap
+
+#     redcell             = redcell_overlap > overlap_threshold
+
+#     redcell_cellpose    = np.vstack((redcell_overlap,redcell))
+
+#     # df_green = pd.DataFrame({'overlap': mask_overlap_green_with_red})
+
+#     # df_red  = pd.DataFrame({'overlap': mask_overlap_red_with_green})
+
+#     clr_rchan = np.array(ImageColor.getcolor('#ff0040', "RGB")) / 255
+#     clr_gchan = np.array(ImageColor.getcolor('#00ffbf', "RGB")) / 255
+
+#     # nOnlyRedCells   = np.sum(mask_overlap_red_with_green==0)
+#     # nOverlapCells   = np.sum(mask_overlap_green_with_red>0)
+#     # nOnlyGreenCells = Nsuite2pcells - nOverlapCells
+#     # nOnlyRedCells   = Ncellpose_redcells - nOverlapCells
+
+#     # nTotalCells     = nOnlyGreenCells + nOnlyRedCells + nOverlapCells
+
+#     # df = pd.DataFrame()
+#     # df['suite2p']       = np.concatenate((np.full((Nsuite2pcells), True), np.full((nOnlyRedCells), False)))
+#     # df['cellpose_red']  = np.concatenate((np.full((nOnlyGreenCells), False), np.full((Ncellpose_redcells), True)))
+#     # df['overlap']       = np.zeros(nTotalCells)
+#     # df['overlap'][np.logical_and(df['suite2p'],df['cellpose_red'])] = mask_overlap_green_with_red[mask_overlap_green_with_red>0]
+
+#     if show_plane:
+#         ######
+#         lowprc = 1
+#         uppprc = 99
+#         rchan = (mimg2 - np.percentile(mimg2,lowprc)) / np.percentile(mimg2 - np.percentile(mimg2,lowprc),uppprc)
+#         gchan = (mimg - np.percentile(mimg,lowprc)) / np.percentile(mimg - np.percentile(mimg,lowprc),uppprc)
+#         bchan = np.zeros(np.shape(mimg))
+
+#         fig, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(18,6))
+
+#         ax1.imshow(gchan,cmap='gray',vmin=np.percentile(gchan,lowprc),vmax=np.percentile(gchan,uppprc))
+#         ax2.imshow(rchan,cmap='gray',vmin=np.percentile(rchan,lowprc),vmax=np.percentile(rchan,uppprc))
+        
+#         im3 = rchan[:,:,np.newaxis] * clr_rchan + gchan[:,:,np.newaxis] * clr_gchan
+#         # im3 = rchan[:,:,np.newaxis] * clr_rchan + gchan[:,:,np.newaxis] * clr_gchan
+#         ax3.imshow(im3)
+
+#         if showcells:
+#             outl_green = utils.outlines_list(masks_suite2p)
+#             #Filter good cells for visualization laters: 
+#             # outl_green = np.array(outl_green)[iscell[:,0]==1]
+
+#             outl_red = utils.outlines_list(masks_cp_red)
+            
+#             for i,o in enumerate(outl_green):
+#                 if iscell[i,0]: #show only good cells
+#                     ax1.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
+#                     # ax2.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
+#                     # ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+#                     if redcell[i]:
+#                         ax3.plot(o[:,0], o[:,1], color='#011aff',linewidth=0.6)
+
+#             for o in outl_red:
+#                 # ax1.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
+#                 ax2.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
+#                 # ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
+#                 # ax3.plot(o[:,0], o[:,1], color='#ffe601',linewidth=0.6)
+        
+#         ax1.set_axis_off()
+#         ax1.set_aspect('auto')
+#         ax1.set_title('Suite2p cells (GCaMP)', fontsize=12, color='black', fontweight='bold',loc='center')
+#         ax2.set_axis_off()
+#         ax2.set_aspect('auto')
+#         ax2.set_title('tdTomato cells (tdTomato)', fontsize=12, color='black', fontweight='bold',loc='center')
+#         ax3.set_axis_off()
+#         ax3.set_aspect('auto')
+#         ax3.set_title('Labeled cells (Merge)', fontsize=12, color='black', fontweight='bold',loc='center')
+
+#         plt.tight_layout(rect=[0, 0, 1, 1])
+
+#     return redcell_cellpose,fig
 
 # def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
 #     stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
@@ -286,22 +439,6 @@ def proc_labeling_plane(plane_folder,show_plane=False,showcells=True):
 
 #     return df_green,df_red,fig
 
-def proc_labeling_session(rawdatadir,animal_id,sessiondate):
-    sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
-
-    suite2p_folder  = os.path.join(sesfolder,"suite2p")
-
-    assert os.path.exists(suite2p_folder), 'suite2p folders not found'
-    
-    plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
-
-    for iplane,plane_folder in enumerate(plane_folders):
-        # h = 2
-        redcell_cellpose,fig              = proc_labeling_plane(plane_folder,show_plane=True)
-        
-        np.save(os.path.join(plane_folder,'redcell_cellpose.npy'),redcell_cellpose)
-
-        fig.savefig(os.path.join(plane_folder,'Labeling_Plane%d.jpg' % iplane),dpi=600)
 
 
 

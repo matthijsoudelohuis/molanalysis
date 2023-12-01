@@ -5,6 +5,15 @@ navigation task while headfixed in a visual tunnel with landmarks.
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
+
+
+#TODO
+# filter runspeed
+# plot individual trials locomotion, get sense of variance
+# plot lick rate and locomotion for psy protocol - panel with only hits
+# split script for diff purposes (psy vs max vs noise)
+# allow psy protocol to fit DP and DN with same function
+
 import math
 import pandas as pd
 import os
