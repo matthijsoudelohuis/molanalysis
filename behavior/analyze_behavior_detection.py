@@ -20,16 +20,15 @@ from scipy.interpolate import interp1d
 from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 from utils.psth import compute_tensor_space,compute_respmat_space
 from utils.plotting_style import * #get all the fixed color schemes
-from utils.behaviorfuncs import compute_dprime,smooth_rate_dprime #get support functions for beh analysis 
+from utils.behaviorlib import compute_dprime,smooth_rate_dprime,plot_psycurve #get support functions for beh analysis 
 
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
 
-############## Load the data ####################################
+############## Load the data - MaxOnly ####################################
 protocol            = ['DM']
 sessions            = filter_sessions(protocol,load_behaviordata=True)
 
 nsessions = len(sessions)
-
 
 ################################################################
 ### Show the overall dprime for each animal across sessions:
@@ -229,3 +228,61 @@ plt.text(25, 5.2, 'Reward',fontsize=12)
 
 
 
+
+############## Load the data ####################################
+protocol            = ['DP']
+sessions            = filter_sessions(protocol,load_behaviordata=True)
+
+nsessions = len(sessions)
+
+# def psy curve: 
+
+fig, ax = plt.subplots()
+
+conds = np.sort(pd.unique(trialdata['signal']))
+nconds = len(conds)
+
+for ises,ses in enumerate(sessions):
+    psy = ses.trialdata.groupby(['signal'])['lickResponse'].mean()
+    plt.plot(psy,'k',marker='o',markersize=12)
+
+ax.set_ylim(0,1)
+ax.set_xlim(0,100)
+ax.set_xlabel('Signal')
+ax.set_ylabel('Response Rate')
+
+if nconds>4:
+
+    fit 
+
+
+# Generate some example data
+np.random.seed(42)
+x_data = np.linspace(-5, 5, 100)
+true_params = [0.5, 1.5, 0.05, 0.02]  # Example parameters (mu, sigma, lapse_rate, guess_rate)
+y_data_true = psychometric_function(x_data, *true_params)
+y_data_noise = y_data_true + np.random.normal(0, 0.02, size=len(x_data))  # Add some noise
+
+# Fit the psychometric curve to the data using curve_fit
+initial_guess = [0, 1, 0.1, 0.01]  # Initial guess for parameters
+
+
+import numpy as np
+from scipy.optimize import curve_fit
+import scipy as sy
+import matplotlib.pyplot as plt
+
+d = np.array([75, 80, 90, 95, 100, 105, 110, 115, 120, 125], dtype=float)
+p2 = np.array([6, 13, 25, 29, 29, 29, 30, 29, 30, 30], dtype=float) / 30. # scale to 0..1
+
+# psychometric function
+def pf(x, alpha, beta):
+    return 1. / (1 + np.exp( -(x-alpha)/beta ))
+
+# fitting
+par0 = sy.array([100., 1.]) # use some good starting values, reasonable default is [0., 1.]
+par, mcov = curve_fit(pf, d, p2, par0)
+print(par)
+plt.plot(d, p2, 'ro')
+plt.plot(d, pf(d, par[0], par[1]))
+plt.show()

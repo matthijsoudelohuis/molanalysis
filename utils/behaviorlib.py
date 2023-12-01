@@ -12,6 +12,9 @@ import os
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from scipy import special
 
 
 def compute_dprime(signal,response):
@@ -61,3 +64,48 @@ def smooth_rate_dprime(sessions,sigma=25):
                         for t in range(len(ses.trialdata))])
 
     return sessions
+
+def plot_psycurve(sessions):
+
+
+
+
+    return
+
+# Psychometric function (cumulative Gaussian)
+def psychometric_function(x, mu, sigma, lapse_rate, guess_rate):
+    """
+    Parameters:
+    - mu: mean or threshold
+    - sigma: standard deviation or slope
+    - lapse_rate: rate of lapses or false positives/negatives
+    - guess_rate: rate of guessing
+    """
+    # return guess_rate + (1 - guess_rate - lapse_rate) * 0.5 * (1 + np.erf((x - mu) / (np.sqrt(2) * sigma)))
+    return guess_rate + (1 - guess_rate - lapse_rate) * 0.5 * (1 + special.erf((x - mu) / (np.sqrt(2) * sigma)))
+
+
+
+def fit_psycurve(ses):
+    
+
+
+
+
+params, covariance = curve_fit(psychometric_function, x_data, y_data_noise, p0=initial_guess)
+
+# Plot the results
+plt.scatter(x_data, y_data_noise, label='Noisy Data')
+plt.plot(x_data, psychometric_function(x_data, *params), label='Fitted Curve', color='red')
+plt.title('Fitted Psychometric Curve')
+plt.xlabel('Stimulus Intensity')
+plt.ylabel('Probability of Response')
+plt.legend()
+plt.show()
+
+# Print the fitted parameters
+print("Fitted Parameters:")
+print("mu:", params[0])
+print("sigma:", params[1])
+print("lapse_rate:", params[2])
+print("guess_rate:", params[3])
