@@ -88,24 +88,23 @@ def psychometric_function(x, mu, sigma, lapse_rate, guess_rate):
 
 def fit_psycurve(ses):
     
+    return
 
 
+# params, covariance = curve_fit(psychometric_function, x_data, y_data_noise, p0=initial_guess)
 
+# # Plot the results
+# plt.scatter(x_data, y_data_noise, label='Noisy Data')
+# plt.plot(x_data, psychometric_function(x_data, *params), label='Fitted Curve', color='red')
+# plt.title('Fitted Psychometric Curve')
+# plt.xlabel('Stimulus Intensity')
+# plt.ylabel('Probability of Response')
+# plt.legend()
+# plt.show()
 
-params, covariance = curve_fit(psychometric_function, x_data, y_data_noise, p0=initial_guess)
-
-# Plot the results
-plt.scatter(x_data, y_data_noise, label='Noisy Data')
-plt.plot(x_data, psychometric_function(x_data, *params), label='Fitted Curve', color='red')
-plt.title('Fitted Psychometric Curve')
-plt.xlabel('Stimulus Intensity')
-plt.ylabel('Probability of Response')
-plt.legend()
-plt.show()
-
-# Print the fitted parameters
-print("Fitted Parameters:")
-print("mu:", params[0])
-print("sigma:", params[1])
-print("lapse_rate:", params[2])
-print("guess_rate:", params[3])
+# # Print the fitted parameters
+# print("Fitted Parameters:")
+# print("mu:", params[0])
+# print("sigma:", params[1])
+# print("lapse_rate:", params[2])
+# print("guess_rate:", params[3])

@@ -276,6 +276,9 @@ def proc_task(rawdatadir,sessiondata):
     trialdata = trialdata.rename(columns={'Reward': 'rewardAvailable'})
     trialdata['rewardGiven']  = np.logical_and(trialdata['rewardAvailable'],trialdata['lickResponse']).astype('int')
     trialdata = trialdata.rename(columns={'trialType': 'signal'})
+    
+    for col in trialdata.columns:
+        trialdata = trialdata.rename(columns={col: col[0].lower() + col[1:]})
 
     # Signal values: 
     assert(np.all(np.logical_and(trialdata['signal'] >= 0,trialdata['signal'] <= 100))), 'not all signal values are between 0 and 100'
@@ -295,7 +298,7 @@ def proc_task(rawdatadir,sessiondata):
     
     #Get behavioral data, construct dataframe and modify a bit:
     behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
-    behaviordata.columns = ["rawvoltage","ts","trialnum","zpos","runspeed","lick","reward"] #rename the columns
+    # behaviordata.columns = ["rawvoltage","ts","trialnum","zpos","runspeed","lick","reward"] #rename the columns
     behaviordata = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
     
     ## Licks
@@ -307,18 +310,18 @@ def proc_task(rawdatadir,sessiondata):
     reward_ts      = behaviordata['ts'][np.append(rewardactivity>0,False)].to_numpy()
     
     ## Reconstruct total position:
-    trialdata['TrialEnd'] = 0
+    trialdata['trialEnd'] = 0
     for t in range(len(trialdata)):
-        trialdata.loc[trialdata.index[trialdata['TrialNumber']==t+1],'TrialEnd'] = max(behaviordata.loc[behaviordata.index[behaviordata['trialnum']==t],'zpos'])
+        trialdata.loc[trialdata.index[trialdata['trialNumber']==t+1],'trialEnd'] = max(behaviordata.loc[behaviordata.index[behaviordata['trialnumber']==t],'zpos'])
 
     behaviordata['zpos_tot'] = behaviordata['zpos']
     for t in range(len(trialdata)):
-        behaviordata.loc[behaviordata.index[behaviordata['trialnum']==t+1],'zpos_tot'] += np.cumsum(trialdata['TrialEnd'])[t]
+        behaviordata.loc[behaviordata.index[behaviordata['trialnumber']==t+1],'zpos_tot'] += np.cumsum(trialdata['trialEnd'])[t]
 
-    trialdata['StimStart_tot']          = trialdata['StimStart'] + np.cumsum(trialdata['TrialEnd'])
-    trialdata['StimEnd_tot']            = trialdata['StimEnd'] + np.cumsum(trialdata['TrialEnd'])
-    trialdata['RewardZoneStart_tot']    = trialdata['RewardZoneStart'] + np.cumsum(trialdata['TrialEnd'])
-    trialdata['RewardZoneEnd_tot']      = trialdata['RewardZoneEnd'] + np.cumsum(trialdata['TrialEnd'])
+    trialdata['stimStart_tot']          = trialdata['stimStart'] + np.cumsum(trialdata['trialEnd'])
+    trialdata['stimEnd_tot']            = trialdata['stimEnd'] + np.cumsum(trialdata['trialEnd'])
+    trialdata['rewardZoneStart_tot']    = trialdata['rewardZoneStart'] + np.cumsum(trialdata['trialEnd'])
+    trialdata['rewardZoneEnd_tot']      = trialdata['rewardZoneEnd'] + np.cumsum(trialdata['trialEnd'])
     
     #Subsample the data, don't need this resolution
     behaviordata = behaviordata.iloc[::10, :].copy().reset_index(drop=True) #subsample data 10 times (to 100 Hz)
@@ -339,18 +342,18 @@ def proc_task(rawdatadir,sessiondata):
     trialdata['tStimStart'] = ''
     trialdata['tStimEnd'] = ''
     for t in range(len(trialdata)):
-        idx             = behaviordata['trialnum']==t+1
+        idx             = behaviordata['trialnumber']==t+1
         z_temp          = behaviordata.loc[behaviordata.index[idx],'zpos'].to_numpy()
         ts_temp         = behaviordata.loc[behaviordata.index[idx],'ts'].to_numpy()
         try:
-            tStimStart      = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'StimStart'])[0][0]]
+            tStimStart      = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'stimStart'])[0][0]]
         except:
             tStimStart        = trialdata.loc[trialdata.index[t], 'tStart']
             print('Stimulus start later than trial end')
         trialdata.loc[trialdata.index[t], 'tStimStart'] = tStimStart
         
         try:
-            tStimEnd        = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'StimEnd'])[0][0]]
+            tStimEnd        = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'stimEnd'])[0][0]]
         except:
             tStimEnd        = trialdata.loc[trialdata.index[t], 'tEnd']
             print('Stimulus end later than trial end')
@@ -363,7 +366,7 @@ def proc_task(rawdatadir,sessiondata):
     trialdata['tReward'] = np.nan
     trialdata['sReward'] = np.nan
     for t in range(len(trialdata)):
-        idx = np.logical_and(behaviordata['reward'],[behaviordata['trialnum']==t+1]).flatten()
+        idx = np.logical_and(behaviordata['reward'],[behaviordata['trialnumber']==t+1]).flatten()
         if np.any(idx):
             trialdata.loc[trialdata.index[t],'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
             trialdata.loc[trialdata.index[t],'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]

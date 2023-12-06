@@ -19,8 +19,8 @@ from preprocessing.preprocesslib import *
 rawdatadir      = "X:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
-rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
-procdatadir     = "E:\\Procdata\\"
+# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+# procdatadir     = "E:\\Procdata\\"
 
 animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
 # animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
@@ -30,13 +30,13 @@ date_filter         = []
 animal_ids          = ['LPE10884'] #If empty than all animals in folder will be processed
 # date_filter        = ['2023_11_08']
 
-animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
-date_filter        = ['2023_11_16']
+# animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
+# date_filter        = ['2023_11_16']
 
 # protocols           = ['GN','RF','SP']
 # protocols           = ['SP']
-protocols           = ['GN']
-# protocols           = ['DM']
+# protocols           = ['GN']
+protocols           = ['DP']
 # protocols           = ['VR']
 
 ## Loop over all selected animals and folders

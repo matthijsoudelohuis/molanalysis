@@ -5,12 +5,9 @@ navigation task while headfixed in a visual tunnel with landmarks.
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
-
-
 #TODO
 # filter runspeed
 # plot individual trials locomotion, get sense of variance
-# plot lick rate and locomotion for psy protocol - panel with only hits
 # split script for diff purposes (psy vs max vs noise)
 # allow psy protocol to fit DP and DN with same function
 
@@ -34,7 +31,7 @@ from utils.behaviorlib import compute_dprime,smooth_rate_dprime,plot_psycurve #g
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
 
 ############## Load the data - MaxOnly ####################################
-protocol            = ['DM']
+protocol            = ['DP']
 sessions            = filter_sessions(protocol,load_behaviordata=True)
 
 nsessions = len(sessions)
@@ -94,8 +91,8 @@ sessions        = smooth_rate_dprime(sessions,sigma=25)
 trialdata       = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
 
 fig,ax = plt.subplots(figsize=(7,4))
-sns.lineplot(data=trialdata,x='TrialNumber',y='smooth_hitrate',color='g')
-sns.lineplot(data=trialdata,x='TrialNumber',y='smooth_farate',color='r')
+sns.lineplot(data=trialdata,x='trialNumber',y='smooth_hitrate',color='g')
+sns.lineplot(data=trialdata,x='trialNumber',y='smooth_farate',color='r')
 plt.ylabel('HIT / FA rate')
 
 plt.savefig(os.path.join(savedir,'Performance','HITFA_rate_acrosssession_LPE10884' + '.png'), format = 'png')
@@ -103,8 +100,8 @@ plt.savefig(os.path.join(savedir,'Performance','HITFA_rate_acrosssession_LPE1088
 ### individual sessions
 fig,ax = plt.subplots(figsize=(7,4))
 for i,ses in enumerate(sessions):
-    plt.plot(ses.trialdata['TrialNumber'],ses.trialdata['smooth_hitrate'],color='g')
-    plt.plot(ses.trialdata['TrialNumber'],ses.trialdata['smooth_farate'],color='r')
+    plt.plot(ses.trialdata['trialNumber'],ses.trialdata['smooth_hitrate'],color='g')
+    plt.plot(ses.trialdata['trialNumber'],ses.trialdata['smooth_farate'],color='r')
 plt.ylabel('HIT / FA rate')
 plt.xlabel('Trial Number')
 
@@ -112,13 +109,13 @@ plt.savefig(os.path.join(savedir,'Performance','HITFA_rate_acrosssession_indiv' 
 
 ### Dprime:
 fig,ax = plt.subplots(figsize=(7,4))
-sns.lineplot(data=trialdata,x='TrialNumber',y='smooth_dprime',color='k')
+sns.lineplot(data=trialdata,x='trialNumber',y='smooth_dprime',color='k')
 plt.ylabel('Dprime')
 plt.savefig(os.path.join(savedir,'Performance','Dprime_acrosssession' + '.png'), format = 'png')
 
 fig,ax = plt.subplots(figsize=(7,4))
 for i,ses in enumerate(sessions):
-    plt.plot(ses.trialdata['TrialNumber'],ses.trialdata['smooth_dprime'],color='k')
+    plt.plot(ses.trialdata['trialNumber'],ses.trialdata['smooth_dprime'],color='k')
 plt.ylabel('Dprime')
 plt.xlabel('Trial Number')
 
@@ -152,8 +149,8 @@ for ises,ses in enumerate(sessions):
     runPSTH_ses     = np.empty(shape=(ntrials, len(bincenters)))
 
     for itrial in range(ntrials):
-        idx = ses.behaviordata['trialnum']==itrial+1
-        runPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['StimStart'][0],
+        idx = ses.behaviordata['trialnumber']==itrial+1
+        runPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
                                             ses.behaviordata['runspeed'][idx], statistic='mean', bins=binedges)[0]
 
     runPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = runPSTH_ses
@@ -161,8 +158,8 @@ for ises,ses in enumerate(sessions):
     lickPSTH_ses    = np.empty(shape=(ntrials, len(bincenters)))
 
     for itrial in range(ntrials-1):
-        idx = ses.behaviordata['trialnum']==itrial+1
-        lickPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['StimStart'][0],
+        idx = ses.behaviordata['trialnumber']==itrial+1
+        lickPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
                                             ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
     lickPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = lickPSTH_ses
 
@@ -175,7 +172,7 @@ ttypes = pd.unique(trialdata['trialOutcome'])
 ttypes = ['CR', 'MISS', 'HIT','FA']
 
 for i,ttype in enumerate(ttypes):
-    idx = np.logical_and(trialdata['trialOutcome']==ttype,trialdata['TrialNumber']<1000)
+    idx = np.logical_and(trialdata['trialOutcome']==ttype,trialdata['trialNumber']<1000)
     data_mean = np.nanmean(runPSTH[idx,:],axis=0)
     data_error = np.nanstd(runPSTH[idx,:],axis=0)# / math.sqrt(sum(idx))
     ax.plot(bincenters,data_mean,label=ttype)
@@ -208,7 +205,7 @@ ttypes = pd.unique(trialdata['trialOutcome'])
 ttypes = ['CR', 'MISS', 'HIT','FA']
 
 for i,ttype in enumerate(ttypes):
-    idx = np.logical_and(trialdata['trialOutcome']==ttype,trialdata['TrialNumber']<300)
+    idx = np.logical_and(trialdata['trialOutcome']==ttype,trialdata['trialNumber']<300)
     data_mean = np.nanmean(lickPSTH[idx,:],axis=0)
     data_error = np.nanstd(lickPSTH[idx,:],axis=0) / math.sqrt(sum(idx))
     ax.plot(bincenters,data_mean,label=ttype)
@@ -234,64 +231,3 @@ plt.text(25, 5.2, 'Reward',fontsize=12)
 
 ################################ 
 
-
-
-
-
-############## Load the data ####################################
-protocol            = ['DP']
-sessions            = filter_sessions(protocol,load_behaviordata=True)
-
-nsessions = len(sessions)
-
-# def psy curve: 
-
-fig, ax = plt.subplots()
-
-conds = np.sort(pd.unique(trialdata['signal']))
-nconds = len(conds)
-
-for ises,ses in enumerate(sessions):
-    psy = ses.trialdata.groupby(['signal'])['lickResponse'].mean()
-    plt.plot(psy,'k',marker='o',markersize=12)
-
-ax.set_ylim(0,1)
-ax.set_xlim(0,100)
-ax.set_xlabel('Signal')
-ax.set_ylabel('Response Rate')
-
-if nconds>4:
-
-    fit 
-
-
-# Generate some example data
-np.random.seed(42)
-x_data = np.linspace(-5, 5, 100)
-true_params = [0.5, 1.5, 0.05, 0.02]  # Example parameters (mu, sigma, lapse_rate, guess_rate)
-y_data_true = psychometric_function(x_data, *true_params)
-y_data_noise = y_data_true + np.random.normal(0, 0.02, size=len(x_data))  # Add some noise
-
-# Fit the psychometric curve to the data using curve_fit
-initial_guess = [0, 1, 0.1, 0.01]  # Initial guess for parameters
-
-
-import numpy as np
-from scipy.optimize import curve_fit
-import scipy as sy
-import matplotlib.pyplot as plt
-
-d = np.array([75, 80, 90, 95, 100, 105, 110, 115, 120, 125], dtype=float)
-p2 = np.array([6, 13, 25, 29, 29, 29, 30, 29, 30, 30], dtype=float) / 30. # scale to 0..1
-
-# psychometric function
-def pf(x, alpha, beta):
-    return 1. / (1 + np.exp( -(x-alpha)/beta ))
-
-# fitting
-par0 = sy.array([100., 1.]) # use some good starting values, reasonable default is [0., 1.]
-par, mcov = curve_fit(pf, d, p2, par0)
-print(par)
-plt.plot(d, p2, 'ro')
-plt.plot(d, pf(d, par[0], par[1]))
-plt.show()
