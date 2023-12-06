@@ -362,6 +362,7 @@ def proc_task(rawdatadir,sessiondata):
     for reward in reward_ts: #set only the first timestamp of reward to True, to have single indices
         behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
     
+    print('problematic if reward not in reward zone!')
     #Compute the timestamp and spatial location of the reward being given and store in trialdata:
     trialdata['tReward'] = np.nan
     trialdata['sReward'] = np.nan
@@ -370,6 +371,11 @@ def proc_task(rawdatadir,sessiondata):
         if np.any(idx):
             trialdata.loc[trialdata.index[t],'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
             trialdata.loc[trialdata.index[t],'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]
+
+    print('problematic if reward not in reward zone!')
+    assert(trialdata[trialdata['lickResponse']==0])
+    print('assert that licks are not in reward zone for lickReponse=0 trials...')
+     # df = sessions[0].trialdata[sessions[0].trialdata['trialOutcome']=='CR']
 
     #Compute reward rate (fraction of GO trials rewarded) with sliding window for engagement index:
     sliding_window = 24

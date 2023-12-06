@@ -68,6 +68,22 @@ def get_clr_gratingnoise_stimuli():
     
     return clrs
 
+def get_clr_outcome(outcomes):
+    palette       = {'CR': '#89A6FA',
+                'MISS' : '#FADB89',
+                'HIT' : '#89FA95',
+                'FA' : '#FA89AD'}
+    # palette       = {'CR': '#0026C7',
+    #             'MISS' : '#C79400',
+    #             'HIT' : '#00C722',
+    #             'FA' : '#C70028'}
+    return itemgetter(*outcomes)(palette)
+
+def get_clr_psy(signals):
+    clrs            = sns.color_palette('Blues', len(signals))
+    # palette         = {stims[i]: clrs[i] for i in range(len(stims))}
+    return clrs
+
 
 # decoding_inputs = ['rate', 'phase', 'energy', 'rate+lfp', 'rate+energy']
 # decoding_inputs_control = ['shuffled_rate', 'rate+shuffled_phase']

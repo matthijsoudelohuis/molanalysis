@@ -3,6 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os 
 
+def extrema_np(arr):
+    return np.min(arr),np.max(arr)
+
 def bleedthrough_correction(greenchanim,redchanim,gain1=0.6,gain2=0.4):
     
     # Regression with pre-established values:
@@ -12,9 +15,6 @@ def bleedthrough_correction(greenchanim,redchanim,gain1=0.6,gain2=0.4):
 
     return greenchanim_corr
 
-
-def extrema_np(arr):
-    return np.min(arr),np.max(arr)
 
 ## 
 def plot_correction_images(greenchanim,redchanim):
