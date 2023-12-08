@@ -51,22 +51,32 @@ def get_clr_blocks(blocks):
     clrs            = sns.color_palette('Greys', 2)
     return clrs
 
-def get_clr_gratingnoise_stimuli():
-    # cmap1           = plt.colormaps['PuOr']((0,0.5,1))[:,:3]
-    # cmap2           = plt.colormaps['PiYG']((0,0.5,1))[:,:3]
-
-    cmap1           = plt.colormaps['tab10']((0,0.5,1))[:,:3]
-    cmap2           = plt.colormaps['Accent']((0,0.5,1))[:,:3]
+def get_clr_gratingnoise_stimuli(oris,speeds):
+    cmap1        = np.array([[160,0,255], #oris
+                            [0,255,115],
+                            [255,164,0]])
+    cmap1       = cmap1 / 255
+    cmap2       = np.array([0.2,0.6,1]) #speeds
 
     clrs = np.empty((3,3,3))
-    for i in range(3):
-        for j in range(3):
-            clrs[i,j,:] = np.mean((cmap1[i,:],cmap2[j,:]),axis=0)
+    labels = np.empty((3,3),dtype=object)
+    for iO,ori in enumerate(oris):
+        for iS,speed in enumerate(speeds):
+            clrs[iO,iS,:] = cmap1[iO,] * cmap2[iS]
+            labels[iO,iS] = '%d deg - %d deg/s' % (ori,speed)     
 
-    clrs = clrs - np.min(clrs)
-    clrs = clrs / np.max(clrs)
+    # cmap1           = plt.colormaps['tab10']((0,0.5,1))[:,:3]
+    # cmap2           = plt.colormaps['Accent']((0,0.5,1))[:,:3]
+
+    # clrs = np.empty((3,3,3))
+    # for i in range(3):
+    #     for j in range(3):
+    #         clrs[i,j,:] = np.mean((cmap1[i,:],cmap2[j,:]),axis=0)
+
+    # clrs = clrs - np.min(clrs)
+    # clrs = clrs / np.max(clrs)
     
-    return clrs
+    return clrs,labels
 
 def get_clr_outcome(outcomes):
     palette       = {'CR': '#89A6FA',
