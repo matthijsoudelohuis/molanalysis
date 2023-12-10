@@ -285,31 +285,35 @@ plt.savefig(os.path.join(savedir,'PCA_allStim_' + sessions[sesidx].sessiondata['
 
 ################### PCA unsupervised dispaly of noise around center for each condition #################
 ## split into area 1 and area 2:
-X1 = sessions[sesidx].respmat[idx_V1,:]
-X2 = sessions[sesidx].respmat[idx_PM,:]
 
 idx_V1_tuned = np.logical_and(sessions[sesidx].celldata['roi_name']=='V1',sessions[sesidx].celldata['tuning']>0.4)
 idx_PM_tuned = np.logical_and(sessions[sesidx].celldata['roi_name']=='PM',sessions[sesidx].celldata['tuning']>0.4)
 
-X1 = sessions[sesidx].respmat[idx_V1_tuned,:]
-X2 = sessions[sesidx].respmat[idx_PM_tuned,:]
+A1 = sessions[sesidx].respmat[idx_V1_tuned,:]
+A2 = sessions[sesidx].respmat[idx_PM_tuned,:]
 
-Y1 = np.vstack((sessions[sesidx].trialdata['deltaOrientation'],
+idx_V1 = np.where(sessions[sesidx].celldata['roi_name']=='V1')[0]
+idx_PM = np.where(sessions[sesidx].celldata['roi_name']=='PM')[0]
+
+A1 = sessions[sesidx].respmat[idx_V1,:]
+A2 = sessions[sesidx].respmat[idx_PM,:]
+
+S   = np.vstack((sessions[sesidx].trialdata['deltaOrientation'],
                sessions[sesidx].trialdata['deltaSpeed'],
                sessions[sesidx].respmat_runspeed))
-Y1 = np.vstack((Y1,np.random.randn(1,K)))
+S = np.vstack((S,np.random.randn(1,K)))
 
-ylabels     = ['Ori','Speed','Running','Random']
+slabels     = ['Ori','Speed','Running','Random']
 arealabels  = ['V1','PM']
 
 # Define neural data parameters
-N1,K        = np.shape(X1)
-N2          = np.shape(X2)[0]
-NY          = np.shape(Y1)[0]
+N1,K        = np.shape(A1)
+N2          = np.shape(A2)[0]
+NS          = np.shape(S)[0]
 
 cmap = plt.get_cmap('hot')
 
-for iY in range(NY):
+for iSvar in range(NS):
     fig, axes = plt.subplots(3, 3, figsize=[9, 9])
     proj = (0, 1)
     # proj = (3, 4)
@@ -317,22 +321,26 @@ for iY in range(NY):
         for iS, speed in enumerate(speeds):                       #plot speed separately with diff colors
             idx         = np.intersect1d(ori_ind[iO],speed_ind[iS])
             
-            Xp          = pca.fit_transform(X1[:,idx].T).T #fit pca to response matrix (n_samples by n_features)
+            # Xp          = pca.fit_transform(respmat_zsc[:,idx].T).T #fit pca to response matrix (n_samples by n_features)
+            Xp          = pca.fit_transform(A1[:,idx].T).T #fit pca to response matrix (n_samples by n_features)
             #dimensionality is now reduced from N by K to ncomp by K
 
             x = Xp[proj[0],:]                          #get all data points for this ori along first PC or projection pairs
             y = Xp[proj[1],:]                          #get all data points for this ori along first PC or projection pairs
             
-            c = cmap(minmax_scale(Y1[iY,idx], feature_range=(0, 1)))[:,:3]
+            c = cmap(minmax_scale(S[iSvar,idx], feature_range=(0, 1)))[:,:3]
 
-            sns.scatterplot(x=x, y=y, c=c,ax = axes[iO,iS],s=15,legend=False,edgecolor =None,alpha=0.7)
-
+            # tip_rate = tips.eval("tip / total_bill").rename("tip_rate")
+            sns.scatterplot(x=x, y=y, c=c,ax = axes[iO,iS],s=10,legend = False,edgecolor =None)
+            plt.title(slabels[iSvar])
+            # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
+            # ax.scatter(x, y, color=pal[(iS-1)*len(unique_oris)+iO], s=respmat_runspeed[idx], alpha=0.8)     #each trial is one dot
             axes[iO,iS].set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
             axes[iO,iS].set_ylabel('PC {}'.format(proj[1]+1))
-    plt.suptitle(ylabels[iY],fontsize=15)
+    plt.suptitle(slabels[iSvar],fontsize=15)
     sns.despine(fig=fig, top=True, right=True)
     plt.tight_layout()
-    plt.savefig(os.path.join(savedir,'GN_PCA','PCA_perStim_color_' + ylabels[iY] + '.png'), format = 'png')
+    plt.savefig(os.path.join(savedir,'PCA_perStim_color' + slabels[iSvar] + '.png'), format = 'png')
 
 
 #### linear model explaining responses: 
@@ -364,22 +372,60 @@ from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 
+### Regression of behavioral variables onto neural data ####
 
-### Regression of neural activity onto behavioral variables: 
-
-kfold       = 5
-R2_Y_mat    = np.empty((NY,noris,nspeeds))
-R2_X1_mat   = np.empty((noris,nspeeds))
-weights     = np.empty((NY,N1,noris,nspeeds,kfold)) 
+kfold = 5
+R2_Y_mat    = np.empty((N1,noris,nspeeds))
+# R2_Y_mat    = np.empty((noris,nspeeds))
+weights     = np.empty((N1,NS,noris,nspeeds,kfold)) 
 
 for iO, ori in enumerate(oris): 
     for iS, speed in enumerate(speeds):     
         # ax = axes[iO,iS]
         idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
 
-        X = X1[:,idx].T
+        X = zscore(S[:,idx],axis=1).T #to be able to interpret weights in uniform scale
+        
+        Y = zscore(A1[:505,idx],axis=1).T
 
-        Y = zscore(Y1[:,idx],axis=1).T #to be able to interpret weights in uniform scale
+        #Implementing cross validation
+        kf  = KFold(n_splits=kfold, random_state=5,shuffle=True)
+        
+        model = linear_model.Ridge(alpha=0.001)  
+
+        Yhat = np.empty(np.shape(Y))
+        for (train_index, test_index),iF in zip(kf.split(X),range(kfold)):
+            X_train , X_test = X[train_index,:],X[test_index,:]
+            Y_train , Y_test = Y[train_index,:],Y[test_index,:]
+            
+            model.fit(X_train,Y_train)
+
+            # Yhat_train  = model.predict(X_train)
+            Yhat[test_index,:]   = model.predict(X_test)
+
+            # weights[:,:,iO,iS,iF] = model.coef_
+
+        # [iO,iS] = Rss(Y, Yhat)
+        # for iY in range(NY):
+        # R2_Y_mat[:,iO,iS] = r2_score(Y, Yhat, multioutput='raw_values')
+        R2_Y_mat[iO,iS] = r2_score(Y, Yhat)
+R2_Y_mat
+
+### Regression of neural variables onto behavioral data ####
+
+kfold       = 5
+R2_Y_mat    = np.empty((NS,noris,nspeeds))
+R2_X1_mat   = np.empty((noris,nspeeds))
+weights     = np.empty((NS,N1,noris,nspeeds,kfold)) 
+
+for iO, ori in enumerate(oris): 
+    for iS, speed in enumerate(speeds):     
+        # ax = axes[iO,iS]
+        idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
+
+        X = A1[:,idx].T
+
+        Y = zscore(S[:,idx],axis=1).T #to be able to interpret weights in uniform scale
 
         #Implementing cross validation
         kf  = KFold(n_splits=kfold, random_state=randomseed,shuffle=True)
@@ -398,17 +444,17 @@ for iO, ori in enumerate(oris):
 
             weights[:,:,iO,iS,iF] = model.coef_
 
-        # [iO,iS] = Rss(Y, Yhat)
-        for iY in range(NY):
+        for iY in range(NS):
             R2_Y_mat[:,iO,iS] = r2_score(Y, Yhat, multioutput='raw_values')
 
+
 ############ # ############# ############# ############# ############# 
-fig, axes   = plt.subplots(1, 4, figsize=[9, 3])
-for iY in range(NY):
+fig, axes   = plt.subplots(1, 4, figsize=[9, 4])
+for iY in range(NS):
     sns.heatmap(data=R2_Y_mat[iY,:,:],vmin=0,vmax=1,ax=axes[iY])
-    axes[iY].set_title(ylabels[iY])
-    axes[iY].set_xticklabels(speeds)
-    axes[iY].set_yticklabels(oris)
+    axes[iY].set_title(slabels[iY])
+    axes[iY].set_xticklabels(oris)
+    axes[iY].set_yticklabels(speeds)
 
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'GN_noiseregression','Regress_Behav_R2' + '.png'), format = 'png')
@@ -425,9 +471,9 @@ for iO, ori in enumerate(oris):
         # ax = axes[iO,iS]
         idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
 
-        X = X1[:,idx].T
+        X = A1[:,idx].T
 
-        Y = zscore(Y1[:,idx],axis=1).T #to be able to interpret weights in uniform scale
+        Y = zscore(S[:,idx],axis=1).T #to be able to interpret weights in uniform scale
 
         #Implementing cross validation
         kf  = KFold(n_splits=kfold, random_state=5,shuffle=True)
@@ -461,10 +507,10 @@ coefs = np.mean(weights,axis=4) #average over folds
 
 for iO, ori in enumerate(oris): 
     for iS, speed in enumerate(speeds):     
-        for iY in range(NY):
-            X = X1[:,idx].T
+        for iY in range(NS):
+            X = A1[:,idx].T
 
-            Y = zscore(Y1[:,idx],axis=1).T #to be able to interpret weights in uniform scale
+            Y = zscore(S[:,idx],axis=1).T #to be able to interpret weights in uniform scale
 
             # EV(X,u)
             u = coefs[iY,:,iO,iS]
@@ -528,8 +574,8 @@ plt.tight_layout()
 fig, axes = plt.subplots(3, 3, figsize=[9, 9])
 proj    = (0, 1)
 
-for iO, ori in enumerate(unique_oris):                                #plot orientation separately with diff colors
-    for iS, speed in enumerate(unique_speeds):     
+for iO, ori in enumerate(oris):                                #plot orientation separately with diff colors
+    for iS, speed in enumerate(speeds):     
         
         idx     = np.intersect1d(ori_ind[iO],speed_ind[iS])
 
