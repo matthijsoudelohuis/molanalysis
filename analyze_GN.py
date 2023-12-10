@@ -27,6 +27,9 @@ from sklearn.preprocessing import minmax_scale
 from utils.plotting_style import * #get all the fixed color schemes
 from scipy.signal import medfilt
 
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
 # from rastermap import Rastermap, utils
 
 # sessions            = filter_sessions(protocols = ['GN'])
@@ -46,12 +49,8 @@ randomseed  = 5
 
 sessions[sesidx].behaviordata['runspeed'] = medfilt(sessions[sesidx].behaviordata['runspeed'] , kernel_size=51)
 
-# zscore all the calcium traces:
-# calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
-
 ######################################
 #Show some traces and some stimuli to see responses:
-
 
 def show_excerpt_traces_gratings(Session,example_cells=None,trialsel=None):
     
@@ -140,8 +139,15 @@ sessions[sesidx].respmat         = compute_respmat(sessions[0].calciumdata, sess
 #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
 temp = pd.DataFrame(np.reshape(np.array(sessions[0].behaviordata['runspeed']),(len(sessions[0].behaviordata['runspeed']),1)))
 sessions[sesidx].respmat_runspeed = compute_respmat(temp, sessions[0].behaviordata['ts'], sessions[0].trialdata['tOnset'],
-                                   t_resp_start=0,t_resp_stop=1,method='mean')
+                                   t_resp_start=0,t_resp_stop=2,method='mean')
 sessions[sesidx].respmat_runspeed = np.squeeze(sessions[sesidx].respmat_runspeed)
+
+#hacky way to create dataframe of the mean motion energy with F x 1 with F number of samples:
+temp = pd.DataFrame(np.reshape(np.array(sessions[0].videodata['motionenergy']),(len(sessions[0].videodata['motionenergy']),1)))
+sessions[sesidx].respmat_motionenergy = compute_respmat(temp, sessions[0].videodata['timestamps'], sessions[0].trialdata['tOnset'],
+                                   t_resp_start=0,t_resp_stop=2,method='mean')
+sessions[sesidx].respmat_motionenergy = np.squeeze(sessions[sesidx].respmat_motionenergy)
+
 
 # #### Check if values make sense:
 fig,ax = plt.subplots(1,1,figsize=(6,6))
@@ -182,6 +188,13 @@ sns.histplot(sessions[sesidx].celldata['tuning'],ax=ax)
 
 tuning = sessions[sesidx].celldata['tuning']
 
+##### Compute selectivity measure: how selective is the mean response to one category versus the rest:
+resp_selec  = np.empty([N,noris,nspeeds])
+for iO,ori in enumerate(oris):
+    for iS,speed in enumerate(speeds):
+        resp_selec[:,iO,iS] = resp_mean[:,iO,iS] / np.sum(resp_mean[:,:,:].reshape(N,-1),axis=1)
+assert(np.allclose(np.sum(resp_selec.reshape(N,-1),axis=1),1)), 'selectivity measure gone wrong'
+
 ##### Show the most beautifully tuned cells:
 fig = show_excerpt_traces_gratings(sessions[sesidx],example_cells=np.where(tuning>np.percentile(tuning,95))[0])[0]
 fig.savefig(os.path.join(savedir,'ExampleTraces_TunedOnly_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
@@ -199,8 +212,9 @@ sessions[sesidx].celldata['prefori'] = prefori
 sessions[sesidx].celldata['prefspeed'] = prefspeed
 
 ##### Show cells tuned to certain orientation and speed to check method:
-# example_cells=np.where(np.all((prefori==150, prefspeed==200,tuning>np.percentile(tuning,90)),axis=0))[0] 
-example_cells=np.where(np.all((prefori==30, prefspeed==12.5,tuning>np.percentile(tuning,90)),axis=0))[0] 
+example_cells=np.where(np.all((prefori==150, prefspeed==200,tuning>np.percentile(tuning,90)),axis=0))[0] 
+# example_cells=np.where(np.all((prefori==30, prefspeed==12.5,tuning>np.percentile(tuning,90)),axis=0))[0] 
+# example_cells=np.where(np.all((prefori==30, prefspeed==12.5,resp_selec[:,0,0]>np.percentile(resp_selec[:,0,0],90)),axis=0))[0] 
 
 fig = show_excerpt_traces_gratings(sessions[sesidx],example_cells=example_cells)[0]
 
@@ -262,7 +276,7 @@ lines_alpha      = 0.8
 
 # handles = []
 projections = [(0, 1), (1, 2), (0, 2)]
-projections = [(0, 1), (1, 2), (3, 4)]
+# projections = [(0, 1), (1, 2), (3, 4)]
 fig, axes = plt.subplots(1, 3, figsize=[9, 3], sharey='row', sharex='row')
 for ax, proj in zip(axes, projections):
     for iO, ori in enumerate(oris):                                #plot orientation separately with diff colors
@@ -283,7 +297,7 @@ sns.despine(fig=fig, top=True, right=True)
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'PCA_allStim_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-################### PCA unsupervised dispaly of noise around center for each condition #################
+################### PCA unsupervised display of noise around center for each condition #################
 ## split into area 1 and area 2:
 
 idx_V1_tuned = np.logical_and(sessions[sesidx].celldata['roi_name']=='V1',sessions[sesidx].celldata['tuning']>0.4)
@@ -298,12 +312,19 @@ idx_PM = np.where(sessions[sesidx].celldata['roi_name']=='PM')[0]
 A1 = sessions[sesidx].respmat[idx_V1,:]
 A2 = sessions[sesidx].respmat[idx_PM,:]
 
+# S   = np.vstack((sessions[sesidx].trialdata['deltaOrientation'],
+#                sessions[sesidx].trialdata['deltaSpeed'],
+#                sessions[sesidx].respmat_runspeed))
+# S = np.vstack((S,np.random.randn(1,K)))
+# slabels     = ['Ori','Speed','Running','Random']
+
 S   = np.vstack((sessions[sesidx].trialdata['deltaOrientation'],
                sessions[sesidx].trialdata['deltaSpeed'],
-               sessions[sesidx].respmat_runspeed))
+               sessions[sesidx].respmat_runspeed,
+               sessions[sesidx].respmat_motionenergy))
 S = np.vstack((S,np.random.randn(1,K)))
+slabels     = ['Ori','Speed','Running','MotionEnergy','Random']
 
-slabels     = ['Ori','Speed','Running','Random']
 arealabels  = ['V1','PM']
 
 # Define neural data parameters
@@ -316,7 +337,7 @@ cmap = plt.get_cmap('hot')
 for iSvar in range(NS):
     fig, axes = plt.subplots(3, 3, figsize=[9, 9])
     proj = (0, 1)
-    # proj = (3, 4)
+    proj = (3, 4)
     for iO, ori in enumerate(oris):                                #plot orientation separately with diff colors
         for iS, speed in enumerate(speeds):                       #plot speed separately with diff colors
             idx         = np.intersect1d(ori_ind[iO],speed_ind[iS])
@@ -372,44 +393,70 @@ from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 
-### Regression of behavioral variables onto neural data ####
+# from scipy.stats import spearmanr
 
-kfold = 5
-R2_Y_mat    = np.empty((N1,noris,nspeeds))
-# R2_Y_mat    = np.empty((noris,nspeeds))
-weights     = np.empty((N1,NS,noris,nspeeds,kfold)) 
+################### Regression of behavioral variables onto neural data #############
+###### First identify single neurons that are correlated with behavioral variables ####
 
-for iO, ori in enumerate(oris): 
-    for iS, speed in enumerate(speeds):     
-        # ax = axes[iO,iS]
-        idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
+scolors = get_clr_GN_svars(slabels)
 
-        X = zscore(S[:,idx],axis=1).T #to be able to interpret weights in uniform scale
+corrmat = np.empty((N,NS,noris,nspeeds))
+for iN in range(N):
+    print(f"\rComputing correlations for neuron  {iN+1} / {N}",end='\r')
+    for iSvar in range(NS):
+        for iO, ori in enumerate(oris): 
+            for iS, speed in enumerate(speeds): 
+                idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
+                corrmat[iN,iSvar,iO,iS] = np.corrcoef(S[iSvar,idx],sessions[sesidx].respmat[iN,idx])[0,1]   
+                # corrmat[iN,iSvar,iO,iS] = spearmanr(S[iSvar,idx],sessions[sesidx].respmat[iN,idx])[0]
+
+fig,ax = plt.subplots(1,1,figsize=(4,4))
+for iSvar in range(NS):
+    sns.kdeplot(corrmat[:,iSvar,:,:].flatten(),ax=ax,color=scolors[iSvar],linewidth=1)
+plt.legend(slabels)
+plt.savefig(os.path.join(savedir,'KDE_Correlations_Svars' + '.png'), format = 'png')
+
+
+### Show the activity fluctuations as a function of variability in the behavioral vars for a couple of neurons:
+nexamples = 4
+plt.rcParams.update({'font.size': 7})
+
+fig,ax = plt.subplots(NS,nexamples,figsize=(6,6))
+
+for iSvar in range(NS):
+    idxN,idxO,idxS  = np.where(np.logical_or(corrmat[:,iSvar,:,:]>np.percentile(corrmat[:,iSvar,:,:].flatten(),95),
+                                             corrmat[:,iSvar,:,:]<np.percentile(corrmat[:,iSvar,:,:].flatten(),5)))
+    idx_examples    = np.random.choice(idxN,nexamples)
+    
+    for iN in range(nexamples):
         
-        Y = zscore(A1[:505,idx],axis=1).T
+        idx_trials = np.intersect1d(ori_ind[idxO[idx_examples[iN]==idxN][0]],speed_ind[idxS[idx_examples[iN]==idxN][0]])
+        ax = plt.subplot(NS,nexamples,iN + 1 + iSvar*nexamples)
+        ax.scatter(S[iSvar,idx_trials],sessions[sesidx].respmat[idx_examples[iN],idx_trials],
+                   s=10,alpha=0.7,marker='.',color=scolors[iSvar])
+        # ax.set_xlabel(slabels[iSvar],fontsize=9)
+        ax.set_title(slabels[iSvar],fontsize=9)
+sns.despine()
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'Examplecells_correlated_with_Svars' + '.png'), format = 'png')
 
-        #Implementing cross validation
-        kf  = KFold(n_splits=kfold, random_state=5,shuffle=True)
-        
-        model = linear_model.Ridge(alpha=0.001)  
+###### Is selectivity to particular orientations or speeds related to the correlation 
+# of neural activity with variability along one of the sensory/state variables?
 
-        Yhat = np.empty(np.shape(Y))
-        for (train_index, test_index),iF in zip(kf.split(X),range(kfold)):
-            X_train , X_test = X[train_index,:],X[test_index,:]
-            Y_train , Y_test = Y[train_index,:],Y[test_index,:]
-            
-            model.fit(X_train,Y_train)
+fig,ax = plt.subplots(1,NS,figsize=(10,2),sharex=True,sharey=True)
 
-            # Yhat_train  = model.predict(X_train)
-            Yhat[test_index,:]   = model.predict(X_test)
+for iSvar in range(NS):
+    ax = plt.subplot(1,NS,iSvar+1)
+    ax.scatter(resp_selec.flatten(),corrmat[:,iSvar,:,:].flatten(),
+                                  s=10,alpha=0.7,marker='.',color=scolors[iSvar])
+    ax.set_title(slabels[iSvar])
+    ax.set_xlabel('Selectivity')
+    ax.set_ylabel('Correlation')
+    ax.axvline(1/9,color='k',linestyle=':',linewidth=0.5)
+plt.savefig(os.path.join(savedir,'Relationship_selectivity_pairwisecorrelations' + '.png'), format = 'png')
 
-            # weights[:,:,iO,iS,iF] = model.coef_
 
-        # [iO,iS] = Rss(Y, Yhat)
-        # for iY in range(NY):
-        # R2_Y_mat[:,iO,iS] = r2_score(Y, Yhat, multioutput='raw_values')
-        R2_Y_mat[iO,iS] = r2_score(Y, Yhat)
-R2_Y_mat
+####### Population regression: 
 
 ### Regression of neural variables onto behavioral data ####
 
@@ -425,7 +472,7 @@ for iO, ori in enumerate(oris):
 
         X = A1[:,idx].T
 
-        Y = zscore(S[:,idx],axis=1).T #to be able to interpret weights in uniform scale
+        Y = zscore(S[:,idx],axis=1).T #z-score to be able to interpret weights in uniform scale
 
         #Implementing cross validation
         kf  = KFold(n_splits=kfold, random_state=randomseed,shuffle=True)
@@ -449,7 +496,7 @@ for iO, ori in enumerate(oris):
 
 
 ############ # ############# ############# ############# ############# 
-fig, axes   = plt.subplots(1, 4, figsize=[9, 4])
+fig, axes   = plt.subplots(1, NS, figsize=[10, 2])
 for iY in range(NS):
     sns.heatmap(data=R2_Y_mat[iY,:,:],vmin=0,vmax=1,ax=axes[iY])
     axes[iY].set_title(slabels[iY])
@@ -461,46 +508,102 @@ plt.savefig(os.path.join(savedir,'GN_noiseregression','Regress_Behav_R2' + '.png
 
 ### Regression of behavioral activity onto neural data: 
 
+idx_tuned = np.logical_and(np.logical_or(corrmat[:,0,0,0]>np.percentile(corrmat[:,0,0,0].flatten(),95),
+    corrmat[:,0,0,0]<np.percentile(corrmat[:,0,0,0].flatten(),5)),   
+                           sessions[sesidx].celldata['tuning']>0.4)
+
+idx_tuned = sessions[sesidx].celldata['tuning']>0.5
+idx_tuned = sessions[sesidx].celldata['tuning']>-0.5
+
+idx_tuned = np.any(resp_selec.reshape(N,-1)>0.2,axis=1)
+idx_tuned = np.logical_or(corrmat[:,0,0,0]>np.percentile(corrmat[:,0,0,0].flatten(),95),
+    corrmat[:,0,0,0]<np.percentile(corrmat[:,0,0,0].flatten(),5))
+
+A1 = sessions[sesidx].respmat[idx_tuned,:]
+
+N1 = np.shape(A1)[0]
+
 kfold       = 5
-R2_Y_mat    = np.empty((NY,noris,nspeeds))
-R2_X1_mat   = np.empty((noris,nspeeds))
-weights     = np.empty((NY,N1,noris,nspeeds,kfold)) 
+R2_Y        = np.empty((noris,nspeeds)) #variance explained across all neural data
+R2_Y_mat    = np.empty((N1,noris,nspeeds)) #variance for each neuron separately
+R2_X_mat    = np.empty((NS,noris,nspeeds)) #variance explained by each predictor separately
+weights     = np.empty((N1,NS,noris,nspeeds,kfold)) 
+
+sc = StandardScaler(with_mean=True,with_std=False)
+
 
 for iO, ori in enumerate(oris): 
     for iS, speed in enumerate(speeds):     
-        # ax = axes[iO,iS]
+
         idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
+        X = zscore(S[:,idx],axis=1).T # z-score to be able to interpret weights in uniform scale
+        # X = S[:,idx].T
+        # Y = zscore(A1[:,idx],axis=1).T
+        # Y = A1[:,idx].T
 
-        X = A1[:,idx].T
-
-        Y = zscore(S[:,idx],axis=1).T #to be able to interpret weights in uniform scale
+        Y = sc.fit_transform(A1[:,idx].T)
+        model = PCA(n_components=25)
+        Y = model.fit_transform(Y)
 
         #Implementing cross validation
         kf  = KFold(n_splits=kfold, random_state=5,shuffle=True)
         
-        model = linear_model.Ridge(alpha=0.00001)  
+        model = linear_model.Ridge(alpha=50)  
 
-        Yhat = np.empty(np.shape(Y))
+        Yhat        = np.empty(np.shape(Y))
+        Yhat_vars   = np.empty(np.shape(Y) + (NS,))
         for (train_index, test_index),iF in zip(kf.split(X),range(kfold)):
             X_train , X_test = X[train_index,:],X[test_index,:]
             Y_train , Y_test = Y[train_index,:],Y[test_index,:]
             
             model.fit(X_train,Y_train)
 
-            # Yhat_train  = model.predict(X_train)
             Yhat[test_index,:]   = model.predict(X_test)
+            for iSvar in range(NS):
+                Xtemp = np.zeros(np.shape(X_test))
+                Xtemp[:,iSvar] = X_test[:,iSvar]
+                Yhat_vars[test_index,:,iSvar]   = model.predict(Xtemp)
 
-            weights[:,:,iO,iS,iF] = model.coef_
+            # weights[:,:,iO,iS,iF] = model.coef_
 
-        # [iO,iS] = Rss(Y, Yhat)
-        for iY in range(NY):
-            R2_Y_mat[:,iO,iS] = r2_score(Y, Yhat, multioutput='raw_values')
+        R2_Y[iO,iS]         = r2_score(Y, Yhat)      
+        # R2_Y_mat[:,iO,iS]   = r2_score(Y, Yhat, multioutput='raw_values')
+        for iSvar in range(NS):
+            R2_X_mat[iSvar,iO,iS]         = r2_score(Y, Yhat_vars[:,:,iSvar])
 
+####################### Plot R2 for different predictors ################################ 
+fig, axes   = plt.subplots(1, NS, figsize=[9, 2])
+for iSvar in range(NS):
+    sns.heatmap(data=R2_X_mat[iSvar,:,:],vmin=0,vmax=0.2,ax=axes[iSvar])
+    axes[iSvar].set_title(slabels[iSvar])
+    axes[iSvar].set_xticklabels(oris)
+    axes[iSvar].set_yticklabels(speeds)
+
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'GN_noiseregression','Regress_StoA_Svar_R2' + '.png'), format = 'png')
+
+############ # ############# ############# ############# ############# 
+from sklearn.linear_model import RidgeCV
+
+model = linear_model.Ridge(alpha=np.array([0.0001,0.01,1,10,100]))  
+# list of alphas to check: 100 values from 0 to 5 with
+r_alphas = np.logspace(0, 5, 100)
+# initiate the cross validation over alphas
+ridge_model = RidgeCV(alphas=r_alphas, scoring='r2',store_cv_values=True)
+# fit the model with the best alpha
+ridge_model = ridge_model.fit(X_train, Y_train)
+
+ridge_model.alpha_
+ridge_model.cv_values_
+
+fig,ax = plt.subplots(1,1,figsize=(6,6))
+for iSvar in range(NS):
+    sns.kdeplot(corrmat[:,iSvar,:,:].flatten(),ax=ax,color=scolors[iSvar])
+plt.legend(slabels)
 
 #### ################## ######################
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 sc = StandardScaler()
+
 model = PCA(n_components=5)
 
 coefs = np.mean(weights,axis=4) #average over folds

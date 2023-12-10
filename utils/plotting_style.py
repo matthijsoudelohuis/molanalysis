@@ -78,6 +78,16 @@ def get_clr_gratingnoise_stimuli(oris,speeds):
     
     return clrs,labels
 
+
+def get_clr_GN_svars(labels):
+    palette       = {'Ori': '#2e17c4',
+                'Speed' : '#17c42e',
+                'Running' : '#c417ad',
+                'Random' : '#021011',
+                'MotionEnergy' : '#adc417'}
+    return itemgetter(*labels)(palette)
+
+
 def get_clr_outcome(outcomes):
     palette       = {'CR': '#89A6FA',
                 'MISS' : '#FADB89',
