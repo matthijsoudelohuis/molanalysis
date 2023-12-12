@@ -36,13 +36,14 @@ from sklearn.preprocessing import StandardScaler
 
 savedir = 'C:\\OneDrive\\PostDoc\\Figures\\NoiseRegression\\'
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\NoiseRegression\\'
+savedir = 'E:\\OneDrive\\PostDoc\\Figures\\NoiseRegression\\'
 
 
 #################################################
 # session_list        = np.array([['LPE10883','2023_10_27']])
 session_list        = np.array([['LPE10919','2023_11_16']])
 sessions            = load_sessions(protocol = 'GN',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='dF')
+                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 
 sesidx      = 0
 randomseed  = 5
@@ -110,10 +111,10 @@ def show_excerpt_traces_gratings(Session,example_cells=None,trialsel=None):
     return fig,example_cells
 
 
-example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
-example_cells   = [6,23,130,99,361,177,153,413,435]
+# example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
+# example_cells   = [6,23,130,99,361,177,153,413,435]
 
-show_excerpt_traces_gratings(sessions[sesidx],example_cells=example_cells,trialsel=[50,90])
+# show_excerpt_traces_gratings(sessions[sesidx],example_cells=example_cells,trialsel=[50,90])
 show_excerpt_traces_gratings(sessions[sesidx])
 
 ##############################################################################
@@ -133,7 +134,7 @@ binsize     = 0.2   #temporal binsize in s
 
 #Alternative method, much faster:
 sessions[sesidx].respmat         = compute_respmat(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'],
-                                  t_resp_start=0,t_resp_stop=2,method='mean',subtr_baseline=False)
+                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
 [N,K]           = np.shape(sessions[sesidx].respmat) #get dimensions of response matrix
 
 #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
@@ -213,7 +214,7 @@ sessions[sesidx].celldata['prefspeed'] = prefspeed
 
 ##### Show cells tuned to certain orientation and speed to check method:
 example_cells=np.where(np.all((prefori==150, prefspeed==200,tuning>np.percentile(tuning,90)),axis=0))[0] 
-# example_cells=np.where(np.all((prefori==30, prefspeed==12.5,tuning>np.percentile(tuning,90)),axis=0))[0] 
+example_cells=np.where(np.all((prefori==30, prefspeed==12.5,tuning>np.percentile(tuning,90)),axis=0))[0] 
 # example_cells=np.where(np.all((prefori==30, prefspeed==12.5,resp_selec[:,0,0]>np.percentile(resp_selec[:,0,0],90)),axis=0))[0] 
 
 fig = show_excerpt_traces_gratings(sessions[sesidx],example_cells=example_cells)[0]
@@ -276,7 +277,7 @@ lines_alpha      = 0.8
 
 # handles = []
 projections = [(0, 1), (1, 2), (0, 2)]
-# projections = [(0, 1), (1, 2), (3, 4)]
+projections = [(0, 1), (1, 2), (3, 4)]
 fig, axes = plt.subplots(1, 3, figsize=[9, 3], sharey='row', sharex='row')
 for ax, proj in zip(axes, projections):
     for iO, ori in enumerate(oris):                                #plot orientation separately with diff colors
@@ -337,7 +338,8 @@ cmap = plt.get_cmap('hot')
 for iSvar in range(NS):
     fig, axes = plt.subplots(3, 3, figsize=[9, 9])
     proj = (0, 1)
-    proj = (3, 4)
+    # proj = (1, 2)
+    # proj = (3, 4)
     for iO, ori in enumerate(oris):                                #plot orientation separately with diff colors
         for iS, speed in enumerate(speeds):                       #plot speed separately with diff colors
             idx         = np.intersect1d(ori_ind[iO],speed_ind[iS])
@@ -361,8 +363,7 @@ for iSvar in range(NS):
     plt.suptitle(slabels[iSvar],fontsize=15)
     sns.despine(fig=fig, top=True, right=True)
     plt.tight_layout()
-    plt.savefig(os.path.join(savedir,'PCA_perStim_color' + slabels[iSvar] + '.png'), format = 'png')
-
+    plt.savefig(os.path.join(savedir,'PCA' + str(proj) + '_perStim_color' + slabels[iSvar] + '.png'), format = 'png')
 
 #### linear model explaining responses: 
 from numpy import linalg
@@ -410,10 +411,13 @@ for iN in range(N):
                 corrmat[iN,iSvar,iO,iS] = np.corrcoef(S[iSvar,idx],sessions[sesidx].respmat[iN,idx])[0,1]   
                 # corrmat[iN,iSvar,iO,iS] = spearmanr(S[iSvar,idx],sessions[sesidx].respmat[iN,idx])[0]
 
+
+##### and plot as density #################################
 fig,ax = plt.subplots(1,1,figsize=(4,4))
 for iSvar in range(NS):
     sns.kdeplot(corrmat[:,iSvar,:,:].flatten(),ax=ax,color=scolors[iSvar],linewidth=1)
 plt.legend(slabels)
+plt.xlabel('Correlation (neuron to variable)')
 plt.savefig(os.path.join(savedir,'KDE_Correlations_Svars' + '.png'), format = 'png')
 
 
@@ -424,8 +428,8 @@ plt.rcParams.update({'font.size': 7})
 fig,ax = plt.subplots(NS,nexamples,figsize=(6,6))
 
 for iSvar in range(NS):
-    idxN,idxO,idxS  = np.where(np.logical_or(corrmat[:,iSvar,:,:]>np.percentile(corrmat[:,iSvar,:,:].flatten(),95),
-                                             corrmat[:,iSvar,:,:]<np.percentile(corrmat[:,iSvar,:,:].flatten(),5)))
+    idxN,idxO,idxS  = np.where(np.logical_or(corrmat[:,iSvar,:,:]>np.percentile(corrmat[:,iSvar,:,:].flatten(),98),
+                                             corrmat[:,iSvar,:,:]<np.percentile(corrmat[:,iSvar,:,:].flatten(),2)))
     idx_examples    = np.random.choice(idxN,nexamples)
     
     for iN in range(nexamples):
@@ -436,6 +440,8 @@ for iSvar in range(NS):
                    s=10,alpha=0.7,marker='.',color=scolors[iSvar])
         # ax.set_xlabel(slabels[iSvar],fontsize=9)
         ax.set_title(slabels[iSvar],fontsize=9)
+        # ax.set_xlim([])
+        ax.set_ylim(np.percentile(sessions[sesidx].respmat[idx_examples[iN],idx_trials],[3,97]))
 sns.despine()
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Examplecells_correlated_with_Svars' + '.png'), format = 'png')
@@ -448,13 +454,12 @@ fig,ax = plt.subplots(1,NS,figsize=(10,2),sharex=True,sharey=True)
 for iSvar in range(NS):
     ax = plt.subplot(1,NS,iSvar+1)
     ax.scatter(resp_selec.flatten(),corrmat[:,iSvar,:,:].flatten(),
-                                  s=10,alpha=0.7,marker='.',color=scolors[iSvar])
+                                  s=10,alpha=0.2,marker='.',color=scolors[iSvar])
     ax.set_title(slabels[iSvar])
     ax.set_xlabel('Selectivity')
     ax.set_ylabel('Correlation')
     ax.axvline(1/9,color='k',linestyle=':',linewidth=0.5)
 plt.savefig(os.path.join(savedir,'Relationship_selectivity_pairwisecorrelations' + '.png'), format = 'png')
-
 
 ####### Population regression: 
 
@@ -477,7 +482,7 @@ for iO, ori in enumerate(oris):
         #Implementing cross validation
         kf  = KFold(n_splits=kfold, random_state=randomseed,shuffle=True)
         
-        model = linear_model.Ridge(alpha=10)  
+        model = linear_model.Ridge(alpha=120)  
 
         Yhat = np.empty(np.shape(Y))
         for (train_index, test_index),iF in zip(kf.split(X),range(kfold)):
@@ -508,18 +513,19 @@ plt.savefig(os.path.join(savedir,'GN_noiseregression','Regress_Behav_R2' + '.png
 
 ### Regression of behavioral activity onto neural data: 
 
-idx_tuned = np.logical_and(np.logical_or(corrmat[:,0,0,0]>np.percentile(corrmat[:,0,0,0].flatten(),95),
-    corrmat[:,0,0,0]<np.percentile(corrmat[:,0,0,0].flatten(),5)),   
-                           sessions[sesidx].celldata['tuning']>0.4)
+# idx_tuned = np.logical_and(np.logical_or(corrmat[:,0,0,0]>np.percentile(corrmat[:,0,0,0].flatten(),95),
+#     corrmat[:,0,0,0]<np.percentile(corrmat[:,0,0,0].flatten(),5)),   
+#                            sessions[sesidx].celldata['tuning']>0.4)
 
-idx_tuned = sessions[sesidx].celldata['tuning']>0.5
+# idx_tuned = sessions[sesidx].celldata['tuning']>0.3
 idx_tuned = sessions[sesidx].celldata['tuning']>-0.5
 
-idx_tuned = np.any(resp_selec.reshape(N,-1)>0.2,axis=1)
-idx_tuned = np.logical_or(corrmat[:,0,0,0]>np.percentile(corrmat[:,0,0,0].flatten(),95),
-    corrmat[:,0,0,0]<np.percentile(corrmat[:,0,0,0].flatten(),5))
+# idx_tuned = np.any(resp_selec.reshape(N,-1)>0.2,axis=1)
+# idx_tuned = np.logical_or(corrmat[:,0,0,0]>np.percentile(corrmat[:,0,0,0].flatten(),95),
+#     corrmat[:,0,0,0]<np.percentile(corrmat[:,0,0,0].flatten(),5))
 
 A1 = sessions[sesidx].respmat[idx_tuned,:]
+A1 = sessions[sesidx].respmat[idx_V1,:]
 
 N1 = np.shape(A1)[0]
 
@@ -530,24 +536,30 @@ R2_X_mat    = np.empty((NS,noris,nspeeds)) #variance explained by each predictor
 weights     = np.empty((N1,NS,noris,nspeeds,kfold)) 
 
 sc = StandardScaler(with_mean=True,with_std=False)
+# sc = StandardScaler(with_mean=True,with_std=True)
 
+dimPCA = 5 #no PCA = 0
 
 for iO, ori in enumerate(oris): 
     for iS, speed in enumerate(speeds):     
 
-        idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
-        X = zscore(S[:,idx],axis=1).T # z-score to be able to interpret weights in uniform scale
+        idx     = np.intersect1d(ori_ind[iO],speed_ind[iS])
+        X       = zscore(S[:,idx],axis=1).T # z-score to be able to interpret weights in uniform scale
         # X = S[:,idx].T
         # Y = zscore(A1[:,idx],axis=1).T
         # Y = A1[:,idx].T
 
-        Y = sc.fit_transform(A1[:,idx].T)
-        model = PCA(n_components=25)
-        Y = model.fit_transform(Y)
+        Y       = sc.fit_transform(A1[:,idx].T)
+        
+        if dimPCA: 
+            pca = PCA(n_components=dimPCA)
+            Y_orig = Y.copy()
+            Y = pca.fit_transform(Y)
 
         #Implementing cross validation
-        kf  = KFold(n_splits=kfold, random_state=5,shuffle=True)
-        
+        # kf  = KFold(n_splits=kfold, random_state=randomseed,shuffle=True)
+        kf  = KFold(n_splits=kfold,shuffle=True)
+
         model = linear_model.Ridge(alpha=50)  
 
         Yhat        = np.empty(np.shape(Y))
@@ -566,6 +578,15 @@ for iO, ori in enumerate(oris):
 
             # weights[:,:,iO,iS,iF] = model.coef_
 
+        if dimPCA: 
+            Yhat = pca.inverse_transform(Yhat)
+            Y   = Y_orig.copy()
+            # Yhat_vars
+            # for iSvar in range(NS):
+            #     Yhat_vars[:,:,iSvar]   = pca.inverse_transform(Yhat_vars[:,:,iSvar])
+            #     Yhat_vars[:,:,iSvar]   = pca.inverse_transform(Yhat_vars[:,:,iSvar])
+            Yhat_vars = np.transpose([pca.inverse_transform(Yhat_vars[:,:,iSvar]) for iSvar in range(NS)],(1,2,0))
+
         R2_Y[iO,iS]         = r2_score(Y, Yhat)      
         # R2_Y_mat[:,iO,iS]   = r2_score(Y, Yhat, multioutput='raw_values')
         for iSvar in range(NS):
@@ -581,6 +602,32 @@ for iSvar in range(NS):
 
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'GN_noiseregression','Regress_StoA_Svar_R2' + '.png'), format = 'png')
+
+
+
+#### testing with specific ori and speed which showed effect: 
+dimPCA = 50
+iO = 1
+iS = 1
+idx     = np.intersect1d(ori_ind[iO],speed_ind[iS])
+X       = zscore(S[:,idx],axis=1).T # z-score to be able to interpret weights in uniform scale
+A1      = sessions[sesidx].respmat[idx_V1,:]
+Y       = A1[:,idx].T
+if dimPCA: 
+    pca = PCA(n_components=dimPCA)
+    Y_orig = Y.copy()
+    Y = pca.fit_transform(Y)
+
+fig, axes = plt.subplots(1, NS, figsize=[15, 3])
+proj = (1, 2)
+for iSvar in range(NS):
+    x = Y[:,proj[0]]                          #get all data points for this ori along first PC or projection pairs
+    y = Y[:,proj[1]]                          #get all data points for this ori along first PC or projection pairs
+    c = cmap(minmax_scale(S[iSvar,idx], feature_range=(0, 1)))[:,:3]
+    sns.scatterplot(x=x, y=y, c=c,ax = axes[iSvar],s=10,legend = False,edgecolor =None)
+    axes[iSvar].set_title(slabels[iSvar])
+    axes[iSvar].set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
+    axes[iSvar].set_ylabel('PC {}'.format(proj[1]+1))
 
 ############ # ############# ############# ############# ############# 
 from sklearn.linear_model import RidgeCV
@@ -601,7 +648,7 @@ for iSvar in range(NS):
     sns.kdeplot(corrmat[:,iSvar,:,:].flatten(),ax=ax,color=scolors[iSvar])
 plt.legend(slabels)
 
-#### ################## ######################
+####################################################################
 sc = StandardScaler()
 
 model = PCA(n_components=5)
