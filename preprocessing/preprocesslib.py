@@ -298,8 +298,10 @@ def proc_task(rawdatadir,sessiondata):
     
     #Get behavioral data, construct dataframe and modify a bit:
     behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
-    # behaviordata.columns = ["rawvoltage","ts","trialnum","zpos","runspeed","lick","reward"] #rename the columns
+    if np.any(behaviordata.filter(regex='Item')):
+        behaviordata.columns = ["rawvoltage","ts","trialNumber","zpos","runSpeed","lick","reward"] #rename the columns
     behaviordata = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
+    behaviordata = behaviordata.rename(columns={'timestamp': 'ts','trialnumber': 'trialNumber', 'runspeed': 'runSpeed'}) #remove rawvoltage, not used
     
     ## Licks
     lickactivity    = np.diff(behaviordata['lick'])
@@ -312,11 +314,11 @@ def proc_task(rawdatadir,sessiondata):
     ## Reconstruct total position:
     trialdata['trialEnd'] = 0
     for t in range(len(trialdata)):
-        trialdata.loc[trialdata.index[trialdata['trialNumber']==t+1],'trialEnd'] = max(behaviordata.loc[behaviordata.index[behaviordata['trialnumber']==t],'zpos'])
+        trialdata.loc[trialdata.index[trialdata['trialNumber']==t+1],'trialEnd'] = max(behaviordata.loc[behaviordata.index[behaviordata['trialNumber']==t],'zpos'])
 
     behaviordata['zpos_tot'] = behaviordata['zpos']
     for t in range(len(trialdata)):
-        behaviordata.loc[behaviordata.index[behaviordata['trialnumber']==t+1],'zpos_tot'] += np.cumsum(trialdata['trialEnd'])[t]
+        behaviordata.loc[behaviordata.index[behaviordata['trialNumber']==t+1],'zpos_tot'] += np.cumsum(trialdata['trialEnd'])[t]
 
     trialdata['stimStart_tot']          = trialdata['stimStart'] + np.cumsum(trialdata['trialEnd'])
     trialdata['stimEnd_tot']            = trialdata['stimEnd'] + np.cumsum(trialdata['trialEnd'])
@@ -342,7 +344,7 @@ def proc_task(rawdatadir,sessiondata):
     trialdata['tStimStart'] = ''
     trialdata['tStimEnd'] = ''
     for t in range(len(trialdata)):
-        idx             = behaviordata['trialnumber']==t+1
+        idx             = behaviordata['trialNumber']==t+1
         z_temp          = behaviordata.loc[behaviordata.index[idx],'zpos'].to_numpy()
         ts_temp         = behaviordata.loc[behaviordata.index[idx],'ts'].to_numpy()
         try:
@@ -367,14 +369,14 @@ def proc_task(rawdatadir,sessiondata):
     trialdata['tReward'] = np.nan
     trialdata['sReward'] = np.nan
     for t in range(len(trialdata)):
-        idx = np.logical_and(behaviordata['reward'],[behaviordata['trialnumber']==t+1]).flatten()
+        idx = np.logical_and(behaviordata['reward'],[behaviordata['trialNumber']==t+1]).flatten()
         if np.any(idx):
             trialdata.loc[trialdata.index[t],'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
             trialdata.loc[trialdata.index[t],'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]
 
     print('problematic if reward not in reward zone!')
-    assert(trialdata[trialdata['lickResponse']==0])
-    print('assert that licks are not in reward zone for lickReponse=0 trials...')
+    # assert(trialdata[trialdata['lickResponse']==0])
+    # print('assert that licks are not in reward zone for lickReponse=0 trials...')
      # df = sessions[0].trialdata[sessions[0].trialdata['trialOutcome']=='CR']
 
     #Compute reward rate (fraction of GO trials rewarded) with sliding window for engagement index:

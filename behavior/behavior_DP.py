@@ -33,29 +33,31 @@ nsessions = len(sessions)
 
 ##################### Spatial plots ####################################
 # Behavior as a function of distance within the corridor:
+sesidx = 1
 
 ### licking across the trial:
-[sessions[0].lickPSTH,bincenters] = lickPSTH(sessions[0],binsize=10)
+[sessions[sesidx].lickPSTH,bincenters] = lickPSTH(sessions[sesidx],binsize=10)
 
-fig = plot_lick_corridor_outcome(sessions[0].trialdata,sessions[0].lickPSTH,bincenters)
-fig = plot_lick_corridor_psy(sessions[0].trialdata,sessions[0].lickPSTH,bincenters)
+fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
+
+fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
 
 ### running across the trial:
-[sessions[0].runPSTH,bincenters] = runPSTH(sessions[0],binsize=10)
+[sessions[sesidx].runPSTH,bincenters] = runPSTH(sessions[sesidx],binsize=10)
 
-fig = plot_run_corridor_outcome(sessions[0].trialdata,sessions[0].runPSTH,bincenters)
-fig = plot_run_corridor_psy(sessions[0].trialdata,sessions[0].runPSTH,bincenters)
+fig = plot_run_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
+fig = plot_run_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
 
 ##################### Plot psychometric curve #########################
 
 fig = plot_psycurve(sessions)
-fig.savefig(os.path.join(savedir,'Psychometric','Psy_1ses_%s.png' % sessions[0].session_id))
+fig.savefig(os.path.join(savedir,'Psychometric','Psy_1ses_%s.png' % sessions[sesidx].session_id))
 
 fig = plot_psycurve(sessions,filter_engaged=True)
-fig.savefig(os.path.join(savedir,'Psychometric','Psy_1ses_Engaged_%s.png' % sessions[0].session_id))
+fig.savefig(os.path.join(savedir,'Psychometric','Psy_1ses_Engaged_%s.png' % sessions[sesidx].session_id))
 
 
-df = sessions[0].trialdata[sessions[0].trialdata['trialOutcome']=='CR']
+# df = sessions[sesidx].trialdata[sessions[0].trialdata['trialOutcome']=='CR']
 
 
 

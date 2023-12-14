@@ -36,14 +36,14 @@ from sklearn.preprocessing import StandardScaler
 
 savedir = 'C:\\OneDrive\\PostDoc\\Figures\\NoiseRegression\\'
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\NoiseRegression\\'
-savedir = 'E:\\OneDrive\\PostDoc\\Figures\\NoiseRegression\\'
+# savedir = 'E:\\OneDrive\\PostDoc\\Figures\\NoiseRegression\\'
 
 
 #################################################
 # session_list        = np.array([['LPE10883','2023_10_27']])
 session_list        = np.array([['LPE10919','2023_11_16']])
 sessions            = load_sessions(protocol = 'GN',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+                                    load_calciumdata=True, load_videodata=True, calciumversion='dF')
 
 sesidx      = 0
 randomseed  = 5
@@ -186,6 +186,7 @@ for iO,ori in enumerate(oris):
 sessions[sesidx].celldata['tuning'] = 1 - np.var(resp_res,axis=1) / np.var(sessions[sesidx].respmat,axis=1)
 fig,ax = plt.subplots(1,1,figsize=(6,6))
 sns.histplot(sessions[sesidx].celldata['tuning'],ax=ax)
+fig.savefig(os.path.join(savedir,'Tuning_distribution' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 tuning = sessions[sesidx].celldata['tuning']
 
@@ -218,6 +219,7 @@ example_cells=np.where(np.all((prefori==30, prefspeed==12.5,tuning>np.percentile
 # example_cells=np.where(np.all((prefori==30, prefspeed==12.5,resp_selec[:,0,0]>np.percentile(resp_selec[:,0,0],90)),axis=0))[0] 
 
 fig = show_excerpt_traces_gratings(sessions[sesidx],example_cells=example_cells)[0]
+fig.savefig(os.path.join(savedir,'ExampleTraces_TunedCondition_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
 #### 

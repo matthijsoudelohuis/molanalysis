@@ -27,7 +27,7 @@ animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty th
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 
-animal_ids          = ['LPE10884'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE11081'] #If empty than all animals in folder will be processed
 # date_filter        = ['2023_11_08']
 
 # animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
@@ -36,7 +36,7 @@ animal_ids          = ['LPE10884'] #If empty than all animals in folder will be 
 # protocols           = ['GN','RF','SP']
 # protocols           = ['SP']
 # protocols           = ['GN']
-protocols           = ['DP']
+protocols           = ['DP','DM']
 # protocols           = ['VR']
 
 ## Loop over all selected animals and folders

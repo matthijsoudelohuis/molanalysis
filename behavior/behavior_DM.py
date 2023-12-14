@@ -31,7 +31,7 @@ from utils.behaviorlib import compute_dprime,smooth_rate_dprime,plot_psycurve #g
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
 
 ############## Load the data - MaxOnly ####################################
-protocol            = ['DP']
+protocol            = ['DM']
 sessions            = filter_sessions(protocol,load_behaviordata=True)
 
 nsessions = len(sessions)

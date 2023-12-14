@@ -149,9 +149,9 @@ def runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
     runPSTH     = np.empty(shape=(ntrials, len(bincenters)))
 
     for itrial in range(ntrials):
-        idx = ses.behaviordata['trialnumber']==itrial+1
+        idx = ses.behaviordata['trialNumber']==itrial+1
         runPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
-                                            ses.behaviordata['runspeed'][idx], statistic='mean', bins=binedges)[0]
+                                            ses.behaviordata['runSpeed'][idx], statistic='mean', bins=binedges)[0]
     # runPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = runPSTH_ses
 
     return runPSTH, bincenters
@@ -176,7 +176,7 @@ def lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
     lickPSTH    = np.empty(shape=(ntrials, len(bincenters)))
 
     for itrial in range(ntrials-1):
-        idx = ses.behaviordata['trialnumber']==itrial+1
+        idx = ses.behaviordata['trialNumber']==itrial+1
         lickPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
                                             ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
     # lickPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = lickPSTH_ses
