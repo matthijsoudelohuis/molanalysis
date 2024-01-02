@@ -7,14 +7,13 @@ def extrema_np(arr):
     return np.min(arr),np.max(arr)
 
 def bleedthrough_correction(greenchanim,redchanim,gain1=0.6,gain2=0.4):
-    
+    # Subtracts
     # Regression with pre-established values:
     b                   = 1.54
     a                   = np.percentile(redchanim.flatten(),5)
     greenchanim_corr    = greenchanim - b * (redchanim-a)
 
     return greenchanim_corr
-
 
 ## 
 def plot_correction_images(greenchanim,redchanim):

@@ -581,7 +581,7 @@ def proc_imaging(sesfolder, sessiondata):
         stat                = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
         # redcell             = np.load(os.path.join(plane_folder, 'redcell.npy'), allow_pickle=True)
         redcell             = np.load(os.path.join(plane_folder, 'redcell_cellpose.npy'), allow_pickle=True)
-        redcell             = np.load(os.path.join(plane_folder, 'redcell_cellpose.npy'), allow_pickle=True)
+        # redcell             = np.load(os.path.join(plane_folder, 'redcell_cellpose.npy'), allow_pickle=True)
 
         ncells_plane              = len(iscell)
         

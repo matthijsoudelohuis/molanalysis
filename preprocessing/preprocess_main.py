@@ -16,27 +16,28 @@ os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "X:\\Rawdata\\"
+rawdatadir      = "J:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
 # procdatadir     = "E:\\Procdata\\"
 
-animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
 # animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 
-animal_ids          = ['LPE11081'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE11081'] #If empty than all animals in folder will be processed
 # date_filter        = ['2023_11_08']
 
-# animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
-# date_filter        = ['2023_11_16']
+animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
+date_filter        = ['2023_11_13']
+# date_filter         = []
 
-# protocols           = ['GN','RF','SP']
-# protocols           = ['SP']
-# protocols           = ['GN']
-protocols           = ['DP','DM']
+protocols           = ['GN','RF','SP','IM']
+protocols           = ['SP']
+protocols           = ['GN']
+# protocols           = ['DP','DM']
 # protocols           = ['VR']
 
 ## Loop over all selected animals and folders
@@ -88,7 +89,7 @@ for animal_id in animal_ids: #for each animal
                     # np.save(os.path.join(outdir,"trialdata.npy"),grid_array,RF_timestamps)
                     # np.savez(os.path.join(outdir,"trialdata.npz"),x=grid_array,y=RF_timestamps)
                 
-                elif protocol == 'IM': #Natural Image Dataset
+                if protocol == 'IM': #Natural Image Dataset
                     trialdata = proc_IM(rawdatadir,sessiondata)
                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
                 

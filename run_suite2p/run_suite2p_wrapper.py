@@ -28,14 +28,14 @@ from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import proc_labeling_session
 from labeling.tdTom_labeling_cellpose import gen_red_images
 
-rawdatadir          = 'r:\\RawData\\'
-rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-animal_id           = 'LPE10919'
-sessiondate         = '2023_11_16'
+rawdatadir          = 'M:\\RawData\\'
+# rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
+animal_id           = 'LPE10883'
+sessiondate         = '2023_10_31'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
-ops['align_by_chan']    = 1
+# ops['align_by_chan']    = 1
 
 ##################    Run registration:  ############################
 suite2p.run_s2p(ops=ops, db=db) 

@@ -11,33 +11,14 @@ import os
 import numpy as np
 from natsort import natsorted 
 from PIL import Image
+from utils.imagelib import im_norm8
 
 # os.chdir('T:\\Python\\molanalysis\\')
 
 rawdatadir      = "X:\\Rawdata\\"
 procdatadir     = "T:\\Python\\cellpose\\"
 
-
-## Loop over all selected animals and folders
-# animal_ids = os.listdir(rawdatadir)
-
-# animal_dirs = [f.path for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
-
-def normalize8(I):
-    # mn = I.min()
-    # mx = I.max()
-
-    mn = np.percentile(I,0.5)
-    mx = np.percentile(I,99.5)
-
-    mx -= mn
-
-    I = ((I - mn)/mx) * 255
-    I[I<0] =0
-    I[I>255] = 255
-    
-    return I.astype(np.uint8)
-
+## Loop over all animals and folders
 animal_ids = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
 
 for animal_id in animal_ids: #for each animal
@@ -57,8 +38,7 @@ for animal_id in animal_ids: #for each animal
                 ops                = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
 
                 img_numpy = np.zeros((512, 512, 3), dtype=np.uint8)
-                # img_numpy[:,:,1] = int((ops['meanImg'] / np.max(ops['meanImg']))*256)
-                img_numpy[:,:,1] = normalize8(ops['meanImg'])
+                img_numpy[:,:,1] = im_norm8(ops['meanImg'],min=0.5,max=99.5)
 
                 img = Image.fromarray(img_numpy, "RGB")
 
@@ -72,19 +52,12 @@ for animal_id in animal_ids: #for each animal
                 mimg2 = ops['meanImg_chan2']
                 mimg2 = np.log(mimg2 - np.min(mimg2))
 
-                img_numpy[:,:,0] = normalize8(mimg2)
+                img_numpy[:,:,0] = im_norm8(mimg2,min=0.5,max=99.5)
 
                 img = Image.fromarray(img_numpy, "RGB")
 
-                # Save the Numpy array as Image
-                # image_filename = "_".join([animal_id, sessiondate,str(iplane),'red.jpeg'])
-                # img.save(os.path.join(procdatadir,'redlib_tiff',image_filename))
-
                 image_filename = "_".join([animal_id, sessiondate,str(iplane),'red.tiff'])
                 img.save(os.path.join(procdatadir,'redlib_tiff',image_filename))
-
-                # #Save sessiondata:
-                # sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')
 
 print(f'\n\nPreprocessing Completed')
 

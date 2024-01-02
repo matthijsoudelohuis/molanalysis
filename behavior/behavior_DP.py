@@ -33,7 +33,7 @@ nsessions = len(sessions)
 
 ##################### Spatial plots ####################################
 # Behavior as a function of distance within the corridor:
-sesidx = 1
+sesidx = 2
 
 ### licking across the trial:
 [sessions[sesidx].lickPSTH,bincenters] = lickPSTH(sessions[sesidx],binsize=10)
