@@ -99,9 +99,12 @@ def plot_psycurve(sessions,filter_engaged=False):
 
         ax.scatter(x,y) 
 
+        X = trialdata['signal']
+        Y = trialdata['lickResponse']
         initial_guess           = [20, 15, 0.1, 0.1]  # Initial guess for parameters (mu,sigma,lapse_rate,guess_rate)
-        bounds                  = ([0,5,0,0],[100,40,0.5,0.5])
+        bounds                  = ([0,4,0,0],[100,40,0.5,0.5])
         params, covariance      = curve_fit(psychometric_function, x, y, p0=initial_guess,bounds=bounds)
+        params, covariance      = curve_fit(psychometric_function, X, Y, p0=initial_guess,bounds=bounds)
 
         # Plot the results
         ax.scatter(x, y, label='data',c='k')

@@ -95,7 +95,7 @@ sns.lineplot(data=trialdata,x='trialNumber',y='smooth_hitrate',color='g')
 sns.lineplot(data=trialdata,x='trialNumber',y='smooth_farate',color='r')
 plt.ylabel('HIT / FA rate')
 
-plt.savefig(os.path.join(savedir,'Performance','HITFA_rate_acrosssession_LPE10884' + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Performance','HITFA_rate_acrosssession_2animals' + '.png'), format = 'png')
 
 ### individual sessions
 fig,ax = plt.subplots(figsize=(7,4))
@@ -149,16 +149,16 @@ for ises,ses in enumerate(sessions):
     runPSTH_ses     = np.empty(shape=(ntrials, len(bincenters)))
 
     for itrial in range(ntrials):
-        idx = ses.behaviordata['trialnumber']==itrial+1
+        idx = ses.behaviordata['trialNumber']==itrial+1
         runPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
-                                            ses.behaviordata['runspeed'][idx], statistic='mean', bins=binedges)[0]
+                                            ses.behaviordata['runSpeed'][idx], statistic='mean', bins=binedges)[0]
 
     runPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = runPSTH_ses
 
     lickPSTH_ses    = np.empty(shape=(ntrials, len(bincenters)))
 
     for itrial in range(ntrials-1):
-        idx = ses.behaviordata['trialnumber']==itrial+1
+        idx = ses.behaviordata['trialNumber']==itrial+1
         lickPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
                                             ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
     lickPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = lickPSTH_ses
@@ -194,6 +194,9 @@ ax.add_patch(matplotlib.patches.Rectangle((20,0),20,50,
 
 plt.text(5, 45, 'Stim',fontsize=12)
 plt.text(25, 45, 'Reward',fontsize=12)
+
+
+# fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
 
 
 ################################################################

@@ -18,7 +18,6 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from sklearn.decomposition import PCA
 from scipy.stats import zscore, pearsonr,spearmanr
-# from rastermap import Rastermap, utils
 
 # %matplotlib inline
 

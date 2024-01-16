@@ -83,20 +83,20 @@ def plot_correction_images(greenchanim,redchanim):
     ax3.set_xlim(extrema_np(redchanim))
     ax3.set_ylim(extrema_np(greenchanim))
 
-###### correction coefficient for red into green:
-coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
-# coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
-# coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
+# ###### correction coefficient for red into green:
+# coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
+# # coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
+# # coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
 
-diff = np.array([-0.2,-0.1,0,0.1,0.2])
-corr = np.array([0.02,0.05,0.0668,0.32,1.54])
+# diff = np.array([-0.2,-0.1,0,0.1,0.2])
+# corr = np.array([0.02,0.05,0.0668,0.32,1.54])
 
-b, a = np.polyfit(diff[2:], np.log10(corr[2:]), deg=1)
+# b, a = np.polyfit(diff[2:], np.log10(corr[2:]), deg=1)
 
-corr_pred = 10**(b*diff+a)
+# corr_pred = 10**(b*diff+a)
 
-fig = plt.figure()
-plt.plot(diff,corr)
-plt.scatter(diff,corr,s=20,color='r')
-plt.yscale('log')
-plt.scatter(diff,corr_pred,s=20,color='b')
+# fig = plt.figure()
+# plt.plot(diff,corr)
+# plt.scatter(diff,corr,s=20,color='r')
+# plt.yscale('log')
+# plt.scatter(diff,corr_pred,s=20,color='b')

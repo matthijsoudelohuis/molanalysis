@@ -48,12 +48,13 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     sessiondata         = sessiondata.assign(protocol = [protocol])
 
     sessions_overview_VISTA = pd.read_excel(os.path.join(rawdatadir,'VISTA_Sessions_Overview.xlsx'))
-    sessions_overview_VR    = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
+    # sessions_overview_VR    = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
+    sessions_overview_DE    = pd.read_excel(os.path.join(rawdatadir,'DE_Sessions_Overview.xlsx'))
 
     if np.any(np.logical_and(sessions_overview_VISTA["sessiondate"] == sessiondate,sessions_overview_VISTA["protocol"] == protocol)):
         sessions_overview = sessions_overview_VISTA
-    elif np.any(np.logical_and(sessions_overview_VR["sessiondate"] == sessiondate,sessions_overview_VR["protocol"] == protocol)):
-        sessions_overview = sessions_overview_VR
+    elif np.any(np.logical_and(sessions_overview_DE["sessiondate"] == sessiondate,sessions_overview_DE["protocol"] == protocol)):
+        sessions_overview = sessions_overview_DE
     else: 
         print('Session not found in excel session overview')
         return sessiondata
@@ -285,16 +286,18 @@ def proc_task(rawdatadir,sessiondata):
     assert(np.any(trialdata['signal'] > 1)), 'signal values do not exceed 1'
 
     if sessiondata.protocol[0] == 'DP':
-        print('psychometric specific processing')
         nconds = len(np.unique(trialdata['signal']))
         assert(nconds>3 and nconds<6), 'too many or too few conditions for psychometric protocol'
 
     if sessiondata.protocol[0] == 'DN':
-        print('noise protocol specific processing')
-        sigs = trialdata[trialdata['signal'] > 0 and trialdata['signal'] < 100]
+        idx = ~np.isin(trialdata['signal'],[0,100])
+        sigs = np.unique(trialdata['signal'][idx])
+
         sessiondata['signal_center']        = np.mean(sigs).round()
         sessiondata['signal_range']         = np.max(sigs) - np.min(sigs)
-        assert(len(np.unique(trialdata['signal']))>10), 'no signal jitter observed'
+        trialdata['signal_jitter']          = np.nan
+        trialdata.loc[trialdata.index[idx],'signal_jitter']     = trialdata.loc[trialdata.index[idx],'signal'].to_numpy() - sessiondata['signal_center'].to_numpy()
+        assert(len(sigs)>5), 'no signal jitter observed'
     
     #Get behavioral data, construct dataframe and modify a bit:
     behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
@@ -545,8 +548,8 @@ def proc_imaging(sesfolder, sessiondata):
     ## Get trigger data to align timestamps:
     filenames         = os.listdir(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior'))
     triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
-    triggerdata       = pd.read_csv(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior',triggerdata_file[0]),skiprows=2).to_numpy()
-    #skip two rows because the first is init of the variable, and the second????
+    triggerdata       = pd.read_csv(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior',triggerdata_file[0]),skiprows=1).to_numpy()
+    #skip the first row because is init of the variable in BONSAI
     [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
 
     # getting numer of ROIs
@@ -618,7 +621,10 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
 
         temprecombinase =  roi_area[plane_roi_idx[iplane]] + '_recombinase'
-        celldata_plane['recombinase'] = sessiondata[temprecombinase].to_list()[0]
+        if np.isin(roi_area[plane_roi_idx[iplane]],['V1','PM']):
+            celldata_plane['recombinase'] = sessiondata[temprecombinase].to_list()[0]
+        else:
+            celldata_plane['recombinase'] = ''
 
         if os.path.exists(os.path.join(plane_folder, 'RF.npy')):
             RF = np.load(os.path.join(plane_folder, 'RF.npy'))
@@ -755,7 +761,15 @@ def align_timestamps(sessiondata, ops, triggerdata):
     
     ## Get trigger information:
     nTriggers = np.shape(triggerdata)[0]
-    assert np.shape(protocol_tif_nframes)[0]==nTriggers,"Not the same number of tiffs as triggers"
+    nTiffFiles = len(protocol_tif_idx)
+    if nTriggers-1 == nTiffFiles:
+        triggerdata = triggerdata[1:,:]
+        print('First trigger missed, too slow for scanimage acquisition system')
+    elif nTriggers-2 == nTiffFiles:
+        triggerdata = triggerdata[2:,:]
+        print('First two triggers missed, too slow for scanimage acquisition system')
+    nTriggers = np.shape(triggerdata)[0]
+    assert nTiffFiles==nTriggers,"Not the same number of tiffs as triggers"
 
     timestamps = np.empty([protocol_nframes,1]) #init empty array for the timestamps
 

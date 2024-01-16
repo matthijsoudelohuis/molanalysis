@@ -21,21 +21,21 @@ try:
     os.chdir('t:\\Python\\molanalysis\\')
 except:
     os.chdir('e:\\Python\\molanalysis\\')
-
+ 
 import suite2p
 from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import proc_labeling_session
 from labeling.tdTom_labeling_cellpose import gen_red_images
 
-rawdatadir          = 'M:\\RawData\\'
+rawdatadir          = 'K:\\RawData\\'
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-animal_id           = 'LPE10883'
-sessiondate         = '2023_10_31'
+animal_id           = 'LPE10884'
+sessiondate         = '2024_01_11'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
-# ops['align_by_chan']    = 1
+ops['align_by_chan']    = 1
 
 ##################    Run registration:  ############################
 suite2p.run_s2p(ops=ops, db=db) 

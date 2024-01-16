@@ -81,10 +81,10 @@ class Session():
             self.zpos_F      = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
                                     fp=self.behaviordata['zpos'])
             self.runspeed_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
-                                    fp=self.behaviordata['runspeed'])
-            if 'trialnum' in self.behaviordata:
+                                    fp=self.behaviordata['runSpeed'])
+            if 'trialNumber' in self.behaviordata:
                 self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
-                                    fp=self.behaviordata['trialnum'])
+                                    fp=self.behaviordata['trialNumber'])
 
             
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,

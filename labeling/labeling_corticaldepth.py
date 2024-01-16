@@ -11,10 +11,11 @@ from pathlib import Path
 from matplotlib.patches import Rectangle
 from cellpose import models
 from utils.imagelib import im_norm8
+from sklearn.preprocessing import minmax_scale
 
 
 ## Directories: 
-rawdatadir      = 'F:\\RawData\\Stacks\\'
+rawdatadir      = 'F:\\Stacks\\'
 savedir         = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - Labeling\\Stack\\'
 
 ## Pretrained models to label tdtomato expressing cells:
@@ -72,10 +73,12 @@ nanimals        = len(animal_ids)
 
 nslices         = 75
 slicedepths     = np.linspace(0,10*(nslices-1),nslices)
-dataV1          = np.empty((2,nslices,nanimals)) #X=2 (fluo and cells), Y=2 areas, V1 and PM, Z=number of slices 75, Z= number of animals 
+dataV1          = np.empty((2,nslices,nanimals)) 
 dataPM          = np.empty((2,nslices,nanimals)) 
+# X=2 (fluo and cells), Y=2 areas, V1 and PM, 
+# Z=number of slices 75, Z= number of animals 
 
-# dataV1          = np.random.rand(2,nslices,nanimals) #X=2 (fluo and cells), Y=2 areas, V1 and PM, Z=number of slices 75, Z= number of animals 
+# dataV1           = np.random.rand(2,nslices,nanimals) 
 # dataPM          = np.random.rand(2,nslices,nanimals) 
 
 for iA,animal_id in enumerate(animal_ids): #for each animal
@@ -95,25 +98,37 @@ np.save(os.path.join(rawdatadir,'stackdata_%danimals.npy' % nanimals),(dataV1,da
 ###################################################################
 ######################   Make figures: ############################
 
+
 dataV1_mean     = np.nanmean(dataV1,axis=2)
 dataV1_err      = np.nanstd(dataV1,axis=2) / np.sqrt(nanimals)
 dataPM_mean     = np.nanmean(dataPM,axis=2)
 dataPM_err      = np.nanstd(dataPM,axis=2) / np.sqrt(nanimals)
 
+dataV1_norm = dataV1.copy()
+dataV1_norm[0,:,:] = minmax_scale(dataV1_norm[0,:,:], feature_range=(0, 1), axis=0, copy=True)
+dataPM_norm = dataPM.copy()
+dataPM_norm[0,:,:] = minmax_scale(dataPM_norm[0,:,:], feature_range=(0, 1), axis=0, copy=True)
+
+dataV1_norm_mean     = np.nanmean(dataV1_norm,axis=2)
+dataV1_norm_err      = np.nanstd(dataV1_norm,axis=2) / np.sqrt(nanimals)
+dataPM_norm_mean     = np.nanmean(dataPM_norm,axis=2)
+dataPM_norm_err      = np.nanstd(dataPM_norm,axis=2) / np.sqrt(nanimals)
+
+
 ### Figure with depth profile: 
 fig,(ax1,ax2)   = plt.subplots(1,2,figsize=(6,7))
-ax1.plot(dataV1_mean[0,:],slicedepths,c='darkviolet')
-ax1.plot(dataPM_mean[0,:],slicedepths,c='lightseagreen')
-ax1.plot(dataV1[0,:,:],slicedepths,c='darkviolet',linewidth=0.5)
-ax1.plot(dataPM[0,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
+ax1.plot(dataV1_norm_mean[0,:],slicedepths,c='darkviolet',linewidth=2)
+ax1.plot(dataPM_norm_mean[0,:],slicedepths,c='lightseagreen',linewidth=2)
+ax1.plot(dataV1_norm[0,:,:],slicedepths,c='darkviolet',linewidth=0.5)
+ax1.plot(dataPM_norm[0,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
 ax1.invert_yaxis()
 ax1.set_ylabel('Cortical Depth')
 ax1.set_xlabel('Fluorescence')
 # ax1.legend(['V1','PM'],frameon=False)
 ax1.set_title('Fluorescence')
 
-ax2.plot(dataV1_mean[1,:],slicedepths,c='darkviolet')
-ax2.plot(dataPM_mean[1,:],slicedepths,c='lightseagreen')
+ax2.plot(dataV1_mean[1,:],slicedepths,c='darkviolet',linewidth=2)
+ax2.plot(dataPM_mean[1,:],slicedepths,c='lightseagreen',linewidth=2)
 ax2.plot(dataV1[1,:,:],slicedepths,c='darkviolet',linewidth=0.5)
 ax2.plot(dataPM[1,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
 ax2.invert_yaxis()
@@ -126,17 +141,17 @@ plt.tight_layout()
 
 ##### + Show example planes alongside it:
 exanimal            = 'LPE10192'
-exanimal            = 'LPE10885'
+# exanimal            = 'LPE10885'
 explanes_depths     = [70,180,320,450]
 vmin                = 0
 vmax                = 200
 
 fig,axes = plt.subplots(4,4,figsize=(9,7))
 ax1 = plt.subplot(141)
-ax1.plot(dataV1_mean[0,:],slicedepths,c='darkviolet')
-ax1.plot(dataPM_mean[0,:],slicedepths,c='lightseagreen')
-ax1.plot(dataV1[0,:,:],slicedepths,c='darkviolet',linewidth=0.5)
-ax1.plot(dataPM[0,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
+ax1.plot(dataV1_norm_mean[0,:],slicedepths,c='darkviolet',linewidth=2)
+ax1.plot(dataPM_norm_mean[0,:],slicedepths,c='lightseagreen',linewidth=2)
+ax1.plot(dataV1_norm[0,:,:],slicedepths,c='darkviolet',linewidth=0.5)
+ax1.plot(dataPM_norm[0,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
 ax1.invert_yaxis()
 ax1.set_ylabel('Cortical Depth')
 ax1.set_xlabel('Fluorescence')
@@ -146,8 +161,8 @@ for d in explanes_depths:
     ax1.axhline(d,color='k',linestyle=':',linewidth=1)
 
 ax2 = plt.subplot(142)
-ax2.plot(dataV1_mean[1,:],slicedepths,c='darkviolet')
-ax2.plot(dataPM_mean[1,:],slicedepths,c='lightseagreen')
+ax2.plot(dataV1_mean[1,:],slicedepths,c='darkviolet',linewidth=2)
+ax2.plot(dataPM_mean[1,:],slicedepths,c='lightseagreen',linewidth=2)
 ax2.plot(dataV1[1,:,:],slicedepths,c='darkviolet',linewidth=0.5)
 ax2.plot(dataPM[1,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
 ax2.invert_yaxis()
@@ -165,7 +180,7 @@ for i,d in enumerate(explanes_depths):
     direc_V1    = os.path.join(os.path.join(rawdatadir,exanimal),
                             os.listdir(os.path.join(rawdatadir,exanimal))[0],
                             'STACK_V1')
-    fname       = os.listdir(direc_V1)[np.floor(d/10).astype('int32')]
+    fname       = os.listdir(direc_V1)[np.floor(d/10).astype('int32')] #get file name corresponding to ex slice depth
     
     reader              = imread(str(os.path.join(direc_V1,fname)))
     Data                = reader.data()
@@ -179,11 +194,10 @@ for i,d in enumerate(explanes_depths):
     if i==0: 
          ax.set_title('V1')
 
-
     direc_PM    = os.path.join(os.path.join(rawdatadir,exanimal),
                             os.listdir(os.path.join(rawdatadir,exanimal))[0],
                             'STACK_PM')
-    fname       = os.listdir(direc_PM)[np.floor(d/10).astype('int32')]
+    fname       = os.listdir(direc_PM)[np.floor(d/10).astype('int32')] 
     
     reader              = imread(str(os.path.join(direc_PM,fname)))
     Data                = reader.data()
@@ -199,8 +213,7 @@ for i,d in enumerate(explanes_depths):
          ax.set_title('PM')
 plt.tight_layout()
 
-
-
+fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals_example_planes.png' % nanimals))
 
 
 

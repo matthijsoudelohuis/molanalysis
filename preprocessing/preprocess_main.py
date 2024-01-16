@@ -16,7 +16,7 @@ os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "J:\\Rawdata\\"
+rawdatadir      = "K:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
@@ -27,17 +27,18 @@ procdatadir     = "V:\\Procdata\\"
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 
+animal_ids          = ['LPE10884'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE11081'] #If empty than all animals in folder will be processed
-# date_filter        = ['2023_11_08']
+date_filter        = ['2024_01_12']
 
-animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
-date_filter        = ['2023_11_13']
+# animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
+# date_filter        = ['2023_11_13']
 # date_filter         = []
 
-protocols           = ['GN','RF','SP','IM']
-protocols           = ['SP']
-protocols           = ['GN']
-# protocols           = ['DP','DM']
+# protocols           = ['GN','RF','SP','IM']
+# protocols           = ['SP']
+# protocols           = ['GN']
+protocols           = ['DP','DM','DN']
 # protocols           = ['VR']
 
 ## Loop over all selected animals and folders

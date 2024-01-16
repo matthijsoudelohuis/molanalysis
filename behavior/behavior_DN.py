@@ -8,7 +8,6 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 #TODO
 # filter runspeed
 # plot individual trials locomotion, get sense of variance
-# split script for diff purposes (psy vs max vs noise)
 # allow psy protocol to fit DP and DN with same function
 
 import math
@@ -25,11 +24,11 @@ from utils.behaviorlib import * # get support functions for beh analysis
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
 
 ########################### Load the data - Psy #######################
-protocol            = ['DP']
+protocol            = ['DN']
 sessions            = filter_sessions(protocol,load_behaviordata=True)
 
-protocol            = 'DP'
-session_list = np.array([['LPE10884', '2024_01_10']])
+protocol            = 'DN'
+session_list = np.array([['LPE10884', '2024_01_12']])
 sessions = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
 
 nsessions = len(sessions)
@@ -37,7 +36,7 @@ nsessions = len(sessions)
 
 ##################### Spatial plots ####################################
 # Behavior as a function of distance within the corridor:
-sesidx = 5
+sesidx = 0
 
 ### licking across the trial:
 [sessions[sesidx].lickPSTH,bincenters] = lickPSTH(sessions[sesidx],binsize=5)
