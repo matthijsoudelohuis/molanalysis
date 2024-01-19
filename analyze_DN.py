@@ -32,88 +32,27 @@ from sklearn.preprocessing import StandardScaler
 
 # from rastermap import Rastermap, utils
 
-# sessions            = filter_sessions(protocols = ['GN'])
-
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - DN regression\\'
-
 
 #################################################
 # session_list        = np.array([['LPE10883','2023_10_27']])
 session_list        = np.array([['LPE10884','2024_01_12']])
 sessions            = load_sessions(protocol = 'DN',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=True, calciumversion='dF')
+nSessions = len(sessions)
 
 sesidx      = 0
 randomseed  = 5
 
-sessions[sesidx].behaviordata['runspeed'] = medfilt(sessions[sesidx].behaviordata['runspeed'] , kernel_size=51)
+sessions[sesidx].behaviordata['runSpeed'] = medfilt(sessions[sesidx].behaviordata['runSpeed'] , kernel_size=51)
 
-######################################
-#Show some traces and some stimuli to see responses:
+sessions[0].trialdata['stimtype'] = 'N'
 
-def show_excerpt_traces_gratings(Session,example_cells=None,trialsel=None):
-    
-    if example_cells is None:
-        example_cells = np.random.choice(Session.calciumdata.shape[1],10)
+idx = sessions[0].trialdata[sessions[0].trialdata['signal']==100].index
+sessions[0].trialdata.loc[idx,'stimtype'] = 'M'
 
-    if len(example_cells)>20:
-        example_cells = np.random.choice(example_cells,20,replace=False)
-
-    if trialsel is None:
-        trialsel = [np.random.randint(low=0,high=len(Session.trialdata)-400)]
-        trialsel.append(trialsel[0]+40)
-
-    example_tstart  = Session.trialdata['tOnset'][trialsel[0]-1]
-    example_tstop   = Session.trialdata['tOnset'][trialsel[1]-1]
-
-    excerpt         = np.array(Session.calciumdata.loc[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)])
-    excerpt         = excerpt[:,example_cells]
-
-    min_max_scaler = preprocessing.MinMaxScaler()
-    excerpt = min_max_scaler.fit_transform(excerpt)
-
-    # spksselec = spksselec 
-    [nframes,ncells] = np.shape(excerpt)
-
-    for i in range(ncells):
-        excerpt[:,i] =  excerpt[:,i] + i
-
-    oris            = np.sort(np.unique(Session.trialdata['centerOrientation']))
-    speeds          = np.sort(np.unique(Session.trialdata['centerSpeed']))
-    clrs,labels     = get_clr_gratingnoise_stimuli(oris,speeds)
-
-    fig, ax = plt.subplots(figsize=[12, 6])
-    plt.plot(Session.ts_F[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)],excerpt,linewidth=0.5,color='black')
-    # plt.show()
-
-    for i in np.arange(trialsel[0],trialsel[1]):
-        iO = np.where(oris==Session.trialdata['centerOrientation'][i])
-        iS = np.where(speeds==Session.trialdata['centerSpeed'][i])
-        ax.add_patch(plt.Rectangle([Session.trialdata['tOnset'][i],0],1,ncells,alpha=0.3,linewidth=0,
-                                facecolor=clrs[iO,iS,:].flatten()))
-
-    handles= []
-    for iO,ori in enumerate(oris):
-        for iS,speed in enumerate(speeds):
-            handles.append(ax.add_patch(plt.Rectangle([0,0],1,ncells,alpha=0.3,linewidth=0,facecolor=clrs[iO,iS,:].flatten())))
-
-    pos = ax.get_position()
-    ax.set_position([pos.x0, pos.y0, pos.width * 0.9, pos.height])
-    ax.legend(handles,labels.flatten(),loc='center right', bbox_to_anchor=(1.25, 0.5))
-
-    ax.set_xlim([example_tstart,example_tstop])
-
-    ax.add_artist(AnchoredSizeBar(ax.transData, 10, "10 Sec",loc=4,frameon=False))
-    ax.axis('off')
-
-    return fig,example_cells
-
-
-# example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
-# example_cells   = [6,23,130,99,361,177,153,413,435]
-
-# show_excerpt_traces_gratings(sessions[sesidx],example_cells=example_cells,trialsel=[50,90])
-show_excerpt_traces_gratings(sessions[sesidx])
+idx = sessions[0].trialdata[sessions[0].trialdata['signal']==0].index
+sessions[0].trialdata.loc[idx,'stimtype'] = 'C'
 
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
@@ -131,45 +70,46 @@ binsize     = 0.2   #temporal binsize in s
 # respmat         = tensor[:,:,np.logical_and(t_axis > 0,t_axis < 1)].mean(axis=2)
 
 #Alternative method, much faster:
-sessions[sesidx].respmat         = compute_respmat(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'],
+sessions[sesidx].respmat         = compute_respmat(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tStart'],
                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
 [N,K]           = np.shape(sessions[sesidx].respmat) #get dimensions of response matrix
 
 #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
-temp = pd.DataFrame(np.reshape(np.array(sessions[0].behaviordata['runspeed']),(len(sessions[0].behaviordata['runspeed']),1)))
-sessions[sesidx].respmat_runspeed = compute_respmat(temp, sessions[0].behaviordata['ts'], sessions[0].trialdata['tOnset'],
+temp = pd.DataFrame(np.reshape(np.array(sessions[0].behaviordata['runSpeed']),(len(sessions[0].behaviordata['runSpeed']),1)))
+sessions[sesidx].respmat_runspeed = compute_respmat(temp, sessions[0].behaviordata['ts'], sessions[0].trialdata['tStart'],
                                    t_resp_start=0,t_resp_stop=2,method='mean')
 sessions[sesidx].respmat_runspeed = np.squeeze(sessions[sesidx].respmat_runspeed)
 
 #hacky way to create dataframe of the mean motion energy with F x 1 with F number of samples:
 temp = pd.DataFrame(np.reshape(np.array(sessions[0].videodata['motionenergy']),(len(sessions[0].videodata['motionenergy']),1)))
-sessions[sesidx].respmat_motionenergy = compute_respmat(temp, sessions[0].videodata['timestamps'], sessions[0].trialdata['tOnset'],
+sessions[sesidx].respmat_motionenergy = compute_respmat(temp, sessions[0].videodata['timestamps'], sessions[0].trialdata['tStart'],
                                    t_resp_start=0,t_resp_stop=2,method='mean')
 sessions[sesidx].respmat_motionenergy = np.squeeze(sessions[sesidx].respmat_motionenergy)
 
 
 # #### Check if values make sense:
 fig,ax = plt.subplots(1,1,figsize=(6,6))
-sns.histplot(np.min(sessions[sesidx].respmat,axis=1),ax=ax)
-sns.histplot(np.max(sessions[sesidx].respmat,axis=1))
+sns.histplot(np.nanmin(sessions[sesidx].respmat,axis=1),ax=ax)
+sns.histplot(np.nanmax(sessions[sesidx].respmat,axis=1))
 
 #############################################################################
-oris            = np.sort(pd.Series.unique(sessions[sesidx].trialdata['centerOrientation']))
+idx_N = sessions[sesidx].trialdata['signal']
+signals         = np.sort(pd.Series.unique(sessions[sesidx].trialdata['signal']))
 speeds          = np.sort(pd.Series.unique(sessions[sesidx].trialdata['centerSpeed']))
 noris           = len(oris) 
 nspeeds         = len(speeds)
 
+
+# oris            = np.sort(pd.Series.unique(sessions[sesidx].trialdata['centerOrientation']))
+# speeds          = np.sort(pd.Series.unique(sessions[sesidx].trialdata['centerSpeed']))
+# noris           = len(oris) 
+# nspeeds         = len(speeds)
+
 clrs,labels     = get_clr_gratingnoise_stimuli(oris,speeds)
+# clrs,labels     = get_clr_signalnoise_stimuli(oris,speeds)
 
 ### Mean response per condition:
 resp_mean       = np.empty([N,noris,nspeeds])
-
-for iO,ori in enumerate(oris):
-    for iS,speed in enumerate(speeds):
-        
-        idx_trial = np.logical_and(sessions[0].trialdata['centerOrientation']==ori,sessions[0].trialdata['centerSpeed']==speed)
-        resp_mean[:,iO,iS] = np.nanmean(sessions[sesidx].respmat[:,idx_trial],axis=1)
-
 
 ## Compute residual response:
 resp_res = sessions[sesidx].respmat.copy()

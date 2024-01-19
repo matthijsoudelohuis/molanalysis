@@ -88,7 +88,7 @@ def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpol
     return tensor,bincenters
 
 
-def compute_tensor_space(data,ts_F,ts_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,binsize=5,method='interpolate'):
+def compute_tensor_space(data,ts_F,z_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,binsize=5,method='interpolate'):
     """
     This function constructs a tensor: a 3D 'matrix' of N neurons by K trials by S spatial bins
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
@@ -108,12 +108,11 @@ def compute_tensor_space(data,ts_F,ts_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,
     bincenters  = np.arange(s_pre,s_post+binsize,binsize)
     
     N           = np.shape(data)[1]
-    K           = len(ts_T)
+    K           = len(z_T)
     S           = len(bincenters)
     
     # N = 10 #for debug only
 
-    # tensor      = np.empty([K,N,S])
     tensor      = np.empty([N,K,S])
     
     for n in range(N):
@@ -189,30 +188,62 @@ def compute_respmat(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
     
     return respmat
 
-def compute_respmat_space(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
-                    t_base_start=-1,t_base_stop=0,subtr_baseline=False,method='mean'):
+def compute_respmat_space(data,ts_F,z_T,zpos_F,trialnum_F,s_resp_start=0,s_resp_stop=20,
+                    s_base_start=-80,s_base_stop=-60,subtr_baseline=False,method='mean'):
     """
     This function constructs a 2D matrix of N neurons by K trials
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
-    It further needs the timestamps (ts_T) to align to (the trials) and the response window
+    It further needs the spatial position (z_T) to align to (e.g. stimulus position in trials)
+    and the response window start and stop positions.
     Different ways of measuring the response can be specified such as 'mean','max'
     The neuron and trial information is kept outside of the function
     """
+    data = np.array(data)
+    ts_F = np.array(ts_F)
+    z_T = np.array(z_T)
+    zpos_F = np.array(zpos_F)
+    trialnum_F = np.array(trialnum_F)
     
     assert np.shape(data)[0] > np.shape(data)[1], 'the data matrix appears to have more neurons than timepoints'
     assert np.shape(data)[0] == np.shape(ts_F)[0], 'the amount of datapoints does not seem to match the timestamps'
     
     N               = np.shape(data)[1] #get number of neurons from shape of datamatrix (number of columns)
-    K               = len(ts_T)         #get number of trials from the number of timestamps given 
+    K               = len(z_T)          #get number of trials from the number of timestamps given 
     
     respmat         = np.empty([N,K])   #init output matrix
 
     for k in range(K): #loop across trials, for every trial, slice through activity matrix and compute response across neurons:
         print(f"\rComputing response for trial {k+1} / {K}",end='\r')
-        respmat[:,k]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop)].to_numpy().mean(axis=0)
+        idx_K           = trialnum_F==k+1
+        idx_S           = np.logical_and(zpos_F-z_T[k]>s_resp_start,zpos_F-z_T[k]<s_resp_stop)
+
+        respmat[:,k]    = data[np.logical_and(idx_K,idx_S),:].mean(axis=0)
 
         if subtr_baseline: #subtract baseline activity if requested:
-            base                = data[np.logical_and(ts_F>ts_T[k]+t_base_start,ts_F<ts_T[k]+t_base_stop)].to_numpy().mean(axis=0)
-            respmat[:,k]        = np.subtract(respmat[:,k],base)
+            idx_S_base      = np.logical_and(zpos_F-z_T[k]>s_base_start,zpos_F-z_T[k]<s_base_stop)
+            base            = data[np.logical_and(idx_K,idx_S_base),:].mean(axis=0)
+            respmat[:,k]    = np.subtract(respmat[:,k],base)
     
     return respmat
+
+# data = temp
+# ts_F = sessions[i].behaviordata['ts']
+# z_T = sessions[i].trialdata['stimStart']
+# zpos_F = sessions[i].behaviordata['zpos']
+# trialnum_F = sessions[i].behaviordata['trialNumber']
+
+# s_resp_start=0
+# s_resp_stop=20
+# method='mean'
+# subtr_baseline=False
+
+# data = sessions[i].calciumdata
+# ts_F = sessions[i].ts_F
+# z_T = sessions[i].trialdata['stimStart']
+# zpos_F = sessions[i].zpos_F
+# trialnum_F = sessions[i].trialnum_F
+
+# s_resp_start=0
+# s_resp_stop=20
+# method='mean'
+# subtr_baseline=False
