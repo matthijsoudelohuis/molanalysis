@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Apr 10 11:53:24 2023
-
-@author: USER
+This script analyzes neural and behavioral data in a multi-area calcium imaging
+dataset with labeled projection neurons. The visual stimuli are natural images.
+Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 import os
@@ -10,49 +10,52 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as st
-from scipy.stats import binned_statistic
 from sklearn import preprocessing
+from loaddata.session_info import filter_sessions,load_sessions
+from scipy.signal import medfilt
+from utils.plotting_style import * #get all the fixed color schemes
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+
+from utils.explorefigs import excerpt_neural_behavioral
 
 
 # from sklearn.decomposition import PCA
 
-procdatadir         = "V:\\Procdata\\"
+savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Images\\'
 
-animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-sessiondates        = ['2023_03_15']
-protocol            = ['IM']
 
-sesfolder = os.path.join(procdatadir,protocol[0],animal_ids[0],sessiondates[0])
+#################################################
+session_list        = np.array([['LPE09665','2023_03_15']])
+session_list        = np.array([['LPE11086','2023_12_16']])
+sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
+                                    load_calciumdata=True, load_videodata=True, calciumversion='dF')
 
-#load the data:
-sessiondata         = pd.read_csv(os.path.join(sesfolder,"sessiondata.csv"), sep=',', index_col=0)
-behaviordata        = pd.read_csv(os.path.join(sesfolder,"behaviordata.csv"), sep=',', index_col=0)
-celldata            = pd.read_csv(os.path.join(sesfolder,"celldata.csv"), sep=',', index_col=0)
-calciumdata         = pd.read_csv(os.path.join(sesfolder,"calciumdata.csv"), sep=',', index_col=0)
-trialdata           = pd.read_csv(os.path.join(sesfolder,"trialdata.csv"), sep=',', index_col=0)
+sesidx      = 0
 
-#get only good cells:
-idx = celldata['iscell'] == 1
-celldata            = celldata[idx].reset_index(drop=True)
-calciumdata         = calciumdata.drop(calciumdata.columns[~idx.append(pd.Series([True]),ignore_index = True)],axis=1)
+sessions[sesidx].videodata['pupil_area'] = medfilt(sessions[sesidx].videodata['pupil_area'] , kernel_size=25)
+sessions[sesidx].videodata['motionenergy'] = medfilt(sessions[sesidx].videodata['motionenergy'] , kernel_size=25)
+sessions[sesidx].behaviordata['runspeed'] = medfilt(sessions[sesidx].behaviordata['runspeed'] , kernel_size=51)
 
-#Get timestamps and remove from dataframe:
-ts_F                = calciumdata['timestamps'].to_numpy()
-calciumdata         = calciumdata.drop(columns=['timestamps'],axis=1)
 
 # zscore all the calcium traces:
-calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
+# calciumdata_z      = st.zscore(sessions[sesidx].calciumdata.copy(),axis=1)
 
 
-zs = np.unique(celldata['depth'])
-for iplane in range(sessiondata['nplanes']):
-# for iplane in range(8):
-    idx = celldata['depth']==zs[iplane]
-    area =  np.unique(celldata['roi_name'][idx])[0]
-    
-    print(f"Plane {iplane+1} ({area}): {int(sum(celldata['redcell'][idx]))} / {sum(idx)} cells")
-    
-print(f"Total labeled cells: {int(sum(celldata['redcell']))} / {len(celldata)} ({sum(celldata['redcell']) / len(celldata) * 100} %)")
+################################################################
+#Show some traces and some stimuli to see responses:
+
+example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
+
+V1_labeled      = 
+V1_unlabeled    = 
+PM_labeled      = 
+PM_unlabeled    = 
+
+excerpt_neural_behavioral(sessions[0],trialsel=[50,90])
+
+
+
+
 
 ## Construct response matrix of N neurons by K trials
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
