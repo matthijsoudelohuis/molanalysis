@@ -16,13 +16,13 @@ from scipy.signal import medfilt
 from utils.plotting_style import * #get all the fixed color schemes
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
-from utils.explorefigs import excerpt_neural_behavioral
+from utils.explorefigs import *
 
 
 # from sklearn.decomposition import PCA
 
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Images\\'
-
+savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Images\\ExploreFigs\\'
 
 #################################################
 session_list        = np.array([['LPE09665','2023_03_15']])
@@ -30,31 +30,28 @@ session_list        = np.array([['LPE11086','2023_12_16']])
 sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=True, calciumversion='dF')
 
+# sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
+#                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+
 sesidx      = 0
 
-sessions[sesidx].videodata['pupil_area'] = medfilt(sessions[sesidx].videodata['pupil_area'] , kernel_size=25)
-sessions[sesidx].videodata['motionenergy'] = medfilt(sessions[sesidx].videodata['motionenergy'] , kernel_size=25)
-sessions[sesidx].behaviordata['runspeed'] = medfilt(sessions[sesidx].behaviordata['runspeed'] , kernel_size=51)
-
-
-# zscore all the calcium traces:
-# calciumdata_z      = st.zscore(sessions[sesidx].calciumdata.copy(),axis=1)
-
+sessions[sesidx].videodata['pupil_area']    = medfilt(sessions[sesidx].videodata['pupil_area'] , kernel_size=25)
+sessions[sesidx].videodata['motionenergy']  = medfilt(sessions[sesidx].videodata['motionenergy'] , kernel_size=25)
+sessions[sesidx].behaviordata['runspeed']   = medfilt(sessions[sesidx].behaviordata['runspeed'] , kernel_size=51)
 
 ################################################################
 #Show some traces and some stimuli to see responses:
 
-example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
+fig = plot_excerpt(sessions[0],trialsel=None,plot_neural=True,plot_behavioral=False)
 
-V1_labeled      = 
-V1_unlabeled    = 
-PM_labeled      = 
-PM_unlabeled    = 
+trialsel = [3294, 3374]
+fig = plot_excerpt(sessions[0],trialsel=trialsel,plot_neural=True,plot_behavioral=True,neural_version='traces')
+# fig.savefig(os.path.join(savedir,'TraceExcerpt_dF_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'Excerpt_Traces_deconv_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-excerpt_neural_behavioral(sessions[0],trialsel=[50,90])
-
-
-
+fig = plot_excerpt(sessions[0],trialsel=None,plot_neural=True,plot_behavioral=True,neural_version='raster')
+fig = plot_excerpt(sessions[0],trialsel=trialsel,plot_neural=True,plot_behavioral=True,neural_version='raster')
+fig.savefig(os.path.join(savedir,'Excerpt_Raster_dF_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
 ## Construct response matrix of N neurons by K trials
