@@ -22,7 +22,6 @@ sessions            = load_sessions(protocol = 'GR',session_list=session_list,lo
                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
 
 
-
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
 ## Parameters for temporal binning

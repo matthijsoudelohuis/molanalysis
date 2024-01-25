@@ -657,7 +657,8 @@ def proc_imaging(sesfolder, sessiondata):
         if np.isin(roi_area[plane_roi_idx[iplane]],['V1','PM']):
             celldata_plane['recombinase'] = sessiondata[temprecombinase].to_list()[0]
         else:
-            celldata_plane['recombinase'] = ''
+            celldata_plane['recombinase'] = 'non'
+        celldata_plane.loc[celldata_plane['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
 
         if os.path.exists(os.path.join(plane_folder, 'RF.npy')):
             RF = np.load(os.path.join(plane_folder, 'RF.npy'))

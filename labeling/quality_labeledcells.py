@@ -19,10 +19,14 @@ protocol            = ['VR']
 # protocol            = ['GR']
 protocol            = ['GR','VR','IM','RF','SP']
 protocol            = ['GR','VR','IM']
+protocol            = ['GR','IM']
 
 # sessions            = filter_sessions(protocol,only_animal_id=['LPE09830','LPE09665'])
 # sessions            = filter_sessions(protocol,only_animal_id=['LPE09829'])
 sessions            = filter_sessions(protocol)
+
+session_list        = np.array([['LPE11086','2023_12_16']])
+sessions            = load_sessions(protocol = 'IM',session_list=session_list)
 
 ## Combine cell data from all loaded sessions to one dataframe:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
@@ -30,21 +34,32 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 ## remove any double cells (for example recorded in both GR and RF)
 celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
-###################### Calcium trace skewness for labeled vs unlabeled cells:
-order = [0,1] #for statistical testing purposes
-pairs = [(0,1)]
+celldata.loc[celldata['redcell_prob']>0.2,'redcell'] = 1
 
-fields = ["skew","noise_level","event_rate","radius","npix_soma","meanF","meanF_chan2"]
-fields = ["skew","noise_level","event_rate","radius","npix_soma"]
+celldata.loc[celldata['redcell']==0,'recombinase'] = 'non'
+
+sns.histplot(data=celldata,x='redcell_prob',stat='probability',hue='redcell')
+plt.ylim([0,0.1])
+
+###################### Calcium trace skewness for labeled vs unlabeled cells:
+# order = [0,1] #for statistical testing purposes
+# pairs = [(0,1)]
+
+order = ['non','flp','cre'] #for statistical testing purposes
+pairs = [('non','flp'),('non','cre')]
+
+# fields = ["skew","noise_level","event_rate","radius","npix_soma","meanF","meanF_chan2"]
+fields = ["skew","noise_level","event_rate","radius","npix_soma","meanF"]
 
 nfields = len(fields)
 fig,axes   = plt.subplots(1,nfields,figsize=(12,4))
 
 for i in range(nfields):
-    sns.violinplot(data=celldata,y=fields[i],x="redcell",palette=['gray','red'],ax=axes[i])
+    # sns.violinplot(data=celldata,y=fields[i],x="redcell",palette=['gray','red'],ax=axes[i])
+    sns.violinplot(data=celldata,y=fields[i],x="recombinase",palette=['gray','orangered','indianred'],ax=axes[i])
     axes[i].set_ylim(np.nanpercentile(celldata[fields[i]],[0.1,99.9]))
 
-    annotator = Annotator(axes[i], pairs, data=celldata, x="redcell", y=fields[i], order=order)
+    annotator = Annotator(axes[i], pairs, data=celldata, x="recombinase", y=fields[i], order=order)
     annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
     annotator.apply_and_annotate()
 
@@ -54,10 +69,14 @@ for i in range(nfields):
 
 df2 = celldata.groupby(['redcell'])['redcell'].count()
 
-labelcounts = celldata.groupby(['redcell'])['redcell'].count().to_numpy()
-plt.suptitle('Quality comparison labeled ({0}) vs unlabeled ({1}) cells'.format(labelcounts[1],labelcounts[0]))
+# labelcounts = celldata.groupby(['redcell'])['redcell'].count().to_numpy()
+# labelcounts = celldata.groupby(['recombinase'])['recombinase'].count().to_numpy()
+labelcounts = celldata.groupby(['recombinase'])['recombinase'].count()
+plt.suptitle('Quality comparison non-labeled ({0}), cre-labeled ({1}) and flp-labeled ({2}) cells'.format(
+    labelcounts[labelcounts.index=='non'][0],labelcounts[labelcounts.index=='cre'][0],labelcounts[labelcounts.index=='flp'][0]))
 plt.tight_layout()
 
+## Scatter of all crosscombinations (seaborn pairplot):
 
 df = celldata[["skew","noise_level","npix_soma",
                "meanF","meanF_chan2","event_rate","redcell"]]
@@ -134,80 +153,5 @@ plt.figure(figsize=(5,4))
 sns.scatterplot(data=celldata,x='event_rate',y='noise_level',s=8,c='k')
 plt.xlabel('event rate')
 plt.ylabel('noise level ')
-
-
-########### Show calcium traces: #############################################################
-
-session_list        = np.array([['LPE09830','2023_04_12']])
-sessions            = load_sessions(protocol = 'GR',session_list=session_list,load_calciumdata=True)
-
-
-def show_excerpt_traces_labeled(Session,example_cells=None,trialsel=None):
-    
-    if example_cells is None:
-        example_cells = np.random.choice(Session.calciumdata.shape[1],10)
-
-    if trialsel is None:
-        trialsel = [np.random.randint(low=0,high=len(Session.trialdata)-400)]
-        trialsel.append(trialsel[0]+40)
-
-    example_tstart = Session.trialdata['tOnset'][trialsel[0]-1]
-    example_tstop = Session.trialdata['tOnset'][trialsel[1]-1]
-
-    excerpt         = np.array(Session.calciumdata.loc[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)])
-    excerpt         = excerpt[:,example_cells]
-
-    min_max_scaler = preprocessing.MinMaxScaler()
-    excerpt = min_max_scaler.fit_transform(excerpt)
-
-    # spksselec = spksselec 
-    [nframes,ncells] = np.shape(excerpt)
-
-    for i in range(ncells):
-        excerpt[:,i] =  excerpt[:,i] + i
-
-    oris        = np.unique(Session.trialdata['Orientation'])
-    rgba_color  = plt.get_cmap('hsv',lut=16)(np.linspace(0, 1, len(oris)))  
-    
-    labeled = Session.celldata['redcell'][example_cells].to_numpy().astype(int)
-    temp = ['k','r']
-    colors = [temp[labeled[i]] for i in range(len(example_cells))]
-
-    fig, ax = plt.subplots(figsize=[12, 6])
-    # plt.plot(Session.ts_F[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)],excerpt,linewidth=0.5,color='black')
-    # plt.plot(Session.ts_F[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)],excerpt,linewidth=0.5,color=colors)
-
-    for i in range(ncells):
-        plt.plot(Session.ts_F[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)],excerpt[:,i],linewidth=0.5,color=colors[i])
-
-    for i in np.arange(trialsel[0],trialsel[1]):
-        ax.add_patch(plt.Rectangle([Session.trialdata['tOnset'][i],0],1,ncells,alpha=0.3,linewidth=0,
-                                facecolor=rgba_color[np.where(oris==Session.trialdata['Orientation'][i])]))
-
-    handles= []
-    for i,ori in enumerate(oris):
-        handles.append(ax.add_patch(plt.Rectangle([0,0],1,ncells,alpha=0.3,linewidth=0,facecolor=rgba_color[i])))
-
-    pos = ax.get_position()
-    ax.set_position([pos.x0, pos.y0, pos.width * 0.9, pos.height])
-    ax.legend(handles,oris,loc='center right', bbox_to_anchor=(1.25, 0.5))
-
-    ax.set_xlim([example_tstart,example_tstop])
-
-    ax.add_artist(AnchoredSizeBar(ax.transData, 10, "10 Sec",loc=4,frameon=False))
-    ax.axis('off')
-
-
-#randomly select X labeled and Y unlabeled cells from V1 to show
-n_ex = 6
-skew_thr = 50
-example_cells = np.concatenate((np.random.choice(np.where(np.all((sessions[0].celldata['skew']>np.nanpercentile(sessions[0].celldata['skew'],skew_thr),
-                    sessions[0].celldata['roi_name']=='PM',
-                    sessions[0].celldata['redcell']==1),axis=0))[0],n_ex),
-                    np.random.choice(np.where(np.all((sessions[0].celldata['skew']>np.nanpercentile(sessions[0].celldata['skew'],skew_thr),
-                    sessions[0].celldata['roi_name']=='PM',
-                    sessions[0].celldata['redcell']==0),axis=0))[0],n_ex)))
-
-show_excerpt_traces_labeled(sessions[0],example_cells=example_cells)
 
 
