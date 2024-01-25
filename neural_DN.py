@@ -55,14 +55,6 @@ nSessions = len(sessions)
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - DN regression\\'
 
-sessions[0].trialdata['stimtype'] = 'N'
-
-idx = sessions[0].trialdata[sessions[0].trialdata['signal']==100].index
-sessions[0].trialdata.loc[idx,'stimtype'] = 'M'
-
-idx = sessions[0].trialdata[sessions[0].trialdata['signal']==0].index
-sessions[0].trialdata.loc[idx,'stimtype'] = 'C'
-
 
 # ##############################################################################
 # ## Construct time tensor: 3D 'matrix' of K trials by N neurons by T time bins

@@ -6,8 +6,6 @@ Main preprocessing function
 Preprocesses behavioral data, task and trial data, imaging data etc.
 """
 
-#TODO:
-# why skip two rows of triggers?
 
 import os, sys
 import numpy as np
@@ -16,7 +14,7 @@ os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "K:\\Rawdata\\"
+rawdatadir      = "I:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
@@ -27,19 +25,16 @@ procdatadir     = "V:\\Procdata\\"
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 
-animal_ids          = ['LPE10884'] #If empty than all animals in folder will be processed
-# animal_ids          = ['LPE11081'] #If empty than all animals in folder will be processed
-date_filter        = ['2024_01_12']
-
-# animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
-# date_filter        = ['2023_11_13']
-# date_filter         = []
+# animal_ids          = ['LPE10884'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
+date_filter        = ['2023_12_16']
+# date_filter        = ['2024_01_16']
 
 # protocols           = ['GN','RF','SP','IM']
-# protocols           = ['SP']
-# protocols           = ['GN']
-protocols           = ['DP','DM','DN']
-# protocols           = ['VR']
+# protocols           = ['DP','DM','DN']
+protocols           = ['IM']
+
+processimagingflag  = False
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -97,7 +92,7 @@ for animal_id in animal_ids: #for each animal
                 videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
                 videodata.to_csv(os.path.join(outdir,"videodata.csv"), sep=',')
 
-                if os.path.exists(os.path.join(sesfolder,"suite2p")):
+                if os.path.exists(os.path.join(sesfolder,"suite2p")) and processimagingflag:
                     print('Detected imaging data')
                     [sessiondata,celldata,dFdata,deconvdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
                     print('\nSaving imaging data\n')

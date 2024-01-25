@@ -34,7 +34,8 @@ savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
 protocol            = ['DM']
 sessions            = filter_sessions(protocol,load_behaviordata=True)
 
-nsessions = len(sessions)
+nsessions   = len(sessions)
+fig         = plot_psycurve(sessions)
 
 ################################################################
 ### Show the overall dprime for each animal across sessions:
@@ -56,10 +57,10 @@ sessiondata['dprime_eng']    = dp_ses_eng #dp_target_eng
 
 fig, (ax1,ax2) = plt.subplots(1,2,figsize=(5,3),sharey=True)
 
-sns.stripplot(data = sessiondata,x='animal_id',y='dprime',palette='Dark2',size=10,ax=ax1)
+sns.stripplot(data = sessiondata,x='animal_id',y='dprime',palette='Dark2',size=6,ax=ax1)
 ax1.axhline(y = 0, color = 'k', linestyle = ':')
 ax1.set_title('Total Session', fontsize=11)
-sns.stripplot(data = sessiondata,x='animal_id',y='dprime_eng',palette='Dark2',size=10,ax=ax2)
+sns.stripplot(data = sessiondata,x='animal_id',y='dprime_eng',palette='Dark2',size=6,ax=ax2)
 ax2.axhline(y = 0, color = 'k', linestyle = ':')
 ax2.set_title('Engaged Only', fontsize=11)
 plt.tight_layout()

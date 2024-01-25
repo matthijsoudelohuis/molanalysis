@@ -19,6 +19,7 @@ from datetime import datetime
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
 from utils.twoplib import get_meta
 import scipy.stats as st
+from loaddata.get_data_folder import get_data_folder
 
 """
   #####  #######  #####   #####  ### ####### #     # ######     #    #######    #    
@@ -47,9 +48,9 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     sessiondata         = sessiondata.assign(preprocessdate = [datetime.now().strftime("%Y_%m_%d")])
     sessiondata         = sessiondata.assign(protocol = [protocol])
 
-    sessions_overview_VISTA = pd.read_excel(os.path.join(rawdatadir,'VISTA_Sessions_Overview.xlsx'))
+    sessions_overview_VISTA = pd.read_excel(os.path.join(get_data_folder(),'VISTA_Sessions_Overview.xlsx'))
     # sessions_overview_VR    = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
-    sessions_overview_DE    = pd.read_excel(os.path.join(rawdatadir,'DE_Sessions_Overview.xlsx'))
+    sessions_overview_DE    = pd.read_excel(os.path.join(get_data_folder(),'DE_Sessions_Overview.xlsx'))
 
     if np.any(np.logical_and(sessions_overview_VISTA["sessiondate"] == sessiondate,sessions_overview_VISTA["protocol"] == protocol)):
         sessions_overview = sessions_overview_VISTA
@@ -271,8 +272,6 @@ def proc_task(rawdatadir,sessiondata):
     trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
     trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]))
     
-    # trialdata.drop(trialdata.tail(1).index,inplace=True) # drop last row
-
     trialdata['lickResponse'] = trialdata['lickResponse'].astype(int)
     trialdata = trialdata.rename(columns={'Reward': 'rewardAvailable'})
     trialdata['rewardGiven']  = np.logical_and(trialdata['rewardAvailable'],trialdata['lickResponse']).astype('int')
@@ -281,24 +280,52 @@ def proc_task(rawdatadir,sessiondata):
     for col in trialdata.columns:
         trialdata = trialdata.rename(columns={col: col[0].lower() + col[1:]})
 
+    # if np.isin(sessiondata['sessiondate'][0],['2023_11_27','2023_11_28','2023_11_30']):
+    #     trialdata['signal'] = trialdata['signal']*100
+
     # Signal values: 
     assert(np.all(np.logical_and(trialdata['signal'] >= 0,trialdata['signal'] <= 100))), 'not all signal values are between 0 and 100'
     assert(np.any(trialdata['signal'] > 1)), 'signal values do not exceed 1'
+    assert(len(np.unique(trialdata['stimRight']))==1), 'more than one stimulus appears to be presented in this session'
+    assert(np.isin(np.unique(trialdata['stimRight'])[0],['Ori45','Ori135','A','B','C','D'])), 'Unknown stimulus presented'
 
-    if sessiondata.protocol[0] == 'DP':
+    #Give stimulus category type 
+    trialdata['stimcat']            =  ''
+    idx                             = trialdata[trialdata['signal']==100].index
+    trialdata.loc[idx,'stimcat']    = 'M'
+    idx                             = trialdata[trialdata['signal']==0].index
+    trialdata.loc[idx,'stimcat']    = 'C'
+
+    if sessiondata.protocol[0] == 'DM':
+        assert np.all(np.isin(trialdata['signal'],[0,100])), 'Max protocol with intermediate saliencies'
+
+    elif sessiondata.protocol[0] == 'DP':
         nconds = len(np.unique(trialdata['signal']))
         assert(nconds>3 and nconds<6), 'too many or too few conditions for psychometric protocol'
+        idx         = ~np.isin(trialdata['signal'],[0,100])
+        trialdata.iloc[idx,trialdata.columns.get_loc('stimcat')]    = 'P'
 
-    if sessiondata.protocol[0] == 'DN':
-        idx = ~np.isin(trialdata['signal'],[0,100])
-        sigs = np.unique(trialdata['signal'][idx])
+    elif sessiondata.protocol[0] == 'DN':
+        idx         = ~np.isin(trialdata['signal'],[0,100])
+        sigs        = np.unique(trialdata['signal'][idx])
+        sigrange    = [sessiondata['signal_center'][0]-sessiondata['signal_range'][0]/2,
+                sessiondata['signal_center']+sessiondata['signal_range']/2]
 
-        sessiondata['signal_center']        = np.mean(sigs).round()
-        sessiondata['signal_range']         = np.max(sigs) - np.min(sigs)
-        trialdata['signal_jitter']          = np.nan
-        trialdata.loc[trialdata.index[idx],'signal_jitter']     = trialdata.loc[trialdata.index[idx],'signal'].to_numpy() - sessiondata['signal_center'].to_numpy()
+        assert np.all(np.logical_and((sigs>=sessiondata['signal_center'][0]-sessiondata['signal_range'][0]/2),
+                      np.all(sigs<=sessiondata['signal_center'][0]+sessiondata['signal_range'][0]/2))),'outside range'
         assert(len(sigs)>5), 'no signal jitter observed'
-    
+        assert sessiondata['signal_center'][0]==np.mean(sigs).round(), 'center of noise does not match overview'
+        assert sessiondata['signal_range'][0]==np.max(sigs) - np.min(sigs), 'noise range does not match overview'
+
+        trialdata['signal_jitter']          = ''
+        trialdata.loc[trialdata.index[idx],'signal_jitter']     = trialdata.loc[trialdata.index[idx],'signal'].to_numpy() - sessiondata['signal_center'].to_numpy()
+        
+        trialdata.iloc[idx,trialdata.columns.get_loc('stimcat')]    = 'N'
+    else:
+        print('unknown protocol abbreviation')
+
+    assert ~np.any(trialdata['stimcat'].isnull()), 'stimulus category labeling error, unknown stimstrength'
+
     #Get behavioral data, construct dataframe and modify a bit:
     behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
     if np.any(behaviordata.filter(regex='Item')):
@@ -328,7 +355,7 @@ def proc_task(rawdatadir,sessiondata):
     trialdata['rewardZoneStart_tot']    = trialdata['rewardZoneStart'] + np.cumsum(trialdata['trialEnd'])
     trialdata['rewardZoneEnd_tot']      = trialdata['rewardZoneEnd'] + np.cumsum(trialdata['trialEnd'])
     
-    #Subsample the data, don't need this resolution
+    #Subsample the data, don't need this high 1000 Hz resolution
     behaviordata = behaviordata.iloc[::10, :].copy().reset_index(drop=True) #subsample data 10 times (to 100 Hz)
     
     behaviordata['lick']    = False #init to false and set to true for sample of first lick or rew
@@ -336,9 +363,16 @@ def proc_task(rawdatadir,sessiondata):
     
     #Now add the lick times and reward times again to the subsampled dataframe:
     for lick in lick_ts:
-        # behaviordata['lick'][np.argmax(lick<behaviordata['ts'])] = True
         behaviordata.loc[behaviordata.index[np.argmax(lick<behaviordata['ts'])],'lick'] = True
     
+    #Assert that licks are not inside the reward zone for trials in which no lick response was recorded:
+    for k in range(len(trialdata)):
+        idx_k           = np.logical_and(behaviordata['lick'],[behaviordata['trialNumber']==k+1])
+        idx_rewzone     = np.logical_and(behaviordata['zpos']>trialdata['rewardZoneStart'][k],behaviordata['zpos']<trialdata['rewardZoneEnd'][k])
+        idx             = np.logical_and(idx_k,idx_rewzone).flatten()
+        if np.any(idx) and trialdata['lickResponse'][k]==False:
+            print('Lick(s) registered in trial %d with lickResponse==false' % k)
+
     print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
 
     trialdata['tStart'] = np.concatenate(([behaviordata['ts'][0]],trialdata['tEnd'][1:]))
@@ -367,22 +401,19 @@ def proc_task(rawdatadir,sessiondata):
     for reward in reward_ts: #set only the first timestamp of reward to True, to have single indices
         behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
     
-    print('problematic if reward not in reward zone!')
     #Compute the timestamp and spatial location of the reward being given and store in trialdata:
-    trialdata['tReward'] = np.nan
-    trialdata['sReward'] = np.nan
-    for t in range(len(trialdata)):
-        idx = np.logical_and(behaviordata['reward'],[behaviordata['trialNumber']==t+1]).flatten()
+    trialdata['tReward'] = ''
+    trialdata['sReward'] = ''
+    for k in range(len(trialdata)):
+        idx_k           = np.logical_and(behaviordata['reward'],[behaviordata['trialNumber']==k+1])
+        idx_rewzone     = np.logical_and(behaviordata['zpos']>trialdata['rewardZoneStart'][k],behaviordata['zpos']<trialdata['rewardZoneEnd'][k])
+        idx             = np.logical_and(idx_k,idx_rewzone).flatten()
         if np.any(idx):
-            trialdata.loc[trialdata.index[t],'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
-            trialdata.loc[trialdata.index[t],'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]
-
-    print('problematic if reward not in reward zone!')
-    # assert(trialdata[trialdata['lickResponse']==0])
-    # print('assert that licks are not in reward zone for lickReponse=0 trials...')
-     # df = sessions[0].trialdata[sessions[0].trialdata['trialOutcome']=='CR']
-
-    #Compute reward rate (fraction of GO trials rewarded) with sliding window for engagement index:
+            trialdata.loc[trialdata.index[k],'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
+            trialdata.loc[trialdata.index[k],'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]
+    
+    #Compute reward rate (fraction of possible rewarded trials that are rewarded) 
+    # with sliding window for engagement index:
     sliding_window = 24
     rewardrate_thr = 0.3
     trialdata['engaged'] = 1
@@ -393,9 +424,11 @@ def proc_task(rawdatadir,sessiondata):
         if hitrate < rewardrate_thr:
             trialdata.loc[trialdata.index[t],'engaged'] = 0
 
-    assert(np.all(~np.isnan(trialdata['tReward'][trialdata['rewardGiven']==1]))), 'not all rewarded trials have timestamp of reward'
-
-    # print("%d rewards" % len(reward_ts)) #Give output to check if reasonable
+    if ~np.all(trialdata['tReward'][trialdata['rewardGiven']==1]):
+        print('a rewarded trial has no timestamp of reward')
+    if np.any(trialdata['tReward'][trialdata['rewardGiven']==0]):
+        print('not rewarded trial has timestamp of reward')
+    
     print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
     print("%d rewards in unique trials" % trialdata['tReward'].count()) #Give output to check if reasonable
 

@@ -31,7 +31,7 @@ from labeling.tdTom_labeling_cellpose import gen_red_images
 rawdatadir          = 'I:\\RawData\\'
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
 animal_id           = 'LPE11086'
-sessiondate         = '2024_01_08'
+sessiondate         = '2024_01_10'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 

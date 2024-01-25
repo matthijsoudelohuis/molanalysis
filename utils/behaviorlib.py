@@ -115,6 +115,7 @@ def plot_psycurve(sessions,filter_engaged=False):
         ax.legend()
         ax.set_xlim([np.min(x),np.max(x)])
         ax.set_ylim([0,1])
+        ax.set_title(ses.sessiondata['session_id'][0])
         
         # Print the fitted parameters
         print("Fitted Parameters:")

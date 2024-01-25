@@ -28,11 +28,10 @@ protocol            = ['DN']
 sessions            = filter_sessions(protocol,load_behaviordata=True)
 
 protocol            = 'DN'
-session_list = np.array([['LPE10884', '2024_01_12']])
+session_list = np.array([['LPE10884', '2024_01_16']])
 sessions = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
 
 nsessions = len(sessions)
-
 
 ##################### Spatial plots ####################################
 # Behavior as a function of distance within the corridor:
@@ -62,7 +61,4 @@ fig.savefig(os.path.join(savedir,'Psychometric','Psy_1ses_Engaged_%s.png' % sess
 
 
 # df = sessions[sesidx].trialdata[sessions[0].trialdata['trialOutcome']=='CR']
-
-
-
 
