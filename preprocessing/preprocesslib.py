@@ -614,8 +614,8 @@ def proc_imaging(sesfolder, sessiondata):
         roi_depths_idx = np.append(roi_depths_idx,np.repeat(i,len(zs)))
     
     #get all the depths of the planes in order of imaging:
-    plane_zs    = np.array(meta_dict['SI.hStackManager.zs'].replace('[','').replace(']','').split(' ')).astype('int')
-    
+    plane_zs    = np.array(meta_dict['SI.hStackManager.zs'].replace('[','').replace(']','').split(' ')).astype('float64')
+
     #Find the roi to which each plane belongs:
     plane_roi_idx = np.array([roi_depths_idx[np.where(roi_depths == plane_zs[i])[0][0]] for i in range(ops['nplanes'])])
 

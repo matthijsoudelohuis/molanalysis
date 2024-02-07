@@ -110,7 +110,7 @@ def init_ops(sesfolder):
     
     return db, ops
 
-def run_bleedthrough_corr(db,ops,coeff):
+def run_bleedthrough_corr(db,ops,coeff=None,gain1=0.6,gain2=0.4):
 
     #Write new binary file with corrected data per plane:
     for iplane in np.arange(ops['nplanes']):
@@ -129,8 +129,8 @@ def run_bleedthrough_corr(db,ops,coeff):
                   
                 #   datagreencorr = datagreen - coeff * datared
 
-                datagreencorr = bleedthrough_correction(datagreen,datared,coeff)
-                  
+                datagreencorr = bleedthrough_correction(datagreen,datared,coeff,gain1,gain2)
+                
                 f1.write(data=datagreencorr)
                 #   f3.write(data=datagreencorr)
             f1.close()

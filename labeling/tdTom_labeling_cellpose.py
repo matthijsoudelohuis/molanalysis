@@ -65,8 +65,17 @@ def proc_labeling_plane(plane_folder,showcells=True,overlap_threshold=0.5):
     # mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
 
     ## Get red image:
-    mimg2       = ops['meanImg_chan2']
-    mimg2       = im_norm(mimg2,min=2.5,max=99).astype(np.uint8) #scale between 0 and 255
+    mimg2 = ops['meanImg_chan2'] #get red channel image from ops
+    # mimg2 = im_norm(mimg2,min=2.5,max=100) #scale between 0 and 255
+    mimg2 = im_norm(mimg2,min=0.5,max=99.5) #scale between 0 and 255
+
+    # mimg2 = im_log(mimg2) #log transform to enhance weakly expressing cells
+
+    mimg2 = im_sqrt(mimg2) #log transform to enhance weakly expressing cells
+
+    mimg2 = im_norm(mimg2,min=0,max=100) #scale between 0 and 255
+    
+    #scale between 0 and 255
     # mimg2       = im_log(mimg2) #log transform to enhance weakly expressing cells
     # mimg2       = im_norm(mimg2,min=0,max=100).astype(np.uint8) #scale between 0 and 255
 
@@ -81,10 +90,14 @@ def proc_labeling_plane(plane_folder,showcells=True,overlap_threshold=0.5):
     #Show labeling results in green and red image:
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(18,6))
 
-    ax1.imshow(mimg,cmap='gray',vmin=0,vmax=255)
-    ax2.imshow(mimg2,cmap='gray',vmin=0,vmax=255)
-    
-    # im3 = rchan[:,:,np.newaxis] * clr_rchan + gchan[:,:,np.newaxis] * clr_gchan
+    # ax1.imshow(mimg,cmap='gray',vmin=0,vmax=255)
+    # ax2.imshow(mimg2,cmap='gray',vmin=0,vmax=255)
+    im1 = np.dstack((np.zeros(np.shape(mimg)),mimg,np.zeros(np.shape(mimg)))).astype(np.uint8)
+    ax1.imshow(im1,vmin=0,vmax=255)
+
+    im2 = np.dstack((mimg2,np.zeros(np.shape(mimg2)),np.zeros(np.shape(mimg2)))).astype(np.uint8)
+    ax2.imshow(im2,vmin=0,vmax=255)
+
     im3 = np.dstack((mimg2,mimg,np.zeros(np.shape(mimg2)))).astype(np.uint8)
     ax3.imshow(im3,vmin=0,vmax=255)
 
@@ -99,18 +112,17 @@ def proc_labeling_plane(plane_folder,showcells=True,overlap_threshold=0.5):
         
         for i,o in enumerate(outl_green):
             if iscell[i,0]: #show only good cells
-                ax1.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
+                ax1.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
                 # ax2.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
                 if red_filtered[i]:
-                    ax3.plot(o[:,0], o[:,1], color='b',linewidth=0.6)
-                else: 
                     ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
-
+                # else: 
+                    # ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
 
         for o in outl_red:
             # ax1.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
-            ax2.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
-            ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
+            ax2.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+            # ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
             # ax3.plot(o[:,0], o[:,1], color='#ffe601',linewidth=0.6)
     
     ax1.set_axis_off()

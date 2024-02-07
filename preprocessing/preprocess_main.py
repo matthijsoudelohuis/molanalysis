@@ -14,7 +14,7 @@ os.chdir('T:\\Python\\molanalysis\\')
 # import suite2p
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "H:\\Rawdata\\"
+rawdatadir      = "J:\\Rawdata\\"
 procdatadir     = "V:\\Procdata\\"
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
@@ -22,12 +22,12 @@ procdatadir     = "V:\\Procdata\\"
 
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
-animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
-date_filter        = ['2023_10_20']
+date_filter        = ['2023_11_13']
 # date_filter        = ['2024_01_26','2023_10_23','2023_10_31']
 
-protocols           = ['GR','GN','SP','IM']
+protocols           = ['GR','SP','IM']
 # protocols           = ['GN']
 # protocols           = ['DP','DM','DN']
 # protocols           = ['IM']
@@ -87,8 +87,8 @@ for animal_id in animal_ids: #for each animal
                     trialdata = proc_IM(rawdatadir,sessiondata)
                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
                 
-                videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
-                videodata.to_csv(os.path.join(outdir,"videodata.csv"), sep=',')
+                # videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
+                # videodata.to_csv(os.path.join(outdir,"videodata.csv"), sep=',')
 
                 if os.path.exists(os.path.join(sesfolder,"suite2p")) and processimagingflag:
                     print('Detected imaging data')

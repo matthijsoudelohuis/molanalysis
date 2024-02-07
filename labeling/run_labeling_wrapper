@@ -11,11 +11,11 @@ except:
     os.chdir('e:\\Python\\molanalysis\\')
 from labeling.tdTom_labeling_cellpose import proc_labeling_session
 
-rawdatadir          = 'I:\\RawData\\'
+rawdatadir          = 'J:\\RawData\\'
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-animal_ids          = ['LPE10883'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
 # date_filter         = ['2024_01_10']
-date_filter         = ['2024_01_26']
+date_filter         = ['2023_12_11']
 # date_filter         = []
 
 ## Loop over all selected animals and folders

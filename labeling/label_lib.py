@@ -7,7 +7,6 @@ def extrema_np(arr):
     return np.min(arr),np.max(arr)
 
 def bleedthrough_correction(greenchanim,redchanim,coeff=None,gain1=0.6,gain2=0.4):
-    # Subtracts
     # Regression with pre-established values:
     if coeff is None:
         coeff = get_gain_coeff(gain1,gain2)

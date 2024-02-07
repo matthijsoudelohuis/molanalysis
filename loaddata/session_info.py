@@ -73,7 +73,7 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                 
                 # SELECT BASED ON # CELLS
                 if sesflag and min_cells is not None:
-                    sesflag = sesflag and len(ses.celldata) >= min_cells
+                    sesflag = sesflag and hasattr(ses, 'celldata') and len(ses.celldata) >= min_cells
                     
                 if sesflag:
                     sessions.append(ses)

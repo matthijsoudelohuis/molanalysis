@@ -23,7 +23,8 @@ protocol            = ['GR','IM']
 
 # sessions            = filter_sessions(protocol,only_animal_id=['LPE09830','LPE09665'])
 # sessions            = filter_sessions(protocol,only_animal_id=['LPE09829'])
-sessions            = filter_sessions(protocol)
+sessions            = filter_sessions(protocol,only_animal_id=['LPE10919','LPE10885','LPE10883','LPE11086'],
+                                      min_cells=100)
 
 session_list        = np.array([['LPE11086','2023_12_16']])
 sessions            = load_sessions(protocol = 'IM',session_list=session_list)
@@ -34,12 +35,14 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 ## remove any double cells (for example recorded in both GR and RF)
 celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
-celldata.loc[celldata['redcell_prob']>0.2,'redcell'] = 1
-
+celldata['redcell'] = celldata['redcell_prob']>0.4
 celldata.loc[celldata['redcell']==0,'recombinase'] = 'non'
 
-sns.histplot(data=celldata,x='redcell_prob',stat='probability',hue='redcell')
-plt.ylim([0,0.1])
+celldata['noise_level'].values[celldata['noise_level'] > 5] = 0
+
+
+sns.histplot(data=celldata,x='redcell_prob',stat='probability',hue='redcell',binwidth=0.05)
+plt.ylim([0,0.01])
 
 ###################### Calcium trace skewness for labeled vs unlabeled cells:
 # order = [0,1] #for statistical testing purposes
@@ -53,6 +56,10 @@ fields = ["skew","noise_level","event_rate","radius","npix_soma","meanF"]
 
 nfields = len(fields)
 fig,axes   = plt.subplots(1,nfields,figsize=(12,4))
+
+celldata = celldata[celldata['meanF_chan2']<1000]
+celldata = celldata[celldata['noise_level']<1]
+
 
 for i in range(nfields):
     # sns.violinplot(data=celldata,y=fields[i],x="redcell",palette=['gray','red'],ax=axes[i])
@@ -77,12 +84,13 @@ plt.suptitle('Quality comparison non-labeled ({0}), cre-labeled ({1}) and flp-la
 plt.tight_layout()
 
 ## Scatter of all crosscombinations (seaborn pairplot):
-
 df = celldata[["skew","noise_level","npix_soma",
                "meanF","meanF_chan2","event_rate","redcell"]]
 sns.pairplot(data=df, hue="redcell")
 
 sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap='bwr')
+
+## 
 
 
 # ###################### Calcium trace skewness for labeled vs unlabeled cells:
