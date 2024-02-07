@@ -186,18 +186,23 @@ def proc_GN(rawdatadir,sessiondata):
     trialdata['Speed'] = trialdata['TF'] / trialdata['SF']
 
     #Checks:
-    CenterOris  = np.array([30,90,150]); #orientations degrees
-    CenterTF    = np.array([1.5,3, 6]); #Hz
-    CenterSF    = np.array([0.12,0.06,0.03]); #cpd
-    CenterSpeed = CenterTF / CenterSF #speed is TF / SF
+    CenterOris  = np.array([30,90,150]);        #orientations degrees
+    # CenterTF    = np.array([1.5,3, 6]);        #Hz #earlier version
+    # CenterSF    = np.array([0.12,0.06,0.03]);  #cpd #earlier version
+
+    CenterTF    = np.array([1, 2.5, 4]);        #Hz #v4
+    CenterSF    = np.array([5/30,3/30,1/30]);   #cpd #v4
+    CenterSpeed = CenterTF / CenterSF           #speed is TF / SF
 
     trialdata['centerOrientation'] = '' #add column with the center orientation for this stimulus (wiht noise around this)
     trialdata['centerTF'] = ''
     trialdata['centerSF'] = ''
+    # trialdata['centerSpeed'] = ''
     for k in range(len(trialdata)): #for every trial get what center the ori, TF and SF where closest to:
         trialdata.iloc[k,trialdata.columns.get_loc("centerOrientation")] = CenterOris[np.abs((CenterOris - trialdata.Orientation[k])).argmin()]
         trialdata.iloc[k,trialdata.columns.get_loc("centerTF")] = CenterTF[np.abs((CenterTF - trialdata.TF[k])).argmin()]
         trialdata.iloc[k,trialdata.columns.get_loc("centerSF")] = CenterSF[np.abs((CenterSF - trialdata.SF[k])).argmin()]
+    
     trialdata['centerSpeed'] = trialdata['centerTF'] / trialdata['centerSF']
 
     # define the noise relative to the center:  
@@ -205,7 +210,8 @@ def proc_GN(rawdatadir,sessiondata):
     trialdata['deltaTF']            = trialdata['TF'] - trialdata['centerTF']
     trialdata['deltaSF']            = trialdata['SF'] - trialdata['centerSF']
     trialdata['deltaSpeed']         = trialdata['Speed'] - trialdata['centerSpeed']
-    
+    trialdata['logdeltaSpeed']      = np.log10(trialdata['Speed']) - np.log10(trialdata['centerSpeed'].to_numpy().astype('float64'))
+
     #Checks:
     assert(all(np.isin(trialdata['centerSpeed'],CenterSpeed))),'grating speed not in originally programmed stimulus speeds'
     ori_counts = trialdata.groupby(['centerOrientation','centerSpeed'])['centerOrientation'].count().to_numpy()
@@ -491,17 +497,25 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
         proc = np.load(os.path.join(sesfolder,facemapfile[0]),allow_pickle=True).item()
         
         assert len(proc['motion'][0])==0,'multivideo performed, should not be done'
-        assert len(proc['rois'])==2,'designed to analyze 2 rois, pupil and motion svd, _proc file contains a different #rois'
-        assert all(x in [proc['rois'][i]['rtype'] for i in range(2)] for x in ['motion SVD', 'Pupil']),'roi type error'
+        
+        roi_types = [proc['rois'][i]['rtype'] for i in range(len(proc['rois']))]
+        assert 'motion SVD' in roi_types,'motion SVD missing, _proc file does not contain motion svd roi'
+        
+        # assert len(proc['rois'])==2,'designed to analyze 2 rois, pupil and motion svd, _proc file contains a different #rois'
+        # assert all(x in [proc['rois'][i]['rtype'] for i in range(len(proc['rois']))] for x in ['motion SVD', 'Pupil']),'roi type error'
 
         videodata['motionenergy']   = proc['motion'][1]
         PC_labels                   = list('videoPC_' + '%s' % k for k in range(0,keepPCs))
         videodata = pd.concat([videodata,pd.DataFrame(proc['motSVD'][1][:,:keepPCs],columns=PC_labels)],axis=1)
         
         #Pupil data:
-        videodata['pupil_area']   = proc['pupil'][0]['area_smooth']
-        videodata['pupil_ypos']   = proc['pupil'][0]['com'][:,0]
-        videodata['pupil_xpos']   = proc['pupil'][0]['com'][:,1]
+        if 'Pupil' not in roi_types: 
+            print('Pupil ROI missing (perhaps video too dark)')
+            videodata['pupil_area'] = videodata['pupil_ypos'] = videodata['pupil_xpos'] = ''
+        else:
+            videodata['pupil_area']   = proc['pupil'][0]['area_smooth']
+            videodata['pupil_ypos']   = proc['pupil'][0]['com'][:,0]
+            videodata['pupil_xpos']   = proc['pupil'][0]['com'][:,1]
     else:
         print('#######################  Could not locate facemapdata...')
 
@@ -615,16 +629,20 @@ def proc_imaging(sesfolder, sessiondata):
 
         iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
         stat                = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
-        # redcell             = np.load(os.path.join(plane_folder, 'redcell.npy'), allow_pickle=True)
+        assert os.path.exists(os.path.join(plane_folder,'redim_plane%d_seg.npy' %iplane)), 'Cellpose results not found'
+        redcell_seg         = np.load(os.path.join(plane_folder,'redim_plane%d_seg.npy' %iplane), allow_pickle=True).item()
+        masks_cp_red        = redcell_seg['masks']
+        Nredcells_plane     = len(np.unique(masks_cp_red))-1 # number of labeled cells overall, minus 1 because 0 for all nonlabeled pixels
+
+        assert os.path.exists(os.path.join(plane_folder,'redcell_cellpose.npy')), 'Cellpose results not found'
         redcell             = np.load(os.path.join(plane_folder, 'redcell_cellpose.npy'), allow_pickle=True)
-        # redcell             = np.load(os.path.join(plane_folder, 'redcell_cellpose.npy'), allow_pickle=True)
 
         ncells_plane              = len(iscell)
         
         celldata_plane            = pd.DataFrame()
 
-        celldata_plane            = celldata_plane.assign(iscell = iscell[:,0])
-        celldata_plane            = celldata_plane.assign(iscell_prob = iscell[:,1])
+        celldata_plane            = celldata_plane.assign(iscell        = iscell[:,0])
+        celldata_plane            = celldata_plane.assign(iscell_prob   = iscell[:,1])
 
         celldata_plane            = celldata_plane.assign(skew          = np.empty([ncells_plane,1]))
         celldata_plane            = celldata_plane.assign(chan2_prob    = np.empty([ncells_plane,1]))
@@ -644,6 +662,7 @@ def proc_imaging(sesfolder, sessiondata):
         
         celldata_plane['redcell_prob']  = redcell[0,:]
         celldata_plane['redcell']       = redcell[1,:]
+        celldata_plane['nredcells']     = Nredcells_plane
 
         celldata_plane['plane_idx']     = iplane
         celldata_plane['roi_idx']       = plane_roi_idx[iplane]
@@ -652,13 +671,6 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['depth']         = plane_zs[iplane] - sessiondata['ROI%d_dura' % (plane_roi_idx[iplane]+1)][0]
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
-
-        temprecombinase =  roi_area[plane_roi_idx[iplane]] + '_recombinase'
-        if np.isin(roi_area[plane_roi_idx[iplane]],['V1','PM']):
-            celldata_plane['recombinase'] = sessiondata[temprecombinase].to_list()[0]
-        else:
-            celldata_plane['recombinase'] = 'non'
-        celldata_plane.loc[celldata_plane['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
 
         if os.path.exists(os.path.join(plane_folder, 'RF.npy')):
             RF = np.load(os.path.join(plane_folder, 'RF.npy'))
@@ -672,8 +684,6 @@ def proc_imaging(sesfolder, sessiondata):
         Fneu                = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
         spks                = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
         
-        #!#!@#!$!#%#%#!$@!#%!^%@!$!#$ 
-
         if np.shape(F_chan2)[0] < np.shape(F)[0]:
             print('ROIs were manually added in suite2p, fabricating red channel data...')
             F_chan2     = np.vstack((F_chan2, np.tile(F_chan2[[-1],:], 1)))
@@ -746,9 +756,18 @@ def proc_imaging(sesfolder, sessiondata):
         print('An imaging area was not named in scanimage')
         if celldata['roi_name'].isin(['PM']).any():
             celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_2','V1')
+            celldata['roi_name'] = celldata['roi_name'].str.replace('ROI 2','V1')
         if celldata['roi_name'].isin(['V1']).any():
             celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_1','PM')
+            celldata['roi_name'] = celldata['roi_name'].str.replace('ROI 1','PM')
         assert not celldata['roi_name'].str.contains('ROI').any(),'unknown area'
+
+    #Add recombinase enzym label to red cells:
+    labelareas = ['V1','PM']
+    for area in labelareas:
+        temprecombinase =  area + '_recombinase'
+        celldata.loc[celldata['roi_name']==area,'recombinase'] = sessiondata[temprecombinase].to_list()[0]
+    celldata_plane.loc[celldata_plane['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
 
     # Correct for suite2p artefact if never opened suite2p to set 0th cell to not iscell based on npix size:
     celldata.iloc[np.where(celldata['npix_soma']<5)[0],celldata.columns.get_loc('iscell')] = 0

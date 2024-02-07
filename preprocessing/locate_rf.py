@@ -156,7 +156,7 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
         ## Get trigger data to align timestamps:
         filenames         = os.listdir(rf_folder)
         triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
-        triggerdata       = pd.read_csv(os.path.join(rf_folder,triggerdata_file[0]),skiprows=2).to_numpy()
+        triggerdata       = pd.read_csv(os.path.join(rf_folder,triggerdata_file[0]),skiprows=1).to_numpy()
 
         [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
 

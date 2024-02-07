@@ -19,7 +19,7 @@ import seaborn as sns
 from suite2p.extraction import extract, masks
 from suite2p.detection.chan2detect import detect,correct_bleedthrough
 
-from utils.imagelib import im_norm,im_norm8,im_log
+from utils.imagelib import im_norm,im_norm8,im_log,im_sqrt
 
 from PIL import Image
 
@@ -160,20 +160,21 @@ def gen_red_images(rawdatadir,animal_id,sessiondate):
         ops = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
         
         mimg2 = ops['meanImg_chan2'] #get red channel image from ops
-        mimg2 = im_norm(mimg2,min=2.5,max=100) #scale between 0 and 255
+        # mimg2 = im_norm(mimg2,min=2.5,max=100) #scale between 0 and 255
+        mimg2 = im_norm(mimg2,min=0.5,max=99.5) #scale between 0 and 255
 
-        mimg2_log = im_log(mimg2) #log transform to enhance weakly expressing cells
+        # mimg2 = im_log(mimg2) #log transform to enhance weakly expressing cells
+
+        mimg2 = im_sqrt(mimg2) #log transform to enhance weakly expressing cells
 
         mimg2 = im_norm(mimg2,min=0,max=100) #scale between 0 and 255
 
+        # mimg2 = np.dstack((mimg2,np.zeros(np.shape(mimg2)),np.zeros(np.shape(mimg2))))
         mimg2 = np.dstack((mimg2,np.zeros(np.shape(mimg2)),np.zeros(np.shape(mimg2))))
 
         img = Image.fromarray(mimg2.astype(np.uint8))
 
         img.save(os.path.join(plane_folder,'redim_plane%d.png' % iplane))
-
-
-
 
 #piece of code to analyze how many red cells were labeled etc. overlap with suite2p bladiebla
     # nOnlyRedCells   = np.sum(mask_overlap_red_with_green==0)

@@ -18,7 +18,7 @@ from suite2p.extraction import extract
 
 
 #####################################################################################
-def load_data(directory,nplanes): 
+def load_data(directory,nplanes,iplane=0): 
     data_green      = np.empty([0,512,512])
     data_red        = np.empty([0,512,512])
     maxtifs         = 20
@@ -33,8 +33,8 @@ def load_data(directory,nplanes):
             print(f)
             reader      = imread(f)
             Data        = reader.data()
-            data_green  = np.append(data_green, Data[0::(2*nplanes),:,:],axis=0)
-            data_red    = np.append(data_red, Data[1::(2*nplanes),:,:],axis=0)
+            data_green  = np.append(data_green, Data[iplane*2::(2*nplanes),:,:],axis=0)
+            data_red    = np.append(data_red, Data[iplane*2+1::(2*nplanes),:,:],axis=0)
     
     return data_green,data_red
 
@@ -80,6 +80,10 @@ def plot_correlation(im1,im2):
 
 ##########################################
 
+
+directory = 'I:\\RawData\\LPE10883\\2023_10_23\\IM\\Imaging\\'
+[data_green,data_red] = load_data(directory,nplanes=8,iplane=5)
+
 directory = 'O:\\RawData\\LPE10192\\2023_05_04\\SP\\Imaging\\'
 [data_green,data_red] = load_data(directory,nplanes=4)
 
@@ -112,13 +116,29 @@ plot_correlation(greenchanim,redchanim)
 plot_correlation(data_green,data_red)
 
 
+greenchanim_corr = bleedthrough_correction(greenchanim,redchanim,coeff=1.54,gain1=0.6,gain2=0.4)
+
+plot_correction_images(greenchanim,redchanim)
+
 plot_correction(greenchanim,redchanim,greenchanim - b * redchanim)
 
 plot_correction(greenchanim,redchanim,greenchanim - 0.068 * redchanim) #0.6 0.6
 plot_correction(greenchanim,redchanim,greenchanim - 0.32 * redchanim) #0.6 0.5
-plot_correction(greenchanim,redchanim,greenchanim - 1.54 * redchanim) #0.6 0.4
+
+greenchanim_corr = bleedthrough_correction(greenchanim,redchanim,coeff=1.54,gain1=0.6,gain2=0.4)
+greenchanim_corr = bleedthrough_correction(greenchanim,redchanim,gain1=0.6,gain2=0.4)
+greenchanim_corr = bleedthrough_correction(greenchanim,redchanim,coeff=1.3)
+plot_correction(greenchanim,redchanim,greenchanim_corr) #0.6 0.4
+
+greenchanim_corr = bleedthrough_correction(greenchanim,redchanim,coeff=1.3,gain1=0.6,gain2=0.4)
+plot_correction(greenchanim,redchanim,greenchanim_corr) #0.6 0.4
 
 # plt.plot(np.log([0.068,0.32,1.54]))
+
+sns.histplot(data_green.flatten())
+plt.scatter(data_green[0,:,:].flatten(),data_red[0,:,:].flatten())
+plt.scatter(data_green[35,:,:].flatten(),data_red[35,:,:].flatten())
+
 ######################################
 
 # subtract bleedthrough of green into red channel

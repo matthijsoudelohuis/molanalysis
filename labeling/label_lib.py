@@ -6,12 +6,14 @@ import os
 def extrema_np(arr):
     return np.min(arr),np.max(arr)
 
-def bleedthrough_correction(greenchanim,redchanim,gain1=0.6,gain2=0.4):
+def bleedthrough_correction(greenchanim,redchanim,coeff=None,gain1=0.6,gain2=0.4):
     # Subtracts
     # Regression with pre-established values:
-    b                   = 1.54
-    a                   = np.percentile(redchanim.flatten(),5)
-    greenchanim_corr    = greenchanim - b * (redchanim-a)
+    if coeff is None:
+        coeff = get_gain_coeff(gain1,gain2)
+
+    offset              = np.percentile(redchanim.flatten(),5)
+    greenchanim_corr    = greenchanim - coeff * (redchanim-offset)
 
     return greenchanim_corr
 
@@ -85,18 +87,26 @@ def plot_correction_images(greenchanim,redchanim):
 
 # ###### correction coefficient for red into green:
 # coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
-# # coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
-# # coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
+# coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
+# coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
+def show_gain_coeff():
+    diff = np.array([-0.2,-0.1,0,0.1,0.2])
+    corr = np.array([0.003,0.015,0.0668,0.32,1.54])
 
-# diff = np.array([-0.2,-0.1,0,0.1,0.2])
-# corr = np.array([0.02,0.05,0.0668,0.32,1.54])
+    b, a = np.polyfit(diff[2:], np.log10(corr[2:]), deg=1)
 
-# b, a = np.polyfit(diff[2:], np.log10(corr[2:]), deg=1)
+    corr_pred = 10**(b*diff+a)
 
-# corr_pred = 10**(b*diff+a)
+    fig = plt.figure()
+    plt.plot(diff,corr)
+    plt.scatter(diff,corr,s=20,color='r')
+    plt.yscale('log')
+    plt.scatter(diff,corr_pred,s=20,color='b')
+    return
 
-# fig = plt.figure()
-# plt.plot(diff,corr)
-# plt.scatter(diff,corr,s=20,color='r')
-# plt.yscale('log')
-# plt.scatter(diff,corr_pred,s=20,color='b')
+def get_gain_coeff(gain1,gain2):
+    diff = gain1-gain2
+    b = 6.813721291804585
+    a = -1.1755564086364871
+    return 10**(b*diff+a)
+

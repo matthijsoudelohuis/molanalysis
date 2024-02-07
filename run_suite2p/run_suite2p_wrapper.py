@@ -30,22 +30,26 @@ from labeling.tdTom_labeling_cellpose import gen_red_images
 
 rawdatadir          = 'I:\\RawData\\'
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-animal_id           = 'LPE11086'
-sessiondate         = '2024_01_10'
+animal_id           = 'LPE10883'
+sessiondate         = '2023_10_09'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
-# ops['align_by_chan']    = 1
+ops['align_by_chan']    = 1 #1-indexed, 1=gcamp,2=tdtomato
 
 ##################    Run registration:  ############################
 suite2p.run_s2p(ops=ops, db=db) 
 
 ################# tdTomato bleedthrough correction: ################
-coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
+# coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
 # coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
 # coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
+gain1 = 0.6
+gain2 = 0.4
+# coeff = 1.3 #for LPE 10883 with maxing out of green signal (don't want to subtract higher than 2**15
 
-ops = run_bleedthrough_corr(db,ops,coeff)
+ops = run_bleedthrough_corr(db,ops,gain1=gain1,gain2=gain2)
+# ops = run_bleedthrough_corr(db,ops,coeff)
 
 ########################## ROI detection ###########################
 ops['do_registration']      = False

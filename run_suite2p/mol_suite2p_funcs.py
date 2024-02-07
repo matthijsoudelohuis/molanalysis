@@ -123,29 +123,46 @@ def run_bleedthrough_corr(db,ops,coeff):
         with BinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
         # with BinaryFile(filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(filename=file_chan1_corr,Ly=512, Lx=512,n_frames=f1.n_frames) as f3:
             
-              for i in np.arange(f1.n_frames):
-                  [ind,datagreen]      = f1.read(batch_size=1)
-                  [ind,datared]        = f2.read(batch_size=1)
+            for i in np.arange(f1.n_frames):
+                [ind,datagreen]      = f1.read(batch_size=1)
+                [ind,datared]        = f2.read(batch_size=1)
                   
                 #   datagreencorr = datagreen - coeff * datared
 
-                  datagreencorr = bleedthrough_correction(datagreen,datared)
+                datagreencorr = bleedthrough_correction(datagreen,datared,coeff)
                   
-                  f1.write(data=datagreencorr)
+                f1.write(data=datagreencorr)
                 #   f3.write(data=datagreencorr)
-            
-    #move original to subdir and rename corrected to data.bin to be read by suite2p for detection:
+            f1.close()
+            f2.close()
+
+    #delete original rename corrected to data.bin to be read by suite2p for detection:
     for iplane in np.arange(ops['nplanes']):
         planefolder = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane)
         file_chan1       = os.path.join(planefolder,'data.bin')
         file_chan1_corr   = os.path.join(planefolder,'data_corr.bin')
         
-        os.mkdir(os.path.join(planefolder,'orig'))
-    
-        shutil.move(os.path.join(planefolder,file_chan1),os.path.join(planefolder,'orig'))
-        
+        # os.mkdir(os.path.join(planefolder,'orig'))
+        # shutil.move(os.path.join(planefolder,file_chan1),os.path.join(planefolder,'orig'))
+        os.remove(os.path.join(planefolder,file_chan1))
+
         os.rename(os.path.join(planefolder,file_chan1_corr), os.path.join(planefolder,file_chan1))
+
+        # os.remove(os.path.join(planefolder,file_chan1_corr))
+
+
+    # #move original to subdir and rename corrected to data.bin to be read by suite2p for detection:
+    # for iplane in np.arange(ops['nplanes']):
+    #     planefolder = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane)
+    #     file_chan1       = os.path.join(planefolder,'data.bin')
+    #     file_chan1_corr   = os.path.join(planefolder,'data_corr.bin')
+        
+    #     os.mkdir(os.path.join(planefolder,'orig'))
     
+    #     shutil.move(os.path.join(planefolder,file_chan1),os.path.join(planefolder,'orig'))
+        
+    #     os.rename(os.path.join(planefolder,file_chan1_corr), os.path.join(planefolder,file_chan1))
+
     ### Update mean images and add enhanced images:
     for iplane in np.arange(ops['nplanes']):
         print('Modifying mean images in ops file for plane %s / %s' % (iplane+1,ops['nplanes']))

@@ -8,6 +8,10 @@ def im_log(image):
     log_image = c * (np.log(image + 1)) 
     return log_image
 
+def im_sqrt(image):
+    # Apply sqrt transformation 
+    return image ** 0.5
+
 def im_norm(I,min=0,max=100):
     mn = np.percentile(I,min)
     mx = np.percentile(I,max)
