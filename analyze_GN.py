@@ -29,8 +29,7 @@ from scipy.signal import medfilt
 
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-
-# from rastermap import Rastermap, utils
+from utils.explorefigs import plot_excerpt
 
 # sessions            = filter_sessions(protocols = ['GN'])
 
@@ -53,69 +52,10 @@ sessions[sesidx].behaviordata['runspeed'] = medfilt(sessions[sesidx].behaviordat
 ######################################
 #Show some traces and some stimuli to see responses:
 
-def show_excerpt_traces_gratings(Session,example_cells=None,trialsel=None):
-    
-    if example_cells is None:
-        example_cells = np.random.choice(Session.calciumdata.shape[1],10)
-
-    if len(example_cells)>20:
-        example_cells = np.random.choice(example_cells,20,replace=False)
-
-    if trialsel is None:
-        trialsel = [np.random.randint(low=0,high=len(Session.trialdata)-400)]
-        trialsel.append(trialsel[0]+40)
-
-    example_tstart  = Session.trialdata['tOnset'][trialsel[0]-1]
-    example_tstop   = Session.trialdata['tOnset'][trialsel[1]-1]
-
-    excerpt         = np.array(Session.calciumdata.loc[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)])
-    excerpt         = excerpt[:,example_cells]
-
-    min_max_scaler = preprocessing.MinMaxScaler()
-    excerpt = min_max_scaler.fit_transform(excerpt)
-
-    # spksselec = spksselec 
-    [nframes,ncells] = np.shape(excerpt)
-
-    for i in range(ncells):
-        excerpt[:,i] =  excerpt[:,i] + i
-
-    oris            = np.sort(np.unique(Session.trialdata['centerOrientation']))
-    speeds          = np.sort(np.unique(Session.trialdata['centerSpeed']))
-    clrs,labels     = get_clr_gratingnoise_stimuli(oris,speeds)
-
-    fig, ax = plt.subplots(figsize=[12, 6])
-    plt.plot(Session.ts_F[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)],excerpt,linewidth=0.5,color='black')
-    # plt.show()
-
-    for i in np.arange(trialsel[0],trialsel[1]):
-        iO = np.where(oris==Session.trialdata['centerOrientation'][i])
-        iS = np.where(speeds==Session.trialdata['centerSpeed'][i])
-        ax.add_patch(plt.Rectangle([Session.trialdata['tOnset'][i],0],1,ncells,alpha=0.3,linewidth=0,
-                                facecolor=clrs[iO,iS,:].flatten()))
-
-    handles= []
-    for iO,ori in enumerate(oris):
-        for iS,speed in enumerate(speeds):
-            handles.append(ax.add_patch(plt.Rectangle([0,0],1,ncells,alpha=0.3,linewidth=0,facecolor=clrs[iO,iS,:].flatten())))
-
-    pos = ax.get_position()
-    ax.set_position([pos.x0, pos.y0, pos.width * 0.9, pos.height])
-    ax.legend(handles,labels.flatten(),loc='center right', bbox_to_anchor=(1.25, 0.5))
-
-    ax.set_xlim([example_tstart,example_tstop])
-
-    ax.add_artist(AnchoredSizeBar(ax.transData, 10, "10 Sec",loc=4,frameon=False))
-    ax.axis('off')
-
-    return fig,example_cells
-
-
 # example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
 # example_cells   = [6,23,130,99,361,177,153,413,435]
 
-# show_excerpt_traces_gratings(sessions[sesidx],example_cells=example_cells,trialsel=[50,90])
-show_excerpt_traces_gratings(sessions[sesidx])
+fig = plot_excerpt(sessions[sesidx])
 
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
@@ -172,7 +112,6 @@ for iO,ori in enumerate(oris):
         idx_trial = np.logical_and(sessions[0].trialdata['centerOrientation']==ori,sessions[0].trialdata['centerSpeed']==speed)
         resp_mean[:,iO,iS] = np.nanmean(sessions[sesidx].respmat[:,idx_trial],axis=1)
 
-
 ## Compute residual response:
 resp_res = sessions[sesidx].respmat.copy()
 for iO,ori in enumerate(oris):
@@ -184,6 +123,9 @@ for iO,ori in enumerate(oris):
 
 ##### Compute tuning measure: how much of the variance is due to mean response per stimulus category:
 sessions[sesidx].celldata['tuning'] = 1 - np.var(resp_res,axis=1) / np.var(sessions[sesidx].respmat,axis=1)
+
+sessions[sesidx].celldata['tuning'] = compute_tuning()
+
 fig,ax = plt.subplots(1,1,figsize=(6,6))
 sns.histplot(sessions[sesidx].celldata['tuning'],ax=ax)
 fig.savefig(os.path.join(savedir,'Tuning_distribution' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')

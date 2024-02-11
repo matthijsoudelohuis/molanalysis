@@ -6,103 +6,42 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 ####################################################
-import math
+import math, os
+try:
+    os.chdir('t:\\Python\\molanalysis\\')
+except:
+    os.chdir('e:\\Python\\molanalysis\\')
+os.chdir('c:\\Python\\molanalysis\\')
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
-from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import seaborn as sns
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from sklearn.decomposition import PCA
 from scipy.stats import zscore, pearsonr,spearmanr
+from utils.explorefigs import plot_excerpt
 
-# %matplotlib inline
-
-sessions            = filter_sessions(protocols = ['IM'])
-
+savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\'
 
 ##################################################
 session_list        = np.array([['LPE09830','2023_04_10']])
-session_list        = np.array([['NSH07422','2023_03_13']])
+session_list        = np.array([['LPE11086','2024_01_10']])
 sessions            = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
+# sessions            = filter_sessions(protocols = ['GR'])
+nSessions = len(sessions)
 
-# session_list        = np.array([['LPE09665','2023_03_15']])
-# sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
-#                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
-
-# #Get n neurons from V1 and from PM:
-# n                   = 100
-# V1_selec            = np.random.choice(np.where(sessions[0].celldata['roi_name']=='V1')[0],n)
-# PM_selec            = np.random.choice(np.where(sessions[0].celldata['roi_name']=='PM')[0],n)
-# sessions[0].calciumdata     = sessions[0].calciumdata.iloc[:,np.concatenate((V1_selec,PM_selec))]
-# sessions[0].celldata        = sessions[0].celldata.iloc[np.concatenate((V1_selec,PM_selec)),:]
-
-# zscore all the calcium traces:
-# calciumdata_z      = st.zscore(calciumdata.copy(),axis=1)
+sesidx      = 0
+randomseed  = 5
 
 ######################################
 #Show some traces and some stimuli to see responses:
-
-def show_excerpt_traces_gratings(Session,example_cells=None,trialsel=None):
-    
-    if example_cells is None:
-        example_cells = np.random.choice(Session.calciumdata.shape[1],10)
-
-    if trialsel is None:
-        trialsel = [np.random.randint(low=0,high=len(Session.trialdata)-400)]
-        trialsel.append(trialsel[0]+40)
-
-    example_tstart  = Session.trialdata['tOnset'][trialsel[0]-1]
-    example_tstop   = Session.trialdata['tOnset'][trialsel[1]-1]
-
-    excerpt         = np.array(Session.calciumdata.loc[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)])
-    excerpt         = excerpt[:,example_cells]
-
-    min_max_scaler = preprocessing.MinMaxScaler()
-    excerpt = min_max_scaler.fit_transform(excerpt)
-
-    # spksselec = spksselec 
-    [nframes,ncells] = np.shape(excerpt)
-
-    for i in range(ncells):
-        excerpt[:,i] =  excerpt[:,i] + i
-
-    oris        = np.unique(Session.trialdata['Orientation'])
-    rgba_color  = plt.get_cmap('hsv',lut=16)(np.linspace(0, 1, len(oris)))  
-    
-    fig, ax = plt.subplots(figsize=[12, 6])
-    plt.plot(Session.ts_F[np.logical_and(Session.ts_F>example_tstart,Session.ts_F<example_tstop)],excerpt,linewidth=0.5,color='black')
-    # plt.show()
-
-    for i in np.arange(trialsel[0],trialsel[1]):
-        ax.add_patch(plt.Rectangle([Session.trialdata['tOnset'][i],0],1,ncells,alpha=0.3,linewidth=0,
-                                facecolor=rgba_color[np.where(oris==Session.trialdata['Orientation'][i])]))
-
-    handles= []
-    for i,ori in enumerate(oris):
-        handles.append(ax.add_patch(plt.Rectangle([0,0],1,ncells,alpha=0.3,linewidth=0,facecolor=rgba_color[i])))
-
-    pos = ax.get_position()
-    ax.set_position([pos.x0, pos.y0, pos.width * 0.9, pos.height])
-    ax.legend(handles,oris,loc='center right', bbox_to_anchor=(1.25, 0.5))
-
-    ax.set_xlim([example_tstart,example_tstop])
-
-    ax.add_artist(AnchoredSizeBar(ax.transData, 10, "10 Sec",loc=4,frameon=False))
-    ax.axis('off')
-
-
 example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
-example_cells   = [6,23,130,99,361,177,153,413,435]
-
-show_excerpt_traces_gratings(sessions[0],example_cells=example_cells,trialsel=[50,90])
-show_excerpt_traces_gratings(sessions[0])
-
-# plt.close('all')
+fig = plot_excerpt(sessions[0])
 
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
@@ -110,6 +49,10 @@ show_excerpt_traces_gratings(sessions[0])
 t_pre       = -1    #pre s
 t_post      = 2     #post s
 binsize     = 0.2   #temporal binsize in s
+
+for i in range(nSessions):
+    [sessions[i].tensor,t_axis] = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], 
+                                 t_pre, t_post, binsize,method='interp_lin')
 
 # [tensor,t_axis] = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], t_pre, t_post, binsize,method='binmean')
 

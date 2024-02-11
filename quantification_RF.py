@@ -29,18 +29,11 @@ sessions            = load_sessions(protocol = 'IM',session_list=session_list,lo
                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
 sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
                                     load_calciumdata=False, load_videodata=False, calciumversion='dF')
-
+nSessions = len(sessions)
 
 # ## Combine cell data from all loaded sessions to one dataframe:
-# celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-#stupid filters because suite2p sometimes outputs this first roi as a good cell:
-idx_filter = (sessions[0].celldata['npix']>5) & (sessions[0].celldata['skew']>0.01) & (sessions[0].celldata['xloc']<512) & (sessions[0].celldata['yloc']<512)
-
-celldata = sessions[0].celldata[idx_filter].reset_index(drop=True)
-calciumdata = sessions[0].calciumdata.iloc[:,np.where(idx_filter)[0]]
-
-celldata.iloc[celldata['roi_name']=='ROI 2',celldata.columns=='roi_name'] = 'V1'
 # ## remove any double cells (for example recorded in both GR and RF)
 # celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
@@ -52,14 +45,66 @@ areas           = ['V1','PM']
 
 vars            = ['rf_azimuth','rf_elevation']
 
-for i in range(2):
-     for j in range(2):
+for ises in range(nSessions):
+    for i in range(len(vars)): #for azimuth and elevation
+        for j in range(len(areas)): #for areas
+            sns.scatterplot(data = sessions[ises].celldata[sessions[ises].celldata['roi_name']==areas[j]],x='xloc',y='yloc',
+                        hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
+        
+            box = axes[i,j].get_position()
+            axes[i,j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
+            # axes[i,j].legend(loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis
+            axes[i,j].set_xlabel('')
+            axes[i,j].set_ylabel('')
+            axes[i,j].set_xticks([])
+            axes[i,j].set_yticks([])
+            axes[i,j].set_xlim([0,512])
+            axes[i,j].set_ylim([0,512])
+            axes[i,j].set_title(areas[j] + ' - ' + vars[i],fontsize=15)
+            axes[i,j].set_facecolor("black")
+            axes[i,j].get_legend().remove()
+
+            # if j==1:
+            norm = plt.Normalize(sessions[ises].celldata[vars[i]].min(), sessions[ises].celldata[vars[i]].max())
+            sm = plt.cm.ScalarMappable(cmap="RdBu", norm=norm)
+            sm.set_array([])
+            # Remove the legend and add a colorbar (optional)
+            axes[i,j].figure.colorbar(sm,ax=axes[i,j],pad=0.02,label=vars[i])
+
+plt.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+###### Fit gradient of RF as a function of spatial location of somata:
+
+
+fig,axes        = plt.subplots(2,2,figsize=(12,12))
+
+from sklearn.linear_model import LinearRegression
+
+areas           = ['V1','PM'] 
+
+vars            = ['rf_azimuth','rf_elevation']
+
+
+# for ises in range(nSessions):
+for i in range(len(vars)): #for azimuth and elevation
+     for j in range(len(areas)): #for areas
+        
+        idx_area = celldata['roi_name']==areas[j]
+        areadf = celldata[idx_area].dropna()
+        X = np.array([areadf['xloc'],areadf['yloc']])
+        y = np.array(areadf[vars[i]])
+
+        reg = LinearRegression().fit(X.T, y)
+
+        idx_area_nan = np.logical_and(idx_area,np.isnan(celldata[vars[i]]))
+        celldata.loc[celldata[idx_area_nan].index,vars[i]] = reg.predict(celldata.loc[celldata[idx_area_nan].index,['xloc','yloc']])
+
         sns.scatterplot(data = celldata[celldata['roi_name']==areas[j]],x='xloc',y='yloc',
                         hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
         
         box = axes[i,j].get_position()
         axes[i,j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
-        axes[i,j].legend(loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis
+        # axes[i,j].legend(loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis
         axes[i,j].set_xlabel('')
         axes[i,j].set_ylabel('')
         axes[i,j].set_xticks([])
@@ -68,8 +113,15 @@ for i in range(2):
         axes[i,j].set_ylim([0,512])
         axes[i,j].set_title(areas[j] + ' - ' + vars[i],fontsize=15)
         axes[i,j].set_facecolor("black")
+        axes[i,j].get_legend().remove()
 
-plt.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
+        # if j==1:
+        norm = plt.Normalize(sessions[ises].celldata[vars[i]].min(), sessions[ises].celldata[vars[i]].max())
+        sm = plt.cm.ScalarMappable(cmap="RdBu", norm=norm)
+        sm.set_array([])
+        # Remove the legend and add a colorbar (optional)
+        axes[i,j].figure.colorbar(sm,ax=axes[i,j],pad=0.02,label=vars[i])
+
 
 ###################### Retinotopic mapping within V1 and PM #####################
 
@@ -77,7 +129,7 @@ fig        = plt.subplots(figsize=(12,12))
 
 fracs = celldata.groupby('roi_name').count()['rf_azimuth'] / celldata.groupby('roi_name').count()['iscell']
 
-sns.barplot(data = fracs),x = areas,y=fracs)
+sns.barplot(data = fracs,x = areas,y=fracs)
 plt.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ###################### RF size difference between V1 and PM #####################

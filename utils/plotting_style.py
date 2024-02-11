@@ -13,6 +13,12 @@ pd.set_option("display.max_columns", 14)
 ## Series of function that spit out lists of colors for different combinations of 
 ## areas, protocols, mice, stimuli, etc. 
 
+def get_clr_area_pairs(areapairs):
+    palette       = {'V1-V1'  : sns.xkcd_rgb['bright blue'],
+                    'PM-V1' : sns.xkcd_rgb['coral'],
+                    'PM-PM' : sns.xkcd_rgb['emerald']}
+    return itemgetter(*areapairs)(palette)
+
 def get_clr_areas(areas):
     palette       = {'V1'  : sns.xkcd_rgb['bright blue'],
                     'PM' : sns.xkcd_rgb['coral'],
