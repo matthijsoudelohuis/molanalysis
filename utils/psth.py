@@ -177,7 +177,7 @@ def compute_respmat(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
     K               = len(ts_T)         #get number of trials from the number of timestamps given 
     
     respmat         = np.empty([N,K])   #init output matrix
-
+    print(f"\n")
     for k in range(K): #loop across trials, for every trial, slice through activity matrix and compute response across neurons:
         print(f"\rComputing response for trial {k+1} / {K}",end='\r')
         respmat[:,k]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop)].to_numpy().mean(axis=0)

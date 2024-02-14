@@ -27,9 +27,11 @@ savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\'
 
 ##############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
+session_list        = np.array([['LPE10885','2023_10_19']])
 sessions            = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=False, calciumversion='dF')
-# sessions            = filter_sessions(protocols = ['GR'])
+sessions            = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
+                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 nSessions = len(sessions)
 
 ##############################################################################
@@ -46,21 +48,97 @@ binsize     = 0.2   #temporal binsize in s
 #Alternative method, much faster:
 for ises in range(nSessions):
     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
-                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
+                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
     # delattr(sessions[ises],'calciumdata')
 
-############################ Compute tuning metrics: ###################################
-    
-sessions[ises].celldata['OSI'] = compute_tuning(sessions[ises].respmat,
-                                                sessions[ises].trialdata['Orientation'],
-                                                tuning_metric='OSI')
-sessions[ises].celldata['gOSI'] = compute_tuning(sessions[ises].respmat,
-                                                sessions[ises].trialdata['Orientation'],
-                                                tuning_metric='gOSI')
-sessions[ises].celldata['tuning_var'] = compute_tuning(sessions[ises].respmat,
-                                                sessions[ises].trialdata['Orientation'],
-                                                tuning_metric='tuning_var')
+    #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
+    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].behaviordata['runspeed']),(len(sessions[ises].behaviordata['runspeed']),1)))
+    sessions[ises].respmat_runspeed = compute_respmat(temp, sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
+                                    t_resp_start=0,t_resp_stop=1,method='mean')
+    sessions[ises].respmat_runspeed = np.squeeze(sessions[ises].respmat_runspeed)
 
+############################ Compute tuning metrics: ###################################
+
+for ises in range(nSessions):
+    sessions[ises].celldata['OSI'] = compute_tuning(sessions[ises].respmat,
+                                                    sessions[ises].trialdata['Orientation'],
+                                                    tuning_metric='OSI')
+    sessions[ises].celldata['gOSI'] = compute_tuning(sessions[ises].respmat,
+                                                    sessions[ises].trialdata['Orientation'],
+                                                    tuning_metric='gOSI')
+    sessions[ises].celldata['tuning_var'] = compute_tuning(sessions[ises].respmat,
+                                                    sessions[ises].trialdata['Orientation'],
+                                                    tuning_metric='tuning_var')
+
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+################################ Show response with and without running #################
+
+thr_still   = 0.5 #max running speed for still trials
+thr_moving  = 1 #min running speed for moving trials
+
+nOris       = 16
+nCells      = len(celldata)
+mean_resp_speedsplit = np.empty((nCells,nOris,2))
+
+from sklearn import preprocessing
+
+min_max_scaler = preprocessing.MinMaxScaler()
+
+# #############################################################################
+for ises in range(nSessions):
+    [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+
+    idx_trials_still = sessions[ises].respmat_runspeed<thr_still
+    idx_trials_moving = sessions[ises].respmat_runspeed>thr_moving
+
+    # compute meanresp
+    oris            = np.sort(sessions[ises].trialdata['Orientation'].unique())
+    ori_counts      = sessions[ises].trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
+    assert(len(ori_counts) == 16 or len(ori_counts) == 8)
+    # resp_meanori    = np.empty([N,len(oris)])
+
+    resp_meanori    = np.empty([N,len(oris),2])
+    for i,ori in enumerate(oris):
+        resp_meanori[:,i,0] = np.nanmean(sessions[ises].respmat[:,np.logical_and(sessions[ises].trialdata['Orientation']==ori,idx_trials_still)],axis=1)
+        resp_meanori[:,i,1] =  np.nanmean(sessions[ises].respmat[:,np.logical_and(sessions[ises].trialdata['Orientation']==ori,idx_trials_moving)],axis=1)
+        
+    # prefori             = np.argmax(resp_meanori.mean(axis=2),axis=1)
+    prefori             = np.argmax(resp_meanori[:,:,0],axis=1)
+
+    resp_meanori_pref       = resp_meanori.copy()
+    for n in range(N):
+        resp_meanori_pref[n,:,0] = np.roll(resp_meanori[n,:,0],-prefori[n])
+        resp_meanori_pref[n,:,1] = np.roll(resp_meanori[n,:,1],-prefori[n])
+
+    # normalize by peak response during still trials
+    tempmin,tempmax = resp_meanori_pref[:,:,0].min(axis=1,keepdims=True),resp_meanori_pref[:,:,0].max(axis=1,keepdims=True)
+    resp_meanori_pref[:,:,0] = (resp_meanori_pref[:,:,0] - tempmin) / (tempmax - tempmin)
+    resp_meanori_pref[:,:,1] = (resp_meanori_pref[:,:,1] - tempmin) / (tempmax - tempmin)
+
+    # resp_meanori_pref
+    idx_ses = np.isin(celldata['session_id'],sessions[ises].celldata['session_id'])
+    mean_resp_speedsplit[idx_ses,:,:] = resp_meanori_pref
+
+
+idx_neurons = celldata['tuning_var']>0.1
+
+idx_neurons = celldata['redcell']==1
+idx_neurons = np.logical_and(idx_neurons,celldata['roi_name']=='V1')
+idx_neurons = np.logical_and(idx_neurons,celldata['tuning_var']>0.1)
+plt.figure(figsize=(5,3))
+plt.plot(np.nanmean(mean_resp_speedsplit[idx_neurons,:,0],axis=0),color='black')
+plt.plot(np.nanmean(mean_resp_speedsplit[idx_neurons,:,1],axis=0),color='red')
+plt.legend(['Still','Running'])
+plt.xlabel('Delta Pref Ori')
+plt.xticks(range(len(oris)),labels=oris,fontsize=8,rotation='vertical')
+plt.ylabel('Normalized Response')
+plt.title('Response amplification for V1 and PM tuned neurons')
+
+
+from utils.explorefigs import PCA_gratings
+sesidx = 0
+PCA_gratings(sessions[sesidx])
 
 ############################ Compute noise correlations: ###################################
 
@@ -106,7 +184,7 @@ for ises in range(nSessions):
 
 ###################### Plot control figure of signal correlation and  ##############################
 
-sesidx = 0
+sesidx = 1
 plt.figure(figsize=(8,5))
 plt.imshow(sessions[sesidx].sig_corr, cmap='coolwarm',
            vmin=np.nanpercentile(sessions[sesidx].sig_corr,15),
@@ -120,6 +198,7 @@ plt.imshow(sessions[sesidx].noise_corr, cmap='coolwarm',
 ###################### Compute pairwise neuronal distances: ##############################
 
 for ises in range(nSessions):
+    [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
 
     ## Compute euclidean distance matrix based on soma center:
     sessions[ises].distmat_xyz     = np.zeros((N,N))
@@ -219,7 +298,7 @@ plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea' + sessions[s
 plt.figure()
 for ises in range(nSessions):
     # filter = sessions[ises].celldata['noise_level']<1
-    filter = sessions[ises].celldata['tuning_var']>0.1
+    filter = sessions[ises].celldata['tuning_var']>0
     # filter = sessions[ises].celldata['tuning_var']>0.1
     df = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr[filter,:].flatten(),
                     'DeltaPrefOri': sessions[ises].delta_pref[filter,:].flatten(),
@@ -247,7 +326,7 @@ plt.ylim([0,0.05])
 fig = plt.subplots(1,3,figsize=(12,4))
 for ises in range(nSessions):
     # filter = sessions[ises].celldata['noise_level']<1
-    filter = sessions[ises].celldata['tuning_var']>0.05
+    filter = sessions[ises].celldata['tuning_var']>0.1
     # filter = np.logical_and(filter,sessions[ises].celldata['tuning_var']>0.1)
     # filter = sessions[ises].celldata['tuning_var']>0.1
     df = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr[filter,:].flatten(),

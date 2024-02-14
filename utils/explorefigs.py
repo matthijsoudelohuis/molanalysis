@@ -12,6 +12,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from scipy.signal import medfilt
 from scipy.stats import zscore
 from rastermap import Rastermap, utils
+from sklearn.decomposition import PCA
 
 def get_rand_trials(Session):
     trialsel = [np.random.randint(low=5,high=len(Session.trialdata)-100)]
@@ -252,7 +253,42 @@ def plot_neural_raster(Session,ax,trialsel=None,counter=0):
 
     return counter
 
+def PCA_gratings(ses):
 
+    ########### PCA on trial-averaged responses ############
+    ######### plot result as scatter by orientation ########
 
+    respmat_zsc = zscore(ses.respmat,axis=1) # zscore for each neuron across trial responses
+
+    pca         = PCA(n_components=15) #construct PCA object with specified number of components
+    Xp          = pca.fit_transform(respmat_zsc.T).T #fit pca to response matrix (n_samples by n_features)
+    #dimensionality is now reduced from N by K to ncomp by K
+
+    ori         = ses.trialdata['Orientation']
+    oris        = np.sort(pd.Series.unique(ses.trialdata['Orientation']))
+
+    ori_ind      = [np.argwhere(np.array(ori) == iori)[:, 0] for iori in oris]
+
+    shade_alpha      = 0.2
+    lines_alpha      = 0.8
+    pal = sns.color_palette('husl', len(oris))
+    pal = np.tile(sns.color_palette('husl', int(len(oris)/2)),(2,1))
+
+    projections = [(0, 1), (1, 2), (0, 2)]
+    fig, axes = plt.subplots(1, 3, figsize=[9, 3], sharey='row', sharex='row')
+    for ax, proj in zip(axes, projections):
+        for t, t_type in enumerate(oris):                       #plot orientation separately with diff colors
+            x = Xp[proj[0],ori_ind[t]]                          #get all data points for this ori along first PC or projection pairs
+            y = Xp[proj[1],ori_ind[t]]                          #and the second
+            # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
+            ax.scatter(x, y, color=pal[t], s=ses.respmat_runspeed[ori_ind[t]], alpha=0.8)     #each trial is one dot
+            ax.set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
+            ax.set_ylabel('PC {}'.format(proj[1]+1))
+            
+        sns.despine(fig=fig, top=True, right=True)
+        # ax.legend(oris,title='Ori')
+        # ax.legend(labels=oris)
+
+    return
 
 
