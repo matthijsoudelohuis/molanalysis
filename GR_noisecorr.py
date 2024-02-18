@@ -22,6 +22,8 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from utils.tuning import compute_tuning
 from utils.plotting_style import * #get all the fixed color schemes
+from utils.explorefigs import PCA_gratings,PCA_gratings_3D
+from utils.plot_lib import shaded_error
 
 savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\'
 
@@ -72,6 +74,17 @@ for ises in range(nSessions):
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
+
+##### 
+
+
+sesidx = 1
+fig = PCA_gratings_3D(sessions[sesidx])
+fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+fig = PCA_gratings(sessions[sesidx])
+fig.savefig(os.path.join(savedir,'PCA','PCA_Gratings_All_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
 ################################ Show response with and without running #################
 
 thr_still   = 0.5 #max running speed for still trials
@@ -81,11 +94,6 @@ nOris       = 16
 nCells      = len(celldata)
 mean_resp_speedsplit = np.empty((nCells,nOris,2))
 
-from sklearn import preprocessing
-
-min_max_scaler = preprocessing.MinMaxScaler()
-
-# #############################################################################
 for ises in range(nSessions):
     [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
 
@@ -120,25 +128,38 @@ for ises in range(nSessions):
     idx_ses = np.isin(celldata['session_id'],sessions[ises].celldata['session_id'])
     mean_resp_speedsplit[idx_ses,:,:] = resp_meanori_pref
 
+# ########### Make the figure ##################################################################
 
-idx_neurons = celldata['tuning_var']>0.1
+redcells    = np.unique(celldata['redcell'])
+redcell_labels = ['Nonlabeled','Labeled']
+areas       = np.unique(celldata['roi_name'])
 
-idx_neurons = celldata['redcell']==1
-idx_neurons = np.logical_and(idx_neurons,celldata['roi_name']=='V1')
-idx_neurons = np.logical_and(idx_neurons,celldata['tuning_var']>0.1)
-plt.figure(figsize=(5,3))
-plt.plot(np.nanmean(mean_resp_speedsplit[idx_neurons,:,0],axis=0),color='black')
-plt.plot(np.nanmean(mean_resp_speedsplit[idx_neurons,:,1],axis=0),color='red')
-plt.legend(['Still','Running'])
-plt.xlabel('Delta Pref Ori')
-plt.xticks(range(len(oris)),labels=oris,fontsize=8,rotation='vertical')
-plt.ylabel('Normalized Response')
-plt.title('Response amplification for V1 and PM tuned neurons')
+fig,axes = plt.subplots(2,2,figsize=(8,8),sharex=True,sharey=True)
 
+for iarea,area in enumerate(areas):
+    for ired,redcell in enumerate(redcells):
+        ax = axes[iarea,ired]
+        idx_neurons = celldata['redcell']==redcell
+        idx_neurons = np.logical_and(idx_neurons,celldata['roi_name']==area)
+        idx_neurons = np.logical_and(idx_neurons,celldata['tuning_var']>0.1)
+        handles = []
+        # handles = handles + shaded_error(ax,x=oris,y=mean_resp_speedsplit[idx_neurons,:,0],center='mean',error='sem',color='black')
+        handles.append(shaded_error(ax,x=oris,y=mean_resp_speedsplit[idx_neurons,:,0],center='mean',error='sem',color='black'))
+        handles.append(shaded_error(ax,x=oris,y=mean_resp_speedsplit[idx_neurons,:,1],center='mean',error='sem',color='red'))
+        # ax.plot(oris,np.nanmean(mean_resp_speedsplit[idx_neurons,:,0],axis=0),color='black')
+        # plt.fill_between(oris, y-error, y+error)
 
-from utils.explorefigs import PCA_gratings
-sesidx = 0
-PCA_gratings(sessions[sesidx])
+        # ax.errorbar(oris,np.nanmean(mean_resp_speedsplit[idx_neurons,:,0],axis=0),
+                    #  np.nanstd(mean_resp_speedsplit[idx_neurons,:,0],axis=0),color='black')
+        # ax.plot(np.nanmean(mean_resp_speedsplit[idx_neurons,:,1],axis=0),color='red')
+        ax.legend(handles=handles,labels=['Still','Running'])
+        ax.set_xlabel(u'Δ Pref Ori')
+        ax.set_xticks(oris,labels=oris,fontsize=8,rotation='vertical')
+        ax.set_ylabel('Normalized Response')
+        ax.set_title('%s - %s' % (area,redcell_labels[ired]))
+plt.tight_layout()
+
+fig.savefig(os.path.join(savedir,'Tuning','Locomotion_V1PM_LabNonLab_' + str(nSessions) + 'sessions.png'), format = 'png')
 
 ############################ Compute noise correlations: ###################################
 

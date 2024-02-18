@@ -112,7 +112,6 @@ pca         = PCA(n_components=15) #construct PCA object with specified number o
 Xp          = pca.fit_transform(X) #fit pca to response matrix (n_samples by n_features)
 #dimensionality is now reduced from time by N to time by ncomp
 
-
 ## Get interpolated values for behavioral variables at imaging frame rate:
 runspeed_F  = np.interp(x=sessions[0].ts_F,xp=sessions[0].behaviordata['ts'],
                         fp=sessions[0].behaviordata['runspeed'])
@@ -130,34 +129,11 @@ for icomp in range(plotncomps):
     sns.lineplot(x=sessions[0].ts_F,y=Xp_norm[:,icomp]+icomp,linewidth=0.5)
 sns.lineplot(x=sessions[0].ts_F,y=Rs_norm.reshape(-1)+plotncomps,linewidth=0.5,color='k')
 
-plt.xlim([sessions[0].trialdata['tOnset'][500],sessions[0].trialdata['tOnset'][800]])
+plt.xlim([sessions[0].trialdata['tOnset'][300],sessions[0].trialdata['tOnset'][800]])
 for icomp in range(plotncomps):
-    plt.text(x=sessions[0].trialdata['tOnset'][700],y=icomp+0.25,s='r=%1.3f' %cmat[icomp])
+    plt.text(x=sessions[0].trialdata['tOnset'][500],y=icomp+0.25,s='r=%1.3f' %cmat[icomp])
 
 plt.ylim([0,plotncomps+1])
-
-########################################
-
-#### 
-
-# spks is neurons by time
-spks = np.load("W:\\Users\\Matthijs\\temp\\spks.npy").astype("float32")
-spks = zscore(spks, axis=1)
-
-# fit rastermap
-model = Rastermap(n_PCs=200, n_clusters=100, 
-                  locality=0.75, time_lag_window=5).fit(spks)
-y = model.embedding # neurons x 1
-isort = model.isort
-
-# bin over neurons
-X_embedding = zscore(utils.bin1d(spks, bin_size=25, axis=0), axis=1)
-
-# plot
-fig = plt.figure(figsize=(12,5))
-ax = fig.add_subplot(111)
-ax.imshow(X_embedding, vmin=0, vmax=1.5, cmap="gray_r", aspect="auto")
-ax.axis('off')
 
 ##############################
 # PCA on trial-concatenated matrix:
@@ -195,37 +171,6 @@ sns.lineplot(
 )
 
 h = 2
-
-
-# PCA on trial-averaged data: 
-
-
-# snakeselec = np.array(snakeplots[:,(bincenters>-60) & (bincenters<30),:])
-# nBins = np.shape(snakeselec)[1]
-# Xa = np.reshape(snakeselec, [N,nBins*4])
-
-# n_components = 15
-# pca = PCA(n_components=n_components)
-# Xa_p = pca.fit_transform(Xa).T
-
-# trial_size = nBins
-# space = bincenters[(bincenters>-60) & (bincenters<30)]
-
-# fig, axes = plt.subplots(1, 3, figsize=[10, 2.8], sharey='row')
-# for comp in range(3):
-#     ax = axes[comp]
-#     for kk, type in enumerate(trial_types):
-#         x = Xa_p[comp, kk * trial_size :(kk+1) * trial_size]
-#         # x = gaussian_filter1d(x, sigma=3)
-#         ax.plot(space, x, c=pal[kk])
-#     # add_stim_to_plot(ax)
-#     ax.set_ylabel('PC {}'.format(comp+1))
-# # add_orientation_legend(axes[2])
-# axes[1].set_xlabel('Time (s)')
-# sns.despine(fig=fig, right=True, top=True)
-# plt.tight_layout(rect=[0, 0, 0.9, 1])
-
-# plt.imshow(Xa)
 
 
 

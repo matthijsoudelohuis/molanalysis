@@ -24,8 +24,8 @@ plt.rcParams["font.family"] = "Arial"
 
 ##################################################
 session_list        = np.array([['LPE09830','2023_04_12']])
-sessions            = load_sessions(protocol = 'GR',session_list=session_list,
-                                    load_behaviordata=False, load_calciumdata=True, load_videodata=False, calciumversion='dF')
+sessions            = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=False,
+                                    load_calciumdata=True, load_videodata=False, calciumversion='dF')
 
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of K trials by N neurons by T time bins
@@ -89,7 +89,6 @@ for example_neuron in range(1000,1100):
 # ax.legend(['Train', 'Test','Train_PCA25', 'Test_PCA25'])
 
 
-
 #%%  
 
 ## split into area 1 and area 2:
@@ -109,127 +108,6 @@ N2          = np.shape(DATA2)[0]
 
 minN        = np.min((N1,N2)) #find common minimum number of neurons recorded
 
-
-# Vary levels of regularization?
-
-def CCA_sample_2areas(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=None):
-    # Data format: 
-    #  DATA1 is the source data (number of source neurons x number of time points x number of trials)
-    #  DATA2 is the target data (number of target neurons x number of time points x number of trials)
-    N1,T,K = np.shape(DATA1)
-    N2 = np.shape(DATA2)[0]
-    
-    corr_train = []
-    corr_test = []
-    
-    for iRS in np.arange(resamples):
-        X = DATA1[np.ix_(np.random.choice(N1,nN,replace=False),range(T),np.random.choice(K,nK,replace=False))]
-        Y = DATA2[np.ix_(np.random.choice(N2,nN,replace=False),range(T),np.random.choice(K,nK,replace=False))]
-
-        # X2 = np.reshape(X,(nN,-1),order='F').T #concatenate time bins from each trial and transpose (samples by features now)
-        # plt.figure()
-        # plt.imshow(X[:,:,0])
-        # plt.figure()
-        # # plt.imshow(X2[0::nK,:].T)
-        # plt.imshow(X2[:5,:].T)
-
-        X = np.reshape(X,(nN,-1),order='F').T #concatenate time bins from each trial and transpose (samples by features now)
-        Y = np.reshape(Y,(nN,-1),order='F').T
-
-        X = zscore(X,axis=0)  #Z score activity for each neuron
-        Y = zscore(Y,axis=0)
-
-        if prePCA and nN>prePCA:
-            pca         = PCA(n_components=prePCA)
-            X           = pca.fit_transform(X)
-            Y           = pca.fit_transform(Y)
-
-        model = CCA(n_components = 1,scale = False, max_iter = 1000)
-
-        #Implementing cross validation
-        kf  = KFold(n_splits=kFold, random_state=None,shuffle=True)
-        
-        for train_index, test_index in kf.split(X):
-            X_train , X_test = X[train_index,:],X[test_index,:]
-            Y_train , Y_test = Y[train_index,:],Y[test_index,:]
-            
-            model.fit(X_train,Y_train)
-
-            # Compute and store canonical correlations for the first pair
-            X_c, Y_c = model.transform(X_train,Y_train)
-            corr = np.corrcoef(X_c[:,0],Y_c[:,0], rowvar = False)[0,1]
-            corr_train.append(corr)
-
-            X_c, Y_c = model.transform(X_test,Y_test)
-            corr = np.corrcoef(X_c[:,0],Y_c[:,0], rowvar = False)[0,1]
-            corr_test.append(corr)
-        
-    corr_train  = np.mean(corr_train)
-    corr_test   = np.mean(corr_test)
-
-    return corr_test,corr_train
-
-
-def CCA_sample_2areas_v2(DATA1,DATA2,nN,nK,resamples=5,kFold=5,prePCA=None):
-    # Data format: 
-    #  DATA1 is the source data (number of source neurons x number of time points x number of trials)
-    #  DATA2 is the target data (number of target neurons x number of time points x number of trials)
-    N1,T,K = np.shape(DATA1)
-    N2 = np.shape(DATA2)[0]
-    
-    corr_train = []
-    corr_test = []
-    
-    for iRS in np.arange(resamples):
-        X = DATA1[np.ix_(np.random.choice(N1,nN,replace=False),range(T),np.random.choice(K,nK,replace=False))]
-        Y = DATA2[np.ix_(np.random.choice(N2,nN,replace=False),range(T),np.random.choice(K,nK,replace=False))]
-
-        X = np.reshape(X,(nN,-1),order='F').T #concatenate time bins from each trial and transpose (samples by features now)
-        Y = np.reshape(Y,(nN,-1),order='F').T 
-
-        X = zscore(X,axis=0)  #Z score activity for each neuron
-        Y = zscore(Y,axis=0)
-
-        if prePCA and nN>prePCA:
-            pca         = PCA(n_components=prePCA)
-            X           = pca.fit_transform(X)
-            Y           = pca.fit_transform(Y)
-
-        model = CCA(n_components = 1,scale = True, max_iter = 1000)
-
-        #Implementing cross validation
-        kf  = KFold(n_splits=kFold, random_state=None,shuffle=True)
-        
-        for train_index, test_index in kf.split(np.arange(nK)):
-            
-            train_index_bins                = np.full((T,nK),False) #init false array
-            test_index_bins                 = np.full((T,nK),False)
-            train_index_bins[:,train_index] = True #set all time bins of train trials to true
-            test_index_bins[:,test_index]   = True
-            train_index_bins                = np.reshape(train_index_bins,-1,order='F') #concatenate time bins from each trial and transpose (samples by features now)
-            test_index_bins                 = np.reshape(test_index_bins,-1,order='F')
-
-            #  plt.figure()
-            #  plt.plot(train_index_bins[:100])
-            #  plt.plot(test_index_bins[:100])
-            X_train , X_test = X[train_index_bins,:],X[test_index_bins,:]
-            Y_train , Y_test = Y[train_index_bins,:],Y[test_index_bins,:]
-            
-            model.fit(X_train,Y_train)
-
-            # Compute and store canonical correlations for the first pair
-            X_c, Y_c = model.transform(X_train,Y_train)
-            corr = np.corrcoef(X_c[:,0],Y_c[:,0], rowvar = False)[0,1]
-            corr_train.append(corr)
-
-            X_c, Y_c = model.transform(X_test,Y_test)
-            corr = np.corrcoef(X_c[:,0],Y_c[:,0], rowvar = False)[0,1]
-            corr_test.append(corr)
-        
-    corr_train  = np.mean(corr_train)
-    corr_test   = np.mean(corr_test)
-
-    return corr_test,corr_train
 
 #%% Apply CCA for different numbers of neurons in the two areas: 
 

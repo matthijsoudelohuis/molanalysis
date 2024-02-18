@@ -50,7 +50,6 @@ for ises in range(nSessions):
     Xp                = pca.fit_transform(mat_zsc) #fit pca to response matrix
     EVratio[ises,:]        = pca.explained_variance_ratio_
 
-
 fig = plt.subplots(figsize=(5,2.5))
 ax = plt.subplot(121)
 for ises in range(nSessions):
