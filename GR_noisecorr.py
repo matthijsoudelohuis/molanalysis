@@ -78,7 +78,7 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 ##### 
 
 
-sesidx = 1
+sesidx = 5
 fig = PCA_gratings_3D(sessions[sesidx])
 fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
@@ -205,7 +205,7 @@ for ises in range(nSessions):
 
 ###################### Plot control figure of signal correlation and  ##############################
 
-sesidx = 1
+sesidx = 0
 plt.figure(figsize=(8,5))
 plt.imshow(sessions[sesidx].sig_corr, cmap='coolwarm',
            vmin=np.nanpercentile(sessions[sesidx].sig_corr,15),
@@ -228,17 +228,37 @@ for ises in range(nSessions):
     sessions[ises].areamat         = np.empty((N,N),dtype=object)
     sessions[ises].labelmat        = np.empty((N,N),dtype=object)
 
+    x,y,z = sessions[ises].celldata['xloc'],sessions[ises].celldata['yloc'],sessions[ises].celldata['depth']
+    rfaz,rfel = sessions[ises].celldata['rf_azimuth'],sessions[ises].celldata['rf_elevation']
+    b = np.array((x,y,z))
+    d = np.array((rfaz,rfel))
+
     for i in range(N):
         print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
-        for j in range(N):
-            sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
-                    [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
-            sessions[ises].distmat_xy[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i]],
-                    [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j]])
-            sessions[ises].distmat_rf[i,j] = math.dist([sessions[ises].celldata['rf_azimuth'][i],sessions[ises].celldata['rf_elevation'][i]],
-                    [sessions[ises].celldata['rf_azimuth'][j],sessions[ises].celldata['rf_elevation'][j]])
-            sessions[ises].areamat[i,j] = sessions[ises].celldata['roi_name'][i] + '-' + sessions[ises].celldata['roi_name'][j]
-            sessions[ises].labelmat[i,j] = str(int(sessions[ises].celldata['redcell'][i])) + '-' + str(int(sessions[ises].celldata['redcell'][j]))
+        a = np.array((x[i],y[i],z[i]))
+        sessions[ises].distmat_xyz[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
+        sessions[ises].distmat_xy[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
+        c = np.array((rfaz[i],rfel[i]))
+        sessions[ises].distmat_rf[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
+
+    g = np.meshgrid(sessions[ises].celldata['roi_name'],sessions[ises].celldata['roi_name'])
+    sessions[ises].areamat = g[0] + '-' + g[1]
+
+    g = np.meshgrid(sessions[ises].celldata['redcell'].astype(int).astype(str).to_numpy(),
+                    sessions[ises].celldata['redcell'].astype(int).astype(str).to_numpy())
+    sessions[ises].labelmat = g[0] + '-' + g[1]
+
+    # for i in range(N):
+    #     print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
+    #     for j in range(N):
+    #         sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
+    #                 [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
+    #         sessions[ises].distmat_xy[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i]],
+    #                 [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j]])
+    #         sessions[ises].distmat_rf[i,j] = math.dist([sessions[ises].celldata['rf_azimuth'][i],sessions[ises].celldata['rf_elevation'][i]],
+    #                 [sessions[ises].celldata['rf_azimuth'][j],sessions[ises].celldata['rf_elevation'][j]])
+    #         sessions[ises].areamat[i,j] = sessions[ises].celldata['roi_name'][i] + '-' + sessions[ises].celldata['roi_name'][j]
+    #         sessions[ises].labelmat[i,j] = str(int(sessions[ises].celldata['redcell'][i])) + '-' + str(int(sessions[ises].celldata['redcell'][j]))
 
     # sessions[ises].distmat_xyz[np.eye(N)==1] = np.nan
     # sessions[ises].distmat_xy[np.eye(N)==1] = np.nan
@@ -249,6 +269,55 @@ for ises in range(nSessions):
     sessions[ises].areamat[idx_triu] = np.nan
     sessions[ises].labelmat[idx_triu] = np.nan
 
+from scipy.spatial import distance
+N = 100
+import time
+
+# do stuff
+
+
+g = np.empty((N,N))
+
+t = time.time()
+
+for i in range(N):
+    print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
+    for j in range(N):
+        # sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
+                # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
+        # sessions[ises].distmat_xyz[i,j] = distance.euclidean([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
+                # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
+        
+        a = np.array((x[i],y[i],z[i]))
+        b = np.array((x[j],y[j],z[j]))
+        g[i,j] = np.linalg.norm(a-b)
+
+print(time.time() - t)
+
+
+
+t = time.time()
+
+g = np.empty((N,3803))
+
+for i in range(N):
+    print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
+    # for j in range(N):
+        # sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
+                # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
+        # sessions[ises].distmat_xyz[i,j] = distance.euclidean([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
+                # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
+        
+    a = np.array((x[i],y[i],z[i]))
+    # b = np.array((x[j],y[j],z[j]))
+    g[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
+
+print(time.time() - t)
+
+g[:,0]
+
+
+                     
 # construct dataframe with all pairwise measurements:
 df  = pd.DataFrame()
 
