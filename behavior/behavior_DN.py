@@ -29,6 +29,7 @@ sessions            = filter_sessions(protocol,load_behaviordata=True)
 
 protocol            = 'DN'
 session_list = np.array([['LPE10884', '2024_01_16']])
+session_list = np.array([['LPE11622', '2024_02_20']])
 sessions = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
 
 nsessions = len(sessions)
@@ -41,23 +42,27 @@ sesidx = 0
 [sessions[sesidx].lickPSTH,bincenters] = lickPSTH(sessions[sesidx],binsize=5)
 
 fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
-sessions[sesidx].lickPSTH[-1,:] = 0
+fig.savefig(os.path.join(savedir,'Noise','LickRate_Outcome_%s.png' % sessions[sesidx].session_id))
+
 fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Noise','LickRate_Psy_%s.png' % sessions[sesidx].session_id))
 
 ### running across the trial:
 [sessions[sesidx].runPSTH,bincenters] = runPSTH(sessions[sesidx],binsize=5)
 
 fig = plot_run_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Noise','RunSpeed_Outcome_%s.png' % sessions[sesidx].session_id))
 fig = plot_run_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Noise','RunSpeed_Psy_%s.png' % sessions[sesidx].session_id))
 
 ##################### Plot psychometric curve #########################
 
 fig = plot_psycurve([sessions[5]])
 fig = plot_psycurve(sessions)
-fig.savefig(os.path.join(savedir,'Psychometric','Psy_1ses_%s.png' % sessions[sesidx].session_id))
+fig.savefig(os.path.join(savedir,'Noise','Psy_%s.png' % sessions[sesidx].session_id))
 
 fig = plot_psycurve(sessions,filter_engaged=True)
-fig.savefig(os.path.join(savedir,'Psychometric','Psy_1ses_Engaged_%s.png' % sessions[sesidx].session_id))
+fig.savefig(os.path.join(savedir,'Noise','Psy_%s_Engaged.png' % sessions[sesidx].session_id))
 
 
 # df = sessions[sesidx].trialdata[sessions[0].trialdata['trialOutcome']=='CR']

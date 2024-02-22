@@ -26,7 +26,8 @@ from scipy.interpolate import interp1d
 from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 from utils.psth import compute_tensor_space,compute_respmat_space
 from utils.plotting_style import * #get all the fixed color schemes
-from utils.behaviorlib import compute_dprime,smooth_rate_dprime,plot_psycurve #get support functions for beh analysis 
+# from utils.behaviorlib import compute_dprime,smooth_rate_dprime,plot_psycurve #get support functions for beh analysis 
+from utils.behaviorlib import * # get support functions for beh analysis 
 
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
 
@@ -34,8 +35,19 @@ savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
 protocol            = ['DM']
 sessions            = filter_sessions(protocol,load_behaviordata=True)
 
+protocol            = 'DM'
+session_list = np.array([['LPE11495', '2024_02_16'],['LPE11622', '2024_02_16']])
+sessions = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
+
+
 nsessions   = len(sessions)
-fig         = plot_psycurve(sessions)
+sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+nanimals    = len(np.unique(sessiondata['animal_id']))
+
+#### 
+sesidx = 1
+fig         = plot_psycurve([sessions[sesidx]])
+fig.savefig(os.path.join(savedir,'Performance','PsyCurve_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ################################################################
 ### Show the overall dprime for each animal across sessions:
@@ -65,8 +77,8 @@ ax2.axhline(y = 0, color = 'k', linestyle = ':')
 ax2.set_title('Engaged Only', fontsize=11)
 plt.tight_layout()
 
-plt.savefig(os.path.join(savedir,'Performance','Dprime_LPE10884_1ses' + '.png'), format = 'png')
-# plt.savefig(os.path.join(savedir,'Performance','Dprime_2animals_duringrecordings_engagedonly' + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'Performance','Dprime_LPE10884_1ses' + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Performance','Dprime_%d' % nanimals + '.png'), format = 'png')
 
 # # plot the mean line
 # sns.boxplot(showmeans=True, 
@@ -96,7 +108,7 @@ sns.lineplot(data=trialdata,x='trialNumber',y='smooth_hitrate',color='g')
 sns.lineplot(data=trialdata,x='trialNumber',y='smooth_farate',color='r')
 plt.ylabel('HIT / FA rate')
 
-plt.savefig(os.path.join(savedir,'Performance','HITFA_rate_acrosssession_2animals' + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Performance','HITFA_rate_acrosssession_%danimals' % nanimals + '.png'), format = 'png')
 
 ### individual sessions
 fig,ax = plt.subplots(figsize=(7,4))
@@ -106,13 +118,14 @@ for i,ses in enumerate(sessions):
 plt.ylabel('HIT / FA rate')
 plt.xlabel('Trial Number')
 
-plt.savefig(os.path.join(savedir,'Performance','HITFA_rate_acrosssession_indiv' + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Performance','HITFA_rate_acrosssession_indiv_%danimals' %nanimals + '.png'), format = 'png')
 
 ### Dprime:
 fig,ax = plt.subplots(figsize=(7,4))
 sns.lineplot(data=trialdata,x='trialNumber',y='smooth_dprime',color='k')
 plt.ylabel('Dprime')
-plt.savefig(os.path.join(savedir,'Performance','Dprime_acrosssession' + '.png'), format = 'png')
+plt.ylim([0,7])
+plt.savefig(os.path.join(savedir,'Performance','Dprime_acrosssession_%danimals' %nanimals + '.png'), format = 'png')
 
 fig,ax = plt.subplots(figsize=(7,4))
 for i,ses in enumerate(sessions):
@@ -128,110 +141,24 @@ plt.savefig(os.path.join(savedir,'Performance','Dprime_acrosssession_indiv' + '.
 ################ Spatial plots ##############################################
 # Behavior as a function of distance within the corridor:
 
-## Parameters for spatial binning
-s_pre       = -100  #pre cm
-s_post      = 50   #post cm
-binsize     = 5     #spatial binning in cm
-
-binedges    = np.arange(s_pre-binsize/2,s_post+binsize+binsize/2,binsize)
-bincenters  = np.arange(s_pre,s_post+binsize,binsize)
-
-trialdata   = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
-
-runPSTH     = np.empty((len(trialdata),len(bincenters)))
-lickPSTH     = np.empty((len(trialdata),len(bincenters)))
-                   
-# ts_harp     = sessions[0].behaviordata['ts'].to_numpy()
-
-for ises,ses in enumerate(sessions):
-
-    ntrials     = len(ses.trialdata)
-
-    runPSTH_ses     = np.empty(shape=(ntrials, len(bincenters)))
-
-    for itrial in range(ntrials):
-        idx = ses.behaviordata['trialNumber']==itrial+1
-        runPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
-                                            ses.behaviordata['runSpeed'][idx], statistic='mean', bins=binedges)[0]
-
-    runPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = runPSTH_ses
-
-    lickPSTH_ses    = np.empty(shape=(ntrials, len(bincenters)))
-
-    for itrial in range(ntrials-1):
-        idx = ses.behaviordata['trialNumber']==itrial+1
-        lickPSTH_ses[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
-                                            ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
-    lickPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = lickPSTH_ses
-
-
-### Plot running speed as a function of trial type:
-
-fig, ax = plt.subplots()
-
-ttypes = pd.unique(trialdata['trialOutcome'])
-ttypes = ['CR', 'MISS', 'HIT','FA']
-
-for i,ttype in enumerate(ttypes):
-    idx = np.logical_and(trialdata['trialOutcome']==ttype,trialdata['trialNumber']<1000)
-    data_mean = np.nanmean(runPSTH[idx,:],axis=0)
-    data_error = np.nanstd(runPSTH[idx,:],axis=0)# / math.sqrt(sum(idx))
-    ax.plot(bincenters,data_mean,label=ttype)
-    ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.5, linewidth=0)
-
-ax.legend()
-ax.set_ylim(0,50)
-ax.set_xlim(-80,80)
-ax.set_xlabel('Position rel. to stimulus onset (cm)')
-ax.set_ylabel('Running speed (cm/s)')
-ax.add_patch(matplotlib.patches.Rectangle((0,0),20,50, 
-                        fill = True, alpha=0.2,
-                        color = "blue",
-                        linewidth = 0))
-ax.add_patch(matplotlib.patches.Rectangle((20,0),20,50, 
-                        fill = True, alpha=0.2,
-                        color = "green",
-                        linewidth = 0))
-
-plt.text(5, 45, 'Stim',fontsize=12)
-plt.text(25, 45, 'Reward',fontsize=12)
-
+sesidx = 1
+### licking across the trial:
+[sessions[sesidx].lickPSTH,bincenters] = lickPSTH(sessions[sesidx],binsize=5)
 
 # fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
+# sessions[sesidx].lickPSTH[-1,:] = 0
+fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Performance','LickRate_Psy_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Performance','LickRate_Outcome_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
+### running across the trial:
+[sessions[sesidx].runPSTH,bincenters] = runPSTH(sessions[sesidx],binsize=5)
 
-################################################################
-### Plot licking rate as a function of trial type:
-
-fig, ax = plt.subplots()
-
-ttypes = pd.unique(trialdata['trialOutcome'])
-ttypes = ['CR', 'MISS', 'HIT','FA']
-
-for i,ttype in enumerate(ttypes):
-    idx = np.logical_and(trialdata['trialOutcome']==ttype,trialdata['trialNumber']<300)
-    data_mean = np.nanmean(lickPSTH[idx,:],axis=0)
-    data_error = np.nanstd(lickPSTH[idx,:],axis=0) / math.sqrt(sum(idx))
-    ax.plot(bincenters,data_mean,label=ttype)
-    ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.5, linewidth=0)
-
-ax.legend()
-ax.set_ylim(0,5.6)
-ax.set_xlim(-80,80)
-ax.set_xlabel('Position rel. to stimulus onset (cm)')
-ax.set_ylabel('Lick Rate (Hz)')
-# ax.fill_between([0,30], [0,50], [0,50],alpha=0.5)
-ax.add_patch(matplotlib.patches.Rectangle((0,0),20,5.6, 
-                        fill = True, alpha=0.2,
-                        color = "blue",
-                        linewidth = 0))
-ax.add_patch(matplotlib.patches.Rectangle((20,0),20,5.6, 
-                        fill = True, alpha=0.2,
-                        color = "green",
-                        linewidth = 0))
-
-plt.text(5, 5.2, 'Stim',fontsize=12)
-plt.text(25, 5.2, 'Reward',fontsize=12)
+fig = plot_run_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Performance','RunSpeed_Outcome_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+fig = plot_run_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Performance','RunSpeed_Psy_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ################################ 
 

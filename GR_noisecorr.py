@@ -58,7 +58,12 @@ for ises in range(nSessions):
     sessions[ises].respmat_runspeed = compute_respmat(temp, sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
                                     t_resp_start=0,t_resp_stop=1,method='mean')
     sessions[ises].respmat_runspeed = np.squeeze(sessions[ises].respmat_runspeed)
-
+    
+    #hacky way to create dataframe of the video motion with F x 1 with F number of samples:
+    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].videodata['motionenergy']),(len(sessions[ises].videodata['motionenergy']),1)))
+    sessions[ises].respmat_videome = compute_respmat(temp, sessions[ises].videodata['timestamps'], sessions[ises].trialdata['tOnset'],
+                                    t_resp_start=0,t_resp_stop=1,method='mean')
+    sessions[ises].respmat_videome = np.squeeze(sessions[ises].respmat_videome)
 ############################ Compute tuning metrics: ###################################
 
 for ises in range(nSessions):

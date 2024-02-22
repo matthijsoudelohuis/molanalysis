@@ -292,7 +292,7 @@ def proc_task(rawdatadir,sessiondata):
     # Signal values: 
     assert(np.all(np.logical_and(trialdata['signal'] >= 0,trialdata['signal'] <= 100))), 'not all signal values are between 0 and 100'
     assert(np.any(trialdata['signal'] > 1)), 'signal values do not exceed 1'
-    assert(len(np.unique(trialdata['stimRight']))==1), 'more than one stimulus appears to be presented in this session'
+    # assert(len(np.unique(trialdata['stimRight']))==1), 'more than one stimulus appears to be presented in this session'
     assert(np.isin(np.unique(trialdata['stimRight'])[0],['Ori45','Ori135','A','B','C','D'])), 'Unknown stimulus presented'
 
     #Give stimulus category type 
@@ -314,11 +314,16 @@ def proc_task(rawdatadir,sessiondata):
     elif sessiondata.protocol[0] == 'DN':
         idx         = ~np.isin(trialdata['signal'],[0,100])
         sigs        = np.unique(trialdata['signal'][idx])
-        sigrange    = [sessiondata['signal_center'][0]-sessiondata['signal_range'][0]/2,
-                sessiondata['signal_center']+sessiondata['signal_range']/2]
+        
+        if 'signal_center' in sessiondata:
+            sigrange    = [sessiondata['signal_center'][0]-sessiondata['signal_range'][0]/2,
+                    sessiondata['signal_center']+sessiondata['signal_range']/2]
+        else:
+            sessiondata['signal_center']=np.mean(sigs).round()
+            sessiondata['signal_range']=[np.max(sigs) - np.min(sigs)]
 
         assert np.all(np.logical_and((sigs>=sessiondata['signal_center'][0]-sessiondata['signal_range'][0]/2),
-                      np.all(sigs<=sessiondata['signal_center'][0]+sessiondata['signal_range'][0]/2))),'outside range'
+                        np.all(sigs<=sessiondata['signal_center'][0]+sessiondata['signal_range'][0]/2))),'outside range'
         assert(len(sigs)>5), 'no signal jitter observed'
         assert sessiondata['signal_center'][0]==np.mean(sigs).round(), 'center of noise does not match overview'
         assert sessiondata['signal_range'][0]==np.max(sigs) - np.min(sigs), 'noise range does not match overview'

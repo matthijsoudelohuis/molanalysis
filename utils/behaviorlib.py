@@ -153,9 +153,13 @@ def runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
     runPSTH     = np.empty(shape=(ntrials, len(bincenters)))
 
     for itrial in range(ntrials):
-        idx = ses.behaviordata['trialNumber']==itrial+1
-        runPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
+        idx = np.logical_and(itrial-1 <= ses.behaviordata['trialNumber'], ses.behaviordata['trialNumber'] <= itrial+2)
+        runPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos_tot'][idx]-ses.trialdata['stimStart_tot'][itrial],
                                             ses.behaviordata['runSpeed'][idx], statistic='mean', bins=binedges)[0]
+        
+        # idx = ses.behaviordata['trialNumber']==itrial+1
+        # runPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
+        #                                     ses.behaviordata['runSpeed'][idx], statistic='mean', bins=binedges)[0]
     # runPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = runPSTH_ses
 
     return runPSTH, bincenters
@@ -180,9 +184,12 @@ def lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
     lickPSTH    = np.empty(shape=(ntrials, len(bincenters)))
 
     for itrial in range(ntrials-1):
-        idx = ses.behaviordata['trialNumber']==itrial+1
-        lickPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][0],
+        idx = np.logical_and(itrial-1 <= ses.behaviordata['trialNumber'], ses.behaviordata['trialNumber'] <= itrial+2)
+        lickPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos_tot'][idx]-ses.trialdata['stimStart_tot'][itrial],
                                             ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
+        
+        # lickPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
+                                            # ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
     # lickPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = lickPSTH_ses
     lickPSTH /= binsize 
 
@@ -204,6 +211,9 @@ def plot_lick_corridor_outcome(trialdata,lickPSTH,bincenters):
         ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
         ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
 
+    rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
+    rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
+
     ax.legend()
     ax.set_ylim(0,2)
     ax.set_xlim(bincenters[0],bincenters[-1])
@@ -214,7 +224,7 @@ def plot_lick_corridor_outcome(trialdata,lickPSTH,bincenters):
                             fill = True, alpha=0.2,
                             color = "blue",
                             linewidth = 0))
-    ax.add_patch(matplotlib.patches.Rectangle((20,0),20,2, 
+    ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,3, 
                             fill = True, alpha=0.2,
                             color = "green",
                             linewidth = 0))
@@ -238,17 +248,20 @@ def plot_lick_corridor_psy(trialdata,lickPSTH,bincenters):
         ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
         ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
 
+    rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
+    rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
+
     ax.legend()
-    ax.set_ylim(0,2)
+    ax.set_ylim(0,3)
     ax.set_xlim(bincenters[0],bincenters[-1])
     ax.set_xlabel('Position rel. to stimulus onset (cm)')
     ax.set_ylabel('Lick Rate (licks/cm)')
     # ax.fill_between([0,30], [0,50], [0,50],alpha=0.5)
-    ax.add_patch(matplotlib.patches.Rectangle((0,0),20,2, 
+    ax.add_patch(matplotlib.patches.Rectangle((0,0),20,3, 
                             fill = True, alpha=0.2,
                             color = "blue",
                             linewidth = 0))
-    ax.add_patch(matplotlib.patches.Rectangle((20,0),20,2, 
+    ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,3, 
                             fill = True, alpha=0.2,
                             color = "green",
                             linewidth = 0))
@@ -273,6 +286,9 @@ def plot_run_corridor_psy(trialdata,runPSTH,bincenters):
         ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
         ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
 
+    rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
+    rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
+
     ax.legend()
     ax.set_ylim(0,50)
     ax.set_xlim(bincenters[0],bincenters[-1])
@@ -282,7 +298,7 @@ def plot_run_corridor_psy(trialdata,runPSTH,bincenters):
                             fill = True, alpha=0.2,
                             color = "blue",
                             linewidth = 0))
-    ax.add_patch(matplotlib.patches.Rectangle((20,0),20,50, 
+    ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,50, 
                             fill = True, alpha=0.2,
                             color = "green",
                             linewidth = 0))
@@ -307,6 +323,9 @@ def plot_run_corridor_outcome(trialdata,runPSTH,bincenters):
         ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
         ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
 
+    rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
+    rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
+
     ax.legend()
     ax.set_ylim(0,50)
     ax.set_xlim(bincenters[0],bincenters[-1])
@@ -316,7 +335,7 @@ def plot_run_corridor_outcome(trialdata,runPSTH,bincenters):
                             fill = True, alpha=0.2,
                             color = "blue",
                             linewidth = 0))
-    ax.add_patch(matplotlib.patches.Rectangle((20,0),20,50, 
+    ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,50, 
                             fill = True, alpha=0.2,
                             color = "green",
                             linewidth = 0))
