@@ -51,19 +51,24 @@ binsize     = 0.2   #temporal binsize in s
 for ises in range(nSessions):
     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
-    # delattr(sessions[ises],'calciumdata')
 
     #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
     temp = pd.DataFrame(np.reshape(np.array(sessions[ises].behaviordata['runspeed']),(len(sessions[ises].behaviordata['runspeed']),1)))
     sessions[ises].respmat_runspeed = compute_respmat(temp, sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
                                     t_resp_start=0,t_resp_stop=1,method='mean')
     sessions[ises].respmat_runspeed = np.squeeze(sessions[ises].respmat_runspeed)
-    
+
     #hacky way to create dataframe of the video motion with F x 1 with F number of samples:
     temp = pd.DataFrame(np.reshape(np.array(sessions[ises].videodata['motionenergy']),(len(sessions[ises].videodata['motionenergy']),1)))
     sessions[ises].respmat_videome = compute_respmat(temp, sessions[ises].videodata['timestamps'], sessions[ises].trialdata['tOnset'],
                                     t_resp_start=0,t_resp_stop=1,method='mean')
     sessions[ises].respmat_videome = np.squeeze(sessions[ises].respmat_videome)
+
+    delattr(sessions[ises],'calciumdata')
+    delattr(sessions[ises],'videodata')
+    delattr(sessions[ises],'behaviordata')
+
+
 ############################ Compute tuning metrics: ###################################
 
 for ises in range(nSessions):
@@ -234,17 +239,20 @@ for ises in range(nSessions):
     sessions[ises].labelmat        = np.empty((N,N),dtype=object)
 
     x,y,z = sessions[ises].celldata['xloc'],sessions[ises].celldata['yloc'],sessions[ises].celldata['depth']
-    rfaz,rfel = sessions[ises].celldata['rf_azimuth'],sessions[ises].celldata['rf_elevation']
     b = np.array((x,y,z))
-    d = np.array((rfaz,rfel))
-
     for i in range(N):
         print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
         a = np.array((x[i],y[i],z[i]))
         sessions[ises].distmat_xyz[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
         sessions[ises].distmat_xy[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
-        c = np.array((rfaz[i],rfel[i]))
-        sessions[ises].distmat_rf[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
+
+    if 'rf_azimuth' in sessions[ises].celldata:
+        rfaz,rfel = sessions[ises].celldata['rf_azimuth'],sessions[ises].celldata['rf_elevation']
+        d = np.array((rfaz,rfel))
+
+        for i in range(N):
+            c = np.array((rfaz[i],rfel[i]))
+            sessions[ises].distmat_rf[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
 
     g = np.meshgrid(sessions[ises].celldata['roi_name'],sessions[ises].celldata['roi_name'])
     sessions[ises].areamat = g[0] + '-' + g[1]

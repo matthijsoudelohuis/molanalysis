@@ -17,27 +17,30 @@ from utils.plotting_style import * #get all the fixed color schemes
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
 from utils.explorefigs import *
+from utils.psth import compute_tensor,compute_respmat
 
 
 # from sklearn.decomposition import PCA
 
-savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Images\\'
-savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Images\\ExploreFigs\\'
+savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Images\\'
+# savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Images\\ExploreFigs\\'
 
 #################################################
 session_list        = np.array([['LPE09665','2023_03_15']])
 session_list        = np.array([['LPE11086','2023_12_16']])
 sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='dF')
-
+                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+sessions            = filter_sessions(protocols = ['IM'],load_behaviordata=True, 
+                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+nSessions = len(sessions)
 # sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
 #                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 
-sesidx      = 0
 
-sessions[sesidx].videodata['pupil_area']    = medfilt(sessions[sesidx].videodata['pupil_area'] , kernel_size=25)
-sessions[sesidx].videodata['motionenergy']  = medfilt(sessions[sesidx].videodata['motionenergy'] , kernel_size=25)
-sessions[sesidx].behaviordata['runspeed']   = medfilt(sessions[sesidx].behaviordata['runspeed'] , kernel_size=51)
+for ises in range(nSessions):
+    sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
+    sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
+    sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
 
 ################################################################
 #Show some traces and some stimuli to see responses:
@@ -54,61 +57,72 @@ fig = plot_excerpt(sessions[0],trialsel=trialsel,plot_neural=True,plot_behaviora
 fig.savefig(os.path.join(savedir,'Excerpt_Raster_dF_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
-## Construct response matrix of N neurons by K trials
-## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
-## Parameters for temporal binning
-t_resp_start     = 0        #pre s
-t_resp_stop      = 0.8      #post s
-t_base_start     = -0.5     #pre s
-t_base_stop      = 0        #post s
 
-N           = celldata.shape[0]
-K           = trialdata.shape[0]
+#Compute average response per trial:
+for ises in range(nSessions):
+    sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
+                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+    # delattr(sessions[ises],'calciumdata')
 
-respmat      = np.empty([N,K])
-respmat_z    = np.empty([N,K])
+    #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
+    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].behaviordata['runspeed']),(len(sessions[ises].behaviordata['runspeed']),1)))
+    sessions[ises].respmat_runspeed = compute_respmat(temp, sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
+                                    t_resp_start=0,t_resp_stop=1,method='mean')
+    sessions[ises].respmat_runspeed = np.squeeze(sessions[ises].respmat_runspeed)
 
-for k in range(K):
-    print(f"\rComputing response vector for trial {k+1} / {K}")
+    #hacky way to create dataframe of the video motion with F x 1 with F number of samples:
+    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].videodata['motionenergy']),(len(sessions[ises].videodata['motionenergy']),1)))
+    sessions[ises].respmat_videome = compute_respmat(temp, sessions[ises].videodata['timestamps'], sessions[ises].trialdata['tOnset'],
+                                    t_resp_start=0,t_resp_stop=1,method='mean')
+    sessions[ises].respmat_videome = np.squeeze(sessions[ises].respmat_videome)
 
-    temp    = np.logical_and(ts_F > trialdata['tOnset'][k]+t_base_start,ts_F < trialdata['tOnset'][k]+t_base_stop)
-    base    = calciumdata.iloc[temp,:].mean()
-    temp    = np.logical_and(ts_F > trialdata['tOnset'][k]+t_resp_start,ts_F < trialdata['tOnset'][k]+t_resp_stop)
-    resp    = calciumdata.iloc[temp,:].mean()
+sesidx = 0
+# fig = PCA_gratings_3D(sessions[sesidx])
+# fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-    respmat[:,k] = resp - base
+fig = plot_PCA_images(sessions[sesidx])
+fig.savefig(os.path.join(savedir,'PCA','PCA_Gratings_All_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-    respmat_z[:,k] = calciumdata_z.iloc[temp,:].mean()
+fig = plt.figure()
+sns.histplot(sessions[sesidx].respmat_runspeed,binwidth=0.5)
+plt.ylim([0,100])
 
 
-trialdata['repetition'] = np.r_[np.zeros([2800]),np.ones([2800])]
+sesidx = 0
+
+
+
+sessions[sesidx].trialdata['repetition'] = np.r_[np.zeros([2800]),np.ones([2800])]
 
 #Sort based on image number:
-arr1inds                = trialdata['ImageNumber'][:2800].argsort()
-arr2inds                = trialdata['ImageNumber'][2800:5600].argsort()
+arr1inds                = sessions[sesidx].trialdata['ImageNumber'][:2800].argsort()
+arr2inds                = sessions[sesidx].trialdata['ImageNumber'][2800:5600].argsort()
 
-respmat_sort = respmat[:,np.r_[arr1inds,arr2inds+2800]]
-respmat_sort = respmat_z[:,np.r_[arr1inds,arr2inds+2800]]
+respmat = sessions[sesidx].respmat[:,np.r_[arr1inds,arr2inds+2800]]
+# respmat_sort = sessions[sesidx].respmat_z[:,np.r_[arr1inds,arr2inds+2800]]
+
+from sklearn.preprocessing import normalize
 
 min_max_scaler = preprocessing.MinMaxScaler()
-respmat_sort = preprocessing.minmax_scale(respmat_sort, feature_range=(0, 1), axis=1, copy=True)
+respmat_sort = preprocessing.minmax_scale(respmat, feature_range=(0, 1), axis=0, copy=True)
+
+respmat_sort = normalize(respmat, 'l2', axis=1)
 
 fig, axes = plt.subplots(1, 2, figsize=(17, 7))
 
-axes[0].imshow(respmat_sort[:,:2800], aspect='auto',vmin=-100,vmax=200) 
-# axes[0].imshow(respmat_sort[:,:2800], aspect='auto',vmin=0.1,vmax=1) 
+# axes[0].imshow(respmat_sort[:,:2800], aspect='auto',vmin=-100,vmax=200) 
+axes[0].imshow(respmat_sort[:,:2800], aspect='auto',vmin=np.percentile(respmat_sort,5),vmax=np.percentile(respmat_sort,95))
 axes[0].set_xlabel('Image #')
 axes[0].set_ylabel('Neuron')
 axes[0].set_title('Repetition 1')
-axes[1].imshow(respmat_sort[:,2800:], aspect='auto',vmin=-100,vmax=200) 
-# axes[1].imshow(respmat_sort[:,2800:], aspect='auto',vmin=0.1,vmax=1) 
+# axes[1].imshow(respmat_sort[:,2800:], aspect='auto',vmin=-100,vmax=200) 
+axes[1].imshow(respmat_sort[:,2800:], aspect='auto',vmin=np.percentile(respmat_sort,5),vmax=np.percentile(respmat_sort,95)) 
 axes[1].set_xlabel('Image #')
 axes[1].set_ylabel('Neuron')
 plt.tight_layout(rect=[0, 0, 1, 1])
 axes[1].set_title('Repetition 2')
 
 
-plt.close('all')
 
 
 

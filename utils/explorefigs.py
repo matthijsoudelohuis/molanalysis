@@ -253,7 +253,7 @@ def plot_neural_raster(Session,ax,trialsel=None,counter=0):
 
     return counter
 
-def PCA_gratings(ses,size='runspeed'):
+def plot_PCA_gratings(ses,size='runspeed'):
 
     ########### PCA on trial-averaged responses ############
     ######### plot result as scatter by orientation ########
@@ -297,7 +297,7 @@ def PCA_gratings(ses,size='runspeed'):
 
     return fig
 
-def PCA_gratings_3D(ses):
+def plot_PCA_gratings_3D(ses):
 
     ########### PCA on trial-averaged responses ############
     ######### plot result as scatter by orientation ########
@@ -346,3 +346,38 @@ def PCA_gratings_3D(ses):
 
     return fig
 
+
+def plot_PCA_images(ses,size='runspeed'):
+
+    ########### PCA on trial-averaged responses ############
+    ######### plot result as scatter by orientation ########
+
+    respmat_zsc = zscore(ses.respmat,axis=1) # zscore for each neuron across trial responses
+
+    pca         = PCA(n_components=15) #construct PCA object with specified number of components
+    Xp          = pca.fit_transform(respmat_zsc.T).T #fit pca to response matrix (n_samples by n_features)
+    #dimensionality is now reduced from N by K to ncomp by K
+    
+    # imagid         = ses.trialdata['ImageNumber']
+    # imagids        = np.sort(pd.Series.unique(ses.trialdata['ImageNumber']))
+
+    if size=='runspeed':
+        sizes = (ses.respmat_runspeed - np.percentile(ses.respmat_runspeed,5)) / (np.percentile(ses.respmat_runspeed,95) - np.percentile(ses.respmat_runspeed,5))
+    elif size=='videome':
+        sizes = (ses.respmat_videome - np.percentile(ses.respmat_videome,5)) / (np.percentile(ses.respmat_videome,95) - np.percentile(ses.respmat_videome,5))
+
+    colors = sns.color_palette('tab10', np.shape(respmat_zsc)[1])
+
+    projections = [(0, 1), (1, 2), (0, 2)]
+    fig, axes = plt.subplots(1, 3, figsize=[9, 3], sharey='row', sharex='row')
+    for ax, proj in zip(axes, projections):
+        x = Xp[proj[0],:]                          #get all data points for this ori along first PC or projection pairs
+        y = Xp[proj[1],:]                          #and the second
+        ax.scatter(x, y, color=colors, s=sizes*8, alpha=0.3)     #each trial is one dot
+        ax.set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
+        ax.set_ylabel('PC {}'.format(proj[1]+1))
+        
+        sns.despine(fig=fig, top=True, right=True)
+        # ax.legend(labels=oris)
+        
+    return fig
