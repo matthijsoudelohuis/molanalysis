@@ -23,16 +23,16 @@ procdatadir     = "V:\\Procdata\\"
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE11622','LPE11495','LPE11623'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE11622','LPE11495','LPE11623'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_01_10']
-date_filter        = ['2024_02_20']
+# date_filter        = ['2024_02_20']
 # date_filter        = ['2024_02_08']
 
 # protocols           = ['GR','SP','IM']
 # protocols           = ['GN']
 # protocols           = ['DP','DM','DN']
-protocols           = ['DN']
-# protocols           = ['IM']
+# protocols           = ['DN']
+protocols           = ['IM']
 processimagingflag  = False
 
 ## Loop over all selected animals and folders

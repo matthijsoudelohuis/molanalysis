@@ -27,10 +27,10 @@ from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
-rawdatadir          = 'J:\\RawData\\'
+rawdatadir          = 'G:\\RawData\\'
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-animal_id           = 'LPE10919'
-sessiondate         = '2023_11_16'
+animal_id           = 'LPE09830'
+sessiondate         = '2023_04_11'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
