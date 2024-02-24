@@ -24,6 +24,11 @@ from scipy import linalg
 from tqdm import tqdm
 from scipy.optimize import minimize
 
+def EV(Y,Y_hat):
+    e = Y - Y_hat
+    ev = 1 - np.trace(e.T @ e) / np.trace(Y.T @ Y) #fraction of variance explained
+    return ev
+
 def LM(Y, X, lam=0):
     """ (multiple) linear regression with regularization """
     # ridge regression

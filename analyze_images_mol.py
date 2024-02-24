@@ -135,7 +135,7 @@ natimgdata = load_natural_images(onlyright=True)
 
 from utils.RRRlib import *
 
-def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30):
+def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2):
     if not X:
         X,Xlabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
 
@@ -147,17 +147,13 @@ def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30):
     ## LM model run
     B_hat = LM(Y, X, lam=10)
 
-    B_hat_rr = RRR(Y, X, B_hat, r=2, mode='left')
+    B_hat_rr = RRR(Y, X, B_hat, r=rank, mode='left')
     Y_hat_rr = X @ B_hat_rr
 
     Y_out = Y - Y_hat_rr
 
     return Y_out
 
-def EV(Y,Y_hat):
-    e = Y - Y_hat
-    ev = 1 - np.trace(e.T @ e) / np.trace(Y.T @ Y) 
-    return ev
 
 Rss_rank = []
  ## LM model run
