@@ -247,3 +247,18 @@ def compute_respmat_space(data,ts_F,z_T,zpos_F,trialnum_F,s_resp_start=0,s_resp_
 # s_resp_stop=20
 # method='mean'
 # subtr_baseline=False
+
+def construct_behav_matrix_ts_F(ses,nvideoPCs = 30):
+    Slabels = []
+    S       = np.empty((len(ses.ts_F),0))
+    S       = np.hstack((S,np.expand_dims(np.interp(ses.ts_F.to_numpy(),ses.behaviordata['ts'].to_numpy(), ses.behaviordata['runspeed'].to_numpy()),axis=1)))
+    Slabels.append('runspeed')
+
+    fields = ['pupil_area','motionenergy']
+    [fields.append('videoPC_' + '%s' % k) for k in range(0,nvideoPCs)]
+
+    for field in fields:
+        S       = np.hstack((S,np.expand_dims(np.interp(ses.ts_F.to_numpy(),ses.videodata['timestamps'].to_numpy(), ses.videodata[field].to_numpy()),axis=1)))
+        Slabels.append(field)
+
+    return S, Slabels

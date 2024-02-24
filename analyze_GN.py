@@ -312,27 +312,7 @@ for iSvar in range(NS):
 #### linear model explaining responses: 
 from numpy import linalg
 
-def LM(Y, X, lam=0):
-    """ (multiple) linear regression with regularization """
-    # ridge regression
-    I = np.diag(np.ones(X.shape[1]))
-    B_hat = linalg.pinv(X.T @ X + lam *I) @ X.T @ Y # ridge regression
-    Y_hat = X @ B_hat
-    return B_hat
-
-def Rss(Y, Y_hat, normed=True):
-    """ evaluate (normalized) model error """
-    e = Y_hat - Y
-    Rss = np.trace(e.T @ e)
-    if normed:
-        Rss /= Y.shape[0]
-    return Rss
-
-def EV(X, u):
-    # how much of the variance lies along this dimension?
-    # here X is the data matrix (samples x features) and u is the dimension
-
-    return EV
+from utils.RRRlib import LM,RSS,EV
 
 from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split

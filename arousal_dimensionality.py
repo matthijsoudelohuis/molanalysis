@@ -34,21 +34,43 @@ sesidx = 0
 
 
 # Median filter of data: 
-
 sessions[sesidx].videodata['pupil_area'] = medfilt(sessions[sesidx].videodata['pupil_area'] , kernel_size=25)
 sessions[sesidx].videodata['motionenergy'] = medfilt(sessions[sesidx].videodata['motionenergy'] , kernel_size=25)
 sessions[sesidx].behaviordata['runspeed'] = medfilt(sessions[sesidx].behaviordata['runspeed'] , kernel_size=51)
 
-# plt.plot(medfilt(data[26016:27016], kernel_size=51),'r',linewidth=0.4)
-# plt.plot(data[26016:27016].to_numpy(),'k',linewidth=0.4)
+S,Slabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
 
-### Create dataframe with relevant variables: 
-df = sessions[0].videodata[['pupil_area','motionenergy']]
-df['runspeed'] = np.interp(x=sessions[sesidx].videodata['timestamps'],xp=sessions[sesidx].behaviordata['ts'],
-                                    fp=sessions[sesidx].behaviordata['runspeed'])
 
-sns.heatmap(df.corr(),vmin=0,vmax=1,annot=True)
+def construct_behav_matrix_ts_F(ses,nvideoPCs = 30):
+    Slabels = []
+    S       = np.empty((len(ses.ts_F),0))
+    S       = np.hstack((S,np.expand_dims(np.interp(ses.ts_F.to_numpy(),ses.behaviordata['ts'].to_numpy(), ses.behaviordata['runspeed'].to_numpy()),axis=1)))
+    Slabels.append('runspeed')
 
+    fields = ['pupil_area','motionenergy']
+    [fields.append('videoPC_' + '%s' % k) for k in range(0,nvideoPCs)]
+
+    for field in fields:
+        S       = np.hstack((S,np.expand_dims(np.interp(ses.ts_F.to_numpy(),ses.videodata['timestamps'].to_numpy(), ses.videodata[field].to_numpy()),axis=1)))
+        Slabels.append(field)
+
+    return S, Slabels
+
+def regress_out_behavior_modulation(ses,X=None,nvideoPCs = 30):
+    S,Slabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
+
+    if not X:
+        X = ses.calciumdata.to_numpy()
+
+    assert X.shape[0] == S.shape[0],'dimensions of calcium activit and interpolated behavior data do not match'
+
+    Xhat= RRR_wrapper(X,rrrdim=3)
+
+
+    return 
+
+
+sns.heatmap(np.corrcoef(S,rowvar=False),xticklabels=Slabels,yticklabels=Slabels)
 
 
 excerpt_behavioral(sessions[sesidx])

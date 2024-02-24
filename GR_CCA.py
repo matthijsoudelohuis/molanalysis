@@ -81,7 +81,7 @@ for ises in range(nSessions):
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 
-from utils.CCAwrappers import CCA_sample_2areas,CCA_sample_2areas_v2
+from utils.CCAlib import CCA_sample_2areas,CCA_sample_2areas_v2
 
 
 sesidx = 0
@@ -123,7 +123,6 @@ for ises in range(nSessions):
         N2          = np.shape(DATA2)[0]
 
         minN        = np.min((N1,N2)) #find common minimum number of neurons recorded
-
 
         DATA1_z = zscore(DATA1,axis=1) # zscore for each neuron across trial responses
         DATA2_z = zscore(DATA2,axis=1) # zscore for each neuron across trial responses

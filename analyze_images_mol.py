@@ -15,9 +15,11 @@ from loaddata.session_info import filter_sessions,load_sessions
 from scipy.signal import medfilt
 from utils.plotting_style import * #get all the fixed color schemes
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+from utils.imagelib import load_natural_images #
 
 from utils.explorefigs import *
-from utils.psth import compute_tensor,compute_respmat
+from utils.psth import compute_tensor,compute_respmat,construct_behav_matrix_ts_F
+
 
 
 # from sklearn.decomposition import PCA
@@ -26,10 +28,10 @@ savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Images\\'
 # savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Images\\ExploreFigs\\'
 
 #################################################
-session_list        = np.array([['LPE09665','2023_03_15']])
-session_list        = np.array([['LPE11086','2023_12_16']])
-sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+# session_list        = np.array([['LPE09665','2023_03_15']])
+# session_list        = np.array([['LPE11086','2023_12_16']])
+# sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
+#                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 sessions            = filter_sessions(protocols = ['IM'],load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 nSessions = len(sessions)
@@ -41,21 +43,6 @@ for ises in range(nSessions):
     sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
     sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
     sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
-
-################################################################
-#Show some traces and some stimuli to see responses:
-
-fig = plot_excerpt(sessions[0],trialsel=None,plot_neural=True,plot_behavioral=False)
-
-trialsel = [3294, 3374]
-fig = plot_excerpt(sessions[0],trialsel=trialsel,plot_neural=True,plot_behavioral=True,neural_version='traces')
-# fig.savefig(os.path.join(savedir,'TraceExcerpt_dF_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'Excerpt_Traces_deconv_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-fig = plot_excerpt(sessions[0],trialsel=None,plot_neural=True,plot_behavioral=True,neural_version='raster')
-fig = plot_excerpt(sessions[0],trialsel=trialsel,plot_neural=True,plot_behavioral=True,neural_version='raster')
-fig.savefig(os.path.join(savedir,'Excerpt_Raster_dF_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-
 
 
 #Compute average response per trial:
@@ -76,6 +63,25 @@ for ises in range(nSessions):
                                     t_resp_start=0,t_resp_stop=1,method='mean')
     sessions[ises].respmat_videome = np.squeeze(sessions[ises].respmat_videome)
 
+
+################################################################
+#Show some traces and some stimuli to see responses:
+
+sesidx = 0
+
+fig = plot_excerpt(sessions[sesidx],trialsel=None,plot_neural=True,plot_behavioral=False)
+
+trialsel = [3294, 3374]
+fig = plot_excerpt(sessions[sesidx],trialsel=trialsel,plot_neural=True,plot_behavioral=True,neural_version='traces')
+# fig.savefig(os.path.join(savedir,'TraceExcerpt_dF_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'Excerpt_Traces_deconv_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+fig = plot_excerpt(sessions[sesidx],trialsel=None,plot_neural=True,plot_behavioral=True,neural_version='raster')
+fig = plot_excerpt(sessions[sesidx],trialsel=trialsel,plot_neural=True,plot_behavioral=True,neural_version='raster')
+fig.savefig(os.path.join(savedir,'Excerpt_Raster_dF_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+
+########################### Show PCA ##########################
 sesidx = 0
 # fig = PCA_gratings_3D(sessions[sesidx])
 # fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
@@ -89,7 +95,6 @@ plt.ylim([0,100])
 
 
 sesidx = 0
-
 
 
 sessions[sesidx].trialdata['repetition'] = np.r_[np.zeros([2800]),np.ones([2800])]
@@ -123,6 +128,85 @@ plt.tight_layout(rect=[0, 0, 1, 1])
 axes[1].set_title('Repetition 2')
 
 
+natimgdata = load_natural_images(onlyright=True)
 
 
+####### Regress out behavioral state related activity  #################################
+
+from utils.RRRlib import *
+
+def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30):
+    if not X:
+        X,Xlabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
+
+    if not Y:
+        Y = ses.calciumdata.to_numpy()
+        
+    assert X.shape[0] == Y.shape[0],'number of samples of calcium activity and interpolated behavior data do not match'
+
+    ## LM model run
+    B_hat = LM(Y, X, lam=10)
+
+    B_hat_rr = RRR(Y, X, B_hat, r=2, mode='left')
+    Y_hat_rr = X @ B_hat_rr
+
+    Y_out = Y - Y_hat_rr
+
+    return Y_out
+
+def EV(Y,Y_hat):
+    e = Y - Y_hat
+    ev = 1 - np.trace(e.T @ e) / np.trace(Y.T @ Y) 
+    return ev
+
+Rss_rank = []
+ ## LM model run
+for i in range(np.shape(X)[1]):
+    B_hat_rr = RRR(Y, X, B_hat, r=i, mode='left')
+    Y_hat_rr = X @ B_hat_rr
+    # Rss_rank.append(Rss(Y,Y_hat_rr))
+    Rss_rank.append(EV(Y,Y_hat_rr))
+
+plt.figure()
+plt.plot(Rss_rank)
+
+
+
+
+# %% LM model run
+B_hat = LM(Y=D, X=S, lam=10)
+# B_hat = LM(X, Y, lam=0.01)
+D_hat = S @ B_hat
+
+B_hat_lr = RRR(D, S, B_hat, r=2, mode='left')
+B_hat_lr = RRR(D, S, B_hat, r=2, mode='right')
+D_hat_lr = S @ B_hat_lr
+
+fig,(ax1,ax2,ax3) = plt.subplots(1,3,figsize=(8,4))
+ax1.imshow(D[:1000,:100].T,vmin=0,vmax=1000,aspect='auto')
+ax2.imshow(D_hat[:1000,:100].T,vmin=0,vmax=1000,aspect='auto')
+ax3.imshow(D_hat_lr[:1000,:100].T,vmin=0,vmax=1000,aspect='auto')
+
+# %% xval lambda
+n = 1000
+k = 5
+lam = xval_ridge_reg_lambda(Y[:n,:], X[:n,:], k)
+
+
+
+
+# %% cheat
+lam = 35
+
+# %% LM model run
+B_hat = LM(Y, X, lam=lam)
+Y_hat = X @ B_hat
+
+print("LM model error:")
+print("LM: %5.3f " % Rss(Y,Y_hat))
+
+
+S,Slabels = construct_behav_matrix_ts_F(sessions[sesidx],nvideoPCs=nvideoPCs)
+
+sns.heatmap(np.corrcoef(S,rowvar=False),xticklabels=Slabels,yticklabels=Slabels)
 

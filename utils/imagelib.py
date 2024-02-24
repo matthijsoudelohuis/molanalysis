@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from PIL import Image
+import scipy.io as sio
 
 def im_log(image):
     # Apply log transformation method 
@@ -25,3 +26,15 @@ def im_norm8(I,min=0,max=100):
     I = im_norm(I,min=min,max=max)
     # Specify the data type so that float value will be converted to int 
     return I.astype(np.uint8)
+
+
+def load_natural_images(onlyright=False):
+
+    mat_fname = os.path.join(os.getcwd(),'images','images_natimg2800_all.mat')
+    mat_contents = sio.loadmat(mat_fname)
+    natimgdata = mat_contents['imgs']
+
+    if onlyright:
+        natimgdata = natimgdata[:,180:,:]
+        
+    return natimgdata
