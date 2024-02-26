@@ -23,6 +23,7 @@ import numpy as np
 from scipy import linalg
 from tqdm import tqdm
 from scipy.optimize import minimize
+from utils.psth import construct_behav_matrix_ts_F
 
 def EV(Y,Y_hat):
     e = Y - Y_hat
@@ -156,3 +157,22 @@ def xval_rank(Y, X, lam, ranks, K=5):
             Rsss_rrr[k,i] = Rss(Y[test_ix], Y_hat_lr_test)
 
     return Rsss_lm, Rsss_rrr
+
+def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2):
+    if X is None:
+        X,Xlabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
+
+    if Y is None:
+        Y = ses.calciumdata.to_numpy()
+        
+    assert X.shape[0] == Y.shape[0],'number of samples of calcium activity and interpolated behavior data do not match'
+
+    ## LM model run
+    B_hat = LM(Y, X, lam=10)
+
+    B_hat_rr = RRR(Y, X, B_hat, r=rank, mode='left')
+    Y_hat_rr = X @ B_hat_rr
+
+    Y_out = Y - Y_hat_rr
+
+    return Y_out

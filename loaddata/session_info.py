@@ -32,7 +32,7 @@ def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdat
     
     report_sessions(sessions)            
     
-    return sessions
+    return sessions,len(sessions)
 
 def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     load_videodata=False, calciumversion='dF',
@@ -80,7 +80,7 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
       
     report_sessions(sessions)            
     
-    return sessions
+    return sessions,len(sessions)
 
 def report_sessions(sessions):
 

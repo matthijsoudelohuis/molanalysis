@@ -29,11 +29,11 @@ savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Images\\'
 
 #################################################
 # session_list        = np.array([['LPE09665','2023_03_15']])
-# session_list        = np.array([['LPE11086','2023_12_16']])
-# sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
-#                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
-sessions            = filter_sessions(protocols = ['IM'],load_behaviordata=True, 
+session_list        = np.array([['LPE11086','2023_12_16']])
+sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+# sessions            = filter_sessions(protocols = ['IM'],load_behaviordata=True, 
+                                    # load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 nSessions = len(sessions)
 # sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
 #                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
@@ -49,19 +49,19 @@ for ises in range(nSessions):
 for ises in range(nSessions):
     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+
+    sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'],
+                                                        sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
+                                                        t_resp_start=0,t_resp_stop=1,method='mean')
+
+    sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
+                                                    sessions[ises].videodata['timestamps'], sessions[ises].trialdata['tOnset'],
+                                                    t_resp_start=0,t_resp_stop=1,method='mean')
+
     # delattr(sessions[ises],'calciumdata')
+    # delattr(sessions[ises],'videodata')
+    # delattr(sessions[ises],'behaviordata')
 
-    #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
-    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].behaviordata['runspeed']),(len(sessions[ises].behaviordata['runspeed']),1)))
-    sessions[ises].respmat_runspeed = compute_respmat(temp, sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
-                                    t_resp_start=0,t_resp_stop=1,method='mean')
-    sessions[ises].respmat_runspeed = np.squeeze(sessions[ises].respmat_runspeed)
-
-    #hacky way to create dataframe of the video motion with F x 1 with F number of samples:
-    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].videodata['motionenergy']),(len(sessions[ises].videodata['motionenergy']),1)))
-    sessions[ises].respmat_videome = compute_respmat(temp, sessions[ises].videodata['timestamps'], sessions[ises].trialdata['tOnset'],
-                                    t_resp_start=0,t_resp_stop=1,method='mean')
-    sessions[ises].respmat_videome = np.squeeze(sessions[ises].respmat_videome)
 
 
 ################################################################
@@ -135,39 +135,32 @@ natimgdata = load_natural_images(onlyright=True)
 
 from utils.RRRlib import *
 
-def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2):
-    if not X:
-        X,Xlabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
 
-    if not Y:
-        Y = ses.calciumdata.to_numpy()
-        
-    assert X.shape[0] == Y.shape[0],'number of samples of calcium activity and interpolated behavior data do not match'
+X = np.column_stack((sessions[sesidx].respmat_runspeed,sessions[sesidx].respmat_videome))
+Y = sessions[sesidx].respmat.T
+# Y_out = regress_out_behavior_modulation(sessions[sesidx],X,Y,nvideoPCs = 30,rank=2)
 
-    ## LM model run
-    B_hat = LM(Y, X, lam=10)
+fig = plot_PCA_images(sessions[sesidx])
 
-    B_hat_rr = RRR(Y, X, B_hat, r=rank, mode='left')
-    Y_hat_rr = X @ B_hat_rr
+sessions[sesidx].respmat = regress_out_behavior_modulation(sessions[sesidx],X,Y,nvideoPCs = 30,rank=2).T
 
-    Y_out = Y - Y_hat_rr
+sessions[sesidx].respmat[sessions[sesidx].respmat>np.percentile(sessions[sesidx].respmat,99.5)] = np.percentile(sessions[sesidx].respmat,99.5)
+sessions[sesidx].respmat[sessions[sesidx].respmat<np.percentile(sessions[sesidx].respmat,0.5)] = np.percentile(sessions[sesidx].respmat,0.5)
+EV(sessions[sesidx].calciumdata,sessions[sesidx].calciumdata2)
+fig = plot_PCA_images(sessions[sesidx])
 
-    return Y_out
-
-
-Rss_rank = []
- ## LM model run
-for i in range(np.shape(X)[1]):
-    B_hat_rr = RRR(Y, X, B_hat, r=i, mode='left')
-    Y_hat_rr = X @ B_hat_rr
-    # Rss_rank.append(Rss(Y,Y_hat_rr))
-    Rss_rank.append(EV(Y,Y_hat_rr))
-
-plt.figure()
-plt.plot(Rss_rank)
+sessions[sesidx].respmat = regress_out_behavior_modulation(sessions[sesidx],X,Y,nvideoPCs = 30,rank=2)
 
 
 
+
+sessions[sesidx].calciumdata2 = regress_out_behavior_modulation(sessions[sesidx],nvideoPCs = 30,rank=15)
+#Compute average response per trial:
+for ises in range(nSessions):
+    sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata2, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
+                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+
+fig = plot_PCA_images(sessions[sesidx])
 
 # %% LM model run
 B_hat = LM(Y=D, X=S, lam=10)

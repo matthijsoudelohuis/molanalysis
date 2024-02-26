@@ -22,52 +22,48 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from utils.tuning import compute_tuning
 from utils.plotting_style import * #get all the fixed color schemes
-from utils.explorefigs import PCA_gratings,PCA_gratings_3D
+from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D
 from utils.plot_lib import shaded_error
+from utils.RRRlib import regress_out_behavior_modulation
 
 savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\'
 
 ##############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
-session_list        = np.array([['LPE10885','2023_10_19']])
-sessions            = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=False, calciumversion='dF')
-sessions            = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
+# session_list        = np.array([['LPE10885','2023_10_19']])
+sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
+                                    load_calciumdata=True, load_videodata=True, calciumversion='dF')
+sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
-nSessions = len(sessions)
+
 
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
 ## Parameters for temporal binning
-t_pre       = -1    #pre s
-t_post      = 2     #post s
-binsize     = 0.2   #temporal binsize in s
+# t_pre       = -1    #pre s
+# t_post      = 2     #post s
+# binsize     = 0.2   #temporal binsize in s
 
 # for i in range(nSessions):
 #     [sessions[i].tensor,t_axis] = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], 
 #                                  t_pre, t_post, binsize,method='interp_lin')
 
-#Alternative method, much faster:
+## Construct trial response matrix:  N neurons by K trials
 for ises in range(nSessions):
     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
 
-    #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
-    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].behaviordata['runspeed']),(len(sessions[ises].behaviordata['runspeed']),1)))
-    sessions[ises].respmat_runspeed = compute_respmat(temp, sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
-                                    t_resp_start=0,t_resp_stop=1,method='mean')
-    sessions[ises].respmat_runspeed = np.squeeze(sessions[ises].respmat_runspeed)
+    sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'],
+                                                      sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
+                                                    t_resp_start=0,t_resp_stop=1,method='mean')
 
-    #hacky way to create dataframe of the video motion with F x 1 with F number of samples:
-    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].videodata['motionenergy']),(len(sessions[ises].videodata['motionenergy']),1)))
-    sessions[ises].respmat_videome = compute_respmat(temp, sessions[ises].videodata['timestamps'], sessions[ises].trialdata['tOnset'],
-                                    t_resp_start=0,t_resp_stop=1,method='mean')
-    sessions[ises].respmat_videome = np.squeeze(sessions[ises].respmat_videome)
+    sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
+                                                    sessions[ises].videodata['timestamps'],sessions[ises].trialdata['tOnset'],
+                                                    t_resp_start=0,t_resp_stop=1,method='mean')
 
-    delattr(sessions[ises],'calciumdata')
-    delattr(sessions[ises],'videodata')
-    delattr(sessions[ises],'behaviordata')
-
+    # delattr(sessions[ises],'calciumdata')
+    # delattr(sessions[ises],'videodata')
+    # delattr(sessions[ises],'behaviordata')
 
 ############################ Compute tuning metrics: ###################################
 
@@ -88,11 +84,11 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 ##### 
 
 
-sesidx = 5
-fig = PCA_gratings_3D(sessions[sesidx])
+sesidx = 0
+fig = plot_PCA_gratings_3D(sessions[sesidx])
 fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-fig = PCA_gratings(sessions[sesidx])
+fig = plot_PCA_gratings(sessions[sesidx])
 fig.savefig(os.path.join(savedir,'PCA','PCA_Gratings_All_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ################################ Show response with and without running #################

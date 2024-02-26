@@ -353,6 +353,7 @@ def plot_PCA_images(ses,size='runspeed'):
     ######### plot result as scatter by orientation ########
 
     respmat_zsc = zscore(ses.respmat,axis=1) # zscore for each neuron across trial responses
+    # respmat_zsc = ses.respmat # zscore for each neuron across trial responses
 
     pca         = PCA(n_components=15) #construct PCA object with specified number of components
     Xp          = pca.fit_transform(respmat_zsc.T).T #fit pca to response matrix (n_samples by n_features)
