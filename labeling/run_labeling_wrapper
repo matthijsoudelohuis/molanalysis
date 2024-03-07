@@ -32,5 +32,5 @@ for animal_id in animal_ids: #for each animal
     for sessiondate in sessiondates: #for each of the sessions for this animal
 
         #########################  tdTomato labeling based on cellpose gui segmented ROIs  ######################
-        gen_red_images(rawdatadir,animal_id,sessiondate)
-        # proc_labeling_session(rawdatadir,animal_id,sessiondate)
+        # gen_red_images(rawdatadir,animal_id,sessiondate)
+        proc_labeling_session(rawdatadir,animal_id,sessiondate)

@@ -188,6 +188,117 @@ def gen_red_images(rawdatadir,animal_id,sessiondate):
 
         img.save(os.path.join(plane_folder,'redim_plane%d.png' % iplane))
 
+def plotseq_labeling_plane(plane_folder,savedir,showcells=True,overlap_threshold=0.5):
+    stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
+    ops         = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
+    iscell      = np.load(os.path.join(plane_folder,'iscell.npy'), allow_pickle=True)
+
+    Nsuite2pcells      = np.shape(stats)[0]
+
+    # From cell masks create outlines:
+    masks_suite2p = np.zeros((512,512), np.float32)
+    for i,s in enumerate(stats):
+        masks_suite2p[s['ypix'],s['xpix']] = i+1
+
+    # load red cell roi information from cellpose gui:
+    filenames       = os.listdir(plane_folder)
+    cellpose_file   = list(filter(lambda a: 'seg.npy' in a, filenames)) #find the files
+    redcell_seg     = np.load(os.path.join(plane_folder,cellpose_file[0]), allow_pickle=True).item()
+    masks_cp_red    = redcell_seg['masks']
+    
+    # Compute overlap of red labeled cell bodies with suite2p cell bodies
+    redcell_overlap = np.empty(Nsuite2pcells)
+    for i in range(Nsuite2pcells):    # Compute overlap in masks:
+        redcell_overlap[i] = np.sum(masks_cp_red[masks_suite2p==i+1] != 0) / np.sum(masks_suite2p ==i+1)
+        # if mask_overlap_green_with_red[i]>0:
+            # mask_overlap_red_with_green[np.unique(masks_cp_red[masks_suite2p==i+1])[1]-1] = overlap
+
+    redcell             = redcell_overlap > overlap_threshold
+    redcell_cellpose    = np.vstack((redcell_overlap,redcell))
+
+    # # Get mean green GCaMP image: 
+    # mimg = ops['meanImg']
+    # mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
+    
+    # Get max projection GCaMP image: 
+    mimg = np.zeros([512,512])
+    mimg[ops['yrange'][0]:ops['yrange'][1],
+    ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
+    mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
+
+    ## Get red image:
+    mimg2 = ops['meanImg_chan2'] #get red channel image from ops
+    # mimg2 = im_norm(mimg2,min=2.5,max=100) #scale between 0 and 255
+    mimg2 = im_norm(mimg2,min=0.5,max=99.5) #scale between 0 and 255
+
+    mimg2 = im_sqrt(mimg2) #square root transform to enhance weakly expressing cells
+
+    mimg2 = im_norm(mimg2,min=0,max=100) #scale between 0 and 255
+
+    # clr_rchan = np.array(ImageColor.getcolor('#ff0040', "RGB")) / 255
+    # clr_gchan = np.array(ImageColor.getcolor('#00ffbf', "RGB")) / 255
+
+    ######
+    # rchan = (mimg2 - np.percentile(mimg2,lowprc)) / np.percentile(mimg2 - np.percentile(mimg2,lowprc),uppprc)
+    # gchan = (mimg - np.percentile(mimg,lowprc)) / np.percentile(mimg - np.percentile(mimg,lowprc),uppprc)
+    # bchan = np.zeros(np.shape(mimg))
+
+    #Show labeling results in green and red image:
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(18,6))
+
+    im1 = np.dstack((np.zeros(np.shape(mimg)),mimg,np.zeros(np.shape(mimg)))).astype(np.uint8)
+    ax1.imshow(im1,vmin=0,vmax=255)
+
+    im2 = np.dstack((mimg2,np.zeros(np.shape(mimg2)),np.zeros(np.shape(mimg2)))).astype(np.uint8)
+    ax2.imshow(im2,vmin=0,vmax=255)
+
+    im3 = np.dstack((mimg2,mimg,np.zeros(np.shape(mimg2)))).astype(np.uint8)
+    ax3.imshow(im3,vmin=0,vmax=255)
+
+    ax1.set_axis_off()
+    ax1.set_aspect('auto')
+    ax1.set_title('GCaMP', fontsize=16, color='green', fontweight='bold',loc='center')
+    ax2.set_axis_off()
+    ax2.set_aspect('auto')
+    ax2.set_title('tdTomato', fontsize=16, color='red', fontweight='bold',loc='center')
+    ax3.set_axis_off()
+    ax3.set_aspect('auto')
+    ax3.set_title('Merge', fontsize=16, color='black', fontweight='bold',loc='center')
+    plt.tight_layout(rect=[0, 0, 1, 1])
+
+    fig.savefig(os.path.join(savedir,'1.png'))
+
+    if showcells:
+        outl_green = utils.outlines_list(masks_suite2p)
+        #Filter good cells for visualization laters: 
+        outl_green = np.array(outl_green)[iscell[:,0]==1]
+        
+        red_filtered = redcell_cellpose[1,iscell[:,0]==1]
+
+        outl_red = utils.outlines_list(masks_cp_red)
+        
+        for i,o in enumerate(outl_green):
+            if iscell[i,0]: #show only good cells
+                ax1.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+                # if red_filtered[i]:
+                #     ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+                
+        fig.savefig(os.path.join(savedir,'2.png'))
+
+        for o in outl_red:
+            ax2.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+        fig.savefig(os.path.join(savedir,'3.png'))
+
+        for i,o in enumerate(outl_green):
+            if iscell[i,0]: #show only good cells
+                # ax1.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+                if red_filtered[i]:
+                    ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+                
+        fig.savefig(os.path.join(savedir,'4.png'))
+
+
+    return 
 #piece of code to analyze how many red cells were labeled etc. overlap with suite2p bladiebla
     # nOnlyRedCells   = np.sum(mask_overlap_red_with_green==0)
     # nOverlapCells   = np.sum(mask_overlap_green_with_red>0)

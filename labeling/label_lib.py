@@ -109,3 +109,9 @@ def get_gain_coeff(gain1,gain2):
     a = -1.1755564086364871
     return 10**(b*diff+a)
 
+def reset_label_threshold(sessions,threshold):
+    print('Setting new labeling threshold based on %1.2f overlap' % threshold)
+    for ses in sessions:
+        ses.celldata['redcell'] = ses.celldata['redcell_prob']>0.4
+
+    return sessions

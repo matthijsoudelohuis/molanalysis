@@ -27,14 +27,14 @@ from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
-rawdatadir          = 'G:\\RawData\\'
+rawdatadir          = 'K:\\RawData\\'
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-animal_id           = 'LPE09830'
-sessiondate         = '2023_04_11'
+animal_id           = 'LPE11622'
+sessiondate         = '2024_02_22'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
-# ops['align_by_chan']    = 1 #1-indexed, 1=gcamp,2=tdtomato
+ops['align_by_chan']    = 1 #1-indexed, 1=gcamp,2=tdtomato
 
 ##################    Run registration:  ############################
 suite2p.run_s2p(ops=ops, db=db) 

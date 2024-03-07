@@ -5,6 +5,7 @@ to various factors such as depth of recording, being labeled etc.
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
+import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -14,6 +15,7 @@ from statannotations.Annotator import Annotator
 
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from sklearn import preprocessing
+from labeling.label_lib import reset_label_threshold
 
 protocol            = ['VR']
 # protocol            = ['GR']
@@ -22,27 +24,62 @@ protocol            = ['GR','VR','IM']
 protocol            = ['GR','IM']
 
 # sessions            = filter_sessions(protocol,only_animal_id=['LPE09830','LPE09665'])
-# sessions            = filter_sessions(protocol,only_animal_id=['LPE09829'])
-sessions            = filter_sessions(protocol,only_animal_id=['LPE10919','LPE10885','LPE10883','LPE11086'],
+sessions,nsessions    = filter_sessions(protocol,only_animal_id=['LPE10919','LPE10885','LPE10883','LPE11086'],
                                       min_cells=100)
 
-session_list        = np.array([['LPE11086','2023_12_16']])
-sessions            = load_sessions(protocol = 'IM',session_list=session_list)
+# session_list        = np.array([['LPE11086','2023_12_16']])
+# sessions            = load_sessions(protocol = 'IM',session_list=session_list)
 
+savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Labeling\\'
+
+############## ############
 ## Combine cell data from all loaded sessions to one dataframe:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 ## remove any double cells (for example recorded in both GR and RF)
 celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
-celldata['redcell'] = celldata['redcell_prob']>0.4
+threshold = 0.4
+sessions = reset_label_threshold(sessions,threshold)
+
 celldata.loc[celldata['redcell']==0,'recombinase'] = 'non'
 
 celldata['noise_level'].values[celldata['noise_level'] > 5] = 0
 
+######## Show histogram of ROI overlaps: #######################
+fig, ax = plt.subplots(figsize=(3,3))
+sns.histplot(data=celldata,x='redcell_prob',stat='probability',hue='redcell',binwidth=0.05,ax=ax)
+# ax = brokenaxes(xlims=((0, 1), (0,1)), ylims=((0, 30000), (0, 0.01)), hspace=.05)
+ax.get_legend().remove()
 
-sns.histplot(data=celldata,x='redcell_prob',stat='probability',hue='redcell',binwidth=0.05)
+plt.xlim([0,1])
+plt.axvline(threshold,color='grey',linestyle=':')
+plt.xlabel('ROI Overlap')
+plt.ylabel('Fraction of cells')
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'Overlap_Dist_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 plt.ylim([0,0.01])
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'Overlap_Dist_Zoom_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
+
+
+#### 
+
+fig, ax = plt.subplots(figsize=(3,3))
+sns.histplot(data=celldata,x='redcell_prob',stat='probability',hue='redcell',binwidth=0.05,ax=ax)
+# ax = brokenaxes(xlims=((0, 1), (0,1)), ylims=((0, 30000), (0, 0.01)), hspace=.05)
+ax.get_legend().remove()
+
+plt.xlim([0,1])
+plt.axvline(threshold,color='grey',linestyle=':')
+plt.xlabel('ROI Overlap')
+plt.ylabel('Fraction of cells')
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'Overlap_Dist_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
+plt.ylim([0,0.01])
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'Overlap_Dist_Zoom_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
+
 
 ###################### Calcium trace skewness for labeled vs unlabeled cells:
 # order = [0,1] #for statistical testing purposes
