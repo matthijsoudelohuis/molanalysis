@@ -13,6 +13,7 @@ from scipy.signal import medfilt
 from scipy.stats import zscore
 from rastermap import Rastermap, utils
 from sklearn.decomposition import PCA
+import matplotlib.animation as animation
 
 def get_rand_trials(Session):
     trialsel = [np.random.randint(low=5,high=len(Session.trialdata)-100)]
@@ -253,12 +254,15 @@ def plot_neural_raster(Session,ax,trialsel=None,counter=0):
 
     return counter
 
-def plot_PCA_gratings(ses,size='runspeed'):
+def plot_PCA_gratings(ses,size='runspeed',filter=None):
 
     ########### PCA on trial-averaged responses ############
     ######### plot result as scatter by orientation ########
 
     respmat_zsc = zscore(ses.respmat,axis=1) # zscore for each neuron across trial responses
+
+    if filter is not None:
+        respmat_zsc = respmat_zsc[filter,:]
 
     pca         = PCA(n_components=15) #construct PCA object with specified number of components
     Xp          = pca.fit_transform(respmat_zsc.T).T #fit pca to response matrix (n_samples by n_features)
@@ -279,7 +283,8 @@ def plot_PCA_gratings(ses,size='runspeed'):
         sizes = (ses.respmat_videome - np.percentile(ses.respmat_videome,5)) / (np.percentile(ses.respmat_videome,95) - np.percentile(ses.respmat_videome,5))
 
     projections = [(0, 1), (1, 2), (0, 2)]
-    fig, axes = plt.subplots(1, 3, figsize=[9, 3], sharey='row', sharex='row')
+    projections = [(0, 1), (1, 2)]
+    fig, axes = plt.subplots(1, len(projections), figsize=[len(projections)*3, 3], sharey='row', sharex='row')
     for ax, proj in zip(axes, projections):
         for t, t_type in enumerate(oris):                       #plot orientation separately with diff colors
             x = Xp[proj[0],ori_ind[t]]                          #get all data points for this ori along first PC or projection pairs
@@ -292,12 +297,16 @@ def plot_PCA_gratings(ses,size='runspeed'):
             
         sns.despine(fig=fig, top=True, right=True)
         # ax.legend(oris,title='Ori')
-        # ax.legend(labels=oris)
-        
+    
+    # Put a legend to the right of the current axis
+    ax.legend(oris,title='Orientation', frameon=False, fontsize=6,title_fontsize=8,
+              loc='center left', bbox_to_anchor=(1, 0.5))
+
+    plt.tight_layout()
 
     return fig
 
-def plot_PCA_gratings_3D(ses):
+def plot_PCA_gratings_3D(ses,size='runspeed',export_animation=False,savedir=None):
 
     ########### PCA on trial-averaged responses ############
     ######### plot result as scatter by orientation ########
@@ -313,6 +322,10 @@ def plot_PCA_gratings_3D(ses):
     lines_alpha      = 0.8
     pal = sns.color_palette('husl', len(oris))
     pal = np.tile(sns.color_palette('husl', int(len(oris)/2)),(2,1))
+    if size=='runspeed':
+        sizes = (ses.respmat_runspeed - np.percentile(ses.respmat_runspeed,5)) / (np.percentile(ses.respmat_runspeed,95) - np.percentile(ses.respmat_runspeed,5))
+    elif size=='videome':
+        sizes = (ses.respmat_videome - np.percentile(ses.respmat_videome,5)) / (np.percentile(ses.respmat_videome,95) - np.percentile(ses.respmat_videome,5))
 
     fig = plt.figure()
 
@@ -334,18 +347,29 @@ def plot_PCA_gratings_3D(ses):
             y = Xp[1,ori_ind[t]]                          #and the second
             z = Xp[2,ori_ind[t]]                          #and the second
             # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
-            # ax.scatter(x, y, z, color=pal[t], s=ses.respmat_runspeed[ori_ind[t]], alpha=0.8)     #each trial is one dot
             ax.scatter(x, y, z, color=pal[t], s=ses.respmat_runspeed[ori_ind[t]], alpha=0.8)     #each trial is one dot
+            # ax.scatter(x, y, z, color=pal[t], s=sizes[ori_ind[t]]*6, alpha=0.8)     #each trial is one dot
             # ax.scatter(x, y, z,marker='o')     #each trial is one dot
             ax.set_xlabel('PC 1')            #give labels to axes
             ax.set_ylabel('PC 2')
             ax.set_zlabel('PC 3')
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
             ax.set_title(area)
             # ax.view_init(elev=-30, azim=45, roll=-45)
         print('Variance Explained (%s) by first 3 components: %2.2f' % (area,pca.explained_variance_ratio_.cumsum()[2]))
 
+    print("Making animation")
+    rot_animation = animation.FuncAnimation(fig, rotate, frames=np.arange(0, 364, 4), interval=100)
+    rot_animation.save(os.path.join(savedir,'rotation.gif'), dpi=80, writer='imagemagick')
+
     return fig
 
+def rotate(angle):
+    axes = fig.axes
+    for ax in axes:
+        ax.view_init(azim=angle)
 
 def plot_PCA_images(ses,size='runspeed'):
 

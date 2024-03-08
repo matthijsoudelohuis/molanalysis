@@ -13,16 +13,17 @@ pd.set_option("display.max_columns", 14)
 ## areas, protocols, mice, stimuli, etc. 
 
 def get_clr_area_pairs(areapairs):
-    palette       = {'V1-V1'  : sns.xkcd_rgb['bright blue'],
-                    'PM-V1' : sns.xkcd_rgb['coral'],
-                    'PM-PM' : sns.xkcd_rgb['emerald']}
+    palette       = {'V1-V1'  : sns.xkcd_rgb['barney'],
+                    'PM-V1' : sns.xkcd_rgb['peacock blue'],
+                    'V1-PM' : sns.xkcd_rgb['orangered'],
+                    'PM-PM' : sns.xkcd_rgb['seaweed']}
     return itemgetter(*areapairs)(palette)
 
 def get_clr_areas(areas):
-    palette       = {'V1'  : sns.xkcd_rgb['bright blue'],
-                    'PM' : sns.xkcd_rgb['coral'],
-                    'AL' : sns.xkcd_rgb['emerald'],
-                    'RSP' : sns.xkcd_rgb['maroon']}
+    palette       = {'V1'  : sns.xkcd_rgb['barney'],
+                    'PM' : sns.xkcd_rgb['seaweed'],
+                    'AL' : sns.xkcd_rgb['clear blue'],
+                    'RSP' : sns.xkcd_rgb['orangered']}
     return itemgetter(*areas)(palette)
 
 

@@ -12,7 +12,7 @@ from matplotlib.patches import Rectangle
 from cellpose import models
 from utils.imagelib import im_norm8
 from sklearn.preprocessing import minmax_scale
-
+from utils.plotting_style import *
 
 ## Directories: 
 rawdatadir      = 'F:\\Stacks\\'
@@ -114,23 +114,24 @@ dataV1_norm_err      = np.nanstd(dataV1_norm,axis=2) / np.sqrt(nanimals)
 dataPM_norm_mean     = np.nanmean(dataPM_norm,axis=2)
 dataPM_norm_err      = np.nanstd(dataPM_norm,axis=2) / np.sqrt(nanimals)
 
+clrs_areas = get_clr_areas(['V1','PM'])
 
 ### Figure with depth profile: 
 fig,(ax1,ax2)   = plt.subplots(1,2,figsize=(6,7))
-ax1.plot(dataV1_norm_mean[0,:],slicedepths,c='darkviolet',linewidth=2)
-ax1.plot(dataPM_norm_mean[0,:],slicedepths,c='lightseagreen',linewidth=2)
-ax1.plot(dataV1_norm[0,:,:],slicedepths,c='darkviolet',linewidth=0.5)
-ax1.plot(dataPM_norm[0,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
+ax1.plot(dataV1_norm_mean[0,:],slicedepths,c=clrs_areas[0],linewidth=2)
+ax1.plot(dataPM_norm_mean[0,:],slicedepths,c=clrs_areas[1],linewidth=2)
+ax1.plot(dataV1_norm[0,:,:],slicedepths,c=clrs_areas[0],linewidth=0.5)
+ax1.plot(dataPM_norm[0,:,:],slicedepths,c=clrs_areas[1],linewidth=0.5)
 ax1.invert_yaxis()
 ax1.set_ylabel('Cortical Depth')
 ax1.set_xlabel('Fluorescence')
 # ax1.legend(['V1','PM'],frameon=False)
 ax1.set_title('Fluorescence')
 
-ax2.plot(dataV1_mean[1,:],slicedepths,c='darkviolet',linewidth=2)
-ax2.plot(dataPM_mean[1,:],slicedepths,c='lightseagreen',linewidth=2)
-ax2.plot(dataV1[1,:,:],slicedepths,c='darkviolet',linewidth=0.5)
-ax2.plot(dataPM[1,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
+ax2.plot(dataV1_mean[1,:],slicedepths,c=clrs_areas[0],linewidth=2)
+ax2.plot(dataPM_mean[1,:],slicedepths,c=clrs_areas[1],linewidth=2)
+ax2.plot(dataV1[1,:,:],slicedepths,c=clrs_areas[0],linewidth=0.5)
+ax2.plot(dataPM[1,:,:],slicedepths,c=clrs_areas[1],linewidth=0.5)
 ax2.invert_yaxis()
 ax2.set_ylabel('')
 ax2.set_xlabel('#Labeled cells')
@@ -148,10 +149,10 @@ vmax                = 200
 
 fig,axes = plt.subplots(4,4,figsize=(9,7))
 ax1 = plt.subplot(141)
-ax1.plot(dataV1_norm_mean[0,:],slicedepths,c='darkviolet',linewidth=2)
-ax1.plot(dataPM_norm_mean[0,:],slicedepths,c='lightseagreen',linewidth=2)
-ax1.plot(dataV1_norm[0,:,:],slicedepths,c='darkviolet',linewidth=0.5)
-ax1.plot(dataPM_norm[0,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
+ax1.plot(dataV1_norm_mean[0,:],slicedepths,c=clrs_areas[0],linewidth=2)
+ax1.plot(dataPM_norm_mean[0,:],slicedepths,c=clrs_areas[1],linewidth=2)
+ax1.plot(dataV1_norm[0,:,:],slicedepths,c=clrs_areas[0],linewidth=0.5)
+ax1.plot(dataPM_norm[0,:,:],slicedepths,c=clrs_areas[1],linewidth=0.5)
 ax1.invert_yaxis()
 ax1.set_ylabel('Cortical Depth')
 ax1.set_xlabel('Fluorescence')
@@ -161,10 +162,10 @@ for d in explanes_depths:
     ax1.axhline(d,color='k',linestyle=':',linewidth=1)
 
 ax2 = plt.subplot(142)
-ax2.plot(dataV1_mean[1,:],slicedepths,c='darkviolet',linewidth=2)
-ax2.plot(dataPM_mean[1,:],slicedepths,c='lightseagreen',linewidth=2)
-ax2.plot(dataV1[1,:,:],slicedepths,c='darkviolet',linewidth=0.5)
-ax2.plot(dataPM[1,:,:],slicedepths,c='lightseagreen',linewidth=0.5)
+ax2.plot(dataV1_mean[1,:],slicedepths,c=clrs_areas[0],linewidth=2)
+ax2.plot(dataPM_mean[1,:],slicedepths,c=clrs_areas[1],linewidth=2)
+ax2.plot(dataV1[1,:,:],slicedepths,c=clrs_areas[0],linewidth=0.5)
+ax2.plot(dataPM[1,:,:],slicedepths,c=clrs_areas[1],linewidth=0.5)
 ax2.invert_yaxis()
 ax2.set_ylabel('')
 ax2.set_xlabel('#Labeled cells')
@@ -189,7 +190,7 @@ for i,d in enumerate(explanes_depths):
     ax.imshow(imdata,cmap='gray',vmin=vmin,vmax=vmax)
     ax.set_axis_off()
     ax.set_aspect('auto')
-    ax.add_patch(Rectangle((0,0),512,512,edgecolor = 'darkviolet',
+    ax.add_patch(Rectangle((0,0),512,512,edgecolor = clrs_areas[0],
              linewidth = 3, fill=False))
     if i==0: 
          ax.set_title('V1')
@@ -207,7 +208,7 @@ for i,d in enumerate(explanes_depths):
     ax.imshow(imdata,cmap='gray',vmin=vmin,vmax=vmax)
     ax.set_axis_off()
     ax.set_aspect('auto')
-    ax.add_patch(Rectangle((0,0),512,512,edgecolor = 'lightseagreen',
+    ax.add_patch(Rectangle((0,0),512,512,edgecolor =clrs_areas[1],
             linewidth = 3, fill=False))
     if i==0: 
          ax.set_title('PM')

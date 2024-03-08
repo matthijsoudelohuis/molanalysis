@@ -26,13 +26,13 @@ from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D
 from utils.plot_lib import shaded_error
 from utils.RRRlib import regress_out_behavior_modulation
 
-savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\'
+savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\'
 
 ##############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
 # session_list        = np.array([['LPE10885','2023_10_19']])
 sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='dF')
+                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 
@@ -88,7 +88,9 @@ sesidx = 0
 fig = plot_PCA_gratings_3D(sessions[sesidx])
 fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-fig = plot_PCA_gratings(sessions[sesidx])
+fig = plot_PCA_gratings_3D(sessions[sesidx],export_animation=True)
+
+fig = plot_PCA_gratings(sessions[sesidx],filter=sessions[sesidx].celldata['redcell'].to_numpy()==1)
 fig.savefig(os.path.join(savedir,'PCA','PCA_Gratings_All_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ################################ Show response with and without running #################
@@ -248,7 +250,7 @@ for ises in range(nSessions):
 
         for i in range(N):
             c = np.array((rfaz[i],rfel[i]))
-            sessions[ises].distmat_rf[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
+            sessions[ises].distmat_rf[i,:] = np.linalg.norm(c[:,np.newaxis]-d,axis=0)
 
     g = np.meshgrid(sessions[ises].celldata['roi_name'],sessions[ises].celldata['roi_name'])
     sessions[ises].areamat = g[0] + '-' + g[1]
@@ -257,7 +259,14 @@ for ises in range(nSessions):
                     sessions[ises].celldata['redcell'].astype(int).astype(str).to_numpy())
     sessions[ises].labelmat = g[0] + '-' + g[1]
 
-    # for i in range(N):
+    idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
+    sessions[ises].distmat_xyz[idx_triu] = np.nan
+    sessions[ises].distmat_xy[idx_triu] = np.nan
+    sessions[ises].distmat_rf[idx_triu] = np.nan
+    sessions[ises].areamat[idx_triu] = np.nan
+    sessions[ises].labelmat[idx_triu] = np.nan
+    
+    # for i in range(N): (deprecated, slow)
     #     print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
     #     for j in range(N):
     #         sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
@@ -269,64 +278,8 @@ for ises in range(nSessions):
     #         sessions[ises].areamat[i,j] = sessions[ises].celldata['roi_name'][i] + '-' + sessions[ises].celldata['roi_name'][j]
     #         sessions[ises].labelmat[i,j] = str(int(sessions[ises].celldata['redcell'][i])) + '-' + str(int(sessions[ises].celldata['redcell'][j]))
 
-    # sessions[ises].distmat_xyz[np.eye(N)==1] = np.nan
-    # sessions[ises].distmat_xy[np.eye(N)==1] = np.nan
-    idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
-    sessions[ises].distmat_xyz[idx_triu] = np.nan
-    sessions[ises].distmat_xy[idx_triu] = np.nan
-    sessions[ises].distmat_rf[idx_triu] = np.nan
-    sessions[ises].areamat[idx_triu] = np.nan
-    sessions[ises].labelmat[idx_triu] = np.nan
 
-from scipy.spatial import distance
-N = 100
-import time
-
-# do stuff
-
-
-g = np.empty((N,N))
-
-t = time.time()
-
-for i in range(N):
-    print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
-    for j in range(N):
-        # sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
-                # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
-        # sessions[ises].distmat_xyz[i,j] = distance.euclidean([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
-                # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
-        
-        a = np.array((x[i],y[i],z[i]))
-        b = np.array((x[j],y[j],z[j]))
-        g[i,j] = np.linalg.norm(a-b)
-
-print(time.time() - t)
-
-
-
-t = time.time()
-
-g = np.empty((N,3803))
-
-for i in range(N):
-    print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
-    # for j in range(N):
-        # sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
-                # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
-        # sessions[ises].distmat_xyz[i,j] = distance.euclidean([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
-                # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
-        
-    a = np.array((x[i],y[i],z[i]))
-    # b = np.array((x[j],y[j],z[j]))
-    g[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
-
-print(time.time() - t)
-
-g[:,0]
-
-
-                     
+                    
 # construct dataframe with all pairwise measurements:
 df  = pd.DataFrame()
 
@@ -365,11 +318,10 @@ plt.savefig(os.path.join(savedir,'Corr_anat_rf_distance' + sessions[0].sessionda
 ####################################################################
 ####### Noise correlations as a function of anatomical distance ####
 
-areapairs = ['V1-V1','PM-V1','PM-PM']
-
+areapairs = ['V1-V1','PM-PM']
 clrs_areapairs = get_clr_area_pairs(areapairs)
 
-plt.figure()
+plt.figure(figsize=(5,4))
 
 for ises in range(nSessions):
     filter = sessions[ises].celldata['noise_level']<1
@@ -386,46 +338,62 @@ for ises in range(nSessions):
     for iap,areapair in enumerate(areapairs):
         plt.plot(histdata['DistXYPair'][histdata['AreaPair']==areapair], 
                  histdata['NoiseCorrelation'][histdata['AreaPair']==areapair],
-                 color=clrs_areapairs[iap])
-    plt.xlabel('Anatomical distance (XY)')
-    plt.ylabel('Noise Correlation')
-    plt.legend(areapairs)
+                 color=clrs_areapairs[iap],linewidth=2)
+plt.xlabel('Anatomical distance (XY)')
+plt.ylabel('Noise Correlation')
+plt.legend(areapairs)
+plt.xlim([-20,600])
+# plt.xlim([-20,100])
 plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ################################################################
 
-plt.figure()
+areapairs = ['V1-V1','V1-PM','PM-PM']
+clrs_areapairs = get_clr_area_pairs(areapairs)
+
+fig,ax = plt.subplots(figsize=(5,4))
 for ises in range(nSessions):
     # filter = sessions[ises].celldata['noise_level']<1
-    filter = sessions[ises].celldata['tuning_var']>0
+    # filter = sessions[ises].celldata['tuning_var']>0
+    filter = sessions[ises].celldata['tuning_var']>0.05
     # filter = sessions[ises].celldata['tuning_var']>0.1
     df = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr[filter,:].flatten(),
                     'DeltaPrefOri': sessions[ises].delta_pref[filter,:].flatten(),
                     'AreaPair': sessions[ises].areamat[filter,:].flatten(),
-                    'DistXYPair': sessions[ises].distmat_xy[filter,:].flatten(),
-                    'DistXYZPair': sessions[ises].distmat_xyz[filter,:].flatten(),
+                    # 'DistXYPair': sessions[ises].distmat_xy[filter,:].flatten(),
+                    # 'DistXYZPair': sessions[ises].distmat_xyz[filter,:].flatten(),
                     'DistRfPair': sessions[ises].distmat_rf[filter,:].flatten(),
                     'LabelPair': sessions[ises].labelmat[filter,:].flatten()}).dropna(how='all')
 
     df['DistRfPair']    = df['DistRfPair'].round(-1)
-    histdata            = df.groupby('DistRfPair', as_index=False)['NoiseCorrelation'].mean()
-    histdata            = df.groupby(['DistRfPair','AreaPair'], as_index=False)['NoiseCorrelation'].mean()
+    # histdata            = df.groupby('DistRfPair', as_index=False)['NoiseCorrelation'].mean()
+    histmean            = df.groupby(['DistRfPair','AreaPair'], as_index=False)['NoiseCorrelation'].mean()
+    histerror           = df.groupby(['DistRfPair','AreaPair'], as_index=False)['NoiseCorrelation'].sem()
     for iap,areapair in enumerate(areapairs):
-        plt.plot(histdata['DistRfPair'][histdata['AreaPair']==areapair], 
-                 histdata['NoiseCorrelation'][histdata['AreaPair']==areapair],
-                 color=clrs_areapairs[iap])
-    plt.legend(areapairs)
+        # plt.plot(histmean['DistRfPair'][histdata['AreaPair']==areapair], 
+                #  histmean['NoiseCorrelation'][histdata['AreaPair']==areapair],
+                #  color=clrs_areapairs[iap],linewidth=2)
+        
+        shaded_error(ax,x=histmean['DistRfPair'][histdata['AreaPair']==areapair],
+                     y=histmean['NoiseCorrelation'][histdata['AreaPair']==areapair],
+                     yerror=histerror['NoiseCorrelation'][histdata['AreaPair']==areapair],
+                     center='mean',error='std',color=clrs_areapairs[iap])
+        # plt.plot(histmean['DistRfPair'][histdata['AreaPair']==areapair], 
+                #  histmean['NoiseCorrelation'][histdata['AreaPair']==areapair],
+                #  color=clrs_areapairs[iap],linewidth=2)
+plt.legend(areapairs)
 plt.xlabel('Delta RF')
 plt.ylabel('NoiseCorrelation')
-plt.xlim([0,200])
-plt.ylim([0,0.05])
+plt.xlim([-5,200])
+plt.ylim([0.03,0.08])
+plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ################################################################
 
 fig = plt.subplots(1,3,figsize=(12,4))
 for ises in range(nSessions):
     # filter = sessions[ises].celldata['noise_level']<1
-    filter = sessions[ises].celldata['tuning_var']>0.1
+    filter = sessions[ises].celldata['tuning_var']>0.05
     # filter = np.logical_and(filter,sessions[ises].celldata['tuning_var']>0.1)
     # filter = sessions[ises].celldata['tuning_var']>0.1
     df = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr[filter,:].flatten(),
@@ -628,3 +596,51 @@ for i,iarea in enumerate(areas):
         axes[i,j].set_xlim([-10,200])
         axes[i,j].set_ylim([-0.05,0.2])
 
+
+
+
+
+# from scipy.spatial import distance
+# N = 100
+# import time
+
+# # do stuff
+
+# g = np.empty((N,N))
+
+# t = time.time()
+
+# for i in range(N):
+#     print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
+#     for j in range(N):
+#         # sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
+#                 # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
+#         # sessions[ises].distmat_xyz[i,j] = distance.euclidean([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
+#                 # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
+        
+#         a = np.array((x[i],y[i],z[i]))
+#         b = np.array((x[j],y[j],z[j]))
+#         g[i,j] = np.linalg.norm(a-b)
+
+# print(time.time() - t)
+
+
+# t = time.time()
+
+# g = np.empty((N,3803))
+
+# for i in range(N):
+#     print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
+#     # for j in range(N):
+#         # sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
+#                 # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
+#         # sessions[ises].distmat_xyz[i,j] = distance.euclidean([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
+#                 # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
+        
+#     a = np.array((x[i],y[i],z[i]))
+#     # b = np.array((x[j],y[j],z[j]))
+#     g[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
+
+# print(time.time() - t)
+
+# g[:,0]
