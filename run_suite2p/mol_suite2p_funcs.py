@@ -75,6 +75,8 @@ def init_ops(sesfolder):
     ops['roidetect']            = False #only do registration in this part
     
     protocols           = ['VR','IM','SP','RF','GR','GN','DN']
+    protocols           = ['GR1','IM1','SP1','GR2','IM2','SP2',
+                           'GR3','IM3','SP3','GR4','IM4','SP4',]
     
     db = {
         'data_path': [sesfolder],

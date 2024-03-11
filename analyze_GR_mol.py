@@ -158,19 +158,19 @@ plt.ylim([0,0.15])
 ##############################
 ## Make dataframe of tensor with all trial, time information etc.
 
-mat_zsc     = tensor.transpose((0,2,1)).reshape(K*T,N,order='F') 
-mat_zsc     = zscore(mat_zsc,axis=4)
+# mat_zsc     = tensor.transpose((0,2,1)).reshape(K*T,N,order='F') 
+# mat_zsc     = zscore(mat_zsc,axis=4)
 
-tracedata = pd.DataFrame(data=mat_zsc, columns=calciumdata.columns)
+# tracedata = pd.DataFrame(data=mat_zsc, columns=calciumdata.columns)
 
-tracedata['time']   = np.tile(t_axis,K)
-tracedata['ori']    = np.repeat(trialdata['Orientation'].to_numpy(),T)
+# tracedata['time']   = np.tile(t_axis,K)
+# tracedata['ori']    = np.repeat(trialdata['Orientation'].to_numpy(),T)
 
-sns.lineplot(
-    data=tracedata, x="time", y=tracedata.columns[2], hue="ori", 
-)
+# sns.lineplot(
+#     data=tracedata, x="time", y=tracedata.columns[2], hue="ori", 
+# )
 
-h = 2
+# h = 2
 
 
 

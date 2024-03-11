@@ -17,25 +17,33 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy.signal import medfilt
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from utils.tuning import compute_tuning
 from utils.plotting_style import * #get all the fixed color schemes
-from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D
+from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D,plot_excerpt
 from utils.plot_lib import shaded_error
 from utils.RRRlib import regress_out_behavior_modulation
+from utils.noisecorr_lib import compute_noise_correlation
 
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\'
 
 ##############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
 # session_list        = np.array([['LPE10885','2023_10_19']])
+session_list        = np.array([['LPE11086','2024_01_10']])
+
 sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+                                    load_calciumdata=True, load_videodata=True, calciumversion='dF')
 sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 
+for ises in range(nSessions):
+    sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
+    sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
+    sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
 
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
@@ -81,8 +89,19 @@ for ises in range(nSessions):
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 
-##### 
 
+######################################
+#Show some traces and some stimuli to see responses:
+sesidx = 0
+
+# fig = plot_excerpt(sessions[0],trialsel=[2220, 2310],neural_version='raster')
+fig = plot_excerpt(sessions[sesidx],trialsel=[2200, 2315],neural_version='traces')
+fig.savefig(os.path.join(savedir,'ExploreFigs','Neural_Behavioral_Traces_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+# fig = plot_excerpt(sessions[sesidx],neural_version='traces')
+# fig = plot_excerpt(sessions[sesidx],trialsel=None,plot_neural=True,plot_behavioral=True,neural_version='traces')
+
+##### 
 
 sesidx = 0
 fig = plot_PCA_gratings_3D(sessions[sesidx])
@@ -170,59 +189,22 @@ plt.tight_layout()
 fig.savefig(os.path.join(savedir,'Tuning','Locomotion_V1PM_LabNonLab_' + str(nSessions) + 'sessions.png'), format = 'png')
 
 ############################ Compute noise correlations: ###################################
+sessions = compute_noise_correlation(sessions)
 
-for ises in range(nSessions):
-    # get signal correlations:
-    [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
-
-    oris            = np.sort(sessions[ises].trialdata['Orientation'].unique())
-    ori_counts      = sessions[ises].trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
-    assert(len(ori_counts) == 16 or len(ori_counts) == 8)
-    resp_meanori    = np.empty([N,len(oris)])
-
-    for i,ori in enumerate(oris):
-        resp_meanori[:,i] = np.nanmean(sessions[ises].respmat[:,sessions[ises].trialdata['Orientation']==ori],axis=1)
-
-    sessions[ises].sig_corr                 = np.corrcoef(resp_meanori)
-
-    prefori                         = oris[np.argmax(resp_meanori,axis=1)]
-    sessions[ises].delta_pref       = np.abs(np.subtract.outer(prefori, prefori))
-
-    respmat_res                     = sessions[ises].respmat.copy()
-
-    ## Compute residuals:
-    for ori in oris:
-        ori_idx     = np.where(sessions[ises].trialdata['Orientation']==ori)[0]
-        temp        = np.mean(respmat_res[:,ori_idx],axis=1)
-        respmat_res[:,ori_idx] = respmat_res[:,ori_idx] - np.repeat(temp[:, np.newaxis], len(ori_idx), axis=1)
-
-    sessions[ises].noise_corr                   = np.corrcoef(respmat_res)
-    
-    # sessions[ises].sig_corr[np.eye(N)==1]   = np.nan
-    # sessions[ises].noise_corr[np.eye(N)==1]     = np.nan
-
-    idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
-    sessions[ises].sig_corr[idx_triu] = np.nan
-    sessions[ises].noise_corr[idx_triu] = np.nan
-    sessions[ises].delta_pref[idx_triu] = np.nan
-
-    assert np.all(sessions[ises].sig_corr[~idx_triu] > -1)
-    assert np.all(sessions[ises].sig_corr[~idx_triu] < 1)
-    assert np.all(sessions[ises].noise_corr[~idx_triu] > -1)
-    assert np.all(sessions[ises].noise_corr[~idx_triu] < 1)
-
-###################### Plot control figure of signal correlation and  ##############################
-
+###################### Plot control figure of signal and noise corrs ##############################
 sesidx = 0
-plt.figure(figsize=(8,5))
+fig = plt.subplots(figsize=(8,5))
 plt.imshow(sessions[sesidx].sig_corr, cmap='coolwarm',
            vmin=np.nanpercentile(sessions[sesidx].sig_corr,15),
            vmax=np.nanpercentile(sessions[sesidx].sig_corr,85))
+# plt.xlabel = 'Neurons'
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','Signal_Correlation_Mat_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-plt.figure(figsize=(8,5))
+fig = plt.figure(figsize=(8,5))
 plt.imshow(sessions[sesidx].noise_corr, cmap='coolwarm',
            vmin=np.nanpercentile(sessions[sesidx].noise_corr,5),
            vmax=np.nanpercentile(sessions[sesidx].noise_corr,95))
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','Noise_Correlation_Mat_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ###################### Compute pairwise neuronal distances: ##############################
 

@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
@@ -7,8 +8,14 @@ facemapfile = "W:\\Users\\Matthijs\\Rawdata\\LPE09829\\2023_03_29\\VR\\Behavior\
 
 facemapfile = 'E:\\OneDrive\\PostDoc\\Analysis\\PupilMotSVD\\testvid\\RF_NSH07422_camera_2023-03-15T10_11_29_proc.npy'
 
+facemapfile = 'I:\\RawData\\LPE10883\\2023_10_23\\IM\\Behavior\\IM_LPE10883_camera_2023-10-23T13_09_37_proc.npy'
+savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Facemap\\'
+
+#### load the file:
 proc = np.load(facemapfile,allow_pickle=True).item()
 
+
+### Show video PCs:
 fig = plt.subplots(1,7,figsize=(14, 2)) 
 ax = plt.subplot(1, 7, 1)
 plt.imshow(proc['avgframe_reshape'],cmap='gray',aspect='auto')
@@ -35,6 +42,9 @@ for i in range(5):
     plt.title('video PC %d' % i,fontsize=12)
 plt.tight_layout()
 
+plt.savefig(os.path.join(savedir,'Example_videoPCs_1.png'))
+
+## Show the pupil data: 
 ## if you want to show something for the pupil:
 # pupilidx = [proc['rois'][i]['rtype'] for i in range(2)].index('Pupil')
 data    = proc['pupil'][0]

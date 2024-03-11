@@ -15,9 +15,9 @@ from rastermap import Rastermap, utils
 from sklearn.decomposition import PCA
 import matplotlib.animation as animation
 
-def get_rand_trials(Session):
+def get_rand_trials(Session,ntrials=80):
     trialsel = [np.random.randint(low=5,high=len(Session.trialdata)-100)]
-    trialsel.append(trialsel[0]+80)
+    trialsel.append(trialsel[0]+ntrials)
     return trialsel
 
 def plot_excerpt(Session,trialsel=None,plot_neural=True,plot_behavioral=True,neural_version='traces'):
@@ -108,7 +108,7 @@ def plot_stimuli(Session,trialsel,ax):
     return
 
 
-def plot_behavioral_traces(Session,ax,trialsel=None,nvideoPCs=10,counter=0):
+def plot_behavioral_traces(Session,ax,trialsel=None,nvideoPCs=8,counter=0):
     
     example_tstart  = Session.trialdata['tOnset'][trialsel[0]-1]
     example_tstop   = Session.trialdata['tOnset'][trialsel[1]-1]
@@ -164,7 +164,7 @@ def plot_behavioral_traces(Session,ax,trialsel=None,nvideoPCs=10,counter=0):
 
     return counter
 
-def plot_neural_traces(Session,ax,trialsel=None,counter=0):
+def plot_neural_traces(Session,ax,trialsel=None,counter=0,nexcells=8):
     
     example_tstart  = Session.trialdata['tOffset'][trialsel[0]-1]
     example_tstop   = Session.trialdata['tOnset'][trialsel[1]-1]
@@ -177,7 +177,6 @@ def plot_neural_traces(Session,ax,trialsel=None,counter=0):
     areas           = np.unique(Session.celldata['roi_name'])
     labeled         = np.unique(Session.celldata['redcell'])
     labeltext       = ['unlabeled','labeled',]
-    nexcells        = 10
 
     example_cells   = np.empty((len(areas),len(labeled),nexcells)).astype('int64')
 
@@ -360,9 +359,10 @@ def plot_PCA_gratings_3D(ses,size='runspeed',export_animation=False,savedir=None
             # ax.view_init(elev=-30, azim=45, roll=-45)
         print('Variance Explained (%s) by first 3 components: %2.2f' % (area,pca.explained_variance_ratio_.cumsum()[2]))
 
-    print("Making animation")
-    rot_animation = animation.FuncAnimation(fig, rotate, frames=np.arange(0, 364, 4), interval=100)
-    rot_animation.save(os.path.join(savedir,'rotation.gif'), dpi=80, writer='imagemagick')
+    if export_animation:
+        print("Making animation")
+        rot_animation = animation.FuncAnimation(fig, rotate, frames=np.arange(0, 364, 4), interval=100)
+        rot_animation.save(os.path.join(savedir,'rotation.gif'), dpi=80, writer='imagemagick')
 
     return fig
 

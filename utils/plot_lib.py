@@ -25,7 +25,7 @@ def shaded_error(ax,x,y,yerror=None,center='mean',error='std',color='black'):
             print('Unknown error type')
     else:
         ycenter = y
-        yerror = yerror
+        yerror = np.array(yerror)
 
     h, = ax.plot(x,ycenter,color=color)
     ax.fill_between(x, ycenter-yerror, ycenter+yerror,color=color,alpha=0.2)
