@@ -13,3 +13,17 @@ def get_data_folder():
         DATA_FOLDER = 'C:/Procdata'
 
     return DATA_FOLDER
+
+def get_local_drive():
+    user = os.environ['USERDOMAIN']
+
+    if user == 'MATTHIJSOUDELOH':
+        LOCAL_DRIVE = 'T:/'
+
+    elif user == 'PCMatthijs':
+        LOCAL_DRIVE = 'E:/'
+
+    elif user == 'MOL-MACHINE':
+        LOCAL_DRIVE = 'C:/'
+
+    return LOCAL_DRIVE

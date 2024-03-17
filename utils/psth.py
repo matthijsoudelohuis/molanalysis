@@ -260,7 +260,8 @@ def construct_behav_matrix_ts_F(ses,nvideoPCs = 30):
     S       = np.hstack((S,np.expand_dims(np.interp(ses.ts_F.to_numpy(),ses.behaviordata['ts'].to_numpy(), ses.behaviordata['runspeed'].to_numpy()),axis=1)))
     Slabels.append('runspeed')
 
-    fields = ['pupil_area','motionenergy']
+    # fields = ['pupil_area','motionenergy']
+    fields = ['pupil_area']
     [fields.append('videoPC_' + '%s' % k) for k in range(0,nvideoPCs)]
 
     for field in fields:

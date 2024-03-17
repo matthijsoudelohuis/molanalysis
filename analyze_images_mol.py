@@ -15,26 +15,23 @@ from loaddata.session_info import filter_sessions,load_sessions
 from scipy.signal import medfilt
 from utils.plotting_style import * #get all the fixed color schemes
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-from utils.imagelib import load_natural_images #
 
+from utils.imagelib import load_natural_images #
 from utils.explorefigs import *
 from utils.psth import compute_tensor,compute_respmat,construct_behav_matrix_ts_F
+from loaddata.get_data_folder import get_local_drive
 
 
-
-# from sklearn.decomposition import PCA
-
-savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Images\\'
-# savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Images\\ExploreFigs\\'
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
 
 #################################################
 # session_list        = np.array([['LPE09665','2023_03_15']])
 session_list        = np.array([['LPE11086','2023_12_16']])
-sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
+sessions,nSessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 # sessions            = filter_sessions(protocols = ['IM'],load_behaviordata=True, 
                                     # load_calciumdata=True, load_videodata=True, calciumversion='deconv')
-nSessions = len(sessions)
+
 # sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
 #                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 
@@ -61,7 +58,6 @@ for ises in range(nSessions):
     # delattr(sessions[ises],'calciumdata')
     # delattr(sessions[ises],'videodata')
     # delattr(sessions[ises],'behaviordata')
-
 
 
 ################################################################
@@ -131,6 +127,21 @@ axes[1].set_title('Repetition 2')
 natimgdata = load_natural_images(onlyright=True)
 
 
+###### 
+
+
+from utils.corr_lib import mean_resp_image,compute_signal_correlation
+
+
+sessions = compute_signal_correlation(sessions)
+
+###################### Plot control figure of signal corrs ##############################
+sesidx = 0
+fig = plt.subplots(figsize=(8,5))
+plt.imshow(sessions[sesidx].sig_corr, cmap='coolwarm',vmin=-0.02,vmax=0.04)
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','Signal_Correlation_Images_Mat_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+
 ####### Regress out behavioral state related activity  #################################
 
 from utils.RRRlib import *
@@ -138,7 +149,6 @@ from utils.RRRlib import *
 
 X = np.column_stack((sessions[sesidx].respmat_runspeed,sessions[sesidx].respmat_videome))
 Y = sessions[sesidx].respmat.T
-# Y_out = regress_out_behavior_modulation(sessions[sesidx],X,Y,nvideoPCs = 30,rank=2)
 
 fig = plot_PCA_images(sessions[sesidx])
 
@@ -149,8 +159,8 @@ sessions[sesidx].respmat[sessions[sesidx].respmat<np.percentile(sessions[sesidx]
 EV(sessions[sesidx].calciumdata,sessions[sesidx].calciumdata2)
 fig = plot_PCA_images(sessions[sesidx])
 
-sessions[sesidx].respmat = regress_out_behavior_modulation(sessions[sesidx],X,Y,nvideoPCs = 30,rank=2)
-
+# sessions[sesidx].respmat = regress_out_behavior_modulation(sessions[sesidx],X,Y,nvideoPCs = 30,rank=2).T
+sessions[sesidx].respmat = regress_out_behavior_modulation(sessions[sesidx],nvideoPCs = 30,rank=5).T
 
 
 
@@ -161,6 +171,16 @@ for ises in range(nSessions):
                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
 
 fig = plot_PCA_images(sessions[sesidx])
+
+
+
+####
+
+
+
+respmean = mean_resp_image(sessions[sesidx])
+
+
 
 # %% LM model run
 B_hat = LM(Y=D, X=S, lam=10)

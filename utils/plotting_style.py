@@ -26,6 +26,12 @@ def get_clr_areas(areas):
                     'RSP' : sns.xkcd_rgb['orangered']}
     return itemgetter(*areas)(palette)
 
+def get_clr_labelpairs(pairs):
+    palette       = {'0-0': sns.xkcd_rgb['grey'],
+        '0-1' : sns.xkcd_rgb['rose'],
+        '1-0' : sns.xkcd_rgb['rose'],
+        '1-1' : sns.xkcd_rgb['red']}
+    return itemgetter(*pairs)(palette)
 
 def get_clr_labeled():
     # clrs            = ['black','red']

@@ -6,10 +6,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-try:
-    os.chdir('t:\\Python\\molanalysis\\')
-except:
-    os.chdir('e:\\Python\\molanalysis\\')
+
+from loaddata.get_data_folder import get_local_drive
+os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat,construct_behav_matrix_ts_F
@@ -25,7 +24,8 @@ from utils.explorefigs import plot_excerpt,plot_PCA_gratings,plot_PCA_gratings_3
 from utils.RRRlib import RRR, LM, EV, regress_out_behavior_modulation
 from scipy import linalg
 
-savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Arousal\\'
+# savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Arousal\\'
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Arousal\\')
 
 ##############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
@@ -40,10 +40,11 @@ for ises in range(nSessions):
     sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
 
 
-##### Construct behavioral variables sampled at imaging frame rate:
+########## Construct behavioral variables sampled at imaging frame rate: #####################
 Svars,Svarlabels = construct_behav_matrix_ts_F(sessions[sesidx],nvideoPCs=30)
 nSvars = len(Svarlabels)
-##### Show correlations between different behavioral measures: 
+
+######## Show correlations between different behavioral measures: ##############################
 fig = plt.figure()
 sns.heatmap(np.corrcoef(Svars,rowvar=False),xticklabels=Svarlabels,yticklabels=Svarlabels)
 fig.savefig(os.path.join(savedir,'Heatmap_Correlations_ArousalVars_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
@@ -73,10 +74,11 @@ for i,r in enumerate(range(nSvars)):
     EV_rrr[i] = EV(Y, Y_hat_lr)
 
 fig = plt.figure(figsize=(4,3))
-plt.plot(EV_rrr,color='purple',linewidth=2)
+plt.plot(range(1,nSvars),EV_rrr[1:],color='purple',linewidth=2)
 plt.ylabel('Variance Explained')
 plt.xlabel('Rank')
 plt.axvline(9,linestyle=':',color='black')
+plt.ylim([0,0.15])
 fig.savefig(os.path.join(savedir,'Rank_EV_deconv_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #### Show original PCA
@@ -104,7 +106,7 @@ sessions[sesidx].calciumdata2 = regress_out_behavior_modulation(sessions[sesidx]
 
 #Compute average response per trial:
 for ises in range(nSessions):
-    sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata2, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
+    sessions[ises].respmat2         = compute_respmat(sessions[ises].calciumdata2, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
 
 #################### Show PCA again #################################
@@ -126,3 +128,18 @@ fig = plot_excerpt(sessions[sesidx],trialsel=trialsel,plot_neural=True,plot_beha
 fig.savefig(os.path.join(savedir,'Excerpt_Traces_deconv_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
+# from utils.RRRlib import regress_out_behavior_modulation
+# from utils.corr_lib import compute_noise_correlation
+
+# ################# With and without regressing out behavioral modulation: #################################
+# fig = plot_PCA_gratings(sessions[sesidx])
+# fig.savefig(os.path.join(savedir,'PCA','PCA_Gratings_All_RegressOut_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+# from utils.RRRlib import *
+# sessions[sesidx].calciumdata2 = regress_out_behavior_modulation(sessions[sesidx],nvideoPCs = 30,rank=15)
+# #Compute average response per trial:
+# for ises in range(nSessions):
+#     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata2, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
+#                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+# fig = plot_PCA_gratings(sessions[sesidx])
+# fig.savefig(os.path.join(savedir,'PCA','PCA_Gratings_All_RegressOut_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')

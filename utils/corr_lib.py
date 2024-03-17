@@ -56,3 +56,27 @@ def compute_noise_correlation(sessions):
     else: 
         print('not yet implemented noise corr for other protocols than GR')
     return sessions
+
+
+def mean_resp_image(ses):
+    nNeurons = np.shape(ses.respmat)[0]
+    images = np.unique(ses.trialdata['ImageNumber'])
+    respmean = np.empty((nNeurons,len(images)))
+    for im in images:
+        respmean[:,im] = np.mean(ses.respmat[:,ses.trialdata['ImageNumber']==im],axis=1)
+    return respmean
+
+
+def compute_signal_correlation(sessions):
+    nSessions = len(sessions)
+
+    sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+    if np.all(sessiondata['protocol']=='IM'):
+         for ises in range(nSessions):
+            respmean = mean_resp_image(sessions[ises])
+
+            sessions[ises].sig_corr                   = np.corrcoef(respmean)
+    else: 
+        print('not yet implemented signal corr for other protocols than IM')
+
+    return sessions
