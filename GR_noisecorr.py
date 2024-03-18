@@ -15,9 +15,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.signal import medfilt
+from scipy.stats import binned_statistic
+from statannotations.Annotator import Annotator
 
 from loaddata.session_info import filter_sessions,load_sessions
-from utils.psth import compute_tensor,compute_respmat
+from utils.psth import compute_respmat
 from utils.tuning import compute_tuning
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D,plot_excerpt
@@ -31,24 +33,27 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - G
 session_list        = np.array([['LPE10919','2023_11_06']])
 # session_list        = np.array([['LPE10885','2023_10_19']])
 session_list        = np.array([['LPE11086','2024_01_05'],
-                                ['LPE11086','2024_01_10'],
-                                ['LPE11086','2024_01_10'],
+                                ['LPE10884','2023_10_20'],
                                 ['LPE10885','2023_10_19'],
+                                ['LPE10885','2023_10_23'],
                                 ['LPE10919','2023_11_06']])
 
-sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
-sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
-
-for ises in range(nSessions):
-    sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
-    sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
+# load_respmat: 
+sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=False, 
+                                    load_calciumdata=False, load_videodata=False, calciumversion='deconv')
+# sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
+                                    
+for ises in range(nSessions):    # iterate over sessions
+    sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
+    
+    if 'pupil_area' in sessions[ises].videodata:
+        sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
+    if 'motionenergy' in sessions[ises].videodata:
+        sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
     sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
 
-##############################################################################
-## Construct trial response matrix:  N neurons by K trials
-for ises in range(nSessions):
+    ##############################################################################
+    ## Construct trial response matrix:  N neurons by K trials
     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
 
@@ -56,13 +61,43 @@ for ises in range(nSessions):
                                                       sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
                                                     t_resp_start=0,t_resp_stop=1,method='mean')
 
-    sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
+    if 'motionenergy' in sessions[ises].videodata:
+        sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
                                                     sessions[ises].videodata['timestamps'],sessions[ises].trialdata['tOnset'],
                                                     t_resp_start=0,t_resp_stop=1,method='mean')
 
-    # delattr(sessions[ises],'calciumdata')
-    # delattr(sessions[ises],'videodata')
-    # delattr(sessions[ises],'behaviordata')
+    delattr(sessions[ises],'calciumdata')
+    delattr(sessions[ises],'videodata')
+    delattr(sessions[ises],'behaviordata')
+
+
+# sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
+#                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+# # sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
+#                                     # load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+
+# for ises in range(nSessions):
+#     sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
+#     sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
+#     sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
+
+# ##############################################################################
+# ## Construct trial response matrix:  N neurons by K trials
+# for ises in range(nSessions):
+#     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
+#                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+
+#     sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'],
+#                                                       sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
+#                                                     t_resp_start=0,t_resp_stop=1,method='mean')
+
+#     sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
+#                                                     sessions[ises].videodata['timestamps'],sessions[ises].trialdata['tOnset'],
+#                                                     t_resp_start=0,t_resp_stop=1,method='mean')
+
+#     # delattr(sessions[ises],'calciumdata')
+#     # delattr(sessions[ises],'videodata')
+#     # delattr(sessions[ises],'behaviordata')
 
 ############################ Compute tuning metrics: ###################################
 
@@ -93,7 +128,7 @@ fig.savefig(os.path.join(savedir,'ExploreFigs','Neural_Behavioral_Traces_' + ses
 
 ##### 
 
-sesidx = 0
+sesidx = 4
 fig = plot_PCA_gratings_3D(sessions[sesidx])
 fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
@@ -101,7 +136,6 @@ fig = plot_PCA_gratings_3D(sessions[sesidx],export_animation=True)
 
 fig = plot_PCA_gratings(sessions[sesidx],filter=sessions[sesidx].celldata['redcell'].to_numpy()==1)
 fig.savefig(os.path.join(savedir,'PCA','PCA_Gratings_All_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-
 
 ################################ Show response with and without running #################
 
@@ -228,10 +262,12 @@ for ises in range(nSessions):
 
     g = np.meshgrid(sessions[ises].celldata['roi_name'],sessions[ises].celldata['roi_name'])
     sessions[ises].areamat = g[0] + '-' + g[1]
+    sessions[ises].areamat[sessions[ises].areamat=='PM-V1'] = 'V1-PM' #fix order for combinations
 
     g = np.meshgrid(sessions[ises].celldata['redcell'].astype(int).astype(str).to_numpy(),
                     sessions[ises].celldata['redcell'].astype(int).astype(str).to_numpy())
-    sessions[ises].labelmat = g[0] + '-' + g[1]
+    sessions[ises].labelmat = g[0] + '-' + g[1] 
+    sessions[ises].labelmat[sessions[ises].labelmat=='1-0'] = '0-1' #fix order for combinations
 
     idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
     sessions[ises].distmat_xyz[idx_triu] = np.nan
@@ -241,7 +277,7 @@ for ises in range(nSessions):
     sessions[ises].labelmat[idx_triu] = np.nan
 
 # construct dataframe with all pairwise measurements:
-df  = pd.DataFrame()
+df_allpairs  = pd.DataFrame()
 
 for ises in range(nSessions):
     [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
@@ -254,129 +290,142 @@ for ises in range(nSessions):
                     'DistRfPair': sessions[ises].distmat_rf.flatten(),
                     'LabelPair': sessions[ises].labelmat.flatten()}).dropna(how='all') 
                     #drop all rows that have all nan (diagonal + repeat below daig)
-    df  = pd.concat([df, tempdf], ignore_index=True).reset_index(drop=True)
+    df_allpairs  = pd.concat([df_allpairs, tempdf], ignore_index=True).reset_index(drop=True)
 
 
-# sns.histplot(data=df,x='NoiseCorrelation',hue='LabelPair',stat='probability',common_bins=False,common_norm=False,fill=False)
+#%% Plotting Noise Correlation distribution across all pairs:
 plt.figure(figsize=(4,3))
-handles = sns.kdeplot(data=df,x='NoiseCorrelation')
+handles = sns.kdeplot(data=df_allpairs,x='NoiseCorrelation')
 plt.xlim([-0.15,0.4])
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'NoiseCorr_distribution_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-###################### Noise correlations within and across areas: #########################
-plt.figure(figsize=(8,5))
-# sns.barplot(data=df,x='AreaPair',y='NoiseCorrelation')
-g = df.groupby('LabelPair', as_index=False)['NoiseCorrelation'].mean()
-sns.barplot(data=g,x='LabelPair',y='NoiseCorrelation')
+#%% ##################### Noise correlations within and across areas: #########################
+areapairs = ['V1-V1','V1-PM','PM-PM']
+clrs_areapairs = get_clr_area_pairs(areapairs)
+pairs = [('V1-V1','V1-PM'),('PM-PM','V1-PM')] #for statistics
 
+fig,ax = plt.subplots(figsize=(3,3))
+center = df_allpairs.groupby('AreaPair', as_index=False)['NoiseCorrelation'].mean()
+handles = sns.barplot(data=center,x='AreaPair',y='NoiseCorrelation',errorbar='ci',palette=clrs_areapairs,
+            order = areapairs,hue_order=areapairs)
+annotator = Annotator(ax, pairs, data=df_allpairs, x="AreaPair", y='NoiseCorrelation', order=areapairs)
+annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
+annotator.apply_and_annotate()
 
-###################### Noise correlations within and across areas: #########################
-plt.figure(figsize=(8,5))
-# sns.barplot(data=df,x='AreaPair',y='NoiseCorrelation')
-g = df.groupby('AreaPair', as_index=False)['NoiseCorrelation'].mean()
-sns.barplot(data=g,x='AreaPair',y='NoiseCorrelation')
+plt.yticks(np.arange(0, 1, step=0.01)) 
+plt.ylim([0,0.05])  
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'NoiseCorr_average_%dsessions' %nSessions + '.png'), format = 'png')
+
+#%% ################## Noise correlations between labeled and unlabeled cells:  #########################
+labelpairs = df_allpairs['LabelPair'].unique()
+labelpairs_legend = ['unl-unl','unl-lab','lab-lab']
+clrs_labelpairs = get_clr_labelpairs(labelpairs)
+
+plt.figure(figsize=(9,4))
+for iap,areapair in enumerate(areapairs):
+    ax = plt.subplot(1,3,iap+1)
+    center = df_allpairs[df_allpairs['AreaPair']==areapair].groupby('LabelPair', as_index=False)['NoiseCorrelation'].mean()['NoiseCorrelation']
+    err = df_allpairs[df_allpairs['AreaPair']==areapair].groupby('LabelPair', as_index=False)['NoiseCorrelation'].sem()['NoiseCorrelation']
+    # sns.barplot(data=center,x='LabelPair',y='NoiseCorrelation')
+    ax.bar(x=labelpairs,height=center,yerr=err,label=labelpairs_legend,color=clrs_labelpairs)
+    ax.set_yticks(np.arange(0, 0.1, step=0.01))
+    ax.set_ylim([0,0.045])
+    ax.set_title(areapair)
+    ax.set_ylabel('Noise Correlation')
+
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'NoiseCorr_labeling_%dsessions' %nSessions + '.png'), format = 'png')
 
 ############### Relationship anatomical distance and receptive field distance: ##################
+df_withinarea = df_allpairs[(df_allpairs['AreaPair'].isin(['V1-V1','PM-PM'])) & (df_allpairs['DistRfPair'].notna()) & (df_allpairs['DistXYPair'] < 1000)]
 
-df_withinarea = df[(df['AreaPair'].isin(['V1-V1','PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
-# df_withinarea = df[(df['AreaPair'].isin(['PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
-
-g = sns.displot(df_withinarea, x="DistXYZPair", y="DistRfPair", binwidth=(2, 2), cbar=True,col="AreaPair")
+g = sns.displot(df_withinarea, x="DistXYPair", y="DistRfPair", binwidth=(2, 2), cbar=True,col="AreaPair")
 plt.xlim([0,650])
 plt.ylim([0,250])
 g.set_axis_labels("Anatomical distance \n (approx um)", "RF distance (deg)")
 
 plt.savefig(os.path.join(savedir,'Corr_anat_rf_distance' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-
-####################################################################
+#%% ###################################################################
 ####### Noise correlations as a function of anatomical distance ####
-
 areapairs = ['V1-V1','PM-PM']
 clrs_areapairs = get_clr_area_pairs(areapairs)
 
-plt.figure(figsize=(5,4))
-
-for ises in range(nSessions):
-    filter = sessions[ises].celldata['tuning_var']>0.05
-    df = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr[filter,:].flatten(),
-                    'DeltaPrefOri': sessions[ises].delta_pref[filter,:].flatten(),
-                    'AreaPair': sessions[ises].areamat[filter,:].flatten(),
-                    'DistXYPair': sessions[ises].distmat_xy[filter,:].flatten(),
-                    'DistXYZPair': sessions[ises].distmat_xyz[filter,:].flatten(),
-                    'DistRfPair': sessions[ises].distmat_rf[filter,:].flatten(),
-                    'LabelPair': sessions[ises].labelmat[filter,:].flatten()}).dropna(how='all')
-    df['DistXYPair'] = df['DistXYPair'].round(-1)
-    histdata = df.groupby(['DistXYPair','AreaPair'], as_index=False)['NoiseCorrelation'].mean()
-    for iap,areapair in enumerate(areapairs):
-        plt.plot(histdata['DistXYPair'][histdata['AreaPair']==areapair], 
-                 histdata['NoiseCorrelation'][histdata['AreaPair']==areapair],
-                 color=clrs_areapairs[iap],linewidth=2)
-plt.xlabel('Anatomical distance (XY)')
+fig,ax=plt.subplots(figsize=(5,4))
+binedges = np.arange(0,1000,10) 
+nbins= len(binedges)-1      
+binmean = np.zeros((nSessions,len(areapairs),nbins))
+handles = []
+for iap,areapair in enumerate(areapairs):
+    for ises in range(nSessions):
+        # filter = sessions[ises].celldata['tuning_var']>0
+        # filter = np.meshgrid(sessions[ises].celldata['tuning_var']>0.05,sessions[ises].celldata['tuning_var']>0.05)
+        filter = sessions[ises].areamat==areapair
+        # filter = np.logical_and(filter)
+        binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xy[filter].flatten(),
+                                               values=sessions[ises].noise_corr[filter].flatten(),
+                        statistic='mean', bins=binedges)[0]
+    handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
+plt.xlabel(r'Anatomical distance ($\mu$m)')
 plt.ylabel('Noise Correlation')
-plt.yticks(np.arange(0, 1, step=0.005))  # ticks at 0, 2, 4, ..., 10
-plt.legend(areapairs)
+plt.yticks(np.arange(0, 1, step=0.005))
+plt.legend(handles,areapairs)
 plt.xlim([20,600])
-plt.ylim([0.04,0.06])
-plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.ylim([0.025,0.05])
+plt.tight_layout()
+# plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_anatomdistance_perArea_%dsessions' % nSessions + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea_regressout' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-################################################################
+#%% ###################################################################
 
-sns.histplot(sessions[ises].distmat_rf.flatten())
+fig,ax = plt.subplots(figsize=(5,4))
+sns.histplot(sessions[ises].distmat_rf.flatten(),ax=ax)
+ax.set(xlabel='delta RF')
+fig.savefig(os.path.join(savedir,'Distribution_deltaRF_%dsessions' %nSessions + '.png'), format = 'png')
 
-########
+#%% ###################################################################
 # areapairs = ['V1-V1','V1-PM','PM-PM']
 areapairs = ['V1-V1','PM-PM','V1-PM']
 clrs_areapairs = get_clr_area_pairs(areapairs)
 
 fig,ax = plt.subplots(figsize=(5,4))
-for ises in range(nSessions):
-    # filter = sessions[ises].celldata['noise_level']<1
-    # filter = sessions[ises].celldata['tuning_var']>0
-    filter = sessions[ises].celldata['tuning_var']>0.05
-    # filter = sessions[ises].celldata['tuning_var']>0.1
-    df = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr[filter,:].flatten(),
-                    'DeltaPrefOri': sessions[ises].delta_pref[filter,:].flatten(),
-                    'AreaPair': sessions[ises].areamat[filter,:].flatten(),
-                    # 'DistXYPair': sessions[ises].distmat_xy[filter,:].flatten(),
-                    # 'DistXYZPair': sessions[ises].distmat_xyz[filter,:].flatten(),
-                    'DistRfPair': sessions[ises].distmat_rf[filter,:].flatten(),
-                    'LabelPair': sessions[ises].labelmat[filter,:].flatten()}).dropna(how='all')
+binedges = np.arange(0,120,5) 
+# bincenters = np.arange(0,120,10) 
+nbins= len(binedges)-1
+binmean = np.zeros((nSessions,len(areapairs),nbins))
+handles = []
+for iap,areapair in enumerate(areapairs):
+    for ises in range(nSessions):
+        # filter = sessions[ises].celldata['tuning_var']>0
+        # signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>0.05,sessions[ises].celldata['tuning_var']>0.05)
+        # signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>0,sessions[ises].celldata['tuning_var']>0)
+        signalfilter = np.meshgrid(sessions[ises].celldata['skew']>3,sessions[ises].celldata['skew']>3)
+        # signalfilter = np.meshgrid(sessions[ises].celldata['redcell']==0,sessions[ises].celldata['redcell']==0)
+        # signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>0.05,sessions[ises].celldata['tuning_var']>0.05)
+        signalfilter = np.logical_and(signalfilter[0],signalfilter[1])
+        areafilter = sessions[ises].areamat==areapair
+        filter = np.logical_and(signalfilter,areafilter)
+        binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_rf[filter].flatten(),
+                                               values=sessions[ises].noise_corr[filter].flatten(),
+                        statistic='mean', bins=binedges)[0]
 
-    df['DistRfPair']    = df['DistRfPair'].round(-1)
-    # histdata            = df.groupby('DistRfPair', as_index=False)['NoiseCorrelation'].mean()
-    histmean            = df.groupby(['DistRfPair','AreaPair'], as_index=False)['NoiseCorrelation'].mean()
-    histerror           = df.groupby(['DistRfPair','AreaPair'], as_index=False)['NoiseCorrelation'].sem()
-    h=[]
-    plt.xlabel('Delta RF')
-    plt.ylabel('NoiseCorrelation')
-    plt.xlim([-2,120])
-    # plt.ylim([0.04,0.07])
-    plt.ylim([0.01,0.04])
-    plt.tight_layout()
-    for iap,areapair in enumerate(areapairs):
-        # plt.plot(histmean['DistRfPair'][histdata['AreaPair']==areapair], 
-                #  histmean['NoiseCorrelation'][histdata['AreaPair']==areapair],
-                #  color=clrs_areapairs[iap],linewidth=2)
-        
-        h.append(shaded_error(ax,x=histmean['DistRfPair'][histdata['AreaPair']==areapair],
-                     y=histmean['NoiseCorrelation'][histdata['AreaPair']==areapair],
-                     yerror=histerror['NoiseCorrelation'][histdata['AreaPair']==areapair],
-                     center='mean',error='std',color=clrs_areapairs[iap]))
-        # plt.plot(histmean['DistRfPair'][histdata['AreaPair']==areapair], 
-                #  histmean['NoiseCorrelation'][histdata['AreaPair']==areapair],
-                #  color=clrs_areapairs[iap],linewidth=2)
-        # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-        plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.xlabel('Delta RF')
+plt.ylabel('NoiseCorrelation')
+plt.xlim([-2,120])
+plt.ylim([0.025,0.07])
+plt.tight_layout()
+for iap,areapair in enumerate(areapairs):
+    handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
+    plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_distRF_%dsessions_' %nSessions + areapair + '.png'), format = 'png')
+    # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-    plt.legend(h,areapairs)
-    # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-    plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_perArea_RegressOut' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.legend(handles,areapairs)
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_distRF_%dsessions_' %nSessions + '.png'), format = 'png')
 
-
-################################################################
+#%% ###################################################################
 
 fig = plt.subplots(1,3,figsize=(12,4))
 for ises in range(nSessions):
@@ -507,97 +556,134 @@ plt.savefig(os.path.join(savedir,'NoiseCorr_tuning_perArea' + sessions[sesidx].s
 ####################################### ####################################### #######################
 #################################### LABELED AND UNLABELED ############################################
 
-###################### Noise correlations distribution  #########################
-labelpairs = df['LabelPair'].unique()
-labelpairs_legend = ['unl-unl','unl-lab','lab-unl','lab-lab']
+
+#%% Plot the tuning parameters for labeled and unlabeled cells
+
+recombinases = celldata['recombinase'].unique()[::-1]
+clr_labeled = get_clr_recombinase(recombinases)
+pairs = [('non','flp'),('non','cre')] #for statistics
+
+fig,ax = plt.subplots(figsize=(3,3))
+# handles = sns.kdeplot(data=celldata,x='tuning_var',hue='redcell',common_norm=False,clip=[0,1],
+#                       hue_order=[0,1],palette=clr_labeled)
+handles = sns.barplot(data=celldata,x='recombinase',y='OSI',order=recombinases,
+                      hue_order=recombinases,palette=clr_labeled)
+annotator = Annotator(ax, pairs, data=celldata, x="recombinase", y='OSI', order=recombinases)
+annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
+annotator.apply_and_annotate()
+
+plt.ylabel('Orientation Selectivity')
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'Labeling_tuning_%dsessions' %nSessions + '.png'), format = 'png')
+
+#%% ################### Noise correlations distribution  #########################
+labelpairs = df_allpairs['LabelPair'].unique()
+labelpairs_legend = ['unl-unl','unl-lab','lab-lab']
 clrs_labelpairs = get_clr_labelpairs(labelpairs)
 
 # sns.histplot(data=df,x='NoiseCorrelation',hue='LabelPair',stat='probability',common_bins=False,common_norm=False,fill=False)
 plt.figure(figsize=(4,3))
-handles = sns.kdeplot(data=df,x='NoiseCorrelation',hue='LabelPair',common_norm=False,
-            hue_order=labelpairs,palette=get_clr_labelpairs(labelpairs))
+handles = sns.kdeplot(data=df_allpairs,x='NoiseCorrelation',hue='LabelPair',common_norm=False,
+            hue_order=labelpairs,palette=clrs_labelpairs)
 plt.xlim([-0.15,0.4])
 # plt.legend(labelpairs_legend,frameon=False)
 plt.legend(labelpairs,frameon=False)
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'NoiseCorr_distribution_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'NoiseCorr_distribution_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'NoiseCorr_distribution_%d' %nSessions + '.png'), format = 'png')
 
-################################################################
+#%% ############################################################################################
+################### Noise correlations as a function of pairwise distance: ####################
+############################# Labeled vs unlabeled neurons #######################################
 
-# areapairs = ['V1-V1','PM-PM']
-labelpairs = df['LabelPair'].unique()
-# clrs_areapairs  = get_clr_area_pairs(areapairs)
+areapairs = ['V1-V1','PM-PM']
+clrs_areapairs = get_clr_area_pairs(areapairs)
+
+labelpairs = df_allpairs['LabelPair'].unique()
 clrs_labelpairs = get_clr_labelpairs(labelpairs)
 
-plt.figure(figsize=(9,4))
+binedges = np.arange(0,1000,50) 
+nbins= len(binedges)-1      
+binmean = np.empty((nSessions,len(areapairs),len(labelpairs),nbins))
+handles = []
+for iap,areapair in enumerate(areapairs):
+    for ilp,labelpair in enumerate(labelpairs):
+        for ises in range(nSessions):
+            areafilter = sessions[ises].areamat==areapair
+            labelfilter = sessions[ises].labelmat==labelpair
+            # filter = sessions[ises].celldata['tuning_var']>0
+            # signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>0.05,sessions[ises].celldata['tuning_var']>0.05)
+            # signalfilter = np.logical_and(signalfilter[0],signalfilter[1])
+            filter = np.logical_and(areafilter,labelfilter)
+            # filter = np.logical_and(signalfilter,areafilter,labelfilter)
+            if filter.any():
+                binmean[ises,iap,ilp,:] = binned_statistic(x=sessions[ises].distmat_xy[filter].flatten(),
+                                                values=sessions[ises].noise_corr[filter].flatten(),
+                            statistic='mean', bins=binedges)[0]
 
-for ises in range(nSessions):
-    filter = sessions[ises].celldata['tuning_var']>0.05
-    df = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr[filter,:].flatten(),
-                    'DeltaPrefOri': sessions[ises].delta_pref[filter,:].flatten(),
-                    'AreaPair': sessions[ises].areamat[filter,:].flatten(),
-                    'DistXYPair': sessions[ises].distmat_xy[filter,:].flatten(),
-                    'DistXYZPair': sessions[ises].distmat_xyz[filter,:].flatten(),
-                    'DistRfPair': sessions[ises].distmat_rf[filter,:].flatten(),
-                    'LabelPair': sessions[ises].labelmat[filter,:].flatten()}).dropna(how='all')
-    df['DistXYPair'] = df['DistXYPair'].round(-2)
-    # histdata = df.groupby(['DistXYPair','AreaPair'], as_index=False)['NoiseCorrelation'].mean()
-    histdata = df.groupby(['DistXYPair','AreaPair','LabelPair'], as_index=False)['NoiseCorrelation'].mean()
-
-    for iap,areapair in enumerate(areapairs):
-        plt.subplot(1,3,iap+1)
-        # idx = histdata['AreaPair']==areapair
-        for lp,labelpair in enumerate(labelpairs):
-
-            plt.plot(histdata['DistXYPair'][np.logical_and(histdata['AreaPair']==areapair,histdata['LabelPair']==labelpair)], 
-                    histdata['NoiseCorrelation'][np.logical_and(histdata['AreaPair']==areapair,histdata['LabelPair']==labelpair)],
-                    color=clrs_labelpairs[lp],linewidth=2)
-        plt.xlabel('Anatomical distance (XY)')
-        plt.ylabel('Noise Correlation')
-        # plt.yticks(np.arange(0, 1, step=0.005))  # ticks at 0, 2, 4, ..., 10
-        plt.legend(labelpairs)
-        plt.xlim([20,600])
-        plt.ylim([0,0.1])
+plt.figure(figsize=(6,3))
+for iap,areapair in enumerate(areapairs):
+    ax = plt.subplot(1,len(areapairs),iap+1)
+    for ilp,labelpair in enumerate(labelpairs):
+        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
+        handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_labelpairs[ilp]))
+    ax.set(xlabel=r'Anatomical distance ($\mu$m)',ylabel='Noise Correlation',
+           yticks=np.arange(0, 1, step=0.01),xticks=np.arange(0, 600, step=100))
+    ax.set(xlim=[10,500],ylim=[0,0.05])
+    ax.legend(handles,labelpairs,frameon=False,loc='upper right')
+    plt.tight_layout()
+    ax.set_title(areapair)
 # plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_anatomdistance_perArea_Labeled_%dsessions' % nSessions + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea_regressout' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
-########################### Noise correlations as a function of pairwise distance f: ####################
+#%% ############################################################################################
+################### Noise correlations as a function of pairwise delta RF : ####################
+############################# Labeled vs unlabeled neurons #######################################
+
+areapairs = ['V1-V1','V1-PM','PM-PM']
+clrs_areapairs = get_clr_area_pairs(areapairs)
+
+labelpairs = df_allpairs['LabelPair'].unique()
+clrs_labelpairs = get_clr_labelpairs(labelpairs)
+
+binedges = np.arange(0,120,5) 
+nbins= len(binedges)-1      
+binmean = np.zeros((nSessions,len(areapairs),len(labelpairs),nbins))
+handles = []
+for iap,areapair in enumerate(areapairs):
+    for ilp,labelpair in enumerate(labelpairs):
+        for ises in range(nSessions):
+            areafilter = sessions[ises].areamat==areapair
+            labelfilter = sessions[ises].labelmat==labelpair
+            # filter = np.logical_and(areafilter,labelfilter)
+
+            # signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>0.05,sessions[ises].celldata['tuning_var']>0.05)
+            # signalfilter = np.logical_and(signalfilter[0],signalfilter[1])
+            # filter = np.logical_and(np.logical_and(signalfilter,areafilter),labelfilter)
+            binmean[ises,iap,ilp,:] = binned_statistic(x=sessions[ises].distmat_rf[filter].flatten(),
+                                                values=sessions[ises].noise_corr[filter].flatten(),
+                            statistic='mean', bins=binedges)[0]
+
+plt.figure(figsize=(9,4))
+for iap,areapair in enumerate(areapairs):
+    ax = plt.subplot(1,3,iap+1)
+    for ilp,labelpair in enumerate(labelpairs):
+        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
+        handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_labelpairs[ilp]))
+    ax.set(xlabel='Delta RF',ylabel='Noise Correlation',
+           yticks=np.arange(0, 1, step=0.01),xticks=np.arange(0, 120, step=10))
+    ax.set(xlim=[0,120],ylim=[0,0.05])
+    ax.legend(handles,labelpairs,frameon=False,loc='upper right')
+    plt.tight_layout()
+    ax.set_title(areapair)
+# plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_deltaRF_Labeled_%dsessions' % nSessions + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea_regressout' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
-########################### Noise correlations as a function of pairwise distance: ####################
-######################################## Labeled vs unlabeled neurons #################################
-
-fig, axes = plt.subplots(2,2,figsize=(8,7))
-
-areas = ['V1','PM']
-
-for i,iarea in enumerate(areas):
-    for j,jarea in enumerate(areas):
-        dfarea = df[df['AreaPair']==iarea + '-' + jarea]
-        sns.lineplot(ax=axes[i,j],x=np.round(dfarea['DistRfPair'],-1),y=dfarea['NoiseCorrelation'],hue=dfarea['LabelPair'])
-        # axes[i,j].set_xlabel="Pairwise distance (um)"
-        axes[i,j].set_xlabel="Delta RF (deg)"
-        axes[i,j].set_xlim([-10,200])
-        axes[i,j].set_ylim([0,0.05])
-        axes[i,j].set_title(iarea + '-' + jarea)
-
-plt.savefig(os.path.join(savedir,'NoiseCorr_labeled_RF_distance' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-    
-
-###################### Noise correlations within and across areas: #########################
-plt.figure(figsize=(8,5))
-# sns.barplot(data=df,x='AreaPair',y='NoiseCorrelation')
-g = df.groupby('AreaPair', as_index=False)['NoiseCorrelation'].mean()
-# g = df.groupby('AreaPair', as_index=False)['NoiseCorrelation'].std()
-sns.barplot(data=g,x='AreaPair',y='NoiseCorrelation')
-
-###################### Noise correlations as a function of pairwise distance: ####################
-plt.figure(figsize=(8,5))
-
-g = df.groupby('AreaPair', as_index=False)['NoiseCorrelation'].mean()
-
+#%% ##################### Noise correlations within and across areas: #########################
 
 # sns.scatterplot(data=df[df['AreaPair']=='V1-V1'],x='DistPair',y='NoiseCorrelation',size=5)
 dfV1 = df[df['AreaPair']=='V1-V1']
@@ -630,49 +716,3 @@ for i,iarea in enumerate(areas):
 
 
 
-
-
-# from scipy.spatial import distance
-# N = 100
-# import time
-
-# # do stuff
-
-# g = np.empty((N,N))
-
-# t = time.time()
-
-# for i in range(N):
-#     print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
-#     for j in range(N):
-#         # sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
-#                 # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
-#         # sessions[ises].distmat_xyz[i,j] = distance.euclidean([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
-#                 # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
-        
-#         a = np.array((x[i],y[i],z[i]))
-#         b = np.array((x[j],y[j],z[j]))
-#         g[i,j] = np.linalg.norm(a-b)
-
-# print(time.time() - t)
-
-
-# t = time.time()
-
-# g = np.empty((N,3803))
-
-# for i in range(N):
-#     print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
-#     # for j in range(N):
-#         # sessions[ises].distmat_xyz[i,j] = math.dist([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
-#                 # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
-#         # sessions[ises].distmat_xyz[i,j] = distance.euclidean([sessions[ises].celldata['xloc'][i],sessions[ises].celldata['yloc'][i],sessions[ises].celldata['depth'][i]],
-#                 # [sessions[ises].celldata['xloc'][j],sessions[ises].celldata['yloc'][j],sessions[ises].celldata['depth'][j]])
-        
-#     a = np.array((x[i],y[i],z[i]))
-#     # b = np.array((x[j],y[j],z[j]))
-#     g[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
-
-# print(time.time() - t)
-
-# g[:,0]

@@ -24,7 +24,6 @@ from utils.explorefigs import plot_excerpt,plot_PCA_gratings,plot_PCA_gratings_3
 from utils.RRRlib import RRR, LM, EV, regress_out_behavior_modulation
 from scipy import linalg
 
-# savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Arousal\\'
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Arousal\\')
 
 ##############################################################################
@@ -46,7 +45,9 @@ nSvars = len(Svarlabels)
 
 ######## Show correlations between different behavioral measures: ##############################
 fig = plt.figure()
-sns.heatmap(np.corrcoef(Svars,rowvar=False),xticklabels=Svarlabels,yticklabels=Svarlabels)
+# sns.heatmap(np.corrcoef(Svars,rowvar=False),xticklabels=Svarlabels,yticklabels=Svarlabels)
+sns.heatmap(np.corrcoef(Svars[:,:13],rowvar=False),xticklabels=Svarlabels[:13],yticklabels=Svarlabels[:13])
+fig.tight_layout()
 fig.savefig(os.path.join(savedir,'Heatmap_Correlations_ArousalVars_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ##### Compute rank of behavioral modulation across neural population activity:

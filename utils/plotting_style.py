@@ -13,15 +13,15 @@ pd.set_option("display.max_columns", 14)
 ## areas, protocols, mice, stimuli, etc. 
 
 def get_clr_area_pairs(areapairs):
-    palette       = {'V1-V1'  : sns.xkcd_rgb['barney'],
+    palette       = {'V1-V1'  : sns.xkcd_rgb['seaweed'],
                     'PM-V1' : sns.xkcd_rgb['peacock blue'],
                     'V1-PM' : sns.xkcd_rgb['orangered'],
-                    'PM-PM' : sns.xkcd_rgb['seaweed']}
+                    'PM-PM' : sns.xkcd_rgb['barney']}
     return itemgetter(*areapairs)(palette)
 
 def get_clr_areas(areas):
-    palette       = {'V1'  : sns.xkcd_rgb['barney'],
-                    'PM' : sns.xkcd_rgb['seaweed'],
+    palette       = {'V1'  : sns.xkcd_rgb['seaweed'],
+                    'PM' : sns.xkcd_rgb['barney'],
                     'AL' : sns.xkcd_rgb['clear blue'],
                     'RSP' : sns.xkcd_rgb['orangered']}
     return itemgetter(*areas)(palette)
@@ -36,6 +36,12 @@ def get_clr_labelpairs(pairs):
 def get_clr_labeled():
     # clrs            = ['black','red']
     return ['black','red']
+
+def get_clr_recombinase(enzymes):
+    palette       = {'non': 'gray',
+        'cre' : 'orangered',
+        'flp' : 'indianred'}
+    return itemgetter(*enzymes)(palette)
 
 def get_clr_protocols(protocols):
     palette       = {'GR': sns.xkcd_rgb['bright blue'],

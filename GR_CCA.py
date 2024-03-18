@@ -7,16 +7,17 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 
 ####################################################
 import math, os
-try:
-    os.chdir('t:\\Python\\molanalysis\\')
-except:
-    os.chdir('e:\\Python\\molanalysis\\')
-os.chdir('c:\\Python\\molanalysis\\')
+from loaddata.get_data_folder import get_local_drive
+os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy.signal import medfilt
+from sklearn.decomposition import PCA
+from scipy.stats import zscore
+from sklearn.cross_decomposition import CCA
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
@@ -24,11 +25,12 @@ from utils.tuning import compute_tuning
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.explorefigs import PCA_gratings,PCA_gratings_3D
 from utils.plot_lib import shaded_error
+from utils.CCAlib import CCA_sample_2areas_v3
 
-savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\'
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\CCA\\GR\\')
 
 ##############################################################################
-# session_list        = np.array([['LPE10919','2023_11_06']])
+session_list        = np.array([['LPE10919','2023_11_06']])
 # session_list        = np.array([['LPE10885','2023_10_19']])
 # sessions            = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
                                     # load_calciumdata=True, load_videodata=False, calciumversion='deconv')
@@ -36,34 +38,37 @@ sessions            = filter_sessions(protocols = ['GR'],load_behaviordata=True,
                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 nSessions = len(sessions)
 
-##############################################################################
-## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
-## Parameters for temporal binning
-# t_pre       = -1    #pre s
-# t_post      = 1     #post s
-# binsize     = 0.2   #temporal binsize in s
+# load_respmat: 
+sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=False, 
+                                    load_calciumdata=False, load_videodata=False, calciumversion='deconv')
+# sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
+                                    
+for ises in range(nSessions):    # iterate over sessions
+    sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
+    
+    if 'pupil_area' in sessions[ises].videodata:
+        sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
+    if 'motionenergy' in sessions[ises].videodata:
+        sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
+    sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
 
-# for i in range(nSessions):
-#     [sessions[i].tensor,t_axis] = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], 
-#                                  t_pre, t_post, binsize,method='interp_lin')
-
-#Compute average response per trial:
-for ises in range(nSessions):
+    ##############################################################################
+    ## Construct trial response matrix:  N neurons by K trials
     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
-    # delattr(sessions[ises],'calciumdata')
 
-    #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
-    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].behaviordata['runspeed']),(len(sessions[ises].behaviordata['runspeed']),1)))
-    sessions[ises].respmat_runspeed = compute_respmat(temp, sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
-                                    t_resp_start=0,t_resp_stop=1,method='mean')
-    sessions[ises].respmat_runspeed = np.squeeze(sessions[ises].respmat_runspeed)
+    sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'],
+                                                      sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
+                                                    t_resp_start=0,t_resp_stop=1,method='mean')
 
-    #hacky way to create dataframe of the video motion with F x 1 with F number of samples:
-    temp = pd.DataFrame(np.reshape(np.array(sessions[ises].videodata['motionenergy']),(len(sessions[ises].videodata['motionenergy']),1)))
-    sessions[ises].respmat_videome = compute_respmat(temp, sessions[ises].videodata['timestamps'], sessions[ises].trialdata['tOnset'],
-                                    t_resp_start=0,t_resp_stop=1,method='mean')
-    sessions[ises].respmat_videome = np.squeeze(sessions[ises].respmat_videome)
+    if 'motionenergy' in sessions[ises].videodata:
+        sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
+                                                    sessions[ises].videodata['timestamps'],sessions[ises].trialdata['tOnset'],
+                                                    t_resp_start=0,t_resp_stop=1,method='mean')
+
+    delattr(sessions[ises],'calciumdata')
+    delattr(sessions[ises],'videodata')
+    delattr(sessions[ises],'behaviordata')
 
 ############################ Compute tuning metrics: ###################################
 
@@ -80,18 +85,51 @@ for ises in range(nSessions):
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-
-from utils.CCAlib import CCA_sample_2areas,CCA_sample_2areas_v2
-
-
-sesidx = 0
 #%%  
 
+sesidx = 0
+ori    = 90
 
-from sklearn.decomposition import PCA
-from scipy.stats import zscore
+[N,K]           = np.shape(sessions[sesidx].respmat) #get dimensions of response matrix
+
+oris            = np.sort(sessions[sesidx].trialdata['Orientation'].unique())
+ori_counts      = sessions[sesidx].trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
+assert(len(ori_counts) == 16 or len(ori_counts) == 8)
+# resp_meanori    = np.empty([N,len(oris)])
+
+idx_V1 = sessions[sesidx].celldata['roi_name']=='V1'
+idx_PM = sessions[sesidx].celldata['roi_name']=='PM'
+
+ori_idx             = sessions[sesidx].trialdata['Orientation']==ori
+
+resp_meanori        = np.nanmean(sessions[sesidx].respmat[:,ori_idx],axis=1,keepdims=True)
+resp_res            = sessions[sesidx].respmat[:,ori_idx] - resp_meanori
+
+##   split into area 1 and area 2:
+DATA1               = resp_res[idx_V1,:]
+DATA2               = resp_res[idx_PM,:]
+
+DATA1_z         = zscore(DATA1,axis=1) # zscore for each neuron across trial responses
+DATA2_z         = zscore(DATA2,axis=1) # zscore for each neuron across trial responses
+
+pca             = PCA(n_components=15) #construct PCA object with specified number of components
+Xp_1            = pca.fit_transform(DATA1_z.T).T #fit pca to response matrix (n_samples by n_features)
+Xp_2            = pca.fit_transform(DATA2_z.T).T #fit pca to response matrix (n_samples by n_features)
+
+plt.subplots(figsize=(3,3))
+plt.scatter(Xp_1[0,:], Xp_2[0,:],s=10,color=sns.color_palette('husl',8)[4])
+plt.xlabel('PCA 1 (V1)')
+plt.ylabel('PCA 1 (PM)')
+plt.text(5,40,'r=%1.2f' % np.corrcoef(Xp_1[0,:],Xp_2[0,:], rowvar = False)[0,1],fontsize=12)
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'PCA_corr_example' + '.png'), format = 'png')
 
 
+#%% 
+
+nOris = 16
+corr_test = np.zeros((nSessions,nOris))
+corr_train = np.zeros((nSessions,nOris))
 for ises in range(nSessions):
     # get signal correlations:
     [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
@@ -99,51 +137,34 @@ for ises in range(nSessions):
     oris            = np.sort(sessions[ises].trialdata['Orientation'].unique())
     ori_counts      = sessions[ises].trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
     assert(len(ori_counts) == 16 or len(ori_counts) == 8)
-    # resp_meanori    = np.empty([N,len(oris)])
 
     idx_V1 = sessions[ises].celldata['roi_name']=='V1'
     idx_PM = sessions[ises].celldata['roi_name']=='PM'
 
-    for i,ori in enumerate(oris):
-        # resp_meanori[:,i] = np.nanmean(sessions[ises].respmat[:,sessions[ises].trialdata['Orientation']==ori],axis=1)
+    for i,ori in enumerate(oris): # loop over orientations 
         ori_idx             = sessions[ises].trialdata['Orientation']==ori
-
         resp_meanori        = np.nanmean(sessions[ises].respmat[:,ori_idx],axis=1,keepdims=True)
         resp_res            = sessions[ises].respmat[:,ori_idx] - resp_meanori
         
-        ##   split into area 1 and area 2:
+        ## Split data into area 1 and area 2:
         DATA1               = resp_res[idx_V1,:]
         DATA2               = resp_res[idx_PM,:]
 
-        # DATA1 = tensor_res[np.ix_(idx_V1,idx_time,range(np.shape(tensor_res)[2]))]
-        # DATA2 = tensor_res[np.ix_(idx_PM,idx_time,range(np.shape(tensor_res)[2]))]
+        corr_test[ises,i],corr_train[ises,i] = CCA_sample_2areas_v3(DATA1,DATA2,resamples=5,kFold=5,prePCA=25)
 
-        # Define neural data parameters
-        N1,K        = np.shape(DATA1)
-        N2          = np.shape(DATA2)[0]
+fig,ax = plt.subplots(figsize=(3,3))
+shaded_error(ax,oris,corr_test,error='std',color='blue')
+ax.set_ylim([0,1])
+ax.set_xlabel('Orientation')
+ax.set_ylabel('First canonical correlation')
+ax.set_xticks(oris[::2])
+ax.set_xticklabels(oris[::2].astype('int'),rotation = 45)
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'CCA1_Gratings_%dsessions' % nSessions  + '.png'), format = 'png')
 
-        minN        = np.min((N1,N2)) #find common minimum number of neurons recorded
-
-        DATA1_z = zscore(DATA1,axis=1) # zscore for each neuron across trial responses
-        DATA2_z = zscore(DATA2,axis=1) # zscore for each neuron across trial responses
-
-        pca             = PCA(n_components=15) #construct PCA object with specified number of components
-        Xp_1          = pca.fit_transform(DATA1_z.T).T #fit pca to response matrix (n_samples by n_features)
-        #dimensionality is now reduced from N by K to ncomp by K
-
-        # pca         = PCA(n_components=15) #construct PCA object with specified number of components
-        Xp_2          = pca.fit_transform(DATA2_z.T).T #fit pca to response matrix (n_samples by n_features)
-        #dimensionality is now reduced from N by K to ncomp by K
-
-        # DATA1 = np.expand_dims(DATA1, axis=1)
-        # DATA2 = np.expand_dims(DATA2, axis=1)
-
-        CCA_sample_2areas(DATA1,DATA2,nN=N,nK=160,resamples=5,kFold=5,prePCA=25)
-
-
+#%% 
 plt.figure()
 plt.scatter(Xp_1[0,:], Xp_2[0,:],s=10,color=sns.color_palette('husl',1))
-
 
 np.corrcoef(Xp_1[0,:],Xp_2[0,:], rowvar = False)[0,1]
 
@@ -151,16 +172,15 @@ np.corrcoef(Xp_1[0,:],sessions[ises].respmat_runspeed[ori_idx], rowvar = False)[
 
 np.corrcoef(Xp_1[0,:],sessions[ises].respmat_videome[ori_idx], rowvar = False)[0,1]
 
-
 model = CCA(n_components = 1,scale = False, max_iter = 1000)
 
 model.fit(Xp_1.T,Xp_2.T)
 
-X_c, Y_c = model.transform(Xp_1,Xp_2)
+X_c, Y_c = model.transform(Xp_1.T,Xp_2.T)
 corr = np.corrcoef(X_c[:,0],Y_c[:,0], rowvar = False)[0,1]
 
 plt.figure()
-plt.scatter(Xp_1[0,:], Xp_2[0,:],c=corr)
+plt.scatter(X_c, Y_c)
 
 
 from sklearn.cross_decomposition import CCA
