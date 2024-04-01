@@ -17,24 +17,27 @@ from preprocessing.preprocesslib import *
 rawdatadir      = "K:\\RawData\\"
 procdatadir     = "V:\\Procdata\\"
 
-# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
 # procdatadir     = "E:\\Procdata\\"
 
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
-animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE11622','LPE11495','LPE11623'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_01_10']
 # date_filter        = ['2024_02_20']
-# date_filter        = ['2024_02_08']
+date_filter        = ['2024_03_08']
 
 # protocols           = ['GR','SP','IM']
 # protocols           = ['GN']
 # protocols           = ['DP','DM','DN']
 # protocols           = ['DN']
-protocols           = ['IM']
-processimagingflag  = False
-
+protocols           = ['GR3']
+processimagingflag  = True
+# protocols           = ['GR1','IM1','SP1','GR2','IM2','SP2',
+                    # 'GR3','IM3','SP3','GR4','IM4','SP4',]
+# protocols           = ['SP2',
+#                     'GR3','IM3','SP3','GR4','IM4','SP4',]
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
     animal_ids = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
@@ -70,7 +73,8 @@ for animal_id in animal_ids: #for each animal
                     behaviordata        = proc_behavior_passive(rawdatadir,sessiondata) #main processing function for harp data
                     behaviordata.to_csv(os.path.join(outdir,"behaviordata.csv"), sep=',')
         
-                if protocol == 'GR': # Grating Repetitions
+                # if protocol == 'GR': # Grating Repetitions
+                if 'GR' in protocol: # Grating Repetitions
                      trialdata = proc_GR(rawdatadir,sessiondata)
                      trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
         
@@ -84,7 +88,7 @@ for animal_id in animal_ids: #for each animal
                     # np.save(os.path.join(outdir,"trialdata.npy"),grid_array,RF_timestamps)
                     # np.savez(os.path.join(outdir,"trialdata.npz"),x=grid_array,y=RF_timestamps)
                 
-                if protocol == 'IM': #Natural Image Dataset
+                if 'IM' in protocol: #Natural Image Dataset
                     trialdata = proc_IM(rawdatadir,sessiondata)
                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
                 

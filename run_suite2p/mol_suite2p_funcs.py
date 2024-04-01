@@ -12,7 +12,9 @@ from suite2p.io.binary import BinaryFile
 from suite2p.extraction import extract
 from utils.twoplib import get_meta
 import pandas as pd
-from labeling.label_lib import bleedthrough_correction
+from labeling.label_lib import bleedthrough_correction,load_tiffs_plane,estimate_correc_coeff
+from ScanImageTiffReader import ScanImageTiffReader as imread
+
 
 # set your options for running
 def gen_ops():
@@ -75,8 +77,8 @@ def init_ops(sesfolder):
     ops['roidetect']            = False #only do registration in this part
     
     protocols           = ['VR','IM','SP','RF','GR','GN','DN']
-    protocols           = ['GR1','IM1','SP1','GR2','IM2','SP2',
-                           'GR3','IM3','SP3','GR4','IM4','SP4',]
+    # protocols           = ['GR1','IM1','SP1','GR2','IM2','SP2',
+                        #    'GR3','IM3','SP3','GR4','IM4','SP4',]
     
     db = {
         'data_path': [sesfolder],
@@ -122,6 +124,16 @@ def run_bleedthrough_corr(db,ops,coeff=None,gain1=0.6,gain2=0.4):
         file_chan2       = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_chan2.bin')
         file_chan1_corr   = os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin')
         
+        # if coeff is None:
+        [data_green,data_red] = load_tiffs_plane(db['subfolders'][0],ops['nplanes'],iplane=iplane)
+        coeff       = estimate_correc_coeff(data_green,data_red)
+
+        # data_green_corr = bleedthrough_correction(data_green,data_red,coeff)
+
+        # plot_corr_redgreen(data_green,data_red)
+        # plot_bleedthrough_correction(np.mean(data_green,axis=0), np.mean(data_red,axis=0), np.mean(data_green_corr,axis=0))
+        # plot_correction_images(greenchanim,redchanim)
+
         with BinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
         # with BinaryFile(filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(filename=file_chan1_corr,Ly=512, Lx=512,n_frames=f1.n_frames) as f3:
             
@@ -181,8 +193,17 @@ def run_bleedthrough_corr(db,ops,coeff=None,gain1=0.6,gain2=0.4):
     
     return ops
 
+def check_tiffs(direc):
 
-
+    # for x in os.listdir(direc):
+    for i,x in enumerate(os.listdir(direc)):
+        if x.endswith(".tif"):
+            # mROI_data, meta = split_mROIs(os.path.join(direc,x))
+            # nROIs = len(mROI_data)
+            print(x)
+            fname = os.path.join(direc,x)
+            reader = imread(str(fname)) # amazing - this librarty needs str
+            reader.close()
 # def get_bleedthrough_coeff(rawdatadir,animal_id,sessiondate):
 
 

@@ -5,11 +5,6 @@ This script run the suite2p analysis pipeline, but in separate steps.
 2) correct for the bleedthrough tdTomato signal to the green PMT
 3) run suite2p calcium trace extraction
 Matthijs Oude Lohuis, 2023, Champalimaud Center
-
-# VISTA 1:  NSH07430,  NSH07435,  LPE10190, 
-# LPE09829, NSH07422
-# VISTA 2: LPE09830, 
-# X: 
 """
 
 # TODO:
@@ -27,10 +22,10 @@ from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
-# rawdatadir          = 'K:\\RawData\\'
-rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\AKS\\'
+rawdatadir          = 'H:\\RawData\\'
+# rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
 animal_id           = 'LPE11622'
-sessiondate         = '2024_03_07'
+sessiondate         = '2024_03_25'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
@@ -43,12 +38,12 @@ suite2p.run_s2p(ops=ops, db=db)
 # coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
 # coeff = 0.32 #for 0.6 and 0.5 combination of PMT gains
 # coeff = 0.068 #for 0.6 and 0.6 combination of PMT gains
-gain1 = 0.6
-gain2 = 0.4
+# gain1 = 0.6
+# gain2 = 0.45
 # coeff = 1.3 #for LPE 10883 with maxing out of green signal (don't want to subtract higher than 2**15
 
-ops = run_bleedthrough_corr(db,ops,gain1=gain1,gain2=gain2)
-# ops = run_bleedthrough_corr(db,ops,coeff)
+# ops = run_bleedthrough_corr(db,ops,gain1=gain1,gain2=gain2)
+ops = run_bleedthrough_corr(db,ops)
 
 ########################## ROI detection ###########################
 ops['do_registration']      = False
@@ -67,6 +62,11 @@ locate_rf_session(rawdatadir,animal_id,sessiondate)
 
 ############################
 # Debug / Verification code:
+
+# for subf in db['subfolders']:
+#     check_tiffs(subf)
+
+# check_tiffs(db['subfolders'][1])
 
 # Verify new images added to ops:
 # import copy

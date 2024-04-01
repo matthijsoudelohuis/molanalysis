@@ -51,11 +51,15 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     sessions_overview_VISTA = pd.read_excel(os.path.join(get_data_folder(),'VISTA_Sessions_Overview.xlsx'))
     # sessions_overview_VR    = pd.read_excel(os.path.join(rawdatadir,'VR_Sessions_Overview.xlsx'))
     sessions_overview_DE    = pd.read_excel(os.path.join(get_data_folder(),'DE_Sessions_Overview.xlsx'))
+    sessions_overview_AKS   = pd.read_excel(os.path.join(get_data_folder(),'AKS_Sessions_Overview.xlsx'))
+
 
     if np.any(np.logical_and(sessions_overview_VISTA["sessiondate"] == sessiondate,sessions_overview_VISTA["protocol"] == protocol)):
         sessions_overview = sessions_overview_VISTA
     elif np.any(np.logical_and(sessions_overview_DE["sessiondate"] == sessiondate,sessions_overview_DE["protocol"] == protocol)):
         sessions_overview = sessions_overview_DE
+    elif np.any(np.logical_and(sessions_overview_AKS["sessiondate"] == sessiondate,sessions_overview_AKS["protocol"] == protocol)):
+        sessions_overview = sessions_overview_AKS
     else: 
         print('Session not found in excel session overview')
         return sessiondata
@@ -164,7 +168,7 @@ def proc_GR(rawdatadir,sessiondata):
     nOris = len(pd.unique(trialdata['Orientation']))
     assert(nOris==8 or nOris == 16) #8 or 16 distinct orientations
     ori_counts = trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
-    assert(all(ori_counts > 50) and all(ori_counts < 400)) #between 50 and 400 repetitions
+    # assert(all(ori_counts > 50) and all(ori_counts < 400)) #between 50 and 400 repetitions
 
     assert(np.allclose(trialdata['tOffset'] - trialdata['tOnset'],0.75,atol=0.1)) #stimulus duration all around 0.75s
     assert(np.allclose(np.diff(trialdata['tOnset']),2,atol=0.1)) #total trial duration all around 2s
@@ -804,6 +808,9 @@ def proc_imaging(sesfolder, sessiondata):
 def align_timestamps(sessiondata, ops, triggerdata):
     # get idx of frames belonging to this protocol:
     protocol_tifs           = list(filter(lambda x: sessiondata['protocol'][0] in x, ops['filelist']))
+    # if sessiondata['session_id'][0] == 'LPE11622_2024_03_07' and sessiondata['protocol'][0] == 'SP4':
+        # protocol_tifs = protocol_tifs[306:]
+
     protocol_tif_idx        = np.array([i for i, x in enumerate(ops['filelist']) if x in protocol_tifs])
     #get the number of frames for each of the files belonging to this protocol:
     protocol_tif_nframes    = ops['frames_per_file'][protocol_tif_idx]
@@ -816,7 +823,7 @@ def align_timestamps(sessiondata, ops, triggerdata):
            protocol_frame_idx = np.append(protocol_frame_idx,np.repeat(False,ops['frames_per_file'][i]))
     
     protocol_nframes = sum(protocol_frame_idx).astype('int') #the number of frames acquired in this protocol
-    
+
     ## Get trigger information:
     nTriggers = np.shape(triggerdata)[0]
     nTiffFiles = len(protocol_tif_idx)

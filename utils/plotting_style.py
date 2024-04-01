@@ -35,7 +35,7 @@ def get_clr_labelpairs(pairs):
 
 def get_clr_labeled():
     # clrs            = ['black','red']
-    return ['black','red']
+    return ['gray','indianred']
 
 def get_clr_recombinase(enzymes):
     palette       = {'non': 'gray',

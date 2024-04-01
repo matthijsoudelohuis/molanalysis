@@ -41,18 +41,31 @@ def proc_labeling_plane(plane_folder,showcells=True,overlap_threshold=0.5):
     redcell_seg     = np.load(os.path.join(plane_folder,cellpose_file[0]), allow_pickle=True).item()
     masks_cp_red    = redcell_seg['masks']
     
-    # Ncellpose_redcells      = len(np.unique(masks_cp_red))-1
+    Ncellpose_redcells      = len(np.unique(masks_cp_red))-1
 
     # Compute overlap of red labeled cell bodies with suite2p cell bodies
     #i.e. 
     redcell_overlap = np.empty(Nsuite2pcells)
     for i in range(Nsuite2pcells):    # Compute overlap in masks:
         redcell_overlap[i] = np.sum(masks_cp_red[masks_suite2p==i+1] != 0) / np.sum(masks_suite2p ==i+1)
+    
+    redcell_overlap2 = np.empty(Nsuite2pcells)
+    for i in range(Nsuite2pcells):    # Compute overlap in masks:
+        temp = np.empty(Ncellpose_redcells)
+        for j in range(Ncellpose_redcells):    # Compute overlap in masks:
+            temp[j] = np.sum(masks_cp_red[masks_suite2p==i+1] == j+1) / np.sum(masks_cp_red == j+1)
+
+        redcell_overlap2[i] = np.max(temp)
+
+        # redcell_overlap[i] = np.sum(masks_cp_red[masks_suite2p==i+1] != 0) / np.sum(masks_suite2p ==i+1)
+
         # if mask_overlap_green_with_red[i]>0:
             # mask_overlap_red_with_green[np.unique(masks_cp_red[masks_suite2p==i+1])[1]-1] = overlap
 
-    redcell             = redcell_overlap > overlap_threshold
-    redcell_cellpose    = np.vstack((redcell_overlap,redcell))
+    # redcell             = redcell_overlap > overlap_threshold
+    redcell             = redcell_overlap2 > overlap_threshold
+    # redcell_cellpose    = np.vstack((redcell_overlap,redcell))
+    redcell_cellpose    = np.vstack((redcell_overlap,redcell_overlap2,redcell))
 
     # Get mean green GCaMP image: 
     mimg = ops['meanImg']
@@ -149,7 +162,7 @@ def proc_labeling_session(rawdatadir,animal_id,sessiondate):
     plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
 
     for iplane,plane_folder in enumerate(plane_folders):
-
+        
         redcell_cellpose,fig              = proc_labeling_plane(plane_folder)
         
         np.save(os.path.join(plane_folder,'redcell_cellpose.npy'),redcell_cellpose)
