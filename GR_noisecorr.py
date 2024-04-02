@@ -36,6 +36,7 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - G
 ##############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
 session_list        = np.array([['LPE10885','2023_10_23']])
+session_list        = np.array([['LPE11086','2024_01_05']])
 # session_list        = np.array([['LPE11086','2024_01_05'],
 #                                 ['LPE10884','2023_10_20'],
 #                                 ['LPE10885','2023_10_19'],
@@ -236,7 +237,7 @@ plt.imshow(sessions[sesidx].noise_corr, cmap='coolwarm',
            vmax=np.nanpercentile(sessions[sesidx].noise_corr,95))
 plt.savefig(os.path.join(savedir,'NoiseCorrelations','Noise_Correlation_Mat_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-###################### Compute pairwise neuronal distances: ##############################
+#%% ##################### Compute pairwise neuronal distances: ##############################
 
 for ises in range(nSessions):
     [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
@@ -594,7 +595,7 @@ for iap,areapair in enumerate(areapairs):
     ax.bar(x=labelpairs,height=center,yerr=err,label=labelpairs_legend,color=clrs_labelpairs)
     ax.set_yticks(np.arange(0, 0.1, step=0.01))
     ax.set_xticklabels(labelpairs_legend)
-    ax.set_ylim([0,0.045])
+    ax.set_ylim([0,0.075])
     ax.set_title(areapair)
     ax.set_ylabel('Noise Correlation')
 
@@ -616,7 +617,7 @@ ax2.scatter(sessions[sesidx].celldata['meanF_chan2'][filter_area],
 ax2.set_xlabel('F Chan2')
 # ax2.set_ylabel('Noise Correlations')
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'NoiseCorr_FChan2_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'NoiseCorr_FChan2_curated_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%%
 sesidx = 0
@@ -675,6 +676,8 @@ for iap,areapair in enumerate(areapairs):
     for ilp,labelpair in enumerate(labelpairs):
         # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
         handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_labelpairs[ilp]))
+        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),
+                                    # yerror=binmean[:,iap,ilp,:].squeeze()/5,color=clrs_labelpairs[ilp]))
     ax.set(xlabel=r'Anatomical distance ($\mu$m)',ylabel='Noise Correlation',
            yticks=np.arange(0, 1, step=0.01),xticks=np.arange(0, 600, step=100))
     ax.set(xlim=[10,500],ylim=[0,0.05])
@@ -696,7 +699,7 @@ clrs_areapairs = get_clr_area_pairs(areapairs)
 labelpairs = df_allpairs['LabelPair'].unique()
 clrs_labelpairs = get_clr_labelpairs(labelpairs)
 
-binedges = np.arange(0,120,5) 
+binedges = np.arange(0,120,10) 
 nbins= len(binedges)-1      
 binmean = np.zeros((nSessions,len(areapairs),len(labelpairs),nbins))
 handles = []
@@ -719,10 +722,12 @@ for iap,areapair in enumerate(areapairs):
     ax = plt.subplot(1,3,iap+1)
     for ilp,labelpair in enumerate(labelpairs):
         # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
+        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),
+                                    # yerror=binmean[:,iap,ilp,:].squeeze()/5,color=clrs_labelpairs[ilp]))
         handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_labelpairs[ilp]))
     ax.set(xlabel='Delta RF',ylabel='Noise Correlation',
            yticks=np.arange(0, 1, step=0.01),xticks=np.arange(0, 120, step=10))
-    ax.set(xlim=[0,120],ylim=[0,0.05])
+    ax.set(xlim=[0,120],ylim=[0,0.07])
     ax.legend(handles,labelpairs,frameon=False,loc='upper right')
     plt.tight_layout()
     ax.set_title(areapair)

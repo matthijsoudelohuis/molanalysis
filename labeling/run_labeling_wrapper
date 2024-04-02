@@ -10,19 +10,27 @@ try:
 except:
     os.chdir('e:\\Python\\molanalysis\\')
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
+from loaddata.get_data_folder import get_rawdata_drive
 
-rawdatadir          = 'G:\\RawData\\'
+rawdatadir          = []
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10883'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
 # date_filter         = ['2024_02_29']
-date_filter         = ['2023_03_14']
-# date_filter         = []
+# date_filter         = ['2023_03_14']
+# date_filter         = ['2023_10_09']
+date_filter         = []
 
 ## Loop over all selected animals and folders
+
 if len(animal_ids) == 0:
     animal_ids = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
 
 for animal_id in animal_ids: #for each animal
+
+    if not rawdatadir:
+        rawdatadir = get_rawdata_drive([animal_id])
 
     sessiondates = os.listdir(os.path.join(rawdatadir,animal_id)) 
     
@@ -33,4 +41,4 @@ for animal_id in animal_ids: #for each animal
 
         #########################  tdTomato labeling based on cellpose gui segmented ROIs  ######################
         # gen_red_images(rawdatadir,animal_id,sessiondate)
-        proc_labeling_session(rawdatadir,animal_id,sessiondate)
+        proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=False)

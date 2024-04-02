@@ -669,9 +669,10 @@ def proc_imaging(sesfolder, sessiondata):
             celldata_plane['xloc'][k] = stat[k]['med'][0]
             celldata_plane['yloc'][k] = stat[k]['med'][1]
         
-        celldata_plane['redcell_prob']  = redcell[0,:]
-        celldata_plane['redcell']       = redcell[1,:]
-        celldata_plane['nredcells']     = Nredcells_plane
+        celldata_plane['redcell']           = redcell[0,:]
+        celldata_plane['frac_of_ROI_red']   = redcell[1,:]
+        celldata_plane['frac_red_in_ROI']   = redcell[2,:]
+        celldata_plane['nredcells']         = Nredcells_plane
 
         celldata_plane['plane_idx']     = iplane
         celldata_plane['roi_idx']       = plane_roi_idx[iplane]

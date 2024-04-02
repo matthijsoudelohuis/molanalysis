@@ -28,8 +28,9 @@ protocol            = ['GR','GN','IM']
 sessions,nsessions    = filter_sessions(protocol,only_animal_id=['LPE10919','LPE10885','LPE10883','LPE11086'],
                                       min_cells=100)
 
-# session_list        = np.array([['LPE11086','2023_12_16']])
-# sessions            = load_sessions(protocol = 'IM',session_list=session_list)
+session_list        = np.array([['LPE10885','2023_10_23']])
+session_list        = np.array([['LPE11086','2024_01_05']])
+sessions,nsessions  = load_sessions(protocol = 'GR',session_list=session_list)
 
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Labeling\\'
 
@@ -42,10 +43,11 @@ celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
 threshold = 0.4
 sessions = reset_label_threshold(sessions,threshold)
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 celldata.loc[celldata['redcell']==0,'recombinase'] = 'non'
 
-celldata['noise_level'].values[celldata['noise_level'] > 5] = 0
+# celldata['noise_level'].values[celldata['noise_level'] > 5] = 0
 
 ######## Show histogram of ROI overlaps: #######################
 fig, ax = plt.subplots(figsize=(3.5,3))
@@ -58,10 +60,10 @@ plt.axvline(threshold,color='grey',linestyle=':')
 plt.xlabel('ROI Overlap')
 plt.ylabel('Fraction of cells')
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'Overlap_Dist_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'Overlap_Dist_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 plt.ylim([0,0.01])
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'Overlap_Dist_Zoom_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'Overlap_Dist_Zoom_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 
 
 #### 
@@ -104,8 +106,8 @@ fields = ["skew","noise_level","event_rate","radius","npix_soma","meanF"]
 nfields = len(fields)
 fig,axes   = plt.subplots(1,nfields,figsize=(12,4))
 
-celldata = celldata[celldata['meanF_chan2']<1000]
-celldata = celldata[celldata['noise_level']<1]
+# celldata = celldata[celldata['meanF_chan2']<1000]
+# celldata = celldata[celldata['noise_level']<1]
 
 for i in range(nfields):
     # sns.violinplot(data=celldata,y=fields[i],x="redcell",palette=['gray','red'],ax=axes[i])
@@ -135,6 +137,7 @@ df = celldata[["depth","skew","noise_level","npix_soma",
 sns.pairplot(data=df, hue="redcell")
 
 ax = sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap='bwr')
+plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Quality_Metrics_Heatmap_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 
 ## 

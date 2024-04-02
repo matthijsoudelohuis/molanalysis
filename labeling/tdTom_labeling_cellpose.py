@@ -23,7 +23,7 @@ from utils.imagelib import im_norm,im_norm8,im_log,im_sqrt
 
 from PIL import Image
 
-def proc_labeling_plane(plane_folder,showcells=True,overlap_threshold=0.5):
+def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5):
     stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
     ops         = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
     iscell      = np.load(os.path.join(plane_folder,'iscell.npy'), allow_pickle=True)
@@ -43,78 +43,67 @@ def proc_labeling_plane(plane_folder,showcells=True,overlap_threshold=0.5):
     
     Ncellpose_redcells      = len(np.unique(masks_cp_red))-1
 
-    # Compute overlap of red labeled cell bodies with suite2p cell bodies
-    #i.e. 
-    redcell_overlap = np.empty(Nsuite2pcells)
-    for i in range(Nsuite2pcells):    # Compute overlap in masks:
-        redcell_overlap[i] = np.sum(masks_cp_red[masks_suite2p==i+1] != 0) / np.sum(masks_suite2p ==i+1)
-    
-    redcell_overlap2 = np.empty(Nsuite2pcells)
-    for i in range(Nsuite2pcells):    # Compute overlap in masks:
-        temp = np.empty(Ncellpose_redcells)
-        for j in range(Ncellpose_redcells):    # Compute overlap in masks:
-            temp[j] = np.sum(masks_cp_red[masks_suite2p==i+1] == j+1) / np.sum(masks_cp_red == j+1)
+    # Compute fraction of suite2p ROI that is red labeled
+    frac_of_ROI_red = np.empty(Nsuite2pcells)
+    for i,s in enumerate(stats):
+        frac_of_ROI_red[i] = np.sum(masks_cp_red[s['ypix'],s['xpix']] != 0) / len(s['ypix'])
 
-        redcell_overlap2[i] = np.max(temp)
-
-        # redcell_overlap[i] = np.sum(masks_cp_red[masks_suite2p==i+1] != 0) / np.sum(masks_suite2p ==i+1)
-
-        # if mask_overlap_green_with_red[i]>0:
-            # mask_overlap_red_with_green[np.unique(masks_cp_red[masks_suite2p==i+1])[1]-1] = overlap
+    # Compute fraction of labeled cellpose soma that falls inside suite2p ROI
+    # Suite2p ROIs are generally larger and capture calcium activity of membrane and AIS
+    # If full tdTomato labeled soma falls inside ROI then labeled. upper measure however could 
+    # have lower value if large extra ROI taken as calcium dependent ROI
+    frac_red_in_ROI     = np.zeros(Nsuite2pcells)
+    npix_redsomas   = np.histogram(masks_cp_red,
+                        bins=np.arange(Ncellpose_redcells+1).astype(int))[0]
+    if Ncellpose_redcells:
+        for i,s in enumerate(stats):
+            c = np.histogram(masks_cp_red[s['ypix'],s['xpix']],
+                        bins=np.arange(Ncellpose_redcells+1).astype(int))[0]
+            c[0] = 0 #set overlap with non-ROI pixels to zero
+            frac_red_in_ROI[i] = np.max(c/npix_redsomas) #get maximum overlap (red cell with largest fraction inside suite2p ROI)
 
     # redcell             = redcell_overlap > overlap_threshold
-    redcell             = redcell_overlap2 > overlap_threshold
-    # redcell_cellpose    = np.vstack((redcell_overlap,redcell))
-    redcell_cellpose    = np.vstack((redcell_overlap,redcell_overlap2,redcell))
+    redcell             = frac_red_in_ROI > overlap_threshold
+    redcell_cellpose    = np.vstack((redcell,frac_of_ROI_red,frac_red_in_ROI))
 
-    # Get mean green GCaMP image: 
-    mimg = ops['meanImg']
-    mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
-    
-    # Get max projection GCaMP image: 
-    # mimg = np.zeros([512,512])
-    # mimg[ops['yrange'][0]:ops['yrange'][1],
-    # ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
-    # mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
-
-    ## Get red image:
-    mimg2 = ops['meanImg_chan2'] #get red channel image from ops
-    # mimg2 = im_norm(mimg2,min=2.5,max=100) #scale between 0 and 255
-    mimg2 = im_norm(mimg2,min=0.5,max=99.5) #scale between 0 and 255
-
-    # mimg2 = im_log(mimg2) #log transform to enhance weakly expressing cells
-
-    mimg2 = im_sqrt(mimg2) #log transform to enhance weakly expressing cells
-
-    mimg2 = im_norm(mimg2,min=0,max=100) #scale between 0 and 255
-    
-    #scale between 0 and 255
-    # mimg2       = im_log(mimg2) #log transform to enhance weakly expressing cells
-    # mimg2       = im_norm(mimg2,min=0,max=100).astype(np.uint8) #scale between 0 and 255
-
-    # clr_rchan = np.array(ImageColor.getcolor('#ff0040', "RGB")) / 255
-    # clr_gchan = np.array(ImageColor.getcolor('#00ffbf', "RGB")) / 255
-
-    ######
-    # rchan = (mimg2 - np.percentile(mimg2,lowprc)) / np.percentile(mimg2 - np.percentile(mimg2,lowprc),uppprc)
-    # gchan = (mimg - np.percentile(mimg,lowprc)) / np.percentile(mimg - np.percentile(mimg,lowprc),uppprc)
-    # bchan = np.zeros(np.shape(mimg))
-
-    #Show labeling results in green and red image:
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(18,6))
-
-    # ax1.imshow(mimg,cmap='gray',vmin=0,vmax=255)
-    # ax2.imshow(mimg2,cmap='gray',vmin=0,vmax=255)
-    im1 = np.dstack((np.zeros(np.shape(mimg)),mimg,np.zeros(np.shape(mimg)))).astype(np.uint8)
-    ax1.imshow(im1,vmin=0,vmax=255)
-
-    im2 = np.dstack((mimg2,np.zeros(np.shape(mimg2)),np.zeros(np.shape(mimg2)))).astype(np.uint8)
-    ax2.imshow(im2,vmin=0,vmax=255)
-
-    im3 = np.dstack((mimg2,mimg,np.zeros(np.shape(mimg2)))).astype(np.uint8)
-    ax3.imshow(im3,vmin=0,vmax=255)
+    np.save(os.path.join(plane_folder,'redcell_cellpose.npy'),redcell_cellpose)
 
     if showcells:
+         # Get mean green GCaMP image: 
+        mimg = ops['meanImg']
+        mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
+        
+        # Get max projection GCaMP image: 
+        # mimg = np.zeros([512,512])
+        # mimg[ops['yrange'][0]:ops['yrange'][1],
+        # ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
+        # mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
+
+        ## Get red image:
+        mimg2 = ops['meanImg_chan2'] #get red channel image from ops
+        mimg2 = im_norm(mimg2,min=0.5,max=99.5) #scale between percentiles
+
+        # mimg2 = im_log(mimg2) #log transform to enhance weakly expressing cells
+        mimg2 = im_sqrt(mimg2) #square root transform to enhance weakly expressing cells
+
+        mimg2 = im_norm(mimg2,min=0,max=100) #scale between 0 and 255
+        
+        #scale between 0 and 255
+        # mimg2       = im_log(mimg2) #log transform to enhance weakly expressing cells
+        # mimg2       = im_norm(mimg2,min=0,max=100).astype(np.uint8) #scale between 0 and 255
+
+        #Show labeling results in green and red image:
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(18,6))
+
+        im1 = np.dstack((np.zeros(np.shape(mimg)),mimg,np.zeros(np.shape(mimg)))).astype(np.uint8)
+        ax1.imshow(im1,vmin=0,vmax=255)
+
+        im2 = np.dstack((mimg2,np.zeros(np.shape(mimg2)),np.zeros(np.shape(mimg2)))).astype(np.uint8)
+        ax2.imshow(im2,vmin=0,vmax=255)
+
+        im3 = np.dstack((mimg2,mimg,np.zeros(np.shape(mimg2)))).astype(np.uint8)
+        ax3.imshow(im3,vmin=0,vmax=255)
+
         outl_green = utils.outlines_list(masks_suite2p)
         #Filter good cells for visualization laters: 
         outl_green = np.array(outl_green)[iscell[:,0]==1]
@@ -137,22 +126,24 @@ def proc_labeling_plane(plane_folder,showcells=True,overlap_threshold=0.5):
             ax2.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
             # ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
             # ax3.plot(o[:,0], o[:,1], color='#ffe601',linewidth=0.6)
-    
-    ax1.set_axis_off()
-    ax1.set_aspect('auto')
-    ax1.set_title('Suite2p cells (GCaMP)', fontsize=12, color='black', fontweight='bold',loc='center')
-    ax2.set_axis_off()
-    ax2.set_aspect('auto')
-    ax2.set_title('tdTomato cells (tdTomato)', fontsize=12, color='black', fontweight='bold',loc='center')
-    ax3.set_axis_off()
-    ax3.set_aspect('auto')
-    ax3.set_title('Labeled cells (Merge)', fontsize=12, color='black', fontweight='bold',loc='center')
+        
+        ax1.set_axis_off()
+        ax1.set_aspect('auto')
+        ax1.set_title('Suite2p cells (GCaMP)', fontsize=12, color='black', fontweight='bold',loc='center')
+        ax2.set_axis_off()
+        ax2.set_aspect('auto')
+        ax2.set_title('tdTomato cells (tdTomato)', fontsize=12, color='black', fontweight='bold',loc='center')
+        ax3.set_axis_off()
+        ax3.set_aspect('auto')
+        ax3.set_title('Labeled cells (Merge)', fontsize=12, color='black', fontweight='bold',loc='center')
 
-    plt.tight_layout(rect=[0, 0, 1, 1])
+        plt.tight_layout(rect=[0, 0, 1, 1])
 
-    return redcell_cellpose,fig
+        fig.savefig(os.path.join(plane_folder,'labeling_Plane%d.jpg' % iplane),dpi=600)
 
-def proc_labeling_session(rawdatadir,animal_id,sessiondate):
+    return 
+
+def proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=True):
     sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
 
     suite2p_folder  = os.path.join(sesfolder,"suite2p")
@@ -162,13 +153,9 @@ def proc_labeling_session(rawdatadir,animal_id,sessiondate):
     plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
 
     for iplane,plane_folder in enumerate(plane_folders):
+        # print(iplane)
+        proc_labeling_plane(iplane,plane_folder,showcells=showcells)
         
-        redcell_cellpose,fig              = proc_labeling_plane(plane_folder)
-        
-        np.save(os.path.join(plane_folder,'redcell_cellpose.npy'),redcell_cellpose)
-
-        fig.savefig(os.path.join(plane_folder,'labeling_Plane%d.jpg' % iplane),dpi=600)
-
 
 def gen_red_images(rawdatadir,animal_id,sessiondate):
 
