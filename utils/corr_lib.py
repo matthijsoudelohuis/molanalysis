@@ -73,10 +73,61 @@ def compute_signal_correlation(sessions):
     sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
     if np.all(sessiondata['protocol']=='IM'):
          for ises in range(nSessions):
-            respmean = mean_resp_image(sessions[ises])
+            respmean        = mean_resp_image(sessions[ises])
+            [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
 
             sessions[ises].sig_corr                   = np.corrcoef(respmean)
+
+            idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
+
+            sessions[ises].sig_corr[idx_triu] = np.nan
+
     else: 
         print('not yet implemented signal corr for other protocols than IM')
 
+    return sessions
+
+def compute_pairwise_metrics(sessions):
+
+    for ises in range(len(sessions)):
+        [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+
+        ## Compute euclidean distance matrix based on soma center:
+        sessions[ises].distmat_xyz     = np.zeros((N,N))
+        sessions[ises].distmat_xy      = np.zeros((N,N))
+        sessions[ises].distmat_rf      = np.zeros((N,N))
+        sessions[ises].areamat         = np.empty((N,N),dtype=object)
+        sessions[ises].labelmat        = np.empty((N,N),dtype=object)
+
+        x,y,z = sessions[ises].celldata['xloc'],sessions[ises].celldata['yloc'],sessions[ises].celldata['depth']
+        b = np.array((x,y,z))
+        for i in range(N):
+            print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
+            a = np.array((x[i],y[i],z[i]))
+            sessions[ises].distmat_xyz[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
+            sessions[ises].distmat_xy[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
+
+        if 'rf_azimuth' in sessions[ises].celldata:
+            rfaz,rfel = sessions[ises].celldata['rf_azimuth'],sessions[ises].celldata['rf_elevation']
+            d = np.array((rfaz,rfel))
+
+            for i in range(N):
+                c = np.array((rfaz[i],rfel[i]))
+                sessions[ises].distmat_rf[i,:] = np.linalg.norm(c[:,np.newaxis]-d,axis=0)
+
+        g = np.meshgrid(sessions[ises].celldata['roi_name'],sessions[ises].celldata['roi_name'])
+        sessions[ises].areamat = g[0] + '-' + g[1]
+        sessions[ises].areamat[sessions[ises].areamat=='PM-V1'] = 'V1-PM' #fix order for combinations
+
+        g = np.meshgrid(sessions[ises].celldata['redcell'].astype(int).astype(str).to_numpy(),
+                        sessions[ises].celldata['redcell'].astype(int).astype(str).to_numpy())
+        sessions[ises].labelmat = g[0] + '-' + g[1] 
+        sessions[ises].labelmat[sessions[ises].labelmat=='1-0'] = '0-1' #fix order for combinations
+
+        idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
+        sessions[ises].distmat_xyz[idx_triu] = np.nan
+        sessions[ises].distmat_xy[idx_triu] = np.nan
+        sessions[ises].distmat_rf[idx_triu] = np.nan
+        sessions[ises].areamat[idx_triu] = np.nan
+        sessions[ises].labelmat[idx_triu] = np.nan
     return sessions
