@@ -15,6 +15,7 @@ import pandas as pd
 from labeling.label_lib import bleedthrough_correction,load_tiffs_plane,estimate_correc_coeff
 from ScanImageTiffReader import ScanImageTiffReader as imread
 
+from run_suite2p.oldbinary import OldBinaryFile
 
 # set your options for running
 def gen_ops():
@@ -26,11 +27,11 @@ def gen_ops():
 
     ops['look_one_level_down']          = True
 
-    ops['nplanes']          = 8
-    ops['nchannels']        = 2
-    ops['functional_chan']  = 1
+    ops['nplanes']          = 8 #default
+    ops['nchannels']        = 2 #default
+    ops['functional_chan']  = 1 #first channel gcamp imaging, second channel tdtomato
     ops['tau']              = 0.7
-    ops['fs']               = 42.857/8
+    ops['fs']               = 42.857/ops['nplanes'] #default
     ops['save_mat']         = False
     ops['save_NWB']         = False
     ops['reg_tif']          = False
@@ -134,28 +135,32 @@ def run_bleedthrough_corr(db,ops,coeff=None,gain1=0.6,gain2=0.4):
         # plot_bleedthrough_correction(np.mean(data_green,axis=0), np.mean(data_red,axis=0), np.mean(data_green_corr,axis=0))
         # plot_correction_images(greenchanim,redchanim)
 
-        # with BinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
-        with BinaryFile(filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(filename=file_chan1_corr,Ly=512, Lx=512,n_frames=f1.n_frames) as f3:
-    
-            #for i in np.arange(f1.n_frames):
-            
-            for i in np.arange(5):
-                print(i)	
-                f3.write
-                datagreen       = f1.file[i]
-                datared         = f2.file[i]
+        with OldBinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, OldBinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
 
+            for i in np.arange(f1.n_frames):
+                # print(i)
+                
+                # f3.write
+              
                 [ind,datagreen]      = f1.read(batch_size=1)
                 [ind,datared]        = f2.read(batch_size=1)
 
                 datagreencorr = bleedthrough_correction(datagreen,datared,coeff,gain1,gain2)
-                f3.file[i] = datagreencorr
 
-                # f1.write(data=datagreencorr)
-                f3.write(data=datagreencorr)
-            f1.close()
-            f2.close()
-            f3.close()
+                f1.write(data=datagreencorr)
+
+            #based on new binaryfile in suite2p 1.14:
+            # if os.path.exists(file_chan1_corr):
+            # os.remove(file_chan1_corr)
+            # with BinaryFile(filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(filename=file_chan1_corr,Ly=512, Lx=512,n_frames=f1.n_frames) as f3:
+            # datagreen       = f1.file[i]#.astype(np.float32)
+            # datared         = f2.file[i]#.astype(np.float32)
+            # f3.file[i] = datagreencorr
+            # f3.write(data=datagreencorr)
+
+            # f1.close()
+            # f2.close()
+            # f3.close()
 
     #delete original rename corrected to data.bin to be read by suite2p for detection:
     for iplane in np.arange(ops['nplanes']):
