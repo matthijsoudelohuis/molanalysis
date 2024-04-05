@@ -77,13 +77,13 @@ def plot_correction_images(greenchanim,redchanim):
     return
 
 # regression through pre-established values:
-    b = 1.54
-    a = np.percentile(redchanim.flatten(),5)
-    xseq = np.linspace(-15000, 32000, num=32000)
-    ax3.plot(xseq, a + b * xseq, color="k", lw=1.5)   # Plot regression line
+    # b = 1.54
+    # a = np.percentile(redchanim.flatten(),5)
+    # xseq = np.linspace(-15000, 32000, num=32000)
+    # ax3.plot(xseq, a + b * xseq, color="k", lw=1.5)   # Plot regression line
 
-    ax3.set_xlim(extrema_np(redchanim))
-    ax3.set_ylim(extrema_np(greenchanim))
+    # ax3.set_xlim(extrema_np(redchanim))
+    # ax3.set_ylim(extrema_np(greenchanim))
 
 # ###### correction coefficient for red into green:
 # coeff = 1.54 #for 0.6 and 0.4 combination of PMT gains
@@ -110,13 +110,6 @@ def get_gain_coeff(gain1,gain2):
     b = 6.813721291804585
     a = -1.1755564086364871
     return 10**(b*diff+a)
-
-def reset_label_threshold(sessions,threshold):
-    print('Setting new labeling threshold based on %1.2f overlap' % threshold)
-    for ses in sessions:
-        ses.celldata['redcell'] = ses.celldata['redcell_prob']>0.4
-
-    return sessions
 
 def estimate_correc_coeff(greendata,reddata):
 

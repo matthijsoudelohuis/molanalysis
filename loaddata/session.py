@@ -86,7 +86,13 @@ class Session():
                 self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
                                     fp=self.behaviordata['trialNumber'])
 
-            
+    def reset_label_threshold(self,threshold):
+        print('Setting new labeling threshold based on %1.2f overlap' % threshold)
+        # self.celldata['redcell'] = self.celldata['redcell_prob']>0.4
+        self.celldata['redcell'] = self.celldata['frac_red_in_ROI']>0.4
+        print('Need to set cre non flp again\n')
+        print('put lower and upper threshold\n')
+        # return sessions
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,
 #                    center_lfp=True):
 
