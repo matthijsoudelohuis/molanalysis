@@ -93,6 +93,9 @@ class Session():
         print('Need to set cre non flp again\n')
         print('put lower and upper threshold\n')
         # return sessions
+
+
+
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,
 #                    center_lfp=True):
 
@@ -136,46 +139,6 @@ class Session():
 #             assert pd.value_counts(self.spike_data['cell_ID']).max() == 1
 
 
-
-#         # --- ADD LFP DATA ---
-#         self.lfp_data = lfp_data
-
-#         if lfp_data is not None:
-#             self.sampling_rate = lfp_data['fs'][0]
-
-#             self.session_t_start = lfp_data['t_start'][0] * pq.us
-#             self.session_t_stop = lfp_data['t_end'][0] * pq.us
-#             self.delta_t = (1 / self.sampling_rate) * 1e6 * pq.us
-
-#             self.channel_id = lfp_data['channel_ID'].astype(str)
-#             # self.lfp_times = np.arange(self.session_t_start,
-#             #                            self.session_t_stop+self.delta_t, self.delta_t)
-
-#             self.lfp_data['signal'] = np.vstack(self.lfp_data['signal'])
-
-#             if center_lfp:
-#                 self.lfp_data['signal'] = scipy.signal.detrend(self.lfp_data['signal'],
-#                                                                 type='constant')
-
-#             self.lfp_times = self.session_t_start + np.arange(self.lfp_data['signal'].shape[1]) / (self.sampling_rate * pq.Hz)
-
-#             # RUN CHECKS ON LFP DATA
-#             assert np.all(lfp_data['fs']==self.sampling_rate)
-#             assert np.all(lfp_data['butter_applied']==1)
-#             assert np.all(lfp_data['kaiser_applied'] == 0)
-#             assert np.all(lfp_data['t_units']=='us')
-#             assert np.all(lfp_data['signal_units']=='V')
-#             assert np.all(lfp_data['t_start']==lfp_data['t_start'][0])
-#             assert np.all(lfp_data['t_end']==lfp_data['t_end'][0])
-#             assert self.lfp_times.shape[0] == self.lfp_data['signal'].shape[1]
-
-
-#     def quick_downsample_lfp(self, factor=2):
-
-#         self.lfp_times = self.lfp_times[::factor]
-#         self.lfp_data['signal'] = self.lfp_data['signal'][:, ::factor]
-
-
 #     def select_trials(self, trial_type=None, only_correct=False,
 #                       visual_post_norm=None, audio_post_norm=None,
 #                       visual_change=None, auditory_change=None, exclude_last=20,
@@ -193,95 +156,8 @@ class Session():
 
 #         """
 
-#         total_n_trials = self.trial_data.shape[0]
-#         selected_trials = []
-
-#         if trial_type is not None:
-#             if isinstance(trial_type, str):
-#                 trial_type = [trial_type]
-#             mask = np.isin(self.trial_data['trialType'], trial_type)
-#             sel_trials = self.trial_data.loc[mask, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if response is not None:
-#             if isinstance(response, int):
-#                 response = [response]
-#             mask = np.isin(self.trial_data['correctResponse'], response)
-#             sel_trials = self.trial_data.loc[mask, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if only_correct:
-#             ind = self.trial_data['correctResponse'] == 1
-#             sel_trials = self.trial_data.loc[ind, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if visual_change is not None:
-#             if isinstance(visual_change, (float, int)):
-#                 visual_change = [visual_change]
-#             mask = np.isin(self.trial_data['visualOriChangeNorm'], visual_change)
-#             sel_trials = self.trial_data.loc[mask, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if auditory_change is not None:
-#             if isinstance(auditory_change, (float, int)):
-#                 auditory_change = [auditory_change]
-#             mask = np.isin(self.trial_data['audioFreqChangeNorm'], auditory_change)
-#             sel_trials = self.trial_data.loc[mask, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if auditory_pre is not None:
-#             ind = self.trial_data['audioFreqPreChange'] == auditory_pre
-#             sel_trials = self.trial_data.loc[ind, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if auditory_post is not None:
-#             if isinstance(auditory_post, (float, int)):
-#                 auditory_post = [auditory_post]
-#             mask = np.isin(self.trial_data['audioFreqPostChange'], auditory_post)
-#             sel_trials = self.trial_data.loc[mask, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if audio_post_norm is not None:
-#             if isinstance(audio_post_norm, (float, int)):
-#                 audio_post_norm = [audio_post_norm]
-#             mask = np.isin(self.trial_data['audioFreqPostChangeNorm'], audio_post_norm)
-#             sel_trials = self.trial_data.loc[mask, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if visual_post_norm is not None:
-#             if isinstance(visual_post_norm, (float, int)):
-#                 visual_post_norm = [visual_post_norm]
-#             mask = np.isin(self.trial_data['visualOriPostChangeNorm'], visual_post_norm)
-#             sel_trials = self.trial_data.loc[mask, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if response_side is not None:
-#             ind = self.trial_data['responseSide'] == response_side
-#             sel_trials = self.trial_data.loc[ind, 'trialNum'].tolist()
-#             selected_trials.append(sel_trials)
-
-#         if len(selected_trials) > 0:
-#             selected_final = list(set.intersection(*map(set, selected_trials)))
-#         else:
-#             selected_final = self.trial_data['trialNum'].tolist()
-
-#         perc = 100*(len(selected_final) / total_n_trials)
-#         print('> Finished trial selection'
-#               '\n ---> {} out of {} trials selected '
-#               '({:.1f}%)'.format(len(selected_final), total_n_trials, perc))
-
-#         if exclude_last is not None:
-#             last_trials = self.trial_data['trialNum'][-exclude_last:].tolist()
-#             selected_final = list(set(selected_final)-set(last_trials))
-
-#         selected_final.sort()
-
-#         return selected_final
-
-
 #     def get_trial_info(self, trial_number):
 #         return self.trial_data[self.trial_data['trialNum'] == trial_number]
-
 
 #     def get_type_of_trial(self, trial_number):
 #         trial_info = self.get_trial_info(trial_number)

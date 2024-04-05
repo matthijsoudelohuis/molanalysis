@@ -24,9 +24,9 @@ protocol            = ['GR','VR','IM','RF','SP']
 protocol            = ['GR','VR','IM']
 protocol            = ['GR','GN','IM']
 
-# sessions            = filter_sessions(protocol,only_animal_id=['LPE09830','LPE09665'])
-sessions,nsessions    = filter_sessions(protocol,only_animal_id=['LPE10919','LPE10885','LPE10883','LPE11086'],
-                                      min_cells=100)
+sessions,nsessions            = filter_sessions(protocol,only_animal_id=['LPE11086','LPE10885'])
+# sessions,nsessions    = filter_sessions(protocol,only_animal_id=['LPE10919','LPE10885','LPE10883','LPE11086'],
+                                    #   min_cells=100)
 
 session_list        = np.array([['LPE10885','2023_10_23']])
 session_list        = np.array([['LPE11086','2024_01_05']])
@@ -41,7 +41,7 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 ## remove any double cells (for example recorded in both GR and RF)
 celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
-threshold = 0.4
+threshold = 0.5
 sessions = reset_label_threshold(sessions,threshold)
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
@@ -51,7 +51,7 @@ celldata.loc[celldata['redcell']==0,'recombinase'] = 'non'
 
 ######## Show histogram of ROI overlaps: #######################
 fig, ax = plt.subplots(figsize=(3.5,3))
-sns.histplot(data=celldata,x='redcell_prob',stat='probability',hue='redcell',
+sns.histplot(data=celldata,x='frac_red_in_ROI',stat='probability',hue='redcell',
              palette=get_clr_labeled(),binwidth=0.05,ax=ax)
 ax.get_legend().remove()
 
@@ -61,7 +61,7 @@ plt.xlabel('ROI Overlap')
 plt.ylabel('Fraction of cells')
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir,'Overlap_Dist_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
-plt.ylim([0,0.01])
+plt.ylim([0,0.02])
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir,'Overlap_Dist_Zoom_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 
@@ -134,7 +134,7 @@ fig.savefig(os.path.join(savedir,'Quality_Metrics_%dcells_%dsessions' % (len(cel
 ## Scatter of all crosscombinations (seaborn pairplot):
 df = celldata[["depth","skew","noise_level","npix_soma",
                "meanF","meanF_chan2","event_rate","redcell"]]
-sns.pairplot(data=df, hue="redcell")
+# sns.pairplot(data=df, hue="redcell")
 
 ax = sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap='bwr')
 plt.tight_layout()

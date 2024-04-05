@@ -20,6 +20,7 @@ from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
 from utils.twoplib import get_meta
 import scipy.stats as st
 from loaddata.get_data_folder import get_data_folder
+from scipy.stats import zscore
 
 """
   #####  #######  #####   #####  ### ####### #     # ######     #    #######    #    
@@ -131,15 +132,20 @@ def proc_behavior_passive(rawdatadir,sessiondata):
     #     plt.plot(behaviordata['ts'][i-prepost:i+prepost],behaviordata['runspeed'][i-prepost:i+prepost]) 
     #     plt.plot(behaviordata['ts'][i],behaviordata['runspeed'][i],'k.') 
 
-    #subsample data 10 times (to 100 Hz)
+    #subsample data 10 times (from 1000 to 100 Hz)
     behaviordata = behaviordata.iloc[::10, :].reset_index(drop=True) 
 
-    #some checks:
+    #Filter slightly to get rid of transient at wheel turn and 0.5hz LED blink artefact:
+    # idx = np.arange(2000,9000)
+    # plt.plot(behaviordata['runspeed'][idx])
+    behaviordata['runspeed'] = gaussian_filter(behaviordata['runspeed'], sigma=21)
+    # plt.plot(behaviordata['runspeed'][idx])
+
+    # Some checks:
     # if sessiondata['session_id'][0] not in ['LPE09665_2023_03_15','LPE09665_2023_03_20']:
-    # assert(np.allclose(np.diff(behaviordata['ts']),1/100,rtol=0.1)) #timestamps ascending and around sampling rate
+    assert(np.allclose(np.diff(behaviordata['ts']),1/100,rtol=0.1)) #timestamps ascending and around sampling rate
     runspeed = behaviordata['runspeed'][1000:].to_numpy()
     assert(np.all(runspeed > -50) and all(runspeed < 100)) #running speed (after initial phase) within reasonable range
-
 
     behaviordata['session_id']     = sessiondata['session_id'][0]
 
@@ -296,8 +302,9 @@ def proc_task(rawdatadir,sessiondata):
     # Signal values: 
     assert(np.all(np.logical_and(trialdata['signal'] >= 0,trialdata['signal'] <= 100))), 'not all signal values are between 0 and 100'
     assert(np.any(trialdata['signal'] > 1)), 'signal values do not exceed 1'
-    # assert(len(np.unique(trialdata['stimRight']))==1), 'more than one stimulus appears to be presented in this session'
     assert(np.isin(np.unique(trialdata['stimRight'])[0],['Ori45','Ori135','A','B','C','D'])), 'Unknown stimulus presented'
+    if os.path.exists(os.path.join(sesfolder,"suite2p")):  
+        assert(len(np.unique(trialdata['stimRight']))==1), 'more than one stimulus appears to be presented in this recording session'
 
     #Give stimulus category type 
     trialdata['stimcat']            =  ''
@@ -478,18 +485,17 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     videodata       = pd.DataFrame(data = ts, columns = ['timestamps'])
 
     #Check that the number of frames is ballpark range of what it should be based on framerate and session duration:
-    
-    # if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") > datetime(2023, 3, 30):
-        
-    #     framerate = 30
-    #     sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
-    #     assert np.isclose(nts,sesdur * framerate,rtol=0.01)
-    #     #Check that frame rate matches interframe interval:
-    #     assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
-    #     #Check that inter frame interval does not take on crazy values:
-    #     assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
-    # else:
-    framerate = np.round(1/np.mean(np.diff(ts)))
+    framerate = np.round(1/np.mean(np.diff(ts))).astype(int)
+    sessiondata['video_fs'] = framerate
+
+    assert np.isin(framerate,[15,30]), 'Frame rate not 15 or 30 Hz'
+    sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
+    assert np.isclose(nts,sesdur * framerate,rtol=0.01)
+    #Check that frame rate matches interframe interval:
+    assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
+    #Check that inter frame interval does not take on crazy values:
+    assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
+    # Replace samples where timestamps are off:
     idx = np.where(np.diff(ts[1:-1])<1/framerate/3)[0] + 2
     for i in idx:
         ts[i] = np.mean((ts[i-1],ts[i+1]))
@@ -525,8 +531,20 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
             videodata['pupil_area']   = proc['pupil'][0]['area_smooth']
             videodata['pupil_ypos']   = proc['pupil'][0]['com'][:,0]
             videodata['pupil_xpos']   = proc['pupil'][0]['com'][:,1]
+
+            #remove outlier data (poor pupil fits):
+            xpos = zscore(videodata['pupil_xpos'])
+            ypos = zscore(videodata['pupil_ypos'])
+            area = zscore(videodata['pupil_area'])
+
+            idx = np.logical_or(np.abs(xpos)>5,np.abs(ypos)>5 ,np.abs(area)>5)
+            print('set %1.4f percent of video frames with pupil fit outlier samples to nan \n' % (np.sum(idx) / len(videodata['pupil_xpos'])))
+            videodata.iloc[idx,videodata.columns.get_loc("pupil_xpos")] = np.nan
+            videodata.iloc[idx,videodata.columns.get_loc("pupil_ypos")] = np.nan
+            videodata.iloc[idx,videodata.columns.get_loc("pupil_area")] = np.nan
     else:
         print('#######################  Could not locate facemapdata...')
+
 
     videodata['session_id']  = sessiondata['session_id'][0]
 
@@ -830,7 +848,9 @@ def align_timestamps(sessiondata, ops, triggerdata):
     nTiffFiles = len(protocol_tif_idx)
     if nTriggers-1 == nTiffFiles:
         triggerdata = triggerdata[1:,:]
-        print('First trigger missed, too slow for scanimage acquisition system')
+        if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") > datetime(2024, 1, 1):
+            print('First trigger missed, problematic with trigger at right VDAQ channel in 2024')
+
     elif nTriggers-2 == nTiffFiles:
         triggerdata = triggerdata[2:,:]
         print('First two triggers missed, too slow for scanimage acquisition system')
@@ -877,3 +897,21 @@ def calculate_dff(F, Fneu, coeff_Fneu=0.7, prc=10): #Rupprecht et al. 2021
     #Compute dF / F0:
     dFF = (Fc - F0) / F0
     return dFF
+
+def plot_pupil_dist(videodata):
+    fig,axes  = plt.subplots(1,3,figsize=(9,3))
+
+    xpos = zscore(videodata['pupil_xpos'])
+    ypos = zscore(videodata['pupil_ypos'])
+    area = zscore(videodata['pupil_area'])
+    axes[0].scatter(xpos,ypos,s=5,alpha=0.1)
+    axes[0].set_xlabel('X Position')
+    axes[0].set_ylabel('Y Position')
+    axes[1].scatter(xpos,area,s=5,alpha=0.1)
+    axes[1].set_xlabel('Area')
+    axes[1].set_ylabel('X Position')
+    axes[2].scatter(ypos,area,s=5,alpha=0.1)
+    axes[2].set_xlabel('Area')
+    axes[2].set_ylabel('Y Position')
+    plt.tight_layout()
+    return

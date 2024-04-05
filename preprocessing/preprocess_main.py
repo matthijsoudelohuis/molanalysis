@@ -3,9 +3,8 @@ Author: Matthijs Oude Lohuis, Champalimaud Research
 2022-2025
 
 Main preprocessing function
-Preprocesses behavioral data, task and trial data, imaging data etc.
+Preprocesses behavioral data, task and trial data, facial video data, calcium imaging data etc.
 """
-
 
 import os, sys
 import numpy as np
@@ -24,7 +23,7 @@ procdatadir     = "V:\\Procdata\\"
 date_filter         = []
 animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE11622','LPE11495','LPE11623'] #If empty than all animals in folder will be processed
-# date_filter        = ['2024_01_10']
+date_filter        = ['2024_01_08']
 # date_filter        = ['2024_02_20']
 # date_filter        = ['2024_01_10']
 
@@ -34,6 +33,7 @@ protocols           = ['GR','SP','IM','GN']
 # protocols           = ['DN']
 
 processimagingflag  = True
+saveimagingflag     = False
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -89,10 +89,11 @@ for animal_id in animal_ids: #for each animal
                 if os.path.exists(os.path.join(sesfolder,"suite2p")) and processimagingflag:
                     print('Detected imaging data')
                     [sessiondata,celldata,dFdata,deconvdata]         = proc_imaging(sesfolder,sessiondata) #main processing function for imaging data
-                    print('\nSaving imaging data\n')
                     celldata.to_csv(os.path.join(outdir,"celldata.csv"), sep=',')
-                    dFdata.to_csv(os.path.join(outdir,"dFdata.csv"), sep=',')
-                    deconvdata.to_csv(os.path.join(outdir,"deconvdata.csv"), sep=',')
+                    if saveimagingflag:
+                        print('\nSaving imaging data\n')
+                        dFdata.to_csv(os.path.join(outdir,"dFdata.csv"), sep=',')
+                        deconvdata.to_csv(os.path.join(outdir,"deconvdata.csv"), sep=',')
                 
                 #Save sessiondata:
                 sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')
