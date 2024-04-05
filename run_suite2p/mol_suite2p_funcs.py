@@ -134,21 +134,28 @@ def run_bleedthrough_corr(db,ops,coeff=None,gain1=0.6,gain2=0.4):
         # plot_bleedthrough_correction(np.mean(data_green,axis=0), np.mean(data_red,axis=0), np.mean(data_green_corr,axis=0))
         # plot_correction_images(greenchanim,redchanim)
 
-        with BinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
-        # with BinaryFile(filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(filename=file_chan1_corr,Ly=512, Lx=512,n_frames=f1.n_frames) as f3:
+        # with BinaryFile(read_filename=file_chan1,write_filename=file_chan1_corr,Ly=512, Lx=512) as f1, BinaryFile(read_filename=file_chan2, Ly=512, Lx=512) as f2:
+        with BinaryFile(filename=file_chan1,Ly=512, Lx=512) as f1, BinaryFile(filename=file_chan2, Ly=512, Lx=512) as f2, BinaryFile(filename=file_chan1_corr,Ly=512, Lx=512,n_frames=f1.n_frames) as f3:
+    
+            #for i in np.arange(f1.n_frames):
             
-            for i in np.arange(f1.n_frames):
+            for i in np.arange(5):
+                print(i)	
+                f3.write
+                datagreen       = f1.file[i]
+                datared         = f2.file[i]
+
                 [ind,datagreen]      = f1.read(batch_size=1)
                 [ind,datared]        = f2.read(batch_size=1)
-                  
-                #   datagreencorr = datagreen - coeff * datared
 
                 datagreencorr = bleedthrough_correction(datagreen,datared,coeff,gain1,gain2)
-                
-                f1.write(data=datagreencorr)
-                #   f3.write(data=datagreencorr)
+                f3.file[i] = datagreencorr
+
+                # f1.write(data=datagreencorr)
+                f3.write(data=datagreencorr)
             f1.close()
             f2.close()
+            f3.close()
 
     #delete original rename corrected to data.bin to be read by suite2p for detection:
     for iplane in np.arange(ops['nplanes']):
