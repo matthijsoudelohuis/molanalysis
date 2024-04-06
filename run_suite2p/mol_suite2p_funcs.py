@@ -196,11 +196,11 @@ def run_bleedthrough_corr(db,ops,coeff=None,gain1=0.6,gain2=0.4):
         # ops['reg_file']         = ops['reg_file'].replace('data','data_corr')
         
         # with BinaryFile(read_filename=os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data_corr.bin'),Ly=512, Lx=512) as f1:
-        with BinaryFile(read_filename=os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data.bin'),Ly=512, Lx=512) as f1:
+        with OldBinaryFile(read_filename=os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'data.bin'),Ly=512, Lx=512) as f1:
             ops['meanImg']      = f1.sampled_mean()
         
         ops                     = extract.enhanced_mean_image(ops)
-        ops                     = extract.enhanced_mean_image_chan2(ops)
+        # ops                     = extract.enhanced_mean_image_chan2(ops)
         np.save(os.path.join(db['save_path0'],'suite2p','plane%s' % iplane,'ops.npy'),ops)    
     
     return ops
