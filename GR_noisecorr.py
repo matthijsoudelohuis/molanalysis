@@ -465,15 +465,38 @@ plt.savefig(os.path.join(savedir,'NoiseCorr_tuning_perArea' + sessions[sesidx].s
 # Plot 2D noise correlations as a function of the difference in preferred orientation
 # for different percentiles of how strongly tuned neurons are
 
+# from utils.RRRlib import *
+
+# X = np.column_stack((sessions[ises].respmat_runspeed,sessions[ises].respmat_videome))
+# Y = sessions[ises].respmat.T
+
+# sessions[ises].respmat = regress_out_behavior_modulation(sessions[ises],X,Y,nvideoPCs = 30,rank=2).T
+
+
 # Recompute noise correlations without setting half triangle to nan
 sessions =  compute_noise_correlation(sessions,uppertriangular=False)
 
-rotate_prefori  = True
+rotate_prefori  = False
 min_counts      = 1000 # minimum pairwise observation to include bin
 
-[noiseRFmat_mean,countsRFmat,binrange] = compute_noisecorr_rfmap(sessions,binresolution=5,rotate_prefori=rotate_prefori)
-
+[noiseRFmat_mean,countsRFmat,binrange] = noisecorr_rfmap(sessions,binresolution=5,
+                                                         rotate_prefori=True,
+                                                         rotate_deltaprefori=False)
 noiseRFmat_mean[countsRFmat<min_counts] = np.nan
+
+binaxis = np.arange(start=binrange[0,0],stop=binrange[0,1],step=5)
+X,Y = np.meshgrid(binaxis,binaxis)
+
+polar_r         = np.mod(np.arctan2(X,Y)+np.pi/2,np.pi*2)
+polar_theta     = np.sqrt(X**2 + Y**2)
+plt.imshow(polar_r)
+plt.imshow(polar_theta)
+
+# np.histogram(noiseRFmat_mean.flatten(),)
+
+NC_circbin       = binned_statistic(x=polar_r.flatten(),
+                        values = noiseRFmat_mean.flatten(),
+                        statistic='mean')[0]
 
 ## Show the counts of pairs:
 fig,ax = plt.subplots(1,1,figsize=(7,4))
@@ -482,11 +505,11 @@ plt.colorbar(IM,fraction=0.026, pad=0.04,label='counts')
 if not rotate_prefori:
     plt.xlabel('delta Azimuth')
     plt.ylabel('delta Elevation')
-    fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Counts_%dsessions' %nSessions  + '.png'), format = 'png')
+    # fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Counts_%dsessions' %nSessions  + '.png'), format = 'png')
 else:
     plt.xlabel('Collinear')
     plt.ylabel('Orthogonal')
-    fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Counts_Rotated_%dsessions' %nSessions  + '.png'), format = 'png')
+    # fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Counts_Rotated_%dsessions' %nSessions  + '.png'), format = 'png')
 
 ## Show the noise correlation map:
 fig,ax = plt.subplots(1,1,figsize=(7,4))
@@ -495,12 +518,33 @@ plt.colorbar(IM,fraction=0.026, pad=0.04,label='noise correlation')
 if not rotate_prefori:
     plt.xlabel('delta Azimuth')
     plt.ylabel('delta Elevation')
-    fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_%dsessions' %nSessions  + '.png'), format = 'png')
+    # fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_%dsessions' %nSessions  + '.png'), format = 'png')
 else:
     plt.xlabel('Collinear')
     plt.ylabel('Orthogonal')
-    fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Rotated_%dsessions' %nSessions  + '.png'), format = 'png')
+    # fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Rotated_%dsessions' %nSessions  + '.png'), format = 'png')
 
+# sns.histplot(celldata['pref_ori'],bins=oris)
+
+[noiseRFmat_mean,countsRFmat,binrange] = noisecorr_rfmap_perori(sessions,binresolution=5,
+                                                                rotate_prefori=True)
+
+## Show the noise correlation map:
+fig,axes = plt.subplots(4,4,figsize=(10,10))
+for i in range(4):
+    for j in range(4):
+        axes[i,j].imshow(noiseRFmat_mean[i*4+j,:,:],vmin=0.02,vmax=0.07,cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
+
+noiseRFmat_mean = np.nanmean(noiseRFmat_mean,axis=0)
+
+min_counts = 500
+countsRFmat = np.sum(countsRFmat,axis=0)
+noiseRFmat_mean[countsRFmat<min_counts] = np.nan
+
+## Show the noise correlation map:
+fig,ax = plt.subplots(1,1,figsize=(7,4))
+IM = ax.imshow(noiseRFmat_mean,vmin=0.034,vmax=0.082,cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
+plt.colorbar(IM,fraction=0.026, pad=0.04,label='noise correlation')
 
 #%% #########################################################################################
 # Contrasts: areas and labeling
