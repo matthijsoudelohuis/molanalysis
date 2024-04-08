@@ -19,17 +19,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.signal import medfilt
-from scipy.stats import binned_statistic
+from scipy.stats import binned_statistic,binned_statistic_2d
+
 from statannotations.Annotator import Annotator
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_respmat
-from utils.tuning import compute_tuning
+from utils.tuning import compute_tuning, compute_prefori
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D,plot_excerpt
 from utils.plot_lib import shaded_error
 from utils.RRRlib import regress_out_behavior_modulation
-from utils.corr_lib import compute_noise_correlation
+from utils.corr_lib import compute_noise_correlation, compute_pairwise_metrics
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - Gratings\\')
 
@@ -37,17 +38,18 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - G
 session_list        = np.array([['LPE10919','2023_11_06']])
 session_list        = np.array([['LPE10885','2023_10_23']])
 session_list        = np.array([['LPE11086','2024_01_05']])
-# session_list        = np.array([['LPE11086','2024_01_05'],
-#                                 ['LPE10884','2023_10_20'],
-#                                 ['LPE10885','2023_10_19'],
-#                                 ['LPE10885','2023_10_23'],
-#                                 ['LPE10919','2023_11_06']])
+session_list        = np.array([['LPE11086','2024_01_05'],
+                                ['LPE10884','2023_10_20'],
+                                ['LPE10885','2023_10_19'],
+                                ['LPE10885','2023_10_23'],
+                                ['LPE10919','2023_11_06']])
 
-# load_respmat: 
+# load sessions lazy: 
 sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=False, 
                                     load_calciumdata=False, load_videodata=False, calciumversion='deconv')
 # sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
-                                    
+
+#   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
     sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
     
@@ -86,24 +88,6 @@ for ises in range(nSessions):    # iterate over sessions
 #     sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
 #     sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
 
-# ##############################################################################
-# ## Construct trial response matrix:  N neurons by K trials
-# for ises in range(nSessions):
-#     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
-#                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
-
-#     sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'],
-#                                                       sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
-#                                                     t_resp_start=0,t_resp_stop=1,method='mean')
-
-#     sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
-#                                                     sessions[ises].videodata['timestamps'],sessions[ises].trialdata['tOnset'],
-#                                                     t_resp_start=0,t_resp_stop=1,method='mean')
-
-#     # delattr(sessions[ises],'calciumdata')
-#     # delattr(sessions[ises],'videodata')
-#     # delattr(sessions[ises],'behaviordata')
-
 ############################ Compute tuning metrics: ###################################
 
 for ises in range(nSessions):
@@ -116,9 +100,35 @@ for ises in range(nSessions):
     sessions[ises].celldata['tuning_var'] = compute_tuning(sessions[ises].respmat,
                                                     sessions[ises].trialdata['Orientation'],
                                                     tuning_metric='tuning_var')
+    sessions[ises].celldata['pref_ori'] = compute_prefori(sessions[ises].respmat,
+                                                    sessions[ises].trialdata['Orientation'])
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
+############################ Compute noise correlations: ###################################
+sessions = compute_noise_correlation(sessions)
+
+#TODO: make noise corr and pairwise functions attributes of session classes
+
+#%% ##################### Compute pairwise neuronal distances: ##############################
+sessions = compute_pairwise_metrics(sessions)
+
+# construct dataframe with all pairwise measurements:
+df_allpairs  = pd.DataFrame()
+
+for ises in range(nSessions):
+    [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+
+    tempdf  = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr.flatten(),
+                    'DeltaPrefOri': sessions[ises].delta_pref.flatten(),
+                    'AreaPair': sessions[ises].areamat.flatten(),
+                    'DistXYPair': sessions[ises].distmat_xy.flatten(),
+                    'DistXYZPair': sessions[ises].distmat_xyz.flatten(),
+                    'DistRfPair': sessions[ises].distmat_rf.flatten(),
+                    'AreaLabelPair': sessions[ises].arealabelmat.flatten(),
+                    'LabelPair': sessions[ises].labelmat.flatten()}).dropna(how='all') 
+                    #drop all rows that have all nan (diagonal + repeat below daig)
+    df_allpairs  = pd.concat([df_allpairs, tempdf], ignore_index=True).reset_index(drop=True)
 
 ######################################
 #Show some traces and some stimuli to see responses:
@@ -219,8 +229,6 @@ plt.tight_layout()
 
 fig.savefig(os.path.join(savedir,'Tuning','Locomotion_V1PM_LabNonLab_' + str(nSessions) + 'sessions.png'), format = 'png')
 
-############################ Compute noise correlations: ###################################
-sessions = compute_noise_correlation(sessions)
 
 ###################### Plot control figure of signal and noise corrs ##############################
 sesidx = 0
@@ -236,26 +244,6 @@ plt.imshow(sessions[sesidx].noise_corr, cmap='coolwarm',
            vmin=np.nanpercentile(sessions[sesidx].noise_corr,5),
            vmax=np.nanpercentile(sessions[sesidx].noise_corr,95))
 plt.savefig(os.path.join(savedir,'NoiseCorrelations','Noise_Correlation_Mat_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-#%% ##################### Compute pairwise neuronal distances: ##############################
-
-sessions = compute_pairwise_metrics(sessions)
-
-# construct dataframe with all pairwise measurements:
-df_allpairs  = pd.DataFrame()
-
-for ises in range(nSessions):
-    [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
-
-    tempdf  = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr.flatten(),
-                    'DeltaPrefOri': sessions[ises].delta_pref.flatten(),
-                    'AreaPair': sessions[ises].areamat.flatten(),
-                    'DistXYPair': sessions[ises].distmat_xy.flatten(),
-                    'DistXYZPair': sessions[ises].distmat_xyz.flatten(),
-                    'DistRfPair': sessions[ises].distmat_rf.flatten(),
-                    'LabelPair': sessions[ises].labelmat.flatten()}).dropna(how='all') 
-                    #drop all rows that have all nan (diagonal + repeat below daig)
-    df_allpairs  = pd.concat([df_allpairs, tempdf], ignore_index=True).reset_index(drop=True)
 
 
 #%% Plotting Noise Correlation distribution across all pairs:
@@ -418,6 +406,7 @@ for ises in range(nSessions):
 
 
 
+
 ##########################################################################################
 # Plot noise correlations as a function of the difference in preferred orientation
 # for different percentiles of how strongly tuned neurons are
@@ -428,7 +417,7 @@ for ises in range(nSessions):
     tuning_percentiles  = np.percentile(sessions[ises].celldata['tuning_var'],tuning_perc_labels)
     clrs_percentiles    = sns.color_palette('inferno', len(tuning_percentiles))
 
-    histdata            = df.groupby(['DeltaPrefOri','DistRfPair','AreaPair'], as_index=False)['NoiseCorrelation'].mean()
+    histdata            = df_allpairs.groupby(['DeltaPrefOri','DistRfPair','AreaPair'], as_index=False)['NoiseCorrelation'].mean()
     for iap,areapair in enumerate(areapairs):
         plt.subplot(1,3,iap+1)
         for ip in range(len(tuning_percentiles)-1):
@@ -470,6 +459,147 @@ for ises in range(nSessions):
 plt.savefig(os.path.join(savedir,'NoiseCorr_tuning_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 # plt.hist(df['DistRfPair'])
 # sns.histplot(df['DistRfPair'])
+
+
+##########################################################################################
+# Plot 2D noise correlations as a function of the difference in preferred orientation
+# for different percentiles of how strongly tuned neurons are
+
+sessions =  compute_noise_correlation(sessions,uppertriangular=False)
+
+binresolution = 5 # in degrees visual angle:
+binrange = np.array([[-50, 50],[-135, 135]])
+nBins = np.array([(binrange[0,1] - binrange[0,0]) / binresolution,(binrange[1,1] - binrange[1,0]) / binresolution]).astype(int)
+
+noiseRFmat = np.empty(nBins)
+countsRFmat = np.empty(nBins)
+rotate_prefori = True
+
+oris            = np.sort(sessions[ises].trialdata['Orientation'].unique())
+rotation_matrix_oris = np.empty((2,2,len(oris)))
+for iori,ori in enumerate(oris):
+    c, s = np.cos(np.radians(ori)), np.sin(np.radians(ori))
+    rotation_matrix_oris[:,:,iori] = np.array(((c, -s), (s, c)))
+
+for ises in range(nSessions):
+    print('computing 2d receptive field hist of noise correlations for session %d / %d' % (ises+1,nSessions))
+    nNeurons    = len(sessions[ises].celldata)
+    idx_RF      = ~np.isnan(sessions[ises].celldata['rf_azimuth'])
+    RFneurons   = np.where(idx_RF)[0]
+
+    for i,iN in enumerate(RFneurons):
+        idx = np.logical_and(idx_RF, range(nNeurons) != iN)
+
+        delta_el = sessions[ises].celldata['rf_elevation'] - sessions[ises].celldata['rf_elevation'][iN]
+        delta_az = sessions[ises].celldata['rf_azimuth'] - sessions[ises].celldata['rf_azimuth'][iN]
+
+        angle_vec = np.vstack((delta_el, delta_az))
+        if rotate_prefori:
+            for iori,ori in enumerate(oris):
+                ori_diff = np.mod(sessions[ises].celldata['pref_ori'] - sessions[ises].celldata['pref_ori'][iN],360)
+                idx_ori = ori_diff ==ori
+
+                angle_vec[:,idx_ori] = rotation_matrix_oris[:,:,iori] @ angle_vec[:,idx_ori]
+
+        noiseRFmat       = noiseRFmat + binned_statistic_2d(x=angle_vec[0,idx],y=angle_vec[1,idx],
+                           values = sessions[ises].noise_corr[iN, idx],
+                           bins=nBins,range=binrange,statistic='sum')[0]
+        
+        countsRFmat      = countsRFmat + np.histogram2d(x=angle_vec[0,idx],y=angle_vec[1,idx],
+                           bins=nBins,range=binrange)[0]
+
+# divide the total summed noise correlations by the number of counts in that bin to get the mean:
+noiseRFmat_mean = noiseRFmat / countsRFmat 
+
+plt.imshow(noiseRFmat)
+plt.imshow(countsRFmat,vmin=np.percentile(countsRFmat,5),vmax=np.percentile(countsRFmat,95))
+
+fig,ax = plt.subplots(1,1,figsize=(5,5))
+noiseRFmat_mean[countsRFmat<np.percentile(countsRFmat,25)] = np.nan
+plt.imshow(noiseRFmat_mean,vmin=0.03,vmax=0.06,cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
+plt.xlim([-50,50])
+plt.ylim([-50,50])
+plt.xlabel('Collinear')
+plt.ylabel('Orthogonal')
+
+#Contrasts: areas and labeling
+areas               = ['V1','PM']
+redcells            = [0,1]
+redcelllabels       = ['unl','lab']
+legendlabels        = np.empty((4,4),dtype='object')
+noiseRFmat          = np.zeros((4,4,*nBins))
+countsRFmat         = np.zeros((4,4,*nBins))
+
+# noiseRFmat = np.empty(nBins)
+# countsRFmat = np.empty(nBins)
+rotate_prefori = True
+
+for ises in range(nSessions):
+    print('computing 2d receptive field hist of noise correlations for session %d / %d' % (ises+1,nSessions))
+    nNeurons    = len(sessions[ises].celldata)
+    idx_RF      = ~np.isnan(sessions[ises].celldata['rf_azimuth'])
+
+    for ixArea,xArea in enumerate(areas):
+        for iyArea,yArea in enumerate(areas):
+            for ixRed,xRed in enumerate(redcells):
+                for iyRed,yRed in enumerate(redcells):
+
+                    idx_source      = np.logical_and(sessions[ises].celldata['roi_name']==xArea,
+                                                sessions[ises].celldata['redcell']==xRed)
+                    idx_source      = np.logical_and(idx_source,idx_RF)
+                    sourceneurons   = np.where(idx_source)[0]
+
+                    for i,iN in enumerate(sourceneurons):
+                        # print(iN)
+                        idx_target      = np.logical_and(sessions[ises].celldata['roi_name']==yArea,
+                                                sessions[ises].celldata['redcell']==yRed)
+                        idx_target      = np.logical_and(idx_target,idx_RF)
+                        idx_target      = np.logical_and(idx_target,range(nNeurons) != iN)
+
+                        delta_el = sessions[ises].celldata['rf_elevation'] - sessions[ises].celldata['rf_elevation'][iN]
+                        delta_az = sessions[ises].celldata['rf_azimuth'] - sessions[ises].celldata['rf_azimuth'][iN]
+                        angle_vec = np.vstack((delta_el, delta_az))
+
+                        if rotate_prefori:
+                            for iori,ori in enumerate(oris):
+                                ori_diff = np.mod(sessions[ises].celldata['pref_ori'] - sessions[ises].celldata['pref_ori'][iN],360)
+                                idx_ori = ori_diff ==ori
+
+                                angle_vec[:,idx_ori] = rotation_matrix_oris[:,:,iori] @ angle_vec[:,idx_ori]
+
+                        noiseRFmat[ixArea*2 + ixRed,iyArea*2 + iyRed,:,:]  += binned_statistic_2d(x=angle_vec[0,idx_target],y=angle_vec[1,idx_target],
+                                        values = sessions[ises].noise_corr[iN, idx_target],
+                                        bins=nBins,range=binrange,statistic='sum')[0]
+                        
+                        countsRFmat[ixArea*2 + ixRed,iyArea*2 + iyRed,:,:] += np.histogram2d(x=angle_vec[0,idx_target],y=angle_vec[1,idx_target],
+                                        bins=nBins,range=binrange)[0]
+                        
+                    legendlabels[ixArea*2 + ixRed,iyArea*2 + iyRed]  = areas[ixArea] + redcelllabels[ixRed] + '-' + areas[iyArea] + redcelllabels[iyRed]
+
+## Make the figure:
+noiseRFmat_mean = noiseRFmat / countsRFmat 
+noiseRFmat_mean[countsRFmat<25] = np.nan
+# noiseRFmat_mean[countsRFmat<50] = np.nanmean(noiseRFmat_mean)
+
+# noiseRFmat_mean[np.isinf(noiseRFmat_mean)] = np.nanmean(noiseRFmat_mean)
+
+                             
+fig,axes = plt.subplots(4,4,figsize=(10,7))
+for i in range(4):
+    for j in range(4):
+        axes[i,j].imshow(noiseRFmat_mean[i,j,:,:],vmin=0.03,vmax=0.06,cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
+        axes[i,j].set_title(legendlabels[i,j])
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_%dsessions' %nSessions  + '.png'), format = 'png')
+
+fig,axes = plt.subplots(4,4,figsize=(10,7))
+for i in range(4):
+    for j in range(4):
+        axes[i,j].imshow(np.log10(countsRFmat[i,j,:,:]),vmax=np.percentile(np.log10(countsRFmat),99.9),cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
+        axes[i,j].set_title(legendlabels[i,j])
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Counts_%dsessions' %nSessions  + '.png'), format = 'png')
+
 
 ################################################################
 plt.figure()

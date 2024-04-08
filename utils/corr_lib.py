@@ -9,7 +9,7 @@ import os
 import numpy as np
 import pandas as pd
 
-def compute_noise_correlation(sessions):
+def compute_noise_correlation(sessions,uppertriangular=True):
     nSessions = len(sessions)
 
     sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
@@ -45,9 +45,10 @@ def compute_noise_correlation(sessions):
             # sessions[ises].noise_corr[np.eye(N)==1]     = np.nan
 
             idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
-            sessions[ises].sig_corr[idx_triu] = np.nan
-            sessions[ises].noise_corr[idx_triu] = np.nan
-            sessions[ises].delta_pref[idx_triu] = np.nan
+            if uppertriangular:
+                sessions[ises].sig_corr[idx_triu] = np.nan
+                sessions[ises].noise_corr[idx_triu] = np.nan
+                sessions[ises].delta_pref[idx_triu] = np.nan
 
             assert np.all(sessions[ises].sig_corr[~idx_triu] > -1)
             assert np.all(sessions[ises].sig_corr[~idx_triu] < 1)
@@ -117,12 +118,20 @@ def compute_pairwise_metrics(sessions):
 
         g = np.meshgrid(sessions[ises].celldata['roi_name'],sessions[ises].celldata['roi_name'])
         sessions[ises].areamat = g[0] + '-' + g[1]
-        sessions[ises].areamat[sessions[ises].areamat=='PM-V1'] = 'V1-PM' #fix order for combinations
 
-        g = np.meshgrid(sessions[ises].celldata['redcell'].astype(int).astype(str).to_numpy(),
-                        sessions[ises].celldata['redcell'].astype(int).astype(str).to_numpy())
-        sessions[ises].labelmat = g[0] + '-' + g[1] 
-        sessions[ises].labelmat[sessions[ises].labelmat=='1-0'] = '0-1' #fix order for combinations
+        temp = sessions[ises].celldata['redcell'].replace(0,'unl').replace(1,'lab').to_numpy()
+        h = np.meshgrid(temp,temp)
+        sessions[ises].labelmat = h[0] + '-' + h[1] 
+        
+        sessions[ises].arealabelmat = g[0] + h[0] + '-' + g[1] + h[1] #combination of area and label
+        
+        #Fix order of pairs to not have similar entries with different labels:
+        sessions[ises].areamat[sessions[ises].areamat=='PM-V1'] = 'V1-PM' #fix order for combinations
+        sessions[ises].labelmat[sessions[ises].labelmat=='lab-unl'] = 'unl-lab' #fix order for combinations
+        sessions[ises].arealabelmat[sessions[ises].arealabelmat=='PMunl-V1lab'] = 'V1lab-PMunl' #fix order for combinations
+        sessions[ises].arealabelmat[sessions[ises].arealabelmat=='PMunl-V1unl'] = 'V1unl-PMunl' #fix order for combinations
+        sessions[ises].arealabelmat[sessions[ises].arealabelmat=='PMlab-V1lab'] = 'V1lab-PMlab' #fix order for combinations
+        sessions[ises].arealabelmat[sessions[ises].arealabelmat=='PMlab-V1unl'] = 'V1unl-PMlab' #fix order for combinations
 
         idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
         sessions[ises].distmat_xyz[idx_triu] = np.nan
@@ -130,4 +139,6 @@ def compute_pairwise_metrics(sessions):
         sessions[ises].distmat_rf[idx_triu] = np.nan
         sessions[ises].areamat[idx_triu] = np.nan
         sessions[ises].labelmat[idx_triu] = np.nan
+        sessions[ises].arealabelmat[idx_triu] = np.nan
+
     return sessions
