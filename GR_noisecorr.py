@@ -30,7 +30,7 @@ from utils.plotting_style import * #get all the fixed color schemes
 from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D,plot_excerpt
 from utils.plot_lib import shaded_error
 from utils.RRRlib import regress_out_behavior_modulation
-from utils.corr_lib import compute_noise_correlation, compute_pairwise_metrics
+from utils.corr_lib import compute_noise_correlation, compute_pairwise_metrics, compute_noisecorr_rfmap
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - Gratings\\')
 
@@ -461,68 +461,49 @@ plt.savefig(os.path.join(savedir,'NoiseCorr_tuning_perArea' + sessions[sesidx].s
 # sns.histplot(df['DistRfPair'])
 
 
-##########################################################################################
+#%% #########################################################################################
 # Plot 2D noise correlations as a function of the difference in preferred orientation
 # for different percentiles of how strongly tuned neurons are
 
+# Recompute noise correlations without setting half triangle to nan
 sessions =  compute_noise_correlation(sessions,uppertriangular=False)
 
-binresolution = 5 # in degrees visual angle:
-binrange = np.array([[-50, 50],[-135, 135]])
-nBins = np.array([(binrange[0,1] - binrange[0,0]) / binresolution,(binrange[1,1] - binrange[1,0]) / binresolution]).astype(int)
+rotate_prefori  = True
+min_counts      = 1000 # minimum pairwise observation to include bin
 
-noiseRFmat = np.empty(nBins)
-countsRFmat = np.empty(nBins)
-rotate_prefori = True
+[noiseRFmat_mean,countsRFmat,binrange] = compute_noisecorr_rfmap(sessions,binresolution=5,rotate_prefori=rotate_prefori)
 
-oris            = np.sort(sessions[ises].trialdata['Orientation'].unique())
-rotation_matrix_oris = np.empty((2,2,len(oris)))
-for iori,ori in enumerate(oris):
-    c, s = np.cos(np.radians(ori)), np.sin(np.radians(ori))
-    rotation_matrix_oris[:,:,iori] = np.array(((c, -s), (s, c)))
+noiseRFmat_mean[countsRFmat<min_counts] = np.nan
 
-for ises in range(nSessions):
-    print('computing 2d receptive field hist of noise correlations for session %d / %d' % (ises+1,nSessions))
-    nNeurons    = len(sessions[ises].celldata)
-    idx_RF      = ~np.isnan(sessions[ises].celldata['rf_azimuth'])
-    RFneurons   = np.where(idx_RF)[0]
+## Show the counts of pairs:
+fig,ax = plt.subplots(1,1,figsize=(7,4))
+IM = ax.imshow(countsRFmat,vmin=np.percentile(countsRFmat,5),vmax=np.percentile(countsRFmat,99),interpolation='none',extent=np.flipud(binrange).flatten())
+plt.colorbar(IM,fraction=0.026, pad=0.04,label='counts')
+if not rotate_prefori:
+    plt.xlabel('delta Azimuth')
+    plt.ylabel('delta Elevation')
+    fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Counts_%dsessions' %nSessions  + '.png'), format = 'png')
+else:
+    plt.xlabel('Collinear')
+    plt.ylabel('Orthogonal')
+    fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Counts_Rotated_%dsessions' %nSessions  + '.png'), format = 'png')
 
-    for i,iN in enumerate(RFneurons):
-        idx = np.logical_and(idx_RF, range(nNeurons) != iN)
+## Show the noise correlation map:
+fig,ax = plt.subplots(1,1,figsize=(7,4))
+IM = ax.imshow(noiseRFmat_mean,vmin=0.03,vmax=0.052,cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
+plt.colorbar(IM,fraction=0.026, pad=0.04,label='noise correlation')
+if not rotate_prefori:
+    plt.xlabel('delta Azimuth')
+    plt.ylabel('delta Elevation')
+    fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_%dsessions' %nSessions  + '.png'), format = 'png')
+else:
+    plt.xlabel('Collinear')
+    plt.ylabel('Orthogonal')
+    fig.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NoiseCorrMap_Rotated_%dsessions' %nSessions  + '.png'), format = 'png')
 
-        delta_el = sessions[ises].celldata['rf_elevation'] - sessions[ises].celldata['rf_elevation'][iN]
-        delta_az = sessions[ises].celldata['rf_azimuth'] - sessions[ises].celldata['rf_azimuth'][iN]
 
-        angle_vec = np.vstack((delta_el, delta_az))
-        if rotate_prefori:
-            for iori,ori in enumerate(oris):
-                ori_diff = np.mod(sessions[ises].celldata['pref_ori'] - sessions[ises].celldata['pref_ori'][iN],360)
-                idx_ori = ori_diff ==ori
-
-                angle_vec[:,idx_ori] = rotation_matrix_oris[:,:,iori] @ angle_vec[:,idx_ori]
-
-        noiseRFmat       = noiseRFmat + binned_statistic_2d(x=angle_vec[0,idx],y=angle_vec[1,idx],
-                           values = sessions[ises].noise_corr[iN, idx],
-                           bins=nBins,range=binrange,statistic='sum')[0]
-        
-        countsRFmat      = countsRFmat + np.histogram2d(x=angle_vec[0,idx],y=angle_vec[1,idx],
-                           bins=nBins,range=binrange)[0]
-
-# divide the total summed noise correlations by the number of counts in that bin to get the mean:
-noiseRFmat_mean = noiseRFmat / countsRFmat 
-
-plt.imshow(noiseRFmat)
-plt.imshow(countsRFmat,vmin=np.percentile(countsRFmat,5),vmax=np.percentile(countsRFmat,95))
-
-fig,ax = plt.subplots(1,1,figsize=(5,5))
-noiseRFmat_mean[countsRFmat<np.percentile(countsRFmat,25)] = np.nan
-plt.imshow(noiseRFmat_mean,vmin=0.03,vmax=0.06,cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
-plt.xlim([-50,50])
-plt.ylim([-50,50])
-plt.xlabel('Collinear')
-plt.ylabel('Orthogonal')
-
-#Contrasts: areas and labeling
+#%% #########################################################################################
+# Contrasts: areas and labeling
 areas               = ['V1','PM']
 redcells            = [0,1]
 redcelllabels       = ['unl','lab']
@@ -530,8 +511,9 @@ legendlabels        = np.empty((4,4),dtype='object')
 noiseRFmat          = np.zeros((4,4,*nBins))
 countsRFmat         = np.zeros((4,4,*nBins))
 
-# noiseRFmat = np.empty(nBins)
-# countsRFmat = np.empty(nBins)
+rotate_prefori = False
+[noiseRFmat_mean,countsRFmat,binrange] = compute_noisecorr_rfmap_v2(sessions,binresolution=5,rotate_prefori=rotate_prefori)
+
 rotate_prefori = True
 
 for ises in range(nSessions):
@@ -582,7 +564,6 @@ noiseRFmat_mean[countsRFmat<25] = np.nan
 # noiseRFmat_mean[countsRFmat<50] = np.nanmean(noiseRFmat_mean)
 
 # noiseRFmat_mean[np.isinf(noiseRFmat_mean)] = np.nanmean(noiseRFmat_mean)
-
                              
 fig,axes = plt.subplots(4,4,figsize=(10,7))
 for i in range(4):
