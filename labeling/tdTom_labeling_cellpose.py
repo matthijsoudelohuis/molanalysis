@@ -6,22 +6,18 @@ Matthijs Oude Lohuis, 2023, Champalimaud Foundation
 
 import os
 import numpy as np
-import matplotlib.pyplot as plt
-from cellpose import models
-from cellpose.io import imread
-from PIL import ImageColor
-from natsort import natsorted 
-
-from cellpose import utils, io
-
 import pandas as pd
 import seaborn as sns
-from suite2p.extraction import extract, masks
-from suite2p.detection.chan2detect import detect,correct_bleedthrough
-
+import matplotlib.pyplot as plt
+from PIL import Image
+from natsort import natsorted
+import cv2
 from utils.imagelib import im_norm,im_norm8,im_log,im_sqrt
 
-from PIL import Image
+# from cellpose import utils #, io
+
+# from suite2p.extraction import extract, masks
+# from suite2p.detection.chan2detect import detect,correct_bleedthrough
 
 def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5):
     stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
@@ -53,7 +49,7 @@ def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5
     # If full tdTomato labeled soma falls inside ROI then labeled. upper measure however could 
     # have lower value if large extra ROI taken as calcium dependent ROI
     frac_red_in_ROI     = np.zeros(Nsuite2pcells)
-    npix_redsomas   = np.histogram(masks_cp_red,
+    npix_redsomas       = np.histogram(masks_cp_red,
                         bins=np.arange(Ncellpose_redcells+1).astype(int))[0]
     if Ncellpose_redcells:
         for i,s in enumerate(stats):
@@ -64,7 +60,8 @@ def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5
 
     # redcell             = redcell_overlap > overlap_threshold
     redcell             = frac_red_in_ROI > overlap_threshold
-    redcell_cellpose    = np.vstack((redcell,frac_of_ROI_red,frac_red_in_ROI))
+    # redcell_cellpose    = np.vstack((redcell,frac_of_ROI_red,frac_red_in_ROI))
+    redcell_cellpose    = np.column_stack((redcell,frac_of_ROI_red,frac_red_in_ROI))
 
     np.save(os.path.join(plane_folder,'redcell_cellpose.npy'),redcell_cellpose)
 
@@ -104,14 +101,15 @@ def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5
         im3 = np.dstack((mimg2,mimg,np.zeros(np.shape(mimg2)))).astype(np.uint8)
         ax3.imshow(im3,vmin=0,vmax=255)
 
-        outl_green = utils.outlines_list(masks_suite2p)
+        outl_green = get_outlines(masks_suite2p)
         #Filter good cells for visualization laters: 
         outl_green = np.array(outl_green)[iscell[:,0]==1]
         
-        red_filtered = redcell_cellpose[1,iscell[:,0]==1]
+        # red_filtered = redcell_cellpose[1,iscell[:,0]==1]
+        red_filtered = redcell_cellpose[iscell[:,0]==1,0]
 
-        outl_red = utils.outlines_list(masks_cp_red)
-        
+        outl_red = get_outlines(masks_cp_red)
+
         for i,o in enumerate(outl_green):
             if iscell[i,0]: #show only good cells
                 ax1.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
@@ -141,7 +139,7 @@ def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5
 
         fig.savefig(os.path.join(plane_folder,'labeling_Plane%d.jpg' % iplane),dpi=600)
 
-    return 
+    return redcell_cellpose
 
 def proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=True):
     sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
@@ -269,14 +267,16 @@ def plotseq_labeling_plane(plane_folder,savedir,showcells=True,overlap_threshold
     fig.savefig(os.path.join(savedir,'1.png'))
 
     if showcells:
-        outl_green = utils.outlines_list(masks_suite2p)
+        # outl_green = utils.outlines_list(masks_suite2p)
+        outl_green = get_outlines(masks_suite2p)
         #Filter good cells for visualization laters: 
         outl_green = np.array(outl_green)[iscell[:,0]==1]
         
-        red_filtered = redcell_cellpose[1,iscell[:,0]==1]
+        red_filtered = redcell_cellpose[iscell[:,0]==1,0]
 
-        outl_red = utils.outlines_list(masks_cp_red)
-        
+        # outl_red = utils.outlines_list(masks_cp_red)
+        outl_red = get_outlines(masks_cp_red)
+
         for i,o in enumerate(outl_green):
             if iscell[i,0]: #show only good cells
                 ax1.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
@@ -297,8 +297,34 @@ def plotseq_labeling_plane(plane_folder,savedir,showcells=True,overlap_threshold
                 
         fig.savefig(os.path.join(savedir,'4.png'))
 
-
     return 
+
+
+def get_outlines(masks):
+    """Get outlines of masks as a list to loop over for plotting.
+
+    Args:
+        masks (ndarray): masks (0=no cells, 1=first cell, 2=second cell,...)
+
+    Returns:
+        list: List of outlines as pixel coordinates.
+
+    """
+    outpix = []
+    for n in np.unique(masks)[1:]:
+        mn = masks == n
+        if mn.sum() > 0:
+            contours = cv2.findContours(mn.astype(np.uint8), mode=cv2.RETR_EXTERNAL,
+                                        method=cv2.CHAIN_APPROX_NONE)
+            contours = contours[-2]
+            cmax = np.argmax([c.shape[0] for c in contours])
+            pix = contours[cmax].astype(int).squeeze()
+            if len(pix) > 4:
+                outpix.append(pix)
+            else:
+                outpix.append(np.zeros((0, 2)))
+    return outpix
+
 #piece of code to analyze how many red cells were labeled etc. overlap with suite2p bladiebla
     # nOnlyRedCells   = np.sum(mask_overlap_red_with_green==0)
     # nOverlapCells   = np.sum(mask_overlap_green_with_red>0)

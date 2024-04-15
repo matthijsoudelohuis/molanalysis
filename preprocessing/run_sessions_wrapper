@@ -11,19 +11,16 @@ except:
     os.chdir('e:\\Python\\molanalysis\\')
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 from loaddata.get_data_folder import get_rawdata_drive
+from preprocessing.locate_rf import locate_rf_session
 
 rawdatadir          = []
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
 # animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE10883'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
-# date_filter         = ['2024_02_29']
-# date_filter         = ['2023_03_14']
-# date_filter         = ['2023_10_09']
 date_filter         = []
 
 ## Loop over all selected animals and folders
-
 if len(animal_ids) == 0:
     animal_ids = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
 
@@ -39,6 +36,7 @@ for animal_id in animal_ids: #for each animal
 
     for sessiondate in sessiondates: #for each of the sessions for this animal
 
-        #########################  tdTomato labeling based on cellpose gui segmented ROIs  ######################
+        ###################  Run one of these functions for all selected sessions:  ################
         # gen_red_images(rawdatadir,animal_id,sessiondate)
-        proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=False)
+        # proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=False)
+        locate_rf_session(rawdatadir,animal_id,sessiondate)

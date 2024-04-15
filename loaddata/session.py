@@ -89,9 +89,17 @@ class Session():
     def reset_label_threshold(self,threshold):
         print('Setting new labeling threshold based on %1.2f overlap' % threshold)
         # self.celldata['redcell'] = self.celldata['redcell_prob']>0.4
-        self.celldata['redcell'] = self.celldata['frac_red_in_ROI']>0.4
-        print('Need to set cre non flp again\n')
+        self.celldata['redcell'] = self.celldata['frac_red_in_ROI']>=threshold
+        # print('Need to set cre non flp again\n')
         print('put lower and upper threshold\n')
+
+        #Add recombinase enzym label to red cells:
+        labelareas = ['V1','PM']
+        for area in labelareas:
+            temprecombinase =  area + '_recombinase'
+            self.celldata.loc[self.celldata['roi_name']==area,'recombinase'] = self.sessiondata[temprecombinase].to_list()[0]
+        self.celldata.loc[self.celldata['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
+
         # return sessions
 
 

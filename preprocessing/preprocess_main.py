@@ -10,10 +10,10 @@ import os, sys
 import numpy as np
 # os.chdir('E:\\Python\\molanalysis\\')
 os.chdir('T:\\Python\\molanalysis\\')
-# import suite2p
 from preprocessing.preprocesslib import *
+from loaddata.get_data_folder import get_rawdata_drive
 
-rawdatadir      = "I:\\RawData\\"
+rawdatadir      = "G:\\RawData\\"
 procdatadir     = "V:\\Procdata\\"
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
@@ -21,19 +21,18 @@ procdatadir     = "V:\\Procdata\\"
 
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
-animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE11622','LPE11495','LPE11623'] #If empty than all animals in folder will be processed
-date_filter        = ['2024_01_08']
+date_filter        = ['2023_03_15']
 # date_filter        = ['2024_02_20']
 # date_filter        = ['2024_01_10']
 
 protocols           = ['GR','SP','IM','GN']
 # protocols           = ['GR']
 # protocols           = ['DP','DM','DN']
-# protocols           = ['DN']
 
 processimagingflag  = True
-saveimagingflag     = False
+saveimagingflag     = True
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:

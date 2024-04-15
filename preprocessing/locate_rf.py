@@ -15,18 +15,19 @@ import scipy.stats as st
 from loaddata.session_info import filter_sessions,load_sessions
 from natsort import natsorted 
 from scipy import ndimage 
+from scipy.stats import combine_pvalues #Fisher's method to combine significance of multiple p-values
 
 from preprocessing.preprocesslib import align_timestamps
 
-rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-rawdatadir          = 'X:\\Rawdata\\'
+# rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
+# rawdatadir          = 'X:\\Rawdata\\'
 
-# animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
-animal_ids          = [] #If empty than all animals in folder will be processed
-date_filter         = []
+# # animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
+# animal_ids          = [] #If empty than all animals in folder will be processed
+# date_filter         = []
 
-animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-date_filter         = ['2023_04_10']
+# animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
+# date_filter         = ['2023_04_10']
 
 ## Mapping of RF on/off blocks to elevation and azimuth:
 nblockselevation    = 13
@@ -43,24 +44,49 @@ t_base_stop         = 0        #post s
 ## Parameters:
 showFig     = True
 minblocks   = 2  #minimum number of adjacent blocks with significant response
-clusterthr  = 10 # this is sum of negative log p values of clustered RF responses
+clusterthr  = 5 # this is sum of negative log p values of clustered RF responses
 # e.g. array = [0.001,0.0001,0.05,0.05,0.02] #pvalues of cluster of RF on or off responses
 # np.sum(-np.log10(array))
 
-def filter_clusters(array,clusterthr=10,minblocks=2): #filters clusters of adjacent significant blocks
-    array_p = array<0.05
-    labelling, label_count = ndimage.label(array_p == True) #find clusters of significance
+
+# array_p = rfmaps_on_p[:,:,n]
+# array_p = rfmaps_off_p[:,:,n]
+
+def find_largest_cluster(array_p,minblocks=2): #filters clusters of adjacent significant blocks
+    
+    array_p_thr = array_p<0.05
+    labeling, label_count = ndimage.label(array_p_thr) #find clusters of significance
     
     for k in range(label_count): #remove all singleton clusters:
-        if np.sum(labelling==(k+1))<minblocks:
-            labelling[labelling == (k+1)] = 0
+        if np.sum(labeling==(k+1))<minblocks:
+            labeling[labeling == (k+1)] = 0
+    
+    #find the largest cluster based on histogram of nd image label indices:
+    largest_cluster = []
+    if np.any(labeling):
+        largest_cluster = np.argmax(np.histogram(labeling,range(label_count+1))[0][1:])+1
 
-    cluster_p = np.zeros(label_count)
+    cluster         = np.isin(labeling,largest_cluster) #keep only largest cluster
+    cluster_p       = combine_pvalues(array_p[np.isin(labeling,largest_cluster)])[1] #get combined p-value, Fisher's test
+
+    return cluster,cluster_p
+
+def filter_clusters(array,clusterthr=10,minblocks=2): #filters clusters of adjacent significant blocks
+    array_p = array<0.05
+    labeling, label_count = ndimage.label(array_p == True) #find clusters of significance
+    
+    for k in range(label_count): #remove all singleton clusters:
+        if np.sum(labeling==(k+1))<minblocks:
+            labeling[labeling == (k+1)] = 0
+
+    clusters_p = np.zeros(label_count)
     for k in range(label_count): #loop over clusters and compute summed significance (negative log)
-        cluster_p[k] = np.sum(-np.log10(array[labelling==(k+1)]))
+        clusters_p[k] = np.sum(-np.log10(array[labeling==(k+1)]))
 
-    clusters = np.isin(labelling,np.argmax(cluster_p>clusterthr)+1) #keep only clusters with combined significance
-    return clusters
+    cluster    = np.isin(labeling,np.argmax(clusters_p>clusterthr)+1) #keep only clusters with combined significance
+    cluster_p  = clusters_p[np.argmax(clusters_p>clusterthr)] #keep only clusters with combined significance
+    
+    return cluster,cluster_p
 
 def com_clusters(clusters): #computes center of mass and size of sig RF clusters
     x = y = size = np.nan
@@ -126,19 +152,6 @@ def proc_RF(rawdatadir,sessiondata):
 
 def locate_rf_session(rawdatadir,animal_id,sessiondate):
     
-# ## Loop over all selected animals and folders
-# if len(animal_ids) == 0:
-#     animal_ids = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
-
-# for animal_id in animal_ids: #for each animal
-
-#     sessiondates = os.listdir(os.path.join(rawdatadir,animal_id)) 
-    
-#     if any(date_filter): #If dates specified, then process only those:
-#         sessiondates = [x for x in sessiondates if x in date_filter]
-
-#     for sessiondate in sessiondates: #for each of the sessions for this animal
-        
     sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
 
     sessiondata = pd.DataFrame({'protocol': ['RF']})
@@ -225,6 +238,7 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
             RF_x            = np.empty(N)
             RF_y            = np.empty(N)
             RF_size         = np.empty(N)
+            RF_p            = np.ones(N)
 
             # clusters_on      = np.empty([xGrid,yGrid,N])
             # clusters_off     = np.empty([xGrid,yGrid,N])
@@ -234,8 +248,14 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
 
             for n in range(N):
 
-                clusters_on     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
-                clusters_off    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+                # clusters_on     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+                # clusters_off    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+                
+                # clusters_on,clusters_on_p     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+                # clusters_off,clusters_off_p    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+                
+                clusters_on,clusters_on_p     = find_largest_cluster(rfmaps_on_p[:,:,n],minblocks=minblocks)
+                clusters_off,clusters_off_p    = find_largest_cluster(rfmaps_off_p[:,:,n],minblocks=minblocks)
                 
                 #temporary calc of center of mass for each separately:
                 #if far apart then ignore this RF fit:
@@ -251,11 +271,12 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
                 clusters        = np.logical_or(clusters_on,clusters_off)
                 
                 RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters)
+                RF_p[n] = np.nansum((clusters_on_p,clusters_off_p))
 
             RF_azim = RF_x/nblocksazimuth * np.diff(vec_azimuth) + vec_azimuth[0]
             RF_elev = RF_y/nblockselevation * np.diff(vec_elevation) + vec_elevation[0]
 
-            np.save(os.path.join(plane_folder,'RF.npy'),np.vstack((RF_azim,RF_elev,RF_size)))
+            np.save(os.path.join(plane_folder,'RF.npy'),np.vstack((RF_azim,RF_elev,RF_size,RF_p)))
 
             if showFig: 
                 example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
@@ -293,10 +314,6 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
                     plt.tight_layout(rect=[0, 0, 1, 1])
                     fig.savefig(os.path.join(plane_folder,'RF_Plane%d.jpg' % iplane),dpi=600)
     return 
-
-
-
-
 
 # example_cells = np.where(iscell==1)[0][50:75]
 # # example_cells = 74

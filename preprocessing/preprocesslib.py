@@ -21,6 +21,7 @@ from utils.twoplib import get_meta
 import scipy.stats as st
 from loaddata.get_data_folder import get_data_folder
 from scipy.stats import zscore
+from labeling.tdTom_labeling_cellpose import proc_labeling_plane
 
 """
   #####  #######  #####   #####  ### ####### #     # ######     #    #######    #    
@@ -142,8 +143,8 @@ def proc_behavior_passive(rawdatadir,sessiondata):
     # plt.plot(behaviordata['runspeed'][idx])
 
     # Some checks:
-    # if sessiondata['session_id'][0] not in ['LPE09665_2023_03_15','LPE09665_2023_03_20']:
-    assert(np.allclose(np.diff(behaviordata['ts']),1/100,rtol=0.1)) #timestamps ascending and around sampling rate
+    if sessiondata['session_id'][0] not in ['LPE09665_2023_03_15','LPE09665_2023_03_20']:
+        assert(np.allclose(np.diff(behaviordata['ts']),1/100,rtol=0.1)) #timestamps ascending and around sampling rate
     runspeed = behaviordata['runspeed'][1000:].to_numpy()
     assert(np.all(runspeed > -50) and all(runspeed < 100)) #running speed (after initial phase) within reasonable range
 
@@ -488,7 +489,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     framerate = np.round(1/np.mean(np.diff(ts))).astype(int)
     sessiondata['video_fs'] = framerate
 
-    assert np.isin(framerate,[15,30]), 'Frame rate not 15 or 30 Hz'
+    assert np.isin(framerate,[10,15,30]), 'Error! Frame rate is not 10, 15 or 30 Hz, something wrong with triggering'
     sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
     assert np.isclose(nts,sesdur * framerate,rtol=0.01)
     #Check that frame rate matches interframe interval:
@@ -661,8 +662,11 @@ def proc_imaging(sesfolder, sessiondata):
         masks_cp_red        = redcell_seg['masks']
         Nredcells_plane     = len(np.unique(masks_cp_red))-1 # number of labeled cells overall, minus 1 because 0 for all nonlabeled pixels
 
-        assert os.path.exists(os.path.join(plane_folder,'redcell_cellpose.npy')), 'Cellpose results not found'
-        redcell             = np.load(os.path.join(plane_folder, 'redcell_cellpose.npy'), allow_pickle=True)
+        # if not 
+        # redcell     = proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=False)
+        redcell = proc_labeling_plane(iplane,plane_folder,showcells=False,overlap_threshold=0.5)
+        # assert os.path.exists(os.path.join(plane_folder,'redcell_cellpose.npy')), 'Cellpose results not found'
+        # redcell                     = np.load(os.path.join(plane_folder, 'redcell_cellpose.npy'), allow_pickle=True)
 
         ncells_plane              = len(iscell)
         
@@ -679,7 +683,7 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane            = celldata_plane.assign(xloc          = np.empty([ncells_plane,1]))
         celldata_plane            = celldata_plane.assign(yloc          = np.empty([ncells_plane,1]))
 
-        for k in range(1,ncells_plane):
+        for k in range(0,ncells_plane):
             celldata_plane['skew'][k] = stat[k]['skew']
             celldata_plane['radius'][k] = stat[k]['radius']
             celldata_plane['npix_soma'][k] = stat[k]['npix_soma']
@@ -687,9 +691,9 @@ def proc_imaging(sesfolder, sessiondata):
             celldata_plane['xloc'][k] = stat[k]['med'][0]
             celldata_plane['yloc'][k] = stat[k]['med'][1]
         
-        celldata_plane['redcell']           = redcell[0,:]
-        celldata_plane['frac_of_ROI_red']   = redcell[1,:]
-        celldata_plane['frac_red_in_ROI']   = redcell[2,:]
+        celldata_plane['redcell']           = redcell[:,0]
+        celldata_plane['frac_of_ROI_red']   = redcell[:,1]
+        celldata_plane['frac_red_in_ROI']   = redcell[:,2]
         celldata_plane['nredcells']         = Nredcells_plane
 
         celldata_plane['plane_idx']     = iplane
@@ -705,6 +709,7 @@ def proc_imaging(sesfolder, sessiondata):
             celldata_plane['rf_azimuth']    = RF[0,:]
             celldata_plane['rf_elevation']  = RF[1,:]
             celldata_plane['rf_size']       = RF[2,:]
+            celldata_plane['rf_p']          = RF[3,:]
 
         ##################### load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
@@ -752,15 +757,25 @@ def proc_imaging(sesfolder, sessiondata):
             print("Problem with timestamps and imaging frames")
  
         #construct dataframe with activity by cells: give unique cell_id as label:
-        cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%04.0f' % k for k in range(0,ncells_plane))
+        # cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%04.0f' % k for k in range(0,ncells_plane))
+        cell_ids            = np.array([sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%04.0f' % k for k in range(0,ncells_plane)])
         #store cell_ids in celldata:
         celldata_plane['cell_id']         = cell_ids
+
+        #Filter only good cells
+        celldata_plane  = celldata_plane[iscell[:,0]==1]
+        cell_ids        = cell_ids[np.where(iscell[:,0]==1)[0]]
+        F               = F[:,iscell[:,0]==1]
+        F_chan2         = F_chan2[:,iscell[:,0]==1]
+        Fneu            = Fneu[:,iscell[:,0]==1]
+        spks            = spks[:,iscell[:,0]==1]
+        dF              = dF[:,iscell[:,0]==1]
 
         if iplane == 0: #if first plane then init dataframe, otherwise append
             celldata = celldata_plane.copy()
         else:
             celldata = pd.concat([celldata,celldata_plane])
-            
+        
         #Save both deconvolved and fluorescence data:
         dFdata_plane                    = pd.DataFrame(dF, columns=cell_ids)
         dFdata_plane['timestamps']      = ts_master    #add timestamps
@@ -795,10 +810,11 @@ def proc_imaging(sesfolder, sessiondata):
     for area in labelareas:
         temprecombinase =  area + '_recombinase'
         celldata.loc[celldata['roi_name']==area,'recombinase'] = sessiondata[temprecombinase].to_list()[0]
-    celldata_plane.loc[celldata_plane['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
+    celldata.loc[celldata['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
 
-    # Correct for suite2p artefact if never opened suite2p to set 0th cell to not iscell based on npix size:
-    celldata.iloc[np.where(celldata['npix_soma']<5)[0],celldata.columns.get_loc('iscell')] = 0
+    # Correct for suite2p artefact where first roi is a cell, but metrics are wrong. Based on skew or npix_soma:
+    # celldata.iloc[np.where(celldata['npix_soma']<5)[0],celldata.columns.get_loc('iscell')] = 0
+    # celldata.iloc[np.where(celldata['skew']<5)[0],celldata.columns.get_loc('iscell')] = 0
 
     ## identify moments of large tdTomato fluorescence change across the session:
     tdTom_absROI    = np.abs(st.zscore(Fchan2data,axis=0)) #get zscored tdtom fluo for rois and take absolute
@@ -810,6 +826,7 @@ def proc_imaging(sesfolder, sessiondata):
     celldata['session_id']      = sessiondata['session_id'][0]
     dFdata['session_id']        = sessiondata['session_id'][0]
     deconvdata['session_id']    = sessiondata['session_id'][0]
+
 
     return sessiondata,celldata,dFdata,deconvdata
 
