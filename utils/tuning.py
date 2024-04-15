@@ -1,6 +1,40 @@
 import numpy as np
 
 
+def compute_prefori(response_matrix,conditions_vector):
+    """
+    Compute preferred orientation for multiple neurons across trials
+    Parameters:
+    - response_matrix: 2D array or list where each row corresponds to responses of a single neuron across trials
+    - conditions: 1D array or list with the condition for each trial (e.g. orientation)
+    
+    Returns:
+    - preferred orientation for each neuron
+    """
+
+    # Convert response_matrix and orientations_vector to numpy arrays
+    response_matrix         = np.array(response_matrix)
+    conditions_vector       = np.array(conditions_vector)
+
+    conditions              = np.sort(np.unique(conditions_vector))
+    C                       = len(conditions)
+
+    # Ensure the dimensions match
+    if np.shape(response_matrix)[1] != len(conditions_vector):
+        raise ValueError("Number of trials in response_matrix should match the length of orientations_vector.")
+
+    [N,K]           = np.shape(response_matrix) #get dimensions of response matrix
+
+    resp_mean       = np.empty((N,C))
+
+    for iC,cond in enumerate(conditions):
+        tempmean                            = np.nanmean(response_matrix[:,conditions_vector==cond],axis=1)
+        resp_mean[:,iC]                     = tempmean
+    
+    pref_cond             = conditions[np.argmax(resp_mean,axis=1)]
+
+    return pref_cond
+
 def compute_tuning(response_matrix,conditions_vector,tuning_metric='OSI'):
 
     """
