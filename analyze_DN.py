@@ -35,24 +35,15 @@ from sklearn.preprocessing import StandardScaler
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - DN regression\\'
 
 #################################################
-# session_list        = np.array([['LPE10883','2023_10_27']])
-session_list        = np.array([['LPE10884','2024_01_12']])
-sessions            = load_sessions(protocol = 'DN',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='dF')
-nSessions = len(sessions)
+session_list        = np.array([['LPE11622','2024_02_23']])
+# session_list        = np.array([['LPE10884','2024_01_12']])
+sessions,nSessions  = load_sessions(protocol = 'DN',session_list=session_list,load_behaviordata=True, 
+                                    load_calciumdata=True, load_videodata=False, calciumversion='dF')
 
 sesidx      = 0
 randomseed  = 5
 
-sessions[sesidx].behaviordata['runSpeed'] = medfilt(sessions[sesidx].behaviordata['runSpeed'] , kernel_size=51)
-
-sessions[0].trialdata['stimtype'] = 'N'
-
-idx = sessions[0].trialdata[sessions[0].trialdata['signal']==100].index
-sessions[0].trialdata.loc[idx,'stimtype'] = 'M'
-
-idx = sessions[0].trialdata[sessions[0].trialdata['signal']==0].index
-sessions[0].trialdata.loc[idx,'stimtype'] = 'C'
+sessions[sesidx].behaviordata['runspeed'] = medfilt(sessions[sesidx].behaviordata['runspeed'] , kernel_size=51)
 
 ##############################################################################
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
@@ -75,7 +66,7 @@ sessions[sesidx].respmat         = compute_respmat(sessions[0].calciumdata, sess
 [N,K]           = np.shape(sessions[sesidx].respmat) #get dimensions of response matrix
 
 #hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
-temp = pd.DataFrame(np.reshape(np.array(sessions[0].behaviordata['runSpeed']),(len(sessions[0].behaviordata['runSpeed']),1)))
+temp = pd.DataFrame(np.reshape(np.array(sessions[0].behaviordata['runspeed']),(len(sessions[0].behaviordata['runspeed']),1)))
 sessions[sesidx].respmat_runspeed = compute_respmat(temp, sessions[0].behaviordata['ts'], sessions[0].trialdata['tStart'],
                                    t_resp_start=0,t_resp_stop=2,method='mean')
 sessions[sesidx].respmat_runspeed = np.squeeze(sessions[sesidx].respmat_runspeed)
@@ -95,9 +86,9 @@ sns.histplot(np.nanmax(sessions[sesidx].respmat,axis=1))
 #############################################################################
 idx_N = sessions[sesidx].trialdata['signal']
 signals         = np.sort(pd.Series.unique(sessions[sesidx].trialdata['signal']))
-speeds          = np.sort(pd.Series.unique(sessions[sesidx].trialdata['centerSpeed']))
-noris           = len(oris) 
-nspeeds         = len(speeds)
+# speeds          = np.sort(pd.Series.unique(sessions[sesidx].trialdata['centerSpeed']))
+# noris           = len(oris) 
+nsignals         = len(signals)
 
 
 # oris            = np.sort(pd.Series.unique(sessions[sesidx].trialdata['centerOrientation']))
@@ -730,9 +721,9 @@ for icomp in range(plotncomps):
     sns.lineplot(x=sessions[0].ts_F,y=Xp_norm[:,icomp]+icomp,linewidth=0.5)
 sns.lineplot(x=sessions[0].ts_F,y=Rs_norm.reshape(-1)+plotncomps,linewidth=0.5,color='k')
 
-plt.xlim([sessions[0].trialdata['tOnset'][500],sessions[0].trialdata['tOnset'][800]])
+plt.xlim([sessions[0].trialdata['tStimStart'][100],sessions[0].trialdata['tStimStart'][120]])
 for icomp in range(plotncomps):
-    plt.text(x=sessions[0].trialdata['tOnset'][700],y=icomp+0.25,s='r=%1.3f' %cmat[icomp])
+    plt.text(x=sessions[0].trialdata['tStimStart'][120],y=icomp+0.25,s='r=%1.3f' %cmat[icomp])
 
 plt.ylim([0,plotncomps+1])
 

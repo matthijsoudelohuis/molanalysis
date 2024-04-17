@@ -41,15 +41,15 @@ plt.rcParams['svg.fonttype'] = 'none'
 protocol            = 'DN'
 
 session_list = np.array([['LPE10884', '2023_12_14']])
-session_list = np.array([['LPE10884', '2024_01_12']])
+session_list = np.array([['LPE10884', '2023_12_14']])
+session_list        = np.array([['LPE11622','2024_02_23']])
 # session_list = np.array([['LPE09829', '2023_03_29'],
 #                         ['LPE09829', '2023_03_30'],
 #                         ['LPE09829', '2023_03_31']])
 
-sessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=True,
-                         load_calciumdata=True,calciumversion='dF') #Load specified list of sessions
+sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
+                         load_calciumdata=True,calciumversion='deconv') #Load specified list of sessions
 # sessions = filter_sessions(protocol) #load sessions that meet criteria:
-nSessions = len(sessions)
 
 # savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
@@ -73,6 +73,9 @@ savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - DN regression\\'
 #                                   t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
 # [N,K]           = np.shape(respmat) #get dimensions of response matrix
 
+for i in range(nSessions):
+    sessions[i].trialdata = sessions[i].trialdata[sessions[i].trialdata['engaged']==1]
+
 ################################ Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning
@@ -86,19 +89,12 @@ for i in range(nSessions):
 
 
 ## Compute average response in stimulus response zone:
-#hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
-# temp = pd.DataFrame(np.reshape(np.array(sessions[0].behaviordata['runSpeed']),(len(sessions[0].behaviordata['runSpeed']),1)))
-# sessions[sesidx].respmat_runspeed = compute_respmat_space(temp, sessions[0].behaviordata['ts'], sessions[0].trialdata['tStart'],
-#                                    t_resp_start=0,t_resp_stop=2,method='mean')
-# sessions[sesidx].respmat_runspeed = np.squeeze(sessions[sesidx].respmat_runspeed)
-
-
 for i in range(nSessions):
     sessions[i].respmat             = compute_respmat_space(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['stimStart'],
                                     sessions[i].zpos_F,sessions[i].trialnum_F,s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
 
 for i in range(nSessions):
-    temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runSpeed']),(len(sessions[0].behaviordata['runSpeed']),1)))
+    temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[0].behaviordata['runspeed']),1)))
     sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
                                     sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
 
@@ -120,9 +116,9 @@ def plot_snake_area(snakeplot,sbins,stimtypes=['C','N','M']):
     fig, axes = plt.subplots(nrows=1,ncols=3,figsize=(10,5))
     for iTT in range(len(stimtypes)):
         plt.subplot(1,3,iTT+1)
-        # c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'PuRd',vmin=-50.0,vmax=700)
+        c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'PuRd',vmin=-50.0,vmax=700)
         # c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.25)
-        c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.5)
+        # c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.5)
         plt.title(stimtypes[iTT],fontsize=11)
         plt.ylabel('nNeurons',fontsize=10)
         plt.xlabel('Pos. relative to stim (cm)',fontsize=9)
@@ -137,13 +133,15 @@ def plot_snake_area(snakeplot,sbins,stimtypes=['C','N','M']):
 ises        = 0 #selected session to plot this for
 [N,K,S]     = np.shape(sessions[ises].stensor) #get dimensions of tensor
 
-stimtypes   = sorted(sessions[ises].trialdata['stimtype'].unique()) # Catch, Noise and Max trials if correct
+stimtypes   = sorted(sessions[ises].trialdata['stimcat'].unique()) # Catch, Noise and Max trials if correct
 stimtypes   = ['C','N','M']
 
 snakeplots  = np.empty([N,S,len(stimtypes)])
 
 for iTT in range(len(stimtypes)):
-    snakeplots[:,:,iTT] = np.nanmean(sessions[ises].stensor[:,sessions[ises].trialdata['stimtype'] == stimtypes[iTT],:],axis=1)
+    snakeplots[:,:,iTT] = np.nanmean(sessions[ises].stensor[:,sessions[ises].trialdata['stimcat'] == stimtypes[iTT],:],axis=1)
+    # idx_trial = np.logical_and(sessions[ises].trialdata['stimcat'] == stimtypes[iTT],sessions[ises].trialdata['lickResponse']==0)
+    # snakeplots[:,:,iTT] = np.nanmean(sessions[ises].stensor[:,idx_trial,:],axis=1)
 
 ################################### Plot for one session: ####################################
 areas   = sessions[ises].celldata['roi_name'].unique()
@@ -152,6 +150,7 @@ for iarea,area in enumerate(areas):
     areasnake   = snakeplots[idx,:,:]
     plot_snake_area(snakeplots[idx,:,:],sbins,stimtypes=stimtypes)
     plt.suptitle(area,fontsize=16,y=0.91)
+    plt.tight_layout()
     # plt.savefig(os.path.join(savedir,'ActivityInCorridor_perStim_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.svg'), format = 'svg')
     plt.savefig(os.path.join(savedir,'ActivityInCorridor_perStim_' + area + '_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
@@ -167,7 +166,7 @@ snakeplots  = np.empty([N,S,len(stimtypes)])
 for ises in range(nSessions):
     idx = celldata['session_id']==sessions[ises].sessiondata['session_id'][0]
     for iTT in range(len(stimtypes)):
-        snakeplots[idx,:,iTT] = np.nanmean(sessions[ises].stensor[:,sessions[ises].trialdata['signal'] == stimtypes[iTT],:],axis=1)
+        snakeplots[idx,:,iTT] = np.nanmean(sessions[ises].stensor[:,sessions[ises].trialdata['stimcat'] == stimtypes[iTT],:],axis=1)
 
 #Plot for all loaded sessions together:
 areas   = celldata['roi_name'].unique()
@@ -199,9 +198,6 @@ for iarea,area in enumerate(areas):
 # plt.savefig(os.path.join(savedir,'ActivityInCorridor_neuronAverage_perStim_' + sessions[0].sessiondata['session_id'][0] + '.svg'), format = 'svg')
 plt.savefig(os.path.join(savedir,'ActivityInCorridor_neuronAverage_perStim_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'ActivityInCorridor_deconv_neuronAverage_perStim_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-
-
 
 
 
@@ -247,7 +243,7 @@ plt.xlabel('Stimulus')
 ######################## PCA to understand variability at the population level ####################
 
 def pca_scatter_stimresp(respmat,trialdata):
-    stimtypes   = sorted(trialdata['stimtype'].unique()) # stim ['A','B','C','D']
+    stimtypes   = sorted(trialdata['stimcat'].unique()) # stim ['A','B','C','D']
     resptypes   = sorted(trialdata['lickResponse'].unique()) # licking resp [0,1]
 
     X           = zscore(respmat,axis=1)
@@ -255,7 +251,7 @@ def pca_scatter_stimresp(respmat,trialdata):
     pca         = PCA(n_components=15)
     Xp          = pca.fit_transform(X.T).T
 
-    s_type_ind      = [np.argwhere(np.array(trialdata['stimtype']) == stimtype)[:, 0] for stimtype in stimtypes]
+    s_type_ind      = [np.argwhere(np.array(trialdata['stimcat']) == stimtype)[:, 0] for stimtype in stimtypes]
     r_type_ind      = [np.argwhere(np.array(trialdata['lickResponse']) == resptype)[:, 0] for resptype in resptypes]
 
     pal             = sns.color_palette('husl', 4)
@@ -285,15 +281,16 @@ def pca_scatter_stimresp(respmat,trialdata):
     plt.tight_layout(rect=[0,0,0.9,1])
 
 #For all areas:
-respmat     = np.nanmean(sessions[sesidx].stensor[:,:,(sbins>0) & (sbins<20)],axis=2) 
-pca_scatter_stimresp(respmat,sessions[sesidx].trialdata)
+# respmat     = np.nanmean(sessions[sesidx].stensor[:,:,(sbins>0) & (sbins<20)],axis=2) 
+pca_scatter_stimresp(sessions[sesidx].respmat,sessions[sesidx].trialdata)
 # plt.savefig(os.path.join(savedir,'PCA_Scatter_stimResponse_allAreas_' + sessions[0].sessiondata['session_id'][0] + '.svg'), format = 'svg')
 plt.savefig(os.path.join(savedir,'PCA_Scatter_stimResponse_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #For each area:
 for iarea,area in enumerate(areas):
     idx         = sessions[sesidx].celldata['roi_name'] == area
-    respmat     = np.nanmean(sessions[sesidx].stensor[np.ix_(idx,range(K),(sbins>0) & (sbins<20))],axis=2) 
+    # respmat     = np.nanmean(sessions[sesidx].stensor[np.ix_(idx,range(K),(sbins>0) & (sbins<20))],axis=2) 
+    respmat     = sessions[sesidx].respmat[idx,:] 
     pca_scatter_stimresp(respmat,sessions[sesidx].trialdata)
     plt.suptitle(area,fontsize=14)
     # plt.savefig(os.path.join(savedir,'PCA_Scatter_stimResponse_' + area + '_' + sessions[0].sessiondata['session_id'][0] + '.svg'), format = 'svg')
@@ -310,8 +307,8 @@ for iarea,area in enumerate(areas):
 A1 = sessions[sesidx].respmat
 # A2 = sessions[sesidx].respmat[idx_PM_tuned,:]
 
-# idx_V1 = np.where(sessions[sesidx].celldata['roi_name']=='V1')[0]
-idx_V1 = np.where(sessions[sesidx].celldata['roi_name']=='AL')[0]
+idx_V1 = np.where(sessions[sesidx].celldata['roi_name']=='V1')[0]
+# idx_V1 = np.where(sessions[sesidx].celldata['roi_name']=='AL')[0]
 # idx_PM = np.where(sessions[sesidx].celldata['roi_name']=='PM')[0]
 
 A1 = sessions[sesidx].respmat[idx_V1,:]
@@ -332,6 +329,9 @@ S   = np.vstack((sessions[sesidx].trialdata['signal'],
 # S = np.vstack((S,np.random.randn(1,K)))
 slabels     = ['Signal','Licking','Running']
 
+df = pd.DataFrame(data=S.T, columns=slabels)
+
+sns.heatmap(df.corr())
 # arealabels  = ['V1','PM']
 
 
@@ -341,7 +341,7 @@ N1,K        = np.shape(A1)
 NS          = np.shape(S)[0]
 
 # Filter only noisy threshold trials:
-idx = sessions[sesidx].trialdata['stimtype']=='N'
+idx = sessions[sesidx].trialdata['stimcat']=='N'
 # idx = sessions[sesidx].trialdata['signal']>-5
 
 cmap = plt.get_cmap('hot')
@@ -412,10 +412,10 @@ def pca_line_stimresp(data,trialdata,spatbins):
     Xp              = np.reshape(Xp,(15,K,S)) #reshape back to trials
 
     #Get indices of trialtypes and responses:
-    stimtypes       = sorted(trialdata['stimtype'].unique()) # stim ['A','B','C','D']
+    stimtypes       = sorted(trialdata['stimcat'].unique()) # stim ['A','B','C','D']
     resptypes       = sorted(trialdata['lickResponse'].unique()) # licking resp [0,1]
 
-    s_type_ind      = [np.argwhere(np.array(trialdata['stimtype']) == stimtype)[:, 0] for stimtype in stimtypes]
+    s_type_ind      = [np.argwhere(np.array(trialdata['stimcat']) == stimtype)[:, 0] for stimtype in stimtypes]
     r_type_ind      = [np.argwhere(np.array(trialdata['lickResponse']) == resptype)[:, 0] for resptype in resptypes]
 
     #For line make-up:
@@ -438,10 +438,10 @@ def pca_line_stimresp(data,trialdata,spatbins):
                 ax.set_ylabel('PC {}'.format(proj + 1))
         
         ax.set_xticks(np.linspace(-50,50,5))
-        ax.add_patch(matplotlib.patches.Rectangle((0,ax.get_xlim()[0]),25,np.diff(ax.get_xlim())[0], 
+        ax.add_patch(matplotlib.patches.Rectangle((0,ax.get_xlim()[0]),20,np.diff(ax.get_xlim())[0], 
                     fill = True, alpha=0.2,
                     color = patchcols[0], linewidth = 0))
-        ax.add_patch(matplotlib.patches.Rectangle((25,ax.get_xlim()[0]),25,np.diff(ax.get_xlim())[0], 
+        ax.add_patch(matplotlib.patches.Rectangle((25,ax.get_xlim()[0]),10,np.diff(ax.get_xlim())[0], 
                     fill = True, alpha=0.2,
                     color = patchcols[1], linewidth = 0))
 
@@ -459,7 +459,7 @@ ises            = 0 #selected session to plot this for
 [N,K,S]         = np.shape(sessions[ises].stensor) #get dimensions of tensor
 
 #For all areas:
-binsubidx   = (sbins>-70) & (sbins<50)
+binsubidx   = (sbins>-60) & (sbins<=40)
 binsub      = sbins[binsubidx]
 data        = sessions[ises].stensor[:,:,binsubidx]
 pca_line_stimresp(data,sessions[ises].trialdata,binsub)
@@ -481,7 +481,6 @@ for iarea,area in enumerate(areas):
 
 
 ################################################ LDA ##################################################
-
 
 
 
@@ -520,10 +519,10 @@ def lda_line_stimresp(data,trialdata,spatbins):
     #Z-score each neurons activity (along rows)
     X               = zscore(X,axis=1)
 
-    respmat_stim        = np.nanmean(data[:,:,(spatbins>0) & (spatbins<25)],axis=2) 
-    respmat_dec         = np.nanmean(data[:,:,(spatbins>25) & (spatbins<50)],axis=2) 
+    respmat_stim        = np.nanmean(data[:,:,(spatbins>=0) & (spatbins<20)],axis=2) 
+    respmat_dec         = np.nanmean(data[:,:,(spatbins>=25) & (spatbins<35)],axis=2) 
 
-    vec_stim            = trialdata['stimRight']     == 'A'
+    vec_stim            = trialdata['stimcat']     == 'M'
     vec_dec             = trialdata['lickResponse']  == 1
 
     lda_stim            = LDA(n_components=1)
@@ -542,7 +541,8 @@ def lda_line_stimresp(data,trialdata,spatbins):
     print('%f degrees between STIM and DEC axes' % angle_between(stim_axis, dec_axis).round(2))
 
     #Get indices of trialtypes and responses:
-    stimtypes       = sorted(trialdata['stimRight'].unique()) # stim ['A','B','C','D']
+    stimtypes       = sorted(trialdata['stimcat'].unique()) # stim ['A','B','C','D']
+    # stimtypes       = np.array(['C','M'])
     resptypes       = sorted(trialdata['lickResponse'].unique()) # licking resp [0,1]
 
     s_type_ind      = [np.argwhere(np.array(trialdata['stimRight']) == stimtype)[:, 0] for stimtype in stimtypes]
@@ -589,9 +589,12 @@ ises            = 0 #selected session to plot this for
 [N,K,S]         = np.shape(sessions[ises].stensor) #get dimensions of tensor
 
 ## For all areas:
-binsubidx   = (sbins>-70) & (sbins<50)
+binsubidx   = (sbins>-60) & (sbins<=40)
 binsub      = sbins[binsubidx]
-trialidx    = np.isin(sessions[ises].trialdata['stimRight'],['A','B'])
+trialidx    = np.isin(sessions[ises].trialdata['stimcat'],['C','M'])
+
+trialidx    = np.logical_and(trialidx,sessions[ises].trialdata['engaged']==1)
+# trialidx    = np.isin(sessions[ises].trialdata['stimcat'],['C','M'])
 
 data        = sessions[ises].stensor[np.ix_(np.arange(N),trialidx,binsubidx)]
 

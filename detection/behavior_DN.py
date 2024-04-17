@@ -21,11 +21,12 @@ from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 from utils.plotting_style import * # get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 
-savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
+savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Detection\\'
 
 ########################### Load the data - Psy #######################
 protocol            = ['DN']
 sessions            = filter_sessions(protocol,load_behaviordata=True)
+sessions,nsessions  = filter_sessions(protocol,load_behaviordata=True,only_animal_id='LPE11622')
 
 protocol            = 'DN'
 session_list = np.array([['LPE10884', '2024_01_16']])
@@ -58,7 +59,7 @@ fig.savefig(os.path.join(savedir,'Noise','RunSpeed_Psy_%s.png' % sessions[sesidx
 ##################### Plot psychometric curve #########################
 
 fig = plot_psycurve([sessions[5]])
-fig = plot_psycurve(sessions)
+fig = plot_psycurve(sessions,filter_engaged=True)
 fig.savefig(os.path.join(savedir,'Noise','Psy_%s.png' % sessions[sesidx].session_id))
 
 fig = plot_psycurve(sessions,filter_engaged=True)

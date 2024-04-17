@@ -303,7 +303,7 @@ def proc_task(rawdatadir,sessiondata):
     # Signal values: 
     assert(np.all(np.logical_and(trialdata['signal'] >= 0,trialdata['signal'] <= 100))), 'not all signal values are between 0 and 100'
     assert(np.any(trialdata['signal'] > 1)), 'signal values do not exceed 1'
-    assert(np.isin(np.unique(trialdata['stimRight'])[0],['Ori45','Ori135','A','B','C','D'])), 'Unknown stimulus presented'
+    assert(np.isin(np.unique(trialdata['stimRight'])[0],['Ori45','Ori135','A','B','C','D','E','F','G'])), 'Unknown stimulus presented'
     if os.path.exists(os.path.join(sesfolder,"suite2p")):  
         assert(len(np.unique(trialdata['stimRight']))==1), 'more than one stimulus appears to be presented in this recording session'
 
@@ -352,9 +352,9 @@ def proc_task(rawdatadir,sessiondata):
     #Get behavioral data, construct dataframe and modify a bit:
     behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
     if np.any(behaviordata.filter(regex='Item')):
-        behaviordata.columns = ["rawvoltage","ts","trialNumber","zpos","runSpeed","lick","reward"] #rename the columns
+        behaviordata.columns = ["rawvoltage","ts","trialNumber","zpos","runspeed","lick","reward"] #rename the columns
     behaviordata = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
-    behaviordata = behaviordata.rename(columns={'timestamp': 'ts','trialnumber': 'trialNumber', 'runspeed': 'runSpeed'}) #remove rawvoltage, not used
+    behaviordata = behaviordata.rename(columns={'timestamp': 'ts','trialnumber': 'trialNumber'}) #rename consistently
     
     ## Licks
     lickactivity    = np.diff(behaviordata['lick'])
@@ -516,9 +516,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
         
         roi_types = [proc['rois'][i]['rtype'] for i in range(len(proc['rois']))]
         assert 'motion SVD' in roi_types,'motion SVD missing, _proc file does not contain motion svd roi'
-        
-        # assert len(proc['rois'])==2,'designed to analyze 2 rois, pupil and motion svd, _proc file contains a different #rois'
-        # assert all(x in [proc['rois'][i]['rtype'] for i in range(len(proc['rois']))] for x in ['motion SVD', 'Pupil']),'roi type error'
+        assert nts==len(proc['motion'][1]),'not the same number of timestamps as frames'
 
         videodata['motionenergy']   = proc['motion'][1]
         PC_labels                   = list('videoPC_' + '%s' % k for k in range(0,keepPCs))

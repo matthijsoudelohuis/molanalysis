@@ -13,25 +13,27 @@ os.chdir('T:\\Python\\molanalysis\\')
 from preprocessing.preprocesslib import *
 from loaddata.get_data_folder import get_rawdata_drive
 
-rawdatadir      = "G:\\RawData\\"
+rawdatadir      = "K:\\RawData\\"
 procdatadir     = "V:\\Procdata\\"
+# rawdatadir = []
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
 # procdatadir     = "E:\\Procdata\\"
 
 # animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
-animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-# animal_ids          = ['LPE11622','LPE11495','LPE11623'] #If empty than all animals in folder will be processed
-date_filter        = ['2023_03_15']
-# date_filter        = ['2024_02_20']
+# animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
+# date_filter        = ['2023_03_21']
+animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
+date_filter        = ['2024_02_20','2024_02_21','2024_02_22','2024_02_23','2024_02_26','2024_02_27']
+date_filter        = ['2024_02_23']
 # date_filter        = ['2024_01_10']
 
-protocols           = ['GR','SP','IM','GN']
+# protocols           = ['GR','SP','IM','GN']
 # protocols           = ['GR']
-# protocols           = ['DP','DM','DN']
+protocols           = ['DP','DM','DN']
 
-processimagingflag  = True
+processimagingflag  = False
 saveimagingflag     = True
 
 ## Loop over all selected animals and folders
@@ -40,6 +42,9 @@ if len(animal_ids) == 0:
 
 for animal_id in animal_ids: #for each animal
 
+    if not rawdatadir:
+        rawdatadir = get_rawdata_drive([animal_id])
+    
     sessiondates = os.listdir(os.path.join(rawdatadir,animal_id)) 
     
     if any(date_filter): #If dates specified, then process only those:
@@ -82,8 +87,8 @@ for animal_id in animal_ids: #for each animal
                     trialdata = proc_IM(rawdatadir,sessiondata)
                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
                 
-                videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
-                videodata.to_csv(os.path.join(outdir,"videodata.csv"), sep=',')
+                # videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
+                # videodata.to_csv(os.path.join(outdir,"videodata.csv"), sep=',')
 
                 if os.path.exists(os.path.join(sesfolder,"suite2p")) and processimagingflag:
                     print('Detected imaging data')
