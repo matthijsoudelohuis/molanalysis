@@ -9,10 +9,6 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 import math, os
 from loaddata.get_data_folder import get_local_drive
 os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
-try:
-    os.chdir('t:\\Python\\molanalysis\\')
-except:
-    os.chdir('e:\\Python\\molanalysis\\')
 
 import numpy as np
 import pandas as pd
@@ -53,12 +49,6 @@ sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,l
 for ises in range(nSessions):    # iterate over sessions
     sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
     
-    if 'pupil_area' in sessions[ises].videodata:
-        sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
-    if 'motionenergy' in sessions[ises].videodata:
-        sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
-    sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
-
     ##############################################################################
     ## Construct trial response matrix:  N neurons by K trials
     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
