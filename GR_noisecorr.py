@@ -30,13 +30,16 @@ from utils.plotting_style import * #get all the fixed color schemes
 from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D,plot_excerpt
 from utils.plot_lib import shaded_error
 from utils.RRRlib import regress_out_behavior_modulation
-from utils.corr_lib import compute_noise_correlation, compute_pairwise_metrics, compute_noisecorr_rfmap
+from utils.corr_lib import compute_noise_correlation, compute_pairwise_metrics, noisecorr_rfmap
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - Gratings\\')
 
 ##############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
 session_list        = np.array([['LPE10885','2023_10_23']])
+session_list        = np.array([['LPE09830','2023_04_10']])
+session_list        = np.array([['LPE09830','2023_04_10'],
+                                ['LPE09830','2023_04_12']])
 session_list        = np.array([['LPE11086','2024_01_05']])
 session_list        = np.array([['LPE11086','2024_01_05'],
                                 ['LPE10884','2023_10_20'],
@@ -644,7 +647,7 @@ for ises in range(nSessions):
     histdata            = df.groupby('DistRfPair', as_index=False)['NoiseCorrelation'].mean()
     histdata            = df.groupby(['DistRfPair','AreaPair'], as_index=False)['NoiseCorrelation'].mean()
     plt.plot(histdata['DistRfPair'][histdata['AreaPair']=='V1-V1'], histdata['NoiseCorrelation'][histdata['AreaPair']=='V1-V1'])
-    plt.plot(histdata['DistRfPair'][histdata['AreaPair']=='PM-V1'], histdata['NoiseCorrelation'][histdata['AreaPair']=='PM-V1'])
+    plt.plot(histdata['DistRfPair'][histdata['AreaPair']=='V1-PM'], histdata['NoiseCorrelation'][histdata['AreaPair']=='V1-PM'])
     plt.plot(histdata['DistRfPair'][histdata['AreaPair']=='PM-PM'], histdata['NoiseCorrelation'][histdata['AreaPair']=='PM-PM'])
 
 plt.xlabel('Delta RF')
@@ -667,6 +670,7 @@ pairs = [('non','flp'),('non','cre')] #for statistics
 # pairs = [('non','flp'),('non','cre')] #for statistics
 # pairs = [(0,1)] #for statistics
 
+tuning_metric = 'tuning_var'
 fig,ax = plt.subplots(figsize=(3,3))
 # handles = sns.kdeplot(data=celldata,x='tuning_var',hue='redcell',common_norm=False,clip=[0,1],
 #                       hue_order=[0,1],palette=clr_labeled)
@@ -675,9 +679,9 @@ fig,ax = plt.subplots(figsize=(3,3))
                     #   hue_order=recombinases,palette=clr_labeled)
 # annotator = Annotator(ax, pairs, data=celldata, x="redcell", y='OSI', order=recombinases)
 
-handles = sns.barplot(data=celldata,x='recombinase',y='OSI',order=recombinases,
+handles = sns.barplot(data=celldata,x='recombinase',y=tuning_metric,order=recombinases,
                       hue_order=recombinases,palette=clr_labeled)
-annotator = Annotator(ax, pairs, data=celldata, x="recombinase", y='OSI', order=recombinases)
+annotator = Annotator(ax, pairs, data=celldata, x="recombinase", y=tuning_metric, order=recombinases)
 annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
 annotator.apply_and_annotate()
 
@@ -770,16 +774,17 @@ binedges = np.arange(0,1000,50)
 nbins= len(binedges)-1      
 binmean = np.empty((nSessions,len(areapairs),len(labelpairs),nbins))
 handles = []
+tuningthr = 0
 for iap,areapair in enumerate(areapairs):
     for ilp,labelpair in enumerate(labelpairs):
         for ises in range(nSessions):
             areafilter = sessions[ises].areamat==areapair
             labelfilter = sessions[ises].labelmat==labelpair
             # filter = sessions[ises].celldata['tuning_var']>0
-            # signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>0.05,sessions[ises].celldata['tuning_var']>0.05)
-            # signalfilter = np.logical_and(signalfilter[0],signalfilter[1])
-            filter = np.logical_and(areafilter,labelfilter)
-            # filter = np.logical_and(signalfilter,areafilter,labelfilter)
+            signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>tuningthr,sessions[ises].celldata['tuning_var']>tuningthr)
+            signalfilter = np.logical_and(signalfilter[0],signalfilter[1])
+            # filter = np.logical_and(areafilter,labelfilter)
+            filter = np.all((signalfilter,areafilter,labelfilter),axis=0)
             if filter.any():
                 binmean[ises,iap,ilp,:] = binned_statistic(x=sessions[ises].distmat_xy[filter].flatten(),
                                                 values=sessions[ises].noise_corr[filter].flatten(),
@@ -790,12 +795,12 @@ for iap,areapair in enumerate(areapairs):
     ax = plt.subplot(1,len(areapairs),iap+1)
     for ilp,labelpair in enumerate(labelpairs):
         # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
-        handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_labelpairs[ilp]))
-        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),
-                                    # yerror=binmean[:,iap,ilp,:].squeeze()/5,color=clrs_labelpairs[ilp]))
+        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_labelpairs[ilp]))
+        handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),
+                                    yerror=binmean[:,iap,ilp,:].squeeze()/5,color=clrs_labelpairs[ilp]))
     ax.set(xlabel=r'Anatomical distance ($\mu$m)',ylabel='Noise Correlation',
            yticks=np.arange(0, 1, step=0.01),xticks=np.arange(0, 600, step=100))
-    ax.set(xlim=[10,500],ylim=[0,0.05])
+    ax.set(xlim=[10,500],ylim=[0,0.075])
     ax.legend(handles,labelpairs,frameon=False,loc='upper right')
     plt.tight_layout()
     ax.set_title(areapair)
@@ -849,38 +854,6 @@ for iap,areapair in enumerate(areapairs):
 # plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_deltaRF_Labeled_%dsessions' % nSessions + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea_regressout' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-
-#%% ##################### Noise correlations within and across areas: #########################
-
-# sns.scatterplot(data=df[df['AreaPair']=='V1-V1'],x='DistPair',y='NoiseCorrelation',size=5)
-dfV1 = df[df['AreaPair']=='V1-V1']
-sns.lineplot(x=np.round(dfV1['DistPair'],-1),y=dfV1['NoiseCorrelation'],color='b')
-
-dfPM = df[df['AreaPair']=='PM-PM']
-sns.lineplot(x=np.round(dfPM['DistPair'],-1),y=dfPM['NoiseCorrelation'],color='g')
-
-plt.xlabel="Pairwise distance (um)"
-plt.legend(labels=['V1-V1','PM-PM'])
-plt.xlim([-10,600])
-plt.ylim([0,0.13])
-
-########################### Noise correlations as a function of pairwise distance: ####################
-######################################## Labeled vs unlabeled neurons #################################
-
-plt.figure(figsize=(8,5))
-fig, axes = plt.subplots(2,2,figsize=(8,5))
-
-areas = ['V1','PM']
-
-for i,iarea in enumerate(areas):
-    for j,jarea in enumerate(areas):
-        dfarea = df[df['AreaPair']==iarea + '-' + jarea]
-        sns.lineplot(ax=axes[i,j],x=np.round(dfarea['DistPair'],-1),y=dfarea['NoiseCorrelation'],hue=dfarea['LabelPair'])
-        axes[i,j].set_xlabel="Pairwise distance (um)"
-        # plt.legend(labels=['V1-V1','PM-PM'])
-        axes[i,j].set_xlim([-10,200])
-        axes[i,j].set_ylim([-0.05,0.2])
 
 
 
