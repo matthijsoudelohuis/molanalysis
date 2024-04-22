@@ -8,13 +8,13 @@ Preprocesses behavioral data, task and trial data, facial video data, calcium im
 
 import os, sys
 import numpy as np
-# os.chdir('E:\\Python\\molanalysis\\')
-os.chdir('T:\\Python\\molanalysis\\')
+from loaddata.get_data_folder import get_local_drive
+os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 from preprocessing.preprocesslib import *
 from loaddata.get_data_folder import get_rawdata_drive
 
 rawdatadir      = "K:\\RawData\\"
-procdatadir     = "V:\\Procdata\\"
+procdatadir     = "D:\\Procdata\\"
 # rawdatadir = []
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
@@ -87,8 +87,8 @@ for animal_id in animal_ids: #for each animal
                     trialdata = proc_IM(rawdatadir,sessiondata)
                     trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
                 
-                # videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
-                # videodata.to_csv(os.path.join(outdir,"videodata.csv"), sep=',')
+                videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
+                videodata.to_csv(os.path.join(outdir,"videodata.csv"), sep=',')
 
                 if os.path.exists(os.path.join(sesfolder,"suite2p")) and processimagingflag:
                     print('Detected imaging data')
