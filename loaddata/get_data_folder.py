@@ -14,6 +14,9 @@ def get_data_folder():
     elif user == 'MOL-MACHINE':
         DATA_FOLDER = 'C:/Procdata'
 
+    elif user == 'KEREMSARIKAYA-P':
+        DATA_FOLDER = 'D:/Procdata'
+
     return DATA_FOLDER
 
 def get_rawdata_drive(animal_id):
@@ -53,5 +56,8 @@ def get_local_drive():
 
     elif user == 'MOL-MACHINE':
         LOCAL_DRIVE = 'C:/'
+
+    elif user == 'KEREMSARIKAYA-P':
+        LOCAL_DRIVE = 'D:/'
 
     return LOCAL_DRIVE

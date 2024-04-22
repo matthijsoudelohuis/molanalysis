@@ -14,7 +14,7 @@ import os, math
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from natsort import natsorted 
+from natsort import natsorted
 from datetime import datetime
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
 from utils.twoplib import get_meta
@@ -121,17 +121,6 @@ def proc_behavior_passive(rawdatadir,sessiondata):
         print('Removed double sampled harp data with duration %1.2f seconds' % ((r-i)/1000))
 
     behaviordata = behaviordata.reset_index(drop=True)
-
-    # Piece of debug code for chunks
-    # prepost = 900 #sometimes data is saved double: delete ths overlapping part
-    # import matplotlib.pyplot as plt
-    # for i in idx:
-    #     plt.figure()
-    #     plt.plot(behaviordata['ts'][i-prepost:i+prepost].to_numpy())
-    #     plt.plot(behaviordata['ts'][i],'k.')
-    #     # plt.plot(behaviordata['runspeed'][i-prepost:i+prepost])
-    #     plt.plot(behaviordata['ts'][i-prepost:i+prepost],behaviordata['runspeed'][i-prepost:i+prepost]) 
-    #     plt.plot(behaviordata['ts'][i],behaviordata['runspeed'][i],'k.') 
 
     #subsample data 10 times (from 1000 to 100 Hz)
     behaviordata = behaviordata.iloc[::10, :].reset_index(drop=True) 
@@ -303,7 +292,7 @@ def proc_task(rawdatadir,sessiondata):
     # Signal values: 
     assert(np.all(np.logical_and(trialdata['signal'] >= 0,trialdata['signal'] <= 100))), 'not all signal values are between 0 and 100'
     assert(np.any(trialdata['signal'] > 1)), 'signal values do not exceed 1'
-    assert(np.isin(np.unique(trialdata['stimRight'])[0],['Ori45','Ori135','A','B','C','D'])), 'Unknown stimulus presented'
+    assert(np.isin(np.unique(trialdata['stimRight'])[0],['Ori45','Ori135','A','B','C','D','E','F','G'])), 'Unknown stimulus presented'
     if os.path.exists(os.path.join(sesfolder,"suite2p")):  
         assert(len(np.unique(trialdata['stimRight']))==1), 'more than one stimulus appears to be presented in this recording session'
 
@@ -352,53 +341,77 @@ def proc_task(rawdatadir,sessiondata):
     #Get behavioral data, construct dataframe and modify a bit:
     behaviordata        = pd.read_csv(os.path.join(sesfolder,harpdata_file[0]),skiprows=0)
     if np.any(behaviordata.filter(regex='Item')):
-        behaviordata.columns = ["rawvoltage","ts","trialNumber","zpos","runSpeed","lick","reward"] #rename the columns
+        behaviordata.columns = ["rawvoltage","ts","trialNumber","zpos","runspeed","lick","reward"] #rename the columns
     behaviordata = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
-    behaviordata = behaviordata.rename(columns={'timestamp': 'ts','trialnumber': 'trialNumber', 'runspeed': 'runSpeed'}) #remove rawvoltage, not used
-    
-    ## Licks
-    lickactivity    = np.diff(behaviordata['lick'])
+    behaviordata = behaviordata.rename(columns={'timestamp': 'ts','trialnumber': 'trialNumber'}) #rename consistently
+    behaviordata = behaviordata[behaviordata['trialNumber'] <= np.max(trialdata['trialNumber'])]
+
+    ## Licks, get only timestamps of onset of discrete licks
+    lickactivity    = np.diff(behaviordata['lick']) #behaviordata lick is True whenever tongue in ROI>threshold
     lick_ts         = behaviordata['ts'][np.append(lickactivity==1,False)].to_numpy()
     
-    ## Rewards
+    ## Rewards, same as licks, get only onset of reward as timestamps
     rewardactivity = np.diff(behaviordata['reward'])
     reward_ts      = behaviordata['ts'][np.append(rewardactivity>0,False)].to_numpy()
     
-    ## Reconstruct total position:
-    trialdata['trialEnd'] = 0
-    for t in range(len(trialdata)):
-        trialdata.loc[trialdata.index[trialdata['trialNumber']==t+1],'trialEnd'] = max(behaviordata.loc[behaviordata.index[behaviordata['trialNumber']==t],'zpos'])
+    ## Modify position indices to be all in overall space, not per trial:
+    # for trialdata fields: trialStart, trialEnd, stimStart, stimEnd, rewardZoneStart, rewardZoneEnd
+    # for behaviordata fields: zpos
 
-    behaviordata['zpos_tot'] = behaviordata['zpos']
-    for t in range(len(trialdata)):
-        behaviordata.loc[behaviordata.index[behaviordata['trialNumber']==t+1],'zpos_tot'] += np.cumsum(trialdata['trialEnd'])[t]
+    trialdata['trialStart_k']   = 0 #always zero
+    trialdata['trialEnd_k']     = 0 #length of that trial
+    for k in range(len(trialdata)):
+        triallength = max(behaviordata.loc[behaviordata.index[behaviordata['trialNumber']==k+1],'zpos'])
+        trialdata.loc[k,'trialEnd_k'] = triallength
 
-    trialdata['stimStart_tot']          = trialdata['stimStart'] + np.cumsum(trialdata['trialEnd'])
-    trialdata['stimEnd_tot']            = trialdata['stimEnd'] + np.cumsum(trialdata['trialEnd'])
-    trialdata['rewardZoneStart_tot']    = trialdata['rewardZoneStart'] + np.cumsum(trialdata['trialEnd'])
-    trialdata['rewardZoneEnd_tot']      = trialdata['rewardZoneEnd'] + np.cumsum(trialdata['trialEnd'])
+    behaviordata['zpos_k'] = behaviordata['zpos']
+    # behaviordata['zpos_tot'] = behaviordata['zpos']
+    for k in range(len(trialdata)):
+        behaviordata.loc[behaviordata.index[behaviordata['trialNumber']==k+1],'zpos'] += np.cumsum(trialdata['trialEnd_k'])[k]
+
+    # Copy the original data to new fields that have values relative to that trial:
+    trialdata['stimStart_k']          = trialdata['stimStart']
+    trialdata['stimEnd_k']            = trialdata['stimEnd']
+    trialdata['rewardZoneStart_k']    = trialdata['rewardZoneStart']
+    trialdata['rewardZoneEnd_k']      = trialdata['rewardZoneEnd']
     
+    # Create or overwrite fields with overall z position:
+    trialdata['trialStart']             = np.cumsum(np.concatenate(([0],trialdata['trialEnd_k'][:-1].to_numpy())))
+    trialdata['trialEnd']               = trialdata['trialEnd_k'] + trialdata['trialStart']
+    trialdata['stimStart']              = trialdata['stimStart_k'] + trialdata['trialStart']
+    trialdata['stimEnd']                = trialdata['stimEnd_k'] + trialdata['trialStart']
+    trialdata['rewardZoneStart']        = trialdata['rewardZoneStart_k'] + trialdata['trialStart']
+    trialdata['rewardZoneEnd']          = trialdata['rewardZoneEnd_k'] + trialdata['trialStart']
+
     #Subsample the data, don't need this high 1000 Hz resolution
     behaviordata = behaviordata.iloc[::10, :].copy().reset_index(drop=True) #subsample data 10 times (to 100 Hz)
     
     behaviordata['lick']    = False #init to false and set to true for sample of first lick or rew
     behaviordata['reward']  = False
     
-    #Now add the lick times and reward times again to the subsampled dataframe:
+    #Add the lick times and reward times again to the subsampled dataframe:
     for lick in lick_ts:
         behaviordata.loc[behaviordata.index[np.argmax(lick<behaviordata['ts'])],'lick'] = True
     
+    if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") >= datetime(2024, 4, 16):
+        sessiondata['minLicks'] = 3
+    else: 
+        sessiondata['minLicks'] = 1
+
     #Assert that licks are not inside the reward zone for trials in which no lick response was recorded:
     for k in range(len(trialdata)):
         idx_k           = np.logical_and(behaviordata['lick'],[behaviordata['trialNumber']==k+1])
         idx_rewzone     = np.logical_and(behaviordata['zpos']>trialdata['rewardZoneStart'][k],behaviordata['zpos']<trialdata['rewardZoneEnd'][k])
         idx             = np.logical_and(idx_k,idx_rewzone).flatten()
-        if np.any(idx) and trialdata['lickResponse'][k]==False:
+        if np.sum(idx)>sessiondata['minLicks'][0] and trialdata['lickResponse'][k]==False:
             print('Lick(s) registered in trial %d with lickResponse==false' % k)
 
     print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
 
-    trialdata['tStart'] = np.concatenate(([behaviordata['ts'][0]],trialdata['tEnd'][1:]))
+    for reward in reward_ts: #set only the first timestamp of reward to True, to have single indices
+        behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
+    
+    trialdata['tStart'] = np.concatenate(([behaviordata['ts'][0]],trialdata['tEnd'].to_numpy()[:-1]))
 
     #Add the timestamps of entering and exiting stimulus zone:
     trialdata['tStimStart'] = ''
@@ -421,9 +434,6 @@ def proc_task(rawdatadir,sessiondata):
             print('Stimulus end later than trial end')
         trialdata.loc[trialdata.index[t], 'tStimEnd'] = tStimEnd
 
-    for reward in reward_ts: #set only the first timestamp of reward to True, to have single indices
-        behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
-    
     #Compute the timestamp and spatial location of the reward being given and store in trialdata:
     trialdata['tReward'] = ''
     trialdata['sReward'] = ''
@@ -455,6 +465,13 @@ def proc_task(rawdatadir,sessiondata):
     print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
     print("%d rewards in unique trials" % trialdata['tReward'].count()) #Give output to check if reasonable
 
+    sessiondata['stimLength']       = np.mean(trialdata['stimEnd'] - trialdata['stimStart'])
+    sessiondata['rewardZoneOffset'] = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
+    sessiondata['rewardZoneLength'] = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
+    assert np.allclose(sessiondata['stimLength'], trialdata['stimEnd'] - trialdata['stimStart'], rtol=1e-05)
+    assert np.allclose(sessiondata['rewardZoneOffset'], trialdata['rewardZoneStart'] - trialdata['stimStart'], rtol=1e-05)
+    assert np.allclose(sessiondata['rewardZoneLength'], trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'], rtol=1e-05)
+
     behaviordata['session_id']  = sessiondata['session_id'][0] #Store unique session_id
     trialdata['session_id']     = sessiondata['session_id'][0]
     
@@ -483,7 +500,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     nts             = len(csvdata)
     ts              = csvdata['Item2'].to_numpy()
 
-    videodata       = pd.DataFrame(data = ts, columns = ['timestamps'])
+    videodata       = pd.DataFrame(data = ts, columns = ['ts'])
 
     #Check that the number of frames is ballpark range of what it should be based on framerate and session duration:
     framerate = np.round(1/np.mean(np.diff(ts))).astype(int)
@@ -504,6 +521,9 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     for i in idx:
         ts[i] = np.mean((ts[i-1],ts[i+1]))
     
+    videodata['zpos'] = np.interp(x=videodata['ts'],xp=behaviordata['ts'],
+                                    fp=behaviordata['zpos'])               
+
     #Load FaceMap data: 
     facemapfile =  list(filter(lambda a: '_proc' in a, filenames)) #find the processed facemap file
     if facemapfile and len(facemapfile)==1 and os.path.exists(os.path.join(sesfolder,facemapfile[0])):
@@ -516,9 +536,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
         
         roi_types = [proc['rois'][i]['rtype'] for i in range(len(proc['rois']))]
         assert 'motion SVD' in roi_types,'motion SVD missing, _proc file does not contain motion svd roi'
-        
-        # assert len(proc['rois'])==2,'designed to analyze 2 rois, pupil and motion svd, _proc file contains a different #rois'
-        # assert all(x in [proc['rois'][i]['rtype'] for i in range(len(proc['rois']))] for x in ['motion SVD', 'Pupil']),'roi type error'
+        assert nts==len(proc['motion'][1]),'not the same number of timestamps as frames'
 
         videodata['motionenergy']   = proc['motion'][1]
         PC_labels                   = list('videoPC_' + '%s' % k for k in range(0,keepPCs))

@@ -88,6 +88,16 @@ def compute_tensor(data,ts_F,ts_T,t_pre=-1,t_post=2,binsize=0.2,method='interpol
     return tensor,bincenters
 
 
+# data = sessions[i].calciumdata
+# ts_F = sessions[i].ts_F
+# z_T = sessions[i].trialdata['stimStart']
+# zpos_F = sessions[i].zpos_F
+# trialnum_F = sessions[i].trialnum_F
+# method='binmean'
+
+
+
+
 def compute_tensor_space(data,ts_F,z_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,binsize=5,method='interpolate'):
     """
     This function constructs a tensor: a 3D 'matrix' of N neurons by K trials by S spatial bins
@@ -115,37 +125,48 @@ def compute_tensor_space(data,ts_F,z_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,b
 
     tensor      = np.empty([N,K,S])
     
-    for n in range(N):
-        print(f"\rComputing tensor for neuron {n+1} / {N}",end='\r')
-        for k in range(K):
-            if method=='binmean':
-                # tensor[k,n,:]       = binned_statistic(ts_F-ts_T[k],data.iloc[:,n], statistic='mean', bins=binedges)[0]
+    for k in range(K):
+        print(f"\rComputing tensor for trial  {k+1} / {K}",end='\r')
+        idx_trial = trialnum_F==k+1
+        for s,(bin_start,bin_end) in enumerate(zip(binedges[:-1],binedges[1:])):
+            # idx_bin = bin_start <= zpos_F[idx]-z_T[k] < bin_end
+            idx = np.all((idx_trial,zpos_F-z_T[k] >= bin_start,zpos_F-z_T[k] < bin_end),axis=0)
+            tensor[:,k,s] = np.nanmean(data.iloc[idx,:], axis=0)
 
-                idx = trialnum_F==k+1
-                tensor[n,k,:] = binned_statistic(zpos_F[idx]-ts_T[k],data.iloc[idx,n], statistic='mean', bins=binedges)[0]
-                # tensor[n,k,:] = binned_statistic(zpos_F[idx]-ts_T[k],data[idx,n], statistic='mean', bins=binedges)[0]
+    if method !='binmean':
+        print('method to bin is unknown')
 
-            elif method == 'interp_lin':
-                idx = trialnum_F==k+1
-                tensor[n,k,:]       = np.interp(bincenters, zpos_F[idx]-ts_T[k], data.iloc[idx,n],left=np.nan,right=np.nan)
+    # for n in range(N):
+    #     print(f"\rComputing tensor for neuron {n+1} / {N}",end='\r')
+    #     for k in range(K):
+    #         if method=='binmean':
+    #             # tensor[k,n,:]       = binned_statistic(ts_F-ts_T[k],data.iloc[:,n], statistic='mean', bins=binedges)[0]
+
+    #             idx = trialnum_F==k+1
+    #             tensor[n,k,:] = binned_statistic(zpos_F[idx]-z_T[k],data.iloc[idx,n], statistic='mean', bins=binedges)[0]
+    #             # tensor[n,k,:] = binned_statistic(zpos_F[idx]-ts_T[k],data[idx,n], statistic='mean', bins=binedges)[0]
+
+    #         elif method == 'interp_lin':
+    #             idx = trialnum_F==k+1
+    #             tensor[n,k,:]       = np.interp(bincenters, zpos_F[idx]-z_T[k], data.iloc[idx,n],left=np.nan,right=np.nan)
                 
-            elif method == 'interp_cub':
-                print('method to bin is not recommended for spatial tensor due to small changes in space with large calcium fluctuations')
+    #         elif method == 'interp_cub':
+    #             print('method to bin is not recommended for spatial tensor due to small changes in space with large calcium fluctuations')
 
-                idx = trialnum_F==k+1
-                x = zpos_F[idx]-ts_T[k]
-                y = data.iloc[idx,n]
-                x_idx = np.argsort(x)
-                x  = x[x_idx]
-                y  = y[x_idx]
-                spl = CubicSpline(x,y,extrapolate=False)
-                tensor[n,k,:]       = spl(bincenters)
+    #             idx = trialnum_F==k+1
+    #             x = zpos_F[idx]-z_T[k]
+    #             y = data.iloc[idx,n]
+    #             x_idx = np.argsort(x)
+    #             x  = x[x_idx]
+    #             y  = y[x_idx]
+    #             spl = CubicSpline(x,y,extrapolate=False)
+    #             tensor[n,k,:]       = spl(bincenters)
 
-            else:
-                print('method to bin is unknown')
-                tensor = None
-                bincenters = None
-                return tensor,bincenters
+    #         else:
+    #             print('method to bin is unknown')
+    #             tensor = None
+    #             bincenters = None
+    #             return tensor,bincenters
             
     return tensor,bincenters
 
