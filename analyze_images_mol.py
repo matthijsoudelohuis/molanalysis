@@ -23,7 +23,7 @@ from utils.psth import compute_tensor,compute_respmat,construct_behav_matrix_ts_
 from loaddata.get_data_folder import get_local_drive
 from utils.corr_lib import mean_resp_image,compute_signal_correlation, compute_pairwise_metrics
 from utils.plot_lib import shaded_error
-
+from utils.RRRlib import *
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
 
@@ -39,10 +39,9 @@ sessions,nSessions            = load_sessions(protocol = 'IM',session_list=sessi
 #                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 
 
-for ises in range(nSessions):
-    sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
-    sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
-    sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
+# for ises in range(nSessions):
+#     sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
+#     sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
 
 
 #Compute average response per trial:
@@ -290,8 +289,6 @@ plt.savefig(os.path.join(savedir,'SignalCorrelations','Signal_Correlation_Images
 
 
 #%% ###### Regress out behavioral state related activity  #################################
-
-from utils.RRRlib import *
 
 X = np.column_stack((sessions[sesidx].respmat_runspeed,sessions[sesidx].respmat_videome))
 Y = sessions[sesidx].respmat.T

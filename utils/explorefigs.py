@@ -404,5 +404,5 @@ def plot_PCA_images(ses,size='runspeed'):
         
         sns.despine(fig=fig, top=True, right=True)
         # ax.legend(labels=oris)
-        
+    plt.tight_layout() 
     return fig
