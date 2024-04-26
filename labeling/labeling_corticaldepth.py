@@ -15,8 +15,8 @@ from sklearn.preprocessing import minmax_scale
 from utils.plotting_style import *
 
 ## Directories: 
-rawdatadir      = 'F:\\Stacks\\'
-savedir         = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - Labeling\\Stack\\'
+rawdatadir      = 'G:\\Stacks\\'
+savedir         = 'D:\\OneDrive\\PostDoc\\Figures\\Neural - Labeling\\Stack\\'
 
 ## Pretrained models to label tdtomato expressing cells:
 model_red       = models.CellposeModel(pretrained_model = 'T:\\Python\\cellpose\\redlib_tiff\\trainingdata\\models\\redcell_20231107')
@@ -66,20 +66,17 @@ def get_stack_data(direc,model=model_red):
 
     return data
 
-################################ #################################
-##  Loop over all selected animals and folders
+#################################################################
+## Get animal information and slice parameters:
+
 animal_ids      = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
 nanimals        = len(animal_ids)
 
 nslices         = 75
 slicedepths     = np.linspace(0,10*(nslices-1),nslices)
-dataV1          = np.empty((2,nslices,nanimals)) 
-dataPM          = np.empty((2,nslices,nanimals)) 
-# X=2 (fluo and cells), Y=2 areas, V1 and PM, 
-# Z=number of slices 75, Z= number of animals 
 
-# dataV1           = np.random.rand(2,nslices,nanimals) 
-# dataPM          = np.random.rand(2,nslices,nanimals) 
+#################################################################
+## Load data and run model for all animals 
 
 for iA,animal_id in enumerate(animal_ids): #for each animal
 
@@ -87,34 +84,41 @@ for iA,animal_id in enumerate(animal_ids): #for each animal
     assert len(os.listdir(animaldir))==1, 'multiple stacks found per animal'
     sesdir      = os.path.join(animaldir,os.listdir(animaldir)[0])
 
-    dataV1[:,:,iA] = get_stack_data(os.path.join(sesdir,'STACK_V1'))
-    dataPM[:,:,iA] = get_stack_data(os.path.join(sesdir,'STACK_PM'))
+    dataV1 = get_stack_data(os.path.join(sesdir,'STACK_V1'))
+    dataPM = get_stack_data(os.path.join(sesdir,'STACK_PM'))
 
-np.save(os.path.join(rawdatadir,'stackdata_%danimals.npy' % nanimals),(dataV1,dataPM))
+    np.save(os.path.join(rawdatadir,'stackdata_%s.npy' % animal_id),(dataV1,dataPM))
 
+#################################################################
 ## Load previously processed stack data: 
-(dataV1,dataPM) = np.load(os.path.join(rawdatadir,'stackdata_%danimals.npy' % nanimals))
+
+# X=2 (fluo and cells), Y=number of slices 75, Z= number of animals 
+dataV1          = np.zeros((2,nslices,nanimals)) 
+dataPM          = np.zeros((2,nslices,nanimals)) 
+
+for iA,animal_id in enumerate([animal_ids[0]]): #for each animal
+
+    (dataV1[:,:,iA],dataPM[:,:,iA]) = np.load(os.path.join(rawdatadir,'stackdata_%s.npy' % animal_id))
 
 ###################################################################
 ######################   Make figures: ############################
 
+dataV1_mean         = np.nanmean(dataV1,axis=2)
+dataV1_err          = np.nanstd(dataV1,axis=2) / np.sqrt(nanimals)
+dataPM_mean         = np.nanmean(dataPM,axis=2)
+dataPM_err          = np.nanstd(dataPM,axis=2) / np.sqrt(nanimals)
 
-dataV1_mean     = np.nanmean(dataV1,axis=2)
-dataV1_err      = np.nanstd(dataV1,axis=2) / np.sqrt(nanimals)
-dataPM_mean     = np.nanmean(dataPM,axis=2)
-dataPM_err      = np.nanstd(dataPM,axis=2) / np.sqrt(nanimals)
+dataV1_norm         = dataV1.copy()
+dataV1_norm[0,:,:]  = minmax_scale(dataV1_norm[0,:,:], feature_range=(0, 1), axis=0, copy=True)
+dataPM_norm         = dataPM.copy()
+dataPM_norm[0,:,:]  = minmax_scale(dataPM_norm[0,:,:], feature_range=(0, 1), axis=0, copy=True)
 
-dataV1_norm = dataV1.copy()
-dataV1_norm[0,:,:] = minmax_scale(dataV1_norm[0,:,:], feature_range=(0, 1), axis=0, copy=True)
-dataPM_norm = dataPM.copy()
-dataPM_norm[0,:,:] = minmax_scale(dataPM_norm[0,:,:], feature_range=(0, 1), axis=0, copy=True)
+dataV1_norm_mean    = np.nanmean(dataV1_norm,axis=2)
+dataV1_norm_err     = np.nanstd(dataV1_norm,axis=2) / np.sqrt(nanimals)
+dataPM_norm_mean    = np.nanmean(dataPM_norm,axis=2)
+dataPM_norm_err     = np.nanstd(dataPM_norm,axis=2) / np.sqrt(nanimals)
 
-dataV1_norm_mean     = np.nanmean(dataV1_norm,axis=2)
-dataV1_norm_err      = np.nanstd(dataV1_norm,axis=2) / np.sqrt(nanimals)
-dataPM_norm_mean     = np.nanmean(dataPM_norm,axis=2)
-dataPM_norm_err      = np.nanstd(dataPM_norm,axis=2) / np.sqrt(nanimals)
-
-clrs_areas = get_clr_areas(['V1','PM'])
+clrs_areas          = get_clr_areas(['V1','PM'])
 
 ### Figure with depth profile: 
 fig,(ax1,ax2)   = plt.subplots(1,2,figsize=(6,7))
@@ -140,7 +144,7 @@ ax2.set_title('#Labeled cells')
 plt.tight_layout()
 
 
-##### + Show example planes alongside it:
+##### Show example planes alongside it:
 exanimal            = 'LPE10192'
 # exanimal            = 'LPE10885'
 explanes_depths     = [70,180,320,450]

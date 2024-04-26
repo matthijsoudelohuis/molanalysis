@@ -86,9 +86,9 @@ class Session():
                 self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
                                     fp=self.behaviordata['trialNumber'])
                 
-        if load_videodata and load_behaviordata:
-            self.load_videodata['zpos'] = np.interp(x=self.videodata['ts'],xp=self.behaviordata['ts'],
-                                    fp=self.behaviordata['zpos'])
+        # if load_videodata and load_behaviordata:
+        #     self.load_videodata['zpos'] = np.interp(x=self.videodata['ts'],xp=self.behaviordata['ts'],
+        #                             fp=self.behaviordata['zpos'])
 
     def reset_label_threshold(self,threshold):
         print('Setting new labeling threshold based on %1.2f overlap' % threshold)

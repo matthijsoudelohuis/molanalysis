@@ -8,7 +8,6 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 # TODO:
-# auto detect raw data folder
 # learn right way of module and folders etc.
 
 import os
@@ -22,10 +21,10 @@ from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
-rawdatadir          = 'G:\\RawData\\'
+rawdatadir          = 'K:\\RawData\\'
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-animal_id           = 'LPE09830'
-sessiondate         = '2023_04_10'
+animal_id           = 'LPE11997'
+sessiondate         = '2024_04_09'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 

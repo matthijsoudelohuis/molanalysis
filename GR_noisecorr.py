@@ -709,8 +709,8 @@ for iap,areapair in enumerate(areapairs):
     ax.set_ylabel('Noise Correlation')
 
 plt.tight_layout()
-# plt.savefig(os.path.join(savedir,'NoiseCorr_labeling_%dsessions' %nSessions + '.png'), format = 'png')
-plt.savefig(os.path.join(savedir,'NoiseCorr_labeling_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'NoiseCorr_labeling_%dsessions' %nSessions + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'NoiseCorr_labeling_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% Cell showing negative noise correlations with increasing fluo in Chan 2 if not curated session
 sesidx = 0
@@ -785,9 +785,9 @@ for iap,areapair in enumerate(areapairs):
     ax = plt.subplot(1,len(areapairs),iap+1)
     for ilp,labelpair in enumerate(labelpairs):
         # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
-        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_labelpairs[ilp]))
-        handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),
-                                    yerror=binmean[:,iap,ilp,:].squeeze()/5,color=clrs_labelpairs[ilp]))
+        handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_labelpairs[ilp]))
+        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),
+                                    # yerror=binmean[:,iap,ilp,:].squeeze()/5,color=clrs_labelpairs[ilp]))
     ax.set(xlabel=r'Anatomical distance ($\mu$m)',ylabel='Noise Correlation',
            yticks=np.arange(0, 1, step=0.01),xticks=np.arange(0, 600, step=100))
     ax.set(xlim=[10,500],ylim=[0,0.075])

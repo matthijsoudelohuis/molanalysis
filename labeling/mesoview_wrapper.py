@@ -1,23 +1,20 @@
 import os
-os.chdir('T:\\Python\\molanalysis\\')
+from loaddata.get_data_folder import get_local_drive,get_data_folder
+os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 import numpy as np
 import tifffile
 from utils.twoplib import split_mROIs
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-from labeling.label_lib import bleedthrough_correction
+from labeling.label_lib import bleedthrough_correction, estimate_correc_coeff
 
-# rawdatadir      = "X:\\Rawdata\\"
-rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
+rawdatadir      = "G:\\Mesoviews\\"
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\PILOTS\\"
-# rawdatadir          = "O:\\Rawdata\\"
-outputdir           = "V:\\Procdata\\OV\\"
+outputdir           = os.path.join(get_data_folder(),"OV")
 
-animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
-# animal_ids          = ['LPE09662'] #If empty than all animals in folder will be processed
+animal_ids          = [] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE11998'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE09830','LPE09831'] #If empty than all animals in folder will be processed
-# animal_ids          = ['NSH07422'] #If empty than all animals in folder will be processed
-# animal_ids          = ['LPE10189','LPE10190','LPE10191','LPE10192'] #If empty than all animals in folder will be processed
 
 cmred = LinearSegmentedColormap.from_list(
         "Custom", [(0, 0, 0), (1, 0, 0)], N=100)
@@ -58,9 +55,10 @@ for animal_id in animal_ids: #for each animal
 
                     cmax        = np.max(c[1::2,:,:], axis=0)
                     redframe    = np.stack([redframe,cmax],axis=2).max(axis=2)
-
             
-            greenframe = bleedthrough_correction(greenframe,redframe)
+            # coeff       = estimate_correc_coeff(greenframe,redframe)
+
+            # greenframe  = bleedthrough_correction(greenframe,redframe,coeff=0)
 
             outpath = os.path.join(outputdir,animal_id + '_' + sessiondate + '_green.tif')
             fH = open(outpath,'wb') #as fH:
@@ -79,8 +77,11 @@ for animal_id in animal_ids: #for each animal
             plt.setp(plt.gcf().get_axes(), xticks=[], yticks=[]);
             plt.tight_layout()
             
+            if not os.path.exists(os.path.join(outputdir,animal_id)):
+                os.makedirs(os.path.join(outputdir,animal_id))
+
             # Save the full figure...
-            outpath = os.path.join(outputdir,animal_id + '_' + sessiondate + '.png')
+            outpath = os.path.join(outputdir,animal_id,animal_id + '_' + sessiondate + '.png')
 
             fig.savefig(outpath)
 
