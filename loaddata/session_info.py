@@ -58,7 +58,7 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
             for session_id in os.listdir(os.path.join(get_data_folder(),protocol,animal_id)):
                 
                 ses = Session(protocol=protocol,animal_id=animal_id,session_id=session_id)
-                ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
+                ses.load_data(load_behaviordata=False, load_calciumdata=False, load_videodata=False)
                 
                 ## go through specified conditions that have to be met for the session to be included:
                 sesflag = True
@@ -76,8 +76,10 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     sesflag = sesflag and hasattr(ses, 'celldata') and len(ses.celldata) >= min_cells
                     
                 if sesflag:
+                    ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
                     sessions.append(ses)
-      
+                
+
     report_sessions(sessions)            
     
     return sessions,len(sessions)

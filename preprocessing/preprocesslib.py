@@ -344,7 +344,8 @@ def proc_task(rawdatadir,sessiondata):
         behaviordata.columns = ["rawvoltage","ts","trialNumber","zpos","runspeed","lick","reward"] #rename the columns
     behaviordata = behaviordata.drop(columns="rawvoltage") #remove rawvoltage, not used
     behaviordata = behaviordata.rename(columns={'timestamp': 'ts','trialnumber': 'trialNumber'}) #rename consistently
-    behaviordata = behaviordata[behaviordata['trialNumber'] <= np.max(trialdata['trialNumber'])]
+    # behaviordata = behaviordata[behaviordata['trialNumber'] <= np.max(trialdata['trialNumber'])]
+    behaviordata.loc[behaviordata.index[behaviordata['trialNumber'] > np.max(trialdata['trialNumber'])],'trialNumber'] = np.max(trialdata['trialNumber'])
 
     ## Licks, get only timestamps of onset of discrete licks
     lickactivity    = np.diff(behaviordata['lick']) #behaviordata lick is True whenever tongue in ROI>threshold
@@ -357,17 +358,20 @@ def proc_task(rawdatadir,sessiondata):
     ## Modify position indices to be all in overall space, not per trial:
     # for trialdata fields: trialStart, trialEnd, stimStart, stimEnd, rewardZoneStart, rewardZoneEnd
     # for behaviordata fields: zpos
-
     trialdata['trialStart_k']   = 0 #always zero
     trialdata['trialEnd_k']     = 0 #length of that trial
     for k in range(len(trialdata)):
         triallength = max(behaviordata.loc[behaviordata.index[behaviordata['trialNumber']==k+1],'zpos'])
         trialdata.loc[k,'trialEnd_k'] = triallength
+    trialdata['tStart'] = np.concatenate(([behaviordata['ts'][0]],trialdata['tEnd'].to_numpy()[:-1]))
 
     behaviordata['zpos_k'] = behaviordata['zpos']
     # behaviordata['zpos_tot'] = behaviordata['zpos']
-    for k in range(len(trialdata)):
-        behaviordata.loc[behaviordata.index[behaviordata['trialNumber']==k+1],'zpos'] += np.cumsum(trialdata['trialEnd_k'])[k]
+    for k in range(1,len(trialdata)):
+        behaviordata.loc[behaviordata.index[behaviordata['trialNumber']==k+1],'zpos'] += np.cumsum(trialdata['trialEnd_k'])[k-1]
+    
+    #correct for postponing problems with stim end if lick time out
+    trialdata['stimEnd']              = trialdata['stimStart'] + 20 
 
     # Copy the original data to new fields that have values relative to that trial:
     trialdata['stimStart_k']          = trialdata['stimStart']
@@ -383,6 +387,24 @@ def proc_task(rawdatadir,sessiondata):
     trialdata['rewardZoneStart']        = trialdata['rewardZoneStart_k'] + trialdata['trialStart']
     trialdata['rewardZoneEnd']          = trialdata['rewardZoneEnd_k'] + trialdata['trialStart']
 
+    # k = 10
+    # idx = behaviordata.index[behaviordata['trialNumber']==k+1]
+    # plt.figure()
+    # plt.plot(behaviordata.loc[idx,'ts'],behaviordata.loc[idx,'zpos_k'])
+    # plt.scatter(trialdata.loc[k,'tStart'],trialdata.loc[k,'trialStart_k'],s=50)
+    # plt.figure()
+    # plt.plot(behaviordata.loc[idx,'ts'],behaviordata.loc[idx,'zpos'])
+    # plt.scatter(trialdata.loc[k,'tStart'],trialdata.loc[k,'trialStart'],s=50)
+
+    sessiondata['stimLength']       = np.mean(trialdata['stimEnd'] - trialdata['stimStart'])
+    sessiondata['rewardZoneOffset'] = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
+    sessiondata['rewardZoneLength'] = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
+    assert np.allclose(sessiondata['stimLength'], trialdata['stimEnd'] - trialdata['stimStart'], rtol=1e-05)
+    # assert np.allclose(sessiondata['rewardZoneOffset'], trialdata['rewardZoneStart'] - trialdata['stimStart'], rtol=1e-05)
+    assert np.allclose(sessiondata['rewardZoneLength'], trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'], rtol=1e-05)
+    g = trialdata[['trialStart','stimStart','stimEnd','rewardZoneEnd','trialEnd']].to_numpy().flatten()
+    assert np.all(np.diff(g)>=0), 'trial event ordering issue'
+
     #Subsample the data, don't need this high 1000 Hz resolution
     behaviordata = behaviordata.iloc[::10, :].copy().reset_index(drop=True) #subsample data 10 times (to 100 Hz)
     
@@ -392,7 +414,8 @@ def proc_task(rawdatadir,sessiondata):
     #Add the lick times and reward times again to the subsampled dataframe:
     for lick in lick_ts:
         behaviordata.loc[behaviordata.index[np.argmax(lick<behaviordata['ts'])],'lick'] = True
-    
+    print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
+
     if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") >= datetime(2024, 4, 16):
         sessiondata['minLicks'] = 3
     else: 
@@ -400,52 +423,43 @@ def proc_task(rawdatadir,sessiondata):
 
     #Assert that licks are not inside the reward zone for trials in which no lick response was recorded:
     for k in range(len(trialdata)):
-        idx_k           = np.logical_and(behaviordata['lick'],[behaviordata['trialNumber']==k+1])
         idx_rewzone     = np.logical_and(behaviordata['zpos']>trialdata['rewardZoneStart'][k],behaviordata['zpos']<trialdata['rewardZoneEnd'][k])
-        idx             = np.logical_and(idx_k,idx_rewzone).flatten()
-        if np.sum(idx)>sessiondata['minLicks'][0] and trialdata['lickResponse'][k]==False:
-            print('Lick(s) registered in trial %d with lickResponse==false' % k)
-
-    print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
+        idx             = np.logical_and(behaviordata['lick'],idx_rewzone)#.flatten()
+        if np.sum(idx)>=sessiondata['minLicks'][0] and trialdata['lickResponse'][k]==False:
+            print('%d lick(s) registered in reward zone of trial %d with lickResponse==false' % (np.sum(idx),k))
 
     for reward in reward_ts: #set only the first timestamp of reward to True, to have single indices
         behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
     
-    trialdata['tStart'] = np.concatenate(([behaviordata['ts'][0]],trialdata['tEnd'].to_numpy()[:-1]))
-
     #Add the timestamps of entering and exiting stimulus zone:
     trialdata['tStimStart'] = ''
     trialdata['tStimEnd'] = ''
     for t in range(len(trialdata)):
-        idx             = behaviordata['trialNumber']==t+1
-        z_temp          = behaviordata.loc[behaviordata.index[idx],'zpos'].to_numpy()
-        ts_temp         = behaviordata.loc[behaviordata.index[idx],'ts'].to_numpy()
-        try:
-            tStimStart      = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'stimStart'])[0][0]]
-        except:
-            tStimStart        = trialdata.loc[trialdata.index[t], 'tStart']
-            print('Stimulus start later than trial end')
-        trialdata.loc[trialdata.index[t], 'tStimStart'] = tStimStart
+        idx             = np.where(behaviordata['zpos'] >= trialdata.loc[t, 'stimStart'])[0][0]
+        trialdata.loc[trialdata.index[t], 'tStimStart'] =  behaviordata.loc[idx,'ts']
         
-        try:
-            tStimEnd        = ts_temp[np.where(z_temp >= trialdata.loc[trialdata.index[t], 'stimEnd'])[0][0]]
-        except:
-            tStimEnd        = trialdata.loc[trialdata.index[t], 'tEnd']
-            print('Stimulus end later than trial end')
-        trialdata.loc[trialdata.index[t], 'tStimEnd'] = tStimEnd
+        idx             = np.where(behaviordata['zpos'] >= trialdata.loc[trialdata.index[t], 'stimEnd'])[0][0]
+        trialdata.loc[trialdata.index[t], 'tStimEnd'] =  behaviordata.loc[idx,'ts']
+    assert ~np.any(trialdata['tStimEnd']<trialdata['tStimStart']), 'Stimulus end earlier than stimulus start'
+    assert ~np.any(trialdata['stimEnd']<trialdata['stimStart']), 'Stimulus end earlier than stimulus start'
 
     #Compute the timestamp and spatial location of the reward being given and store in trialdata:
-    trialdata['tReward'] = ''
-    trialdata['sReward'] = ''
+    trialdata['tReward'] = pd.Series(dtype='float')
+    trialdata['sReward'] = pd.Series(dtype='float')
     for k in range(len(trialdata)):
-        idx_k           = np.logical_and(behaviordata['reward'],[behaviordata['trialNumber']==k+1])
-        idx_rewzone     = np.logical_and(behaviordata['zpos']>trialdata['rewardZoneStart'][k],behaviordata['zpos']<trialdata['rewardZoneEnd'][k])
-        idx             = np.logical_and(idx_k,idx_rewzone).flatten()
+        idx_k           = behaviordata['reward']
+        idx_rewzone     = np.logical_and(behaviordata['zpos']>=trialdata['rewardZoneStart'][k],behaviordata['zpos']<=trialdata['rewardZoneEnd'][k])
+        idx             = np.logical_and(idx_k,idx_rewzone) #.flatten()
         if np.any(idx):
-            trialdata.loc[trialdata.index[k],'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
-            trialdata.loc[trialdata.index[k],'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]
+            trialdata.loc[k,'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
+            trialdata.loc[k,'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]
     
-    #Compute reward rate (fraction of possible rewarded trials that are rewarded) 
+    if ~np.all(trialdata['tReward'][trialdata['rewardGiven']==1]):
+        print('a rewarded trial has no timestamp of reward' % trialdata['tReward'][trialdata['rewardGiven']==1].isnull().count())
+    if np.any(trialdata['tReward'][trialdata['rewardGiven']==0]):
+        print('%d unrewarded trials have timestamp of reward (manual?)' % trialdata['tReward'][trialdata['rewardGiven']==0].count())
+
+    # Compute reward rate (fraction of possible rewarded trials that are rewarded) 
     # with sliding window for engagement index:
     sliding_window = 24
     rewardrate_thr = 0.3
@@ -457,20 +471,8 @@ def proc_task(rawdatadir,sessiondata):
         if hitrate < rewardrate_thr:
             trialdata.loc[trialdata.index[t],'engaged'] = 0
 
-    if ~np.all(trialdata['tReward'][trialdata['rewardGiven']==1]):
-        print('a rewarded trial has no timestamp of reward')
-    if np.any(trialdata['tReward'][trialdata['rewardGiven']==0]):
-        print('not rewarded trial has timestamp of reward')
-    
-    print("%d rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
-    print("%d rewards in unique trials" % trialdata['tReward'].count()) #Give output to check if reasonable
-
-    sessiondata['stimLength']       = np.mean(trialdata['stimEnd'] - trialdata['stimStart'])
-    sessiondata['rewardZoneOffset'] = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
-    sessiondata['rewardZoneLength'] = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
-    assert np.allclose(sessiondata['stimLength'], trialdata['stimEnd'] - trialdata['stimStart'], rtol=1e-05)
-    assert np.allclose(sessiondata['rewardZoneOffset'], trialdata['rewardZoneStart'] - trialdata['stimStart'], rtol=1e-05)
-    assert np.allclose(sessiondata['rewardZoneLength'], trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'], rtol=1e-05)
+    print("%d total rewards" % np.sum(behaviordata['reward'])) #Give output to check if reasonable
+    print("%d rewarded trials" % trialdata['tReward'].count()) #Give output to check if reasonable
 
     behaviordata['session_id']  = sessiondata['session_id'][0] #Store unique session_id
     trialdata['session_id']     = sessiondata['session_id'][0]
@@ -512,15 +514,15 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     #Check that frame rate matches interframe interval:
     assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
     #Check that inter frame interval does not take on crazy values:
+    # issues_ts = np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2)
+    issues_ts = np.concatenate(([False],np.logical_or(np.diff(ts[1:-1])<1/framerate/3,
+                                                  np.diff(ts[1:-1])>1/framerate*2),[False,False]))
+    if np.any(issues_ts):
+        print('Interpolating %d video timestamp issues' % np.sum(issues_ts))
+        ts[issues_ts] = np.interp(np.where(issues_ts)[0],np.where(~issues_ts)[0],ts[~issues_ts])
+        # Interpolate samples where timestamps are off:
     assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
-    # Replace samples where timestamps are off:
-    idx = np.where(np.diff(ts[1:-1])<1/framerate/3)[0] + 2
-    for i in idx:
-        ts[i] = np.mean((ts[i-1],ts[i+1]))
-    idx = np.where(np.diff(ts[1:-1])>1/framerate*2)[0] + 2
-    for i in idx:
-        ts[i] = np.mean((ts[i-1],ts[i+1]))
-    
+
     videodata['zpos'] = np.interp(x=videodata['ts'],xp=behaviordata['ts'],
                                     fp=behaviordata['zpos'])               
 
@@ -528,7 +530,6 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     facemapfile =  list(filter(lambda a: '_proc' in a, filenames)) #find the processed facemap file
     if facemapfile and len(facemapfile)==1 and os.path.exists(os.path.join(sesfolder,facemapfile[0])):
         # facemapfile = "W:\\Users\\Matthijs\\Rawdata\\NSH07422\\2023_03_13\\SP\\Behavior\\SP_NSH07422_camera_2023-03-13T16_44_07_proc.npy"
-        # facemapfile = "W:\\Users\\Matthijs\\Rawdata\\LPE09829\\2023_03_29\\VR\\Behavior\\VR_LPE09829_camera_2023-03-29T15_32_29_proc.npy"
         
         proc = np.load(os.path.join(sesfolder,facemapfile[0]),allow_pickle=True).item()
         
@@ -675,16 +676,16 @@ def proc_imaging(sesfolder, sessiondata):
 
         iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
         stat                = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
-        assert os.path.exists(os.path.join(plane_folder,'redim_plane%d_seg.npy' %iplane)), 'Cellpose results not found'
-        redcell_seg         = np.load(os.path.join(plane_folder,'redim_plane%d_seg.npy' %iplane), allow_pickle=True).item()
-        masks_cp_red        = redcell_seg['masks']
-        Nredcells_plane     = len(np.unique(masks_cp_red))-1 # number of labeled cells overall, minus 1 because 0 for all nonlabeled pixels
-
-        # if not 
-        # redcell     = proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=False)
-        redcell = proc_labeling_plane(iplane,plane_folder,showcells=False,overlap_threshold=0.5)
-        # assert os.path.exists(os.path.join(plane_folder,'redcell_cellpose.npy')), 'Cellpose results not found'
-        # redcell                     = np.load(os.path.join(plane_folder, 'redcell_cellpose.npy'), allow_pickle=True)
+        
+        if os.path.exists(os.path.join(plane_folder,'redim_plane%d_seg.npy' %iplane)):
+            redcell_seg         = np.load(os.path.join(plane_folder,'redim_plane%d_seg.npy' %iplane), allow_pickle=True).item()
+            masks_cp_red        = redcell_seg['masks']
+            Nredcells_plane     = len(np.unique(masks_cp_red))-1 # number of labeled cells overall, minus 1 because 0 for all nonlabeled pixels
+            redcell = proc_labeling_plane(iplane,plane_folder,showcells=False,overlap_threshold=0.5)
+        else: 
+            print('\n\n Warning: cellpose results not found, setting labeling to zero\n\n')
+            redcell             = np.zeros((len(iscell),3))
+            Nredcells_plane     = 0
 
         ncells_plane              = len(iscell)
         

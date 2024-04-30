@@ -90,23 +90,13 @@ def plot_psycurve(sessions,filter_engaged=False):
             trialdata = trialdata[trialdata['engaged']==1]
 
         psydata = trialdata.groupby(['signal'])['lickResponse'].sum() / trialdata.groupby(['signal'])['lickResponse'].count()
-
         x = psydata.keys().to_numpy()
         y = psydata.to_numpy()
+       
+        params = fit_psycurve(trialdata,printoutput=True)
 
-        # # Plot the results
+        ## Plot the results
         fig, ax = plt.subplots()
-
-        ax.scatter(x,y) 
-
-        X = trialdata['signal']
-        Y = trialdata['lickResponse']
-        initial_guess           = [20, 15, 0.1, 0.1]  # Initial guess for parameters (mu,sigma,lapse_rate,guess_rate)
-        bounds                  = ([0,4,0,0],[100,40,0.5,0.5])
-        params, covariance      = curve_fit(psychometric_function, x, y, p0=initial_guess,bounds=bounds)
-        params, covariance      = curve_fit(psychometric_function, X, Y, p0=initial_guess,bounds=bounds)
-
-        # Plot the results
         ax.scatter(x, y, label='data',c='k')
         x_highres = np.linspace(np.min(x),np.max(x),1000)
         ax.plot(x_highres, psychometric_function(x_highres, *params), label='fit', color='blue')
@@ -116,23 +106,54 @@ def plot_psycurve(sessions,filter_engaged=False):
         ax.set_xlim([np.min(x),np.max(x)])
         ax.set_ylim([0,1])
         ax.set_title(ses.sessiondata['session_id'][0])
-        
+ 
+    return fig
+
+
+def fit_psycurve(trialdata,printoutput=False):
+
+    psydata = trialdata.groupby(['signal'])['lickResponse'].sum() / trialdata.groupby(['signal'])['lickResponse'].count()
+    x = psydata.keys().to_numpy()
+    y = psydata.to_numpy()
+
+    X = trialdata['signal'] #Fit with actual trials, not averages per condition
+    Y = trialdata['lickResponse']
+    initial_guess           = [20, 15, 1-y[-1], y[0]]  # Initial guess for parameters (mu,sigma,lapse_rate,guess_rate)
+    # set guess rate and lapse rate to be within 10% of actual response rates at catch and max trials:
+    bounds                  = ([0,2,(1-y[-1])*0.9,y[0]*0.9-0.01],[100,40,(1-y[-1])*1.1+0.01,y[0]*1.1])
+    # bounds                  = ([0,4,0,0],[100,40,0.5,0.5])
+    
+    # Fit the psychometric curve to the data using curve_fit
+    # params, covariance      = curve_fit(psychometric_function, x, y, p0=initial_guess,bounds=bounds)
+    params, covariance      = curve_fit(psychometric_function, X, Y, p0=initial_guess,bounds=bounds)
+    
+    if printoutput: 
         # Print the fitted parameters
         print("Fitted Parameters:")
         print("mu:", '%2.2f' % params[0])
         print("sigma:", '%2.2f' % params[1])
         print("lapse_rate:", '%2.2f' % params[2])
         print("guess_rate:", '%2.2f' % params[3])
- 
-    return fig
+    
+    return params
 
 
-def fit_psycurve(ses):
-    # Fit the psychometric curve to the data using curve_fit
-    initial_guess = [0, 1, 0.1, 0.01]  # Initial guess for parameters
-    params, covariance = curve_fit(psychometric_function, x_data, y_data_noise, p0=initial_guess)
+def noise_to_psy(sessions,filter_engaged=True):
 
-    return
+    for ises,ses in enumerate(sessions):
+        trialdata = ses.trialdata.copy()
+        if filter_engaged:
+            trialdata = trialdata[trialdata['engaged']==1]
+
+        params = fit_psycurve(trialdata,printoutput=False)
+
+        idx = ses.trialdata['stimcat']=='N'
+        ses.trialdata['signal_psy'] = pd.Series(dtype='float')
+
+        ses.trialdata.loc[idx,'signal_psy'] = (ses.trialdata.loc[idx,'signal'] - params[0]) / params[1]
+
+    return sessions
+
 
 def runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
@@ -154,12 +175,12 @@ def runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
     for itrial in range(ntrials):
         idx = np.logical_and(itrial-1 <= ses.behaviordata['trialNumber'], ses.behaviordata['trialNumber'] <= itrial+2)
-        runPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos_tot'][idx]-ses.trialdata['stimStart_tot'][itrial],
-                                            ses.behaviordata['runSpeed'][idx], statistic='mean', bins=binedges)[0]
+        runPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
+                                            ses.behaviordata['runspeed'][idx], statistic='mean', bins=binedges)[0]
         
         # idx = ses.behaviordata['trialNumber']==itrial+1
         # runPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
-        #                                     ses.behaviordata['runSpeed'][idx], statistic='mean', bins=binedges)[0]
+        #                                     ses.behaviordata['runspeed'][idx], statistic='mean', bins=binedges)[0]
     # runPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = runPSTH_ses
 
     return runPSTH, bincenters
@@ -185,7 +206,7 @@ def lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
     for itrial in range(ntrials-1):
         idx = np.logical_and(itrial-1 <= ses.behaviordata['trialNumber'], ses.behaviordata['trialNumber'] <= itrial+2)
-        lickPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos_tot'][idx]-ses.trialdata['stimStart_tot'][itrial],
+        lickPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
                                             ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
         
         # lickPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],

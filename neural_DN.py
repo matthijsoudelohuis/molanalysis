@@ -7,7 +7,7 @@ This script contains a series of functions that analyze activity in visual VR de
 """
 
 import os
-os.chdir('T:\\Python\\molanalysis\\')
+os.chdir('D:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 
@@ -40,16 +40,18 @@ plt.rcParams['svg.fonttype'] = 'none'
 
 protocol            = 'DN'
 
+session_list = np.array([['LPE11998', '2024_04_23']])
 session_list = np.array([['LPE10884', '2023_12_14']])
 session_list = np.array([['LPE10884', '2023_12_14']])
-session_list        = np.array([['LPE11622','2024_02_23']])
+session_list        = np.array([['LPE12013','2024_04_25']])
 # session_list = np.array([['LPE09829', '2023_03_29'],
 #                         ['LPE09829', '2023_03_30'],
 #                         ['LPE09829', '2023_03_31']])
 
 sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion='deconv') #Load specified list of sessions
-# sessions = filter_sessions(protocol) #load sessions that meet criteria:
+sessions,nSessions = filter_sessions([protocol],only_animal_id=['LPE11997','LPE11998'],
+                           load_behaviordata=True,load_calciumdata=True,calciumversion='deconv') #load sessions that meet criteria:
 
 # savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
@@ -87,14 +89,13 @@ for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
                                        sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=binsize,method='binmean')
 
-
 ## Compute average response in stimulus response zone:
 for i in range(nSessions):
     sessions[i].respmat             = compute_respmat_space(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['stimStart'],
                                     sessions[i].zpos_F,sessions[i].trialnum_F,s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
 
 for i in range(nSessions):
-    temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[0].behaviordata['runspeed']),1)))
+    temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[i].behaviordata['runspeed']),1)))
     sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
                                     sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
 
@@ -116,7 +117,8 @@ def plot_snake_area(snakeplot,sbins,stimtypes=['C','N','M']):
     fig, axes = plt.subplots(nrows=1,ncols=3,figsize=(10,5))
     for iTT in range(len(stimtypes)):
         plt.subplot(1,3,iTT+1)
-        c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'PuRd',vmin=-50.0,vmax=700)
+        c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'PuRd',
+                           vmin=np.percentile(snakeplot,10),vmax=np.percentile(snakeplot,90))
         # c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.25)
         # c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.5)
         plt.title(stimtypes[iTT],fontsize=11)
@@ -280,6 +282,8 @@ def pca_scatter_stimresp(respmat,trialdata):
             frameon=False, loc='center left', bbox_to_anchor=(1, 0.5))
     plt.tight_layout(rect=[0,0,0.9,1])
 
+
+sesidx = 5
 #For all areas:
 # respmat     = np.nanmean(sessions[sesidx].stensor[:,:,(sbins>0) & (sbins<20)],axis=2) 
 pca_scatter_stimresp(sessions[sesidx].respmat,sessions[sesidx].trialdata)
@@ -311,16 +315,9 @@ idx_V1 = np.where(sessions[sesidx].celldata['roi_name']=='V1')[0]
 # idx_V1 = np.where(sessions[sesidx].celldata['roi_name']=='AL')[0]
 # idx_PM = np.where(sessions[sesidx].celldata['roi_name']=='PM')[0]
 
-A1 = sessions[sesidx].respmat[idx_V1,:]
+A1 = sessions[sesidx].respmat[:,:]
+# A1 = sessions[sesidx].respmat[idx_V1,:]
 # A2 = sessions[sesidx].respmat[idx_PM,:]
-
-
-
-# S   = np.vstack((sessions[sesidx].trialdata['deltaOrientation'],
-#                sessions[sesidx].trialdata['deltaSpeed'],
-#                sessions[sesidx].respmat_runspeed))
-# S = np.vstack((S,np.random.randn(1,K)))
-# slabels     = ['Ori','Speed','Running','Random']
 
 S   = np.vstack((sessions[sesidx].trialdata['signal'],
                  sessions[sesidx].trialdata['lickResponse'],

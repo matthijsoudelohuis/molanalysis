@@ -17,8 +17,8 @@ class Session():
 
     def __init__(self, protocol='',animal_id='', session_id='', verbose=1):
 
-        print('\nInitializing Session object for: \n- animal ID: {}'
-              '\n- Session ID: {}\n'.format(animal_id, session_id))
+        # print('\nInitializing Session object for: \n- animal ID: {}'
+            #   '\n- Session ID: {}\n'.format(animal_id, session_id))
         self.data_folder = os.path.join(get_data_folder(), protocol, animal_id, session_id)
         self.verbose = verbose
         self.protocol = protocol
