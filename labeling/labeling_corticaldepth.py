@@ -18,8 +18,26 @@ from utils.plotting_style import *
 rawdatadir      = 'G:\\Stacks\\'
 savedir         = 'D:\\OneDrive\\PostDoc\\Figures\\Neural - Labeling\\Stack\\'
 
+recomblist = np.array([['NSH07429','flp'], #which recombinase is causing expression in V1, by design other one in PM
+['NSH07422','cre'],
+['LPE09665','flp'],
+['LPE09830','flp'],
+['LPE10883','cre'],
+['LPE10884','flp'],
+['LPE10885','cre'],
+['LPE10919','cre'],
+['LPE10192','flp'],
+['LPE11081','cre'],
+['LPE11086','cre'],
+['LPE11622','flp'],
+['LPE11623','cre'],
+['LPE11495','cre'],
+['LPE11997','flp'],
+['LPE11998','flp'],
+['LPE12013','flp']])
+
 ## Pretrained models to label tdtomato expressing cells:
-model_red       = models.CellposeModel(pretrained_model = 'T:\\Python\\cellpose\\redlib_tiff\\trainingdata\\models\\redcell_20231107')
+model_red       = models.CellposeModel(pretrained_model = 'D:\\Python\\cellpose\\redlib_tiff\\trainingdata\\models\\redcell_20231107')
 # model_type='cyto' or 'nuclei' or 'cyto2'
 # model_red = models.CellposeModel(pretrained_model = 'T:\\Python\\cellpose\\testdir\\models\\MOL_20230814_redcells')
 # model_green     = models.Cellpose(model_type='cyto')
@@ -66,6 +84,17 @@ def get_stack_data(direc,model=model_red):
 
     return data
 
+
+def plot_depthprofile(data,ax,clr):
+    # data is assumed to have shape S x M where 
+    # S is slices (75) and M is number of mice 
+    data_mean = np.nanmean(data,axis=1)
+    data_err = np.nanstd(data,axis=1) / np.sqrt(np.shape(data)[1])
+
+    ax.plot(data,slicedepths,c=clr,linewidth=0.5)
+    h, = ax.plot(data_mean,slicedepths,c=clr,linewidth=2)
+    return h
+
 #################################################################
 ## Get animal information and slice parameters:
 
@@ -96,54 +125,82 @@ for iA,animal_id in enumerate(animal_ids): #for each animal
 dataV1          = np.zeros((2,nslices,nanimals)) 
 dataPM          = np.zeros((2,nslices,nanimals)) 
 
-for iA,animal_id in enumerate([animal_ids[0]]): #for each animal
+for iA,animal_id in enumerate(animal_ids): #for each animal
 
     (dataV1[:,:,iA],dataPM[:,:,iA]) = np.load(os.path.join(rawdatadir,'stackdata_%s.npy' % animal_id))
 
 ###################################################################
-######################   Make figures: ############################
-
-dataV1_mean         = np.nanmean(dataV1,axis=2)
-dataV1_err          = np.nanstd(dataV1,axis=2) / np.sqrt(nanimals)
-dataPM_mean         = np.nanmean(dataPM,axis=2)
-dataPM_err          = np.nanstd(dataPM,axis=2) / np.sqrt(nanimals)
-
-dataV1_norm         = dataV1.copy()
-dataV1_norm[0,:,:]  = minmax_scale(dataV1_norm[0,:,:], feature_range=(0, 1), axis=0, copy=True)
-dataPM_norm         = dataPM.copy()
-dataPM_norm[0,:,:]  = minmax_scale(dataPM_norm[0,:,:], feature_range=(0, 1), axis=0, copy=True)
-
-dataV1_norm_mean    = np.nanmean(dataV1_norm,axis=2)
-dataV1_norm_err     = np.nanstd(dataV1_norm,axis=2) / np.sqrt(nanimals)
-dataPM_norm_mean    = np.nanmean(dataPM_norm,axis=2)
-dataPM_norm_err     = np.nanstd(dataPM_norm,axis=2) / np.sqrt(nanimals)
+######################  Make figure: ############################
 
 clrs_areas          = get_clr_areas(['V1','PM'])
 
 ### Figure with depth profile: 
-fig,(ax1,ax2)   = plt.subplots(1,2,figsize=(6,7))
-ax1.plot(dataV1_norm_mean[0,:],slicedepths,c=clrs_areas[0],linewidth=2)
-ax1.plot(dataPM_norm_mean[0,:],slicedepths,c=clrs_areas[1],linewidth=2)
-ax1.plot(dataV1_norm[0,:,:],slicedepths,c=clrs_areas[0],linewidth=0.5)
-ax1.plot(dataPM_norm[0,:,:],slicedepths,c=clrs_areas[1],linewidth=0.5)
+fig,(ax1,ax2)   = plt.subplots(1,2,figsize=(6,7),sharey=True)
+handles = []
+handles.append(plot_depthprofile(minmax_scale(dataV1[0,:,:], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_areas[0]))
+handles.append(plot_depthprofile(minmax_scale(dataPM[0,:,:], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_areas[1]))
+ax1.set_xlabel('Fluorescence')
+ax1.set_title('Fluorescence')
 ax1.invert_yaxis()
 ax1.set_ylabel('Cortical Depth')
-ax1.set_xlabel('Fluorescence')
-# ax1.legend(['V1','PM'],frameon=False)
-ax1.set_title('Fluorescence')
 
-ax2.plot(dataV1_mean[1,:],slicedepths,c=clrs_areas[0],linewidth=2)
-ax2.plot(dataPM_mean[1,:],slicedepths,c=clrs_areas[1],linewidth=2)
-ax2.plot(dataV1[1,:,:],slicedepths,c=clrs_areas[0],linewidth=0.5)
-ax2.plot(dataPM[1,:,:],slicedepths,c=clrs_areas[1],linewidth=0.5)
-ax2.invert_yaxis()
-ax2.set_ylabel('')
+handles = []
+handles.append(plot_depthprofile(dataV1[1,:,:],ax2,clrs_areas[0]))
+handles.append(plot_depthprofile(dataPM[1,:,:],ax2,clrs_areas[1]))
 ax2.set_xlabel('#Labeled cells')
-ax2.legend(['V1','PM'],frameon=False)
+ax2.legend(handles,['V1','PM'],frameon=False)
 ax2.set_title('#Labeled cells')
 plt.tight_layout()
 
+fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals.png' % nanimals))
 
+##############################################################################
+###################   Make figure with cre and flp separate: #################
+
+clrs_enzymes        = get_clr_recombinase(['cre','flp'])
+
+clrs_enzymes = [sns.xkcd_rgb['orangered'],sns.xkcd_rgb['clear blue']]
+
+### Figure with depth profile: 
+fig,(ax1,ax2,ax3,ax4)   = plt.subplots(1,4,figsize=(9,7),sharey=True)
+
+idx_V1cre = recomblist[np.isin(recomblist[:,0],animal_ids),1]=='cre'
+dataV1_fluo = dataV1[0,:,:]
+handles = []
+handles.append(plot_depthprofile(minmax_scale(dataV1_fluo[:,idx_V1cre], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_enzymes[0]))
+handles.append(plot_depthprofile(minmax_scale(dataV1_fluo[:,~idx_V1cre], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_enzymes[1]))
+ax1.set_xlabel('Fluorescence')
+ax1.set_title('Fluorescence V1')
+ax1.invert_yaxis()
+ax1.set_ylabel('Cortical Depth')
+
+handles = []
+dataPM_fluo = dataPM[0,:,:]
+handles.append(plot_depthprofile(minmax_scale(dataPM_fluo[:,~idx_V1cre], feature_range=(0, 1), axis=0, copy=True),ax2,clrs_enzymes[0]))
+handles.append(plot_depthprofile(minmax_scale(dataPM_fluo[:,idx_V1cre], feature_range=(0, 1), axis=0, copy=True),ax2,clrs_enzymes[1]))
+ax2.set_xlabel('Fluorescence')
+ax2.set_title('Fluorescence PM')
+ax2.legend(handles,['cre','flp'],frameon=False)
+
+handles = []
+dataV1_nlab = dataV1[1,:,:]
+handles.append(plot_depthprofile(minmax_scale(dataV1_nlab[:,idx_V1cre], feature_range=(0, 1), axis=0, copy=True),ax3,clrs_enzymes[0]))
+handles.append(plot_depthprofile(minmax_scale(dataV1_nlab[:,~idx_V1cre], feature_range=(0, 1), axis=0, copy=True),ax3,clrs_enzymes[1]))
+ax3.set_xlabel('#Labeled cells')
+ax3.set_title('#Labeled cells V1')
+
+handles = []
+dataPM_nlab = dataPM[1,:,:]
+handles.append(plot_depthprofile(minmax_scale(dataPM_nlab[:,~idx_V1cre], feature_range=(0, 1), axis=0, copy=True),ax4,clrs_enzymes[0]))
+handles.append(plot_depthprofile(minmax_scale(dataPM_nlab[:,idx_V1cre], feature_range=(0, 1), axis=0, copy=True),ax4,clrs_enzymes[1]))
+ax4.set_xlabel('#Labeled cells')
+ax4.set_title('#Labeled cells PM')
+ax4.legend(handles,['cre','flp'],frameon=False)
+plt.tight_layout()
+
+fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals_splitrecombinase.png' % nanimals))
+
+####################################################################
 ##### Show example planes alongside it:
 exanimal            = 'LPE10192'
 # exanimal            = 'LPE10885'
@@ -151,36 +208,38 @@ explanes_depths     = [70,180,320,450]
 vmin                = 0
 vmax                = 200
 
-fig,axes = plt.subplots(4,4,figsize=(9,7))
-ax1 = plt.subplot(141)
-ax1.plot(dataV1_norm_mean[0,:],slicedepths,c=clrs_areas[0],linewidth=2)
-ax1.plot(dataPM_norm_mean[0,:],slicedepths,c=clrs_areas[1],linewidth=2)
-ax1.plot(dataV1_norm[0,:,:],slicedepths,c=clrs_areas[0],linewidth=0.5)
-ax1.plot(dataPM_norm[0,:,:],slicedepths,c=clrs_areas[1],linewidth=0.5)
+fig = plt.figure(figsize=(9,7))
+ax1 = fig.add_subplot(1,4,1)
+
+handles = []
+handles.append(plot_depthprofile(minmax_scale(dataV1[0,:,:], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_areas[0]))
+handles.append(plot_depthprofile(minmax_scale(dataPM[0,:,:], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_areas[1]))
+ax1.set_xlabel('Fluorescence')
+ax1.set_title('Fluorescence')
 ax1.invert_yaxis()
 ax1.set_ylabel('Cortical Depth')
-ax1.set_xlabel('Fluorescence')
-# ax1.legend(['V1','PM'],frameon=False)
-ax1.set_title('Fluorescence')
 for d in explanes_depths:
     ax1.axhline(d,color='k',linestyle=':',linewidth=1)
+ax1.set_yticks(np.arange(0,800,step=100))
 
-ax2 = plt.subplot(142)
-ax2.plot(dataV1_mean[1,:],slicedepths,c=clrs_areas[0],linewidth=2)
-ax2.plot(dataPM_mean[1,:],slicedepths,c=clrs_areas[1],linewidth=2)
-ax2.plot(dataV1[1,:,:],slicedepths,c=clrs_areas[0],linewidth=0.5)
-ax2.plot(dataPM[1,:,:],slicedepths,c=clrs_areas[1],linewidth=0.5)
+ax2 = fig.add_subplot(142)
+handles = []
+handles.append(plot_depthprofile(dataV1[1,:,:],ax2,clrs_areas[0]))
+handles.append(plot_depthprofile(dataPM[1,:,:],ax2,clrs_areas[1]))
+ax2.set_xlabel('#Labeled cells')
+ax2.legend(handles,['V1','PM'],frameon=False)
+ax2.set_title('#Labeled cells')
 ax2.invert_yaxis()
 ax2.set_ylabel('')
-ax2.set_xlabel('#Labeled cells')
-ax2.legend(['V1','PM'],frameon=False)
+ax2.legend(handles,['V1','PM'],frameon=False)
 ax2.set_title('#Labeled cells')
+ax2.set_yticks(np.arange(0,800,step=100))
 
 for d in explanes_depths:
     ax2.axhline(d,color='k',linestyle=':',linewidth=1)
 
 for i,d in enumerate(explanes_depths):
-    ax = plt.subplot(4,4,i*4+3)
+    ax = fig.add_subplot(4,4,i*4+3)
 
     direc_V1    = os.path.join(os.path.join(rawdatadir,exanimal),
                             os.listdir(os.path.join(rawdatadir,exanimal))[0],

@@ -130,7 +130,8 @@ def compute_tensor_space(data,ts_F,z_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,b
         idx_trial = trialnum_F==k+1
         for s,(bin_start,bin_end) in enumerate(zip(binedges[:-1],binedges[1:])):
             # idx_bin = bin_start <= zpos_F[idx]-z_T[k] < bin_end
-            idx = np.all((idx_trial,zpos_F-z_T[k] >= bin_start,zpos_F-z_T[k] < bin_end),axis=0)
+            # idx = np.all((idx_trial,zpos_F-z_T[k] >= bin_start,zpos_F-z_T[k] < bin_end),axis=0)
+            idx = np.all((zpos_F-z_T[k] >= bin_start,zpos_F-z_T[k] < bin_end),axis=0)
             tensor[:,k,s] = np.nanmean(data.iloc[idx,:], axis=0)
 
     if method !='binmean':

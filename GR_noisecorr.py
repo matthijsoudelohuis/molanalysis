@@ -55,16 +55,15 @@ for ises in range(nSessions):    # iterate over sessions
     ##############################################################################
     ## Construct trial response matrix:  N neurons by K trials
     sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
-                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+                                    t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
 
     sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'],
-                                                      sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
-                                                    t_resp_start=0,t_resp_stop=1,method='mean')
+                                    sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
+                                    t_resp_start=0,t_resp_stop=1,method='mean')
 
-    if 'motionenergy' in sessions[ises].videodata:
-        sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
-                                                    sessions[ises].videodata['timestamps'],sessions[ises].trialdata['tOnset'],
-                                                    t_resp_start=0,t_resp_stop=1,method='mean')
+    sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
+                                    sessions[ises].videodata['ts'],sessions[ises].trialdata['tOnset'],
+                                    t_resp_start=0,t_resp_stop=1,method='mean')
 
     delattr(sessions[ises],'calciumdata')
     delattr(sessions[ises],'videodata')
@@ -846,4 +845,7 @@ plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_deltaRF_Labeled_
 # plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea_regressout' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
+
+sessions[0].celldata['rf_azimuth']
+sessions[0].celldata['rf_p']
 
