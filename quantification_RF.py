@@ -4,18 +4,18 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 ####################################################
-import math,os
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from statannotations.Annotator import Annotator
 from loaddata.session_info import filter_sessions,load_sessions
+from utils.rf_lib import *
 
 ### TODO:
 # append for multiple sessions to dataframe with pairwise measurements
 # filter and compute only for cells with receptive field? Probably not
-# compute distance in x,y,z, but also only x,y for RF distance plot
 
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - RF\\RF_quantification\\'
 
@@ -24,14 +24,33 @@ savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - RF\\RF_quantification\\'
 # sessions            = filter_sessions(protocols = ['SP'])
 
 session_list        = np.array([['LPE09830','2023_04_10']])
-session_list        = np.array([['LPE10885','2023_10_20']])
-sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=False, calciumversion='dF')
-sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
-                                    load_calciumdata=False, load_videodata=False, calciumversion='dF')
-nSessions = len(sessions)
+# session_list        = np.array([['LPE10885','2023_10_20']])
+# sessions,nSessions = load_sessions(protocol = 'GR',session_list=session_list)
+sessions,nSessions = filter_sessions(protocols = ['GR'],only_animal_id='LPE09830')
+sessions,nSessions = filter_sessions(protocols = ['GR'],only_animal_id=['LPE09665','LPE09830'],session_rf=True)
+# sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
+                                    # load_calciumdata=False, load_videodata=False, calciumversion='dF')
 
-# ## Combine cell data from all loaded sessions to one dataframe:
+sig_thr = 0.001 #cumulative significance of receptive fields clusters
+
+###################### Retinotopic mapping within V1 and PM #####################
+
+for ises in range(nSessions):
+    fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr) 
+    fig.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+###### Plot locations of receptive fields and scale by probability ##############################
+
+for ises in range(nSessions):
+    fig = plot_rf_screen(sessions[ises].celldata,sig_thr=1) 
+
+###### Fit gradient of RF as a function of spatial location of somata:
+
+r2 = interp_rf(sessions,sig_thr=0.0001,show_fit=True)
+
+###
+
+## Combine cell data from all loaded sessions to one dataframe:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 # ## remove any double cells (for example recorded in both GR and RF)
@@ -39,97 +58,11 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 ###################### Retinotopic mapping within V1 and PM #####################
 
-fig,axes        = plt.subplots(2,2,figsize=(12,12))
-
-areas           = ['V1','PM'] 
-
-vars            = ['rf_azimuth','rf_elevation']
-
-for ises in range(nSessions):
-    for i in range(len(vars)): #for azimuth and elevation
-        for j in range(len(areas)): #for areas
-            sns.scatterplot(data = sessions[ises].celldata[sessions[ises].celldata['roi_name']==areas[j]],x='xloc',y='yloc',
-                        hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
-        
-            box = axes[i,j].get_position()
-            axes[i,j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
-            # axes[i,j].legend(loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis
-            axes[i,j].set_xlabel('')
-            axes[i,j].set_ylabel('')
-            axes[i,j].set_xticks([])
-            axes[i,j].set_yticks([])
-            axes[i,j].set_xlim([0,512])
-            axes[i,j].set_ylim([0,512])
-            axes[i,j].set_title(areas[j] + ' - ' + vars[i],fontsize=15)
-            axes[i,j].set_facecolor("black")
-            axes[i,j].get_legend().remove()
-
-            # if j==1:
-            norm = plt.Normalize(sessions[ises].celldata[vars[i]].min(), sessions[ises].celldata[vars[i]].max())
-            sm = plt.cm.ScalarMappable(cmap="RdBu", norm=norm)
-            sm.set_array([])
-            # Remove the legend and add a colorbar (optional)
-            axes[i,j].figure.colorbar(sm,ax=axes[i,j],pad=0.02,label=vars[i])
-
-plt.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-###### Fit gradient of RF as a function of spatial location of somata:
-
-
-fig,axes        = plt.subplots(2,2,figsize=(12,12))
-
-from sklearn.linear_model import LinearRegression
-
-areas           = ['V1','PM'] 
-
-vars            = ['rf_azimuth','rf_elevation']
-
-
-# for ises in range(nSessions):
-for i in range(len(vars)): #for azimuth and elevation
-     for j in range(len(areas)): #for areas
-        
-        idx_area = celldata['roi_name']==areas[j]
-        areadf = celldata[idx_area].dropna()
-        X = np.array([areadf['xloc'],areadf['yloc']])
-        y = np.array(areadf[vars[i]])
-
-        reg = LinearRegression().fit(X.T, y)
-
-        idx_area_nan = np.logical_and(idx_area,np.isnan(celldata[vars[i]]))
-        celldata.loc[celldata[idx_area_nan].index,vars[i]] = reg.predict(celldata.loc[celldata[idx_area_nan].index,['xloc','yloc']])
-
-        sns.scatterplot(data = celldata[celldata['roi_name']==areas[j]],x='xloc',y='yloc',
-                        hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
-        
-        box = axes[i,j].get_position()
-        axes[i,j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
-        # axes[i,j].legend(loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis
-        axes[i,j].set_xlabel('')
-        axes[i,j].set_ylabel('')
-        axes[i,j].set_xticks([])
-        axes[i,j].set_yticks([])
-        axes[i,j].set_xlim([0,512])
-        axes[i,j].set_ylim([0,512])
-        axes[i,j].set_title(areas[j] + ' - ' + vars[i],fontsize=15)
-        axes[i,j].set_facecolor("black")
-        axes[i,j].get_legend().remove()
-
-        # if j==1:
-        norm = plt.Normalize(sessions[ises].celldata[vars[i]].min(), sessions[ises].celldata[vars[i]].max())
-        sm = plt.cm.ScalarMappable(cmap="RdBu", norm=norm)
-        sm.set_array([])
-        # Remove the legend and add a colorbar (optional)
-        axes[i,j].figure.colorbar(sm,ax=axes[i,j],pad=0.02,label=vars[i])
-
-
-###################### Retinotopic mapping within V1 and PM #####################
-
 fig        = plt.subplots(figsize=(12,12))
 
 fracs = celldata.groupby('roi_name').count()['rf_azimuth'] / celldata.groupby('roi_name').count()['iscell']
 
-sns.barplot(data = fracs,x = areas,y=fracs)
+sns.barplot(data = fracs,x = 'roi_name',y=fracs)
 plt.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ###################### RF size difference between V1 and PM #####################
@@ -150,111 +83,3 @@ ax.set_xlabel('area')
 ax.set_ylabel('RF size\n(squared degrees)')
 
 plt.savefig(os.path.join(savedir,'V1_PM_rf_size_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-############################## Noise correlations #################
-[T,N]       = np.shape(calciumdata) #get dimensions of data matrix
-
-noise_corr = np.corrcoef(calciumdata.to_numpy().T)
-
-## Compute euclidean distance matrix based on soma center:
-distmat_xyz     = np.zeros((N,N))
-distmat_xy      = np.zeros((N,N))
-distmat_rf      = np.zeros((N,N))
-areamat         = np.empty((N,N),dtype=object)
-labelmat        = np.empty((N,N),dtype=object)
-
-for i in range(N):
-    print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
-    for j in range(N):
-        distmat_xyz[i,j] = math.dist([celldata['xloc'][i],celldata['yloc'][i],celldata['depth'][i]],
-                [celldata['xloc'][j],celldata['yloc'][j],celldata['depth'][j]])
-        distmat_xy[i,j] = math.dist([celldata['xloc'][i],celldata['yloc'][i]],
-                [celldata['xloc'][j],celldata['yloc'][j]])
-        distmat_rf[i,j] = math.dist([celldata['rf_azimuth'][i],celldata['rf_elevation'][i]],
-                [celldata['rf_azimuth'][j],celldata['rf_elevation'][j]])
-        areamat[i,j] = celldata['roi_name'][i] + '-' + celldata['roi_name'][j]
-        labelmat[i,j] = str(int(celldata['redcell'][i])) + '-' + str(int(celldata['redcell'][j]))
-
-        # distmat_xyz[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i],sessions[0].celldata['depth'][i]],
-        #         [sessions[0].celldata['xloc'][j],sessions[0].celldata['yloc'][j],sessions[0].celldata['depth'][j]])
-        # distmat_xy[i,j] = math.dist([sessions[0].celldata['xloc'][i],sessions[0].celldata['yloc'][i]],
-        #         [sessions[0].celldata['xloc'][j],sessions[0].celldata['yloc'][j]])
-        # distmat_rf[i,j] = math.dist([sessions[0].celldata['rf_azimuth'][i],sessions[0].celldata['rf_elevation'][i]],
-        #         [sessions[0].celldata['rf_azimuth'][j],sessions[0].celldata['rf_elevation'][j]])
-        # areamat[i,j] = sessions[0].celldata['roi_name'][i] + '-' + sessions[0].celldata['roi_name'][j]
-        # labelmat[i,j] = str(int(sessions[0].celldata['redcell'][i])) + '-' + str(int(sessions[0].celldata['redcell'][j]))
-
-
-#Just a check that this works: should only show values in upper triangle of noise corr matrix:
-noise_corr2   = np.triu(noise_corr,k=1) #keep only upper triangular part
-plt.figure()
-plt.imshow(noise_corr2,vmin=-0.1,vmax=0.1)
-
-# construct dataframe with all pairwise measurements:
-idx_triu = np.tri(N,N,k=0)==0 #index only upper triangular part
-df = pd.DataFrame({'NoiseCorrelation': noise_corr[idx_triu].flatten(),
-                'AreaPair': areamat[idx_triu].flatten(),
-                'DistXYPair': distmat_xy[idx_triu].flatten(),
-                'DistXYZPair': distmat_xyz[idx_triu].flatten(),
-                'DistRfPair': distmat_rf[idx_triu].flatten(),
-                'LabelPair': labelmat[idx_triu].flatten()})
-
-
-############### Relationship anatomical distance and receptive field distance: ##################
-
-df_withinarea = df[(df['AreaPair'].isin(['V1-V1','PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
-# df_withinarea = df[(df['AreaPair'].isin(['PM-PM'])) & (df['DistRfPair'].notna()) & (df['DistXYPair'] < 1000)]
-
-g = sns.displot(df_withinarea, x="DistXYZPair", y="DistRfPair", binwidth=(2, 2), cbar=True,col="AreaPair")
-plt.xlim([0,650])
-plt.ylim([0,250])
-g.set_axis_labels("Anatomical distance \n (approx um)", "RF distance (deg)")
-
-plt.savefig(os.path.join(savedir,'Corr_anat_rf_distance' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-###################### Noise correlations within and across areas: #########################
-plt.figure(figsize=(8,5))
-sns.barplot(data=df,x='AreaPair',y='NoiseCorrelation')
-
-###################### Noise correlations as a function of pairwise anatomical distance: ####################
-fig,axes   = plt.subplots(1,2,figsize=(8,6))
-
-sns.lineplot(x=np.round(df_withinarea['DistXYZPair'],-1),y=df_withinarea['NoiseCorrelation'],hue=df_withinarea['AreaPair'],ax=axes[0])
-axes[0].set_xlabel="Pairwise distance XYZ (um)"
-# plt.legend(labels=['V1-V1','PM-PM'])
-axes[0].set_xlim([-10,600])
-axes[0].set_ylim([0,0.13])
-# axes[0].set_xlabel("Anatomical distance (approx um)")
-axes[0].set_ylabel("Noise Correlation")
-axes[0].set_title("Anatomical")
-
-sns.lineplot(x=np.round(df['DistRfPair'],-1),y=df['NoiseCorrelation'],hue=df['AreaPair'],ax=axes[1])
-axes[1].set_xlabel="Pairwise RF distance (um)"
-axes[1].set_xlim([-10,300])
-axes[1].set_ylim([0,0.13])
-# axes[1].set_xlabel(['RF distance (ret deg)'])
-axes[1].set_ylabel("Noise Correlation")
-axes[1].set_title("Receptive Field")
-
-plt.savefig(os.path.join(savedir,'NoiseCorr_anat_rf_distance' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-########################### Noise correlations as a function of pairwise distance: ####################
-######################################## Labeled vs unlabeled neurons #################################
-
-fig, axes = plt.subplots(2,2,figsize=(8,7))
-
-areas = ['V1','PM']
-
-for i,iarea in enumerate(areas):
-    for j,jarea in enumerate(areas):
-        dfarea = df[df['AreaPair']==iarea + '-' + jarea]
-        sns.lineplot(ax=axes[i,j],x=np.round(dfarea['DistRfPair'],-1),y=dfarea['NoiseCorrelation'],hue=dfarea['LabelPair'])
-        # axes[i,j].set_xlabel="Pairwise distance (um)"
-        axes[i,j].set_xlabel="Delta RF (deg)"
-        axes[i,j].set_xlim([-10,200])
-        axes[i,j].set_ylim([0,0.05])
-        axes[i,j].set_title(iarea + '-' + jarea)
-
-plt.savefig(os.path.join(savedir,'NoiseCorr_labeled_RF_distance' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-

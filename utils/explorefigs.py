@@ -317,8 +317,6 @@ def plot_PCA_gratings_3D(ses,size='runspeed',export_animation=False,savedir=None
 
     ori_ind      = [np.argwhere(np.array(ori) == iori)[:, 0] for iori in oris]
 
-    shade_alpha      = 0.2
-    lines_alpha      = 0.8
     pal = sns.color_palette('husl', len(oris))
     pal = np.tile(sns.color_palette('husl', int(len(oris)/2)),(2,1))
     if size=='runspeed':
@@ -346,8 +344,8 @@ def plot_PCA_gratings_3D(ses,size='runspeed',export_animation=False,savedir=None
             y = Xp[1,ori_ind[t]]                          #and the second
             z = Xp[2,ori_ind[t]]                          #and the second
             # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
-            ax.scatter(x, y, z, color=pal[t], s=ses.respmat_runspeed[ori_ind[t]], alpha=0.8)     #each trial is one dot
-            # ax.scatter(x, y, z, color=pal[t], s=sizes[ori_ind[t]]*6, alpha=0.8)     #each trial is one dot
+            # ax.scatter(x, y, z, color=pal[t], s=ses.respmat_runspeed[ori_ind[t]], alpha=0.8)     #each trial is one dot
+            ax.scatter(x, y, z, color=pal[t], s=sizes[ori_ind[t]]*6, alpha=0.8)     #each trial is one dot
             # ax.scatter(x, y, z,marker='o')     #each trial is one dot
             ax.set_xlabel('PC 1')            #give labels to axes
             ax.set_ylabel('PC 2')

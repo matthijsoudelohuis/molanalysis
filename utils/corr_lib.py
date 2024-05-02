@@ -58,8 +58,13 @@ def compute_noise_correlation(sessions,uppertriangular=True):
             assert np.all(sessions[ises].sig_corr[~idx_triu] < 1)
             assert np.all(sessions[ises].noise_corr[~idx_triu] > -1)
             assert np.all(sessions[ises].noise_corr[~idx_triu] < 1)
+                
+    elif np.all(sessiondata['protocol']=='SP'):
+        for ises in range(nSessions):
+            sessions[ises].noise_corr                   = np.corrcoef(sessions[ises].calciumdata)
     else: 
         print('not yet implemented noise corr for other protocols than GR')
+
     return sessions
 
 
@@ -118,7 +123,7 @@ def compute_signal_correlation(sessions):
 def compute_pairwise_metrics(sessions):
 
     for ises in range(len(sessions)):
-        [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+        N           = len(sessions[ises].celldata) #get dimensions of response matrix
 
         ## Compute euclidean distance matrix based on soma center:
         sessions[ises].distmat_xyz     = np.zeros((N,N))
