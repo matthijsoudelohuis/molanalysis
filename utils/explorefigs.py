@@ -331,7 +331,7 @@ def plot_PCA_gratings_3D(ses,size='runspeed',export_animation=False,savedir=None
     for iarea,area in enumerate(areas):
 
         idx_area        = ses.celldata['roi_name']==area
-        idx_tuned       = ses.celldata['tuning_var']>0.05
+        idx_tuned       = ses.celldata['tuning_var']>0.0
         idx             = np.logical_and(idx_area,idx_tuned)
         respmat_zsc     = zscore(ses.respmat[idx,:],axis=1) # zscore for each neuron across trial responses
 

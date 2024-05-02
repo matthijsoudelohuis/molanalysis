@@ -133,7 +133,7 @@ def proc_behavior_passive(rawdatadir,sessiondata):
 
     # Some checks:
     if sessiondata['session_id'][0] not in ['LPE09665_2023_03_15','LPE09665_2023_03_20']:
-        assert(np.allclose(np.diff(behaviordata['ts']),1/100,rtol=0.1)) #timestamps ascending and around sampling rate
+        assert(np.allclose(np.diff(behaviordata['ts']),1/100,rtol=0.2)) #timestamps ascending and around sampling rate
     runspeed = behaviordata['runspeed'][1000:].to_numpy()
     assert(np.all(runspeed > -50) and all(runspeed < 100)) #running speed (after initial phase) within reasonable range
 

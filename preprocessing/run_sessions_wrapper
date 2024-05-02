@@ -5,18 +5,17 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
 import os
-try:
-    os.chdir('t:\\Python\\molanalysis\\')
-except:
-    os.chdir('e:\\Python\\molanalysis\\')
+from loaddata.get_data_folder import get_local_drive
+os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
+
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 from loaddata.get_data_folder import get_rawdata_drive
 from preprocessing.locate_rf import locate_rf_session
 
-rawdatadir          = []
+rawdatadir          = 'I:\\RawData\\'
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
 # animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
+animal_ids          = [] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
 date_filter         = []
 

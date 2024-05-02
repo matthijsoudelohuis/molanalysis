@@ -22,7 +22,7 @@ def get_data_folder():
 def get_rawdata_drive(animal_id):
     if isinstance(animal_id, str):
         animal_id =  [animal_id]
-
+    print('Make specific for active and passive protocols:\n')
     drives       = {'LPE09665' : 'G:',
                     'LPE09830' : 'G:',
                     'LPE11495' : 'G:',
@@ -61,3 +61,25 @@ def get_local_drive():
         LOCAL_DRIVE = 'D:/'
 
     return LOCAL_DRIVE
+
+def get_drive_name():
+
+    ## drives:
+    drivelist = {'VISTA 1': 'G:',
+    'VISTA 2': 'H:',
+    'VISTA 3': 'I:',
+    'VISTA 4': 'J:',
+    'VISTA 5': 'K:',
+    'VISTA 6': 'L:',
+    'VISTA 7': 'M:',
+    'VISTA 8': 'N:',
+    'VISTA 1 BACKUP': 'O:',
+    'VISTA 2 BACKUP': 'P:',
+    'VISTA 3 BACKUP': 'Q:',
+    'VISTA 4 BACKUP': 'R:',
+    'VISTA 5 BACKUP': 'S:',
+    'VISTA 6 BACKUP': 'T:',
+    'VISTA 7 BACKUP': 'U:',
+    'VISTA 8 BACKUP': 'V:',
+    }
+    return drivelist

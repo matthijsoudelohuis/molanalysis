@@ -13,26 +13,26 @@ os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 from preprocessing.preprocesslib import *
 from loaddata.get_data_folder import get_rawdata_drive
 
-rawdatadir      = "K:\\RawData\\"
+rawdatadir      = "I:\\RawData\\"
 procdatadir     = "D:\\Procdata\\"
 # rawdatadir = []
 
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
 # procdatadir     = "E:\\Procdata\\"
 
-# animal_ids          = [] #If empty than all animals in folder will be processed
+animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
-# animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-# date_filter        = ['2023_03_21']
-# animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
+# date_filter        = ['2024_01_26']
+# animal_ids          = ['LPE11495'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_02_20','2024_02_21','2024_02_22','2024_02_23','2024_02_26','2024_02_27']
 # date_filter        = ['2024_02_19']
-animal_ids          = ['LPE11997'] #If empty than all animals in folder will be processed
-date_filter        = ['2024_04_17','2024_04_18','2024_04_19']
+# animal_ids          = ['LPE11997'] #If empty than all animals in folder will be processed
+# date_filter        = ['2024_04_17','2024_04_18','2024_04_19']
 
 # protocols           = ['GR','SP','IM','GN']
-# protocols           = ['GR']
-protocols           = ['DP','DM','DN']
+protocols           = ['SP','GR']
+# protocols           = ['DP','DM','DN']
 
 processimagingflag  = True
 saveimagingflag     = True

@@ -49,11 +49,10 @@ def compute_noise_correlation(sessions,uppertriangular=True):
                 sessions[ises].sig_corr[idx_triu] = np.nan
                 sessions[ises].noise_corr[idx_triu] = np.nan
                 sessions[ises].delta_pref[idx_triu] = np.nan
-            else: 
+            else:
                 np.fill_diagonal(sessions[ises].sig_corr,np.nan)
                 np.fill_diagonal(sessions[ises].noise_corr,np.nan)
                 np.fill_diagonal(sessions[ises].delta_pref,np.nan)
-
 
             assert np.all(sessions[ises].sig_corr[~idx_triu] > -1)
             assert np.all(sessions[ises].sig_corr[~idx_triu] < 1)
@@ -72,6 +71,29 @@ def mean_resp_image(ses):
         respmean[:,im] = np.mean(ses.respmat[:,ses.trialdata['ImageNumber']==im],axis=1)
     return respmean
 
+def mean_resp_oris(ses):
+
+    # get signal correlations:
+    [N,K]           = np.shape(ses.respmat) #get dimensions of response matrix
+
+    oris            = np.sort(ses.trialdata['Orientation'].unique())
+    ori_counts      = ses.trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
+    assert(len(ori_counts) == 16 or len(ori_counts) == 8)
+    resp_meanori    = np.empty([N,len(oris)])
+
+    for i,ori in enumerate(oris):
+        resp_meanori[:,i] = np.nanmean(ses.respmat[:,ses.trialdata['Orientation']==ori],axis=1)
+
+
+    respmat_res                     = ses.respmat.copy()
+
+    ## Compute residuals:
+    for ori in oris:
+        ori_idx     = np.where(ses.trialdata['Orientation']==ori)[0]
+        temp        = np.mean(respmat_res[:,ori_idx],axis=1)
+        respmat_res[:,ori_idx] = respmat_res[:,ori_idx] - np.repeat(temp[:, np.newaxis], len(ori_idx), axis=1)
+
+    return resp_meanori,respmat_res
 
 def compute_signal_correlation(sessions):
     nSessions = len(sessions)
@@ -170,11 +192,8 @@ def noisecorr_rfmap(sessions,binresolution=5,rotate_prefori=False,rotate_deltapr
         idx_source = ~np.isnan(sessions[ises].celldata['rf_azimuth']) #get all neurons with RF
         idx_target = ~np.isnan(sessions[ises].celldata['rf_azimuth']) #get all neurons with RF
 
-        idx_source = np.logical_and(idx_source,sessions[ises].celldata['roi_name']=='V1')
-        idx_target = np.logical_and(idx_target,sessions[ises].celldata['roi_name']=='PM')
-    
-        # idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>0.02)
-        # idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>0.02)
+        idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>0.05)
+        idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>0.05)
         
         [noiseRFmat_ses,countsRFmat_ses] = compute_NC_map(sourcecells = sessions[ises].celldata[idx_source].reset_index(drop=True),
                                                  targetcells = sessions[ises].celldata[idx_target].reset_index(drop=True),
@@ -189,8 +208,7 @@ def noisecorr_rfmap(sessions,binresolution=5,rotate_prefori=False,rotate_deltapr
     
     return noiseRFmat_mean,countsRFmat,binrange
 
-
-def noisecorr_rfmap_perori(sessions,binresolution=5,rotate_prefori=False):
+def noisecorr_rfmap_perori(sessions,binresolution=5,rotate_prefori=False,rotate_deltaprefori=False):
     # Computes the average noise correlation depending on the difference in receptive field between the two neurons
     # binresolution determines spatial bins in degrees visual angle
     # If rotate_prefori=True then the delta RF is rotated depending on the preferred orientation of the source neuron 
@@ -223,8 +241,8 @@ def noisecorr_rfmap_perori(sessions,binresolution=5,rotate_prefori=False):
             # idx_source = np.logical_and(idx_source,sessions[ises].celldata['roi_name']=='V1')
             # idx_target = np.logical_and(idx_target,sessions[ises].celldata['roi_name']=='V1')
 
-            # idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>0.05)
-            # idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>0.05)
+            idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>0.05)
+            idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>0.05)
 
             [noiseRFmat_ses,countsRFmat_ses] = compute_NC_map(sourcecells = sessions[ises].celldata[idx_source].reset_index(drop=True),
                                                     targetcells = sessions[ises].celldata[idx_target].reset_index(drop=True),
@@ -239,7 +257,122 @@ def noisecorr_rfmap_perori(sessions,binresolution=5,rotate_prefori=False):
     
     return noiseRFmat_mean,countsRFmat,binrange
 
-def compute_NC_map(sourcecells, targetcells,NC_data,nBins,binrange,
+
+def noisecorr_rfmap_areas(sessions,binresolution=5,rotate_prefori=True,
+                            rotate_deltaprefori=False,thr_tuned=0,thr_rf_p=1):
+
+    areas               = ['V1','PM']
+
+    if rotate_prefori:
+        binrange        = np.array([[-135, 135],[-135, 135]])
+        nBins           = np.array([(binrange[0,1] - binrange[0,0]) / binresolution,(binrange[1,1] - binrange[1,0]) / binresolution]).astype(int)
+    else: 
+        binrange        = np.array([[-50, 50],[-135, 135]])
+        nBins           = np.array([(binrange[0,1] - binrange[0,0]) / binresolution,(binrange[1,1] - binrange[1,0]) / binresolution]).astype(int)
+  
+    noiseRFmat          = np.zeros((2,2,*nBins))
+    countsRFmat         = np.zeros((2,2,*nBins))
+
+    for ises in range(len(sessions)):
+        print('computing 2d receptive field hist of noise correlations for session %d / %d' % (ises+1,len(sessions)))
+        for ixArea,xArea in enumerate(areas):
+            for iyArea,yArea in enumerate(areas):
+
+                idx_source = ~np.isnan(sessions[ises].celldata['rf_azimuth']) #get all neurons with RF
+                idx_target = ~np.isnan(sessions[ises].celldata['rf_azimuth']) #get all neurons with RF
+
+                # idx_source = np.logical_and(idx_source,sessions[ises].celldata['rf_azimuth']>30)
+                # idx_target = np.logical_and(idx_target,sessions[ises].celldata['rf_azimuth']>30)
+                
+                if thr_tuned:
+                    idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>thr_tuned)
+                    idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>thr_tuned)
+                
+                if thr_rf_p<1:
+                    if 'rf_p' in sessions[ises].celldata:
+                        idx_source = np.logical_and(idx_source,sessions[ises].celldata['rf_p']<thr_rf_p)
+                        idx_target = np.logical_and(idx_target,sessions[ises].celldata['rf_p']<thr_rf_p)
+                
+                idx_source = np.logical_and(idx_source,sessions[ises].celldata['roi_name']==xArea)
+                idx_target = np.logical_and(idx_target,sessions[ises].celldata['roi_name']==yArea)
+
+                [noiseRFmat_temp,countsRFmat_temp] = compute_NC_map(sourcecells = sessions[ises].celldata[idx_source].reset_index(drop=True),
+                                                        targetcells = sessions[ises].celldata[idx_target].reset_index(drop=True),
+                                                        NC_data = sessions[ises].noise_corr[np.ix_(idx_source, idx_target)],
+                                                        nBins=nBins,binrange=binrange,
+                                                        rotate_deltaprefori=rotate_deltaprefori, rotate_prefori=rotate_prefori)
+                noiseRFmat[ixArea,iyArea,:,:]  += noiseRFmat_temp
+                countsRFmat[ixArea,iyArea,:,:] += countsRFmat_temp
+
+    # divide the total summed noise correlations by the number of counts in that bin to get the mean:
+    noiseRFmat_mean = noiseRFmat / countsRFmat 
+    
+    return noiseRFmat_mean,countsRFmat,binrange
+
+
+def noisecorr_rfmap_areas_projections(sessions,binresolution=5,rotate_prefori=True,
+                            rotate_deltaprefori=False,thr_tuned=0,thr_rf_p=1):
+
+    areas               = ['V1','PM']
+    redcells            = [0,1]
+    redcelllabels       = ['unl','lab']
+    legendlabels        = np.empty((4,4),dtype='object')
+
+    if rotate_prefori:
+        binrange        = np.array([[-135, 135],[-135, 135]])
+        nBins           = np.array([(binrange[0,1] - binrange[0,0]) / binresolution,(binrange[1,1] - binrange[1,0]) / binresolution]).astype(int)
+    else: 
+        binrange        = np.array([[-50, 50],[-135, 135]])
+        nBins           = np.array([(binrange[0,1] - binrange[0,0]) / binresolution,(binrange[1,1] - binrange[1,0]) / binresolution]).astype(int)
+  
+    # noiseRFmat          = np.zeros((2,2,2,2,*nBins))
+    # countsRFmat         = np.zeros((2,2,2,2,*nBins))
+    
+    noiseRFmat          = np.zeros((4,4,*nBins))
+    countsRFmat         = np.zeros((4,4,*nBins))
+
+    for ises in range(len(sessions)):
+        print('computing 2d receptive field hist of noise correlations for session %d / %d' % (ises+1,len(sessions)))
+        for ixArea,xArea in enumerate(areas):
+            for iyArea,yArea in enumerate(areas):
+                for ixRed,xRed in enumerate(redcells):
+                    for iyRed,yRed in enumerate(redcells):
+                        
+                        idx_source = ~np.isnan(sessions[ises].celldata['rf_azimuth']) #get all neurons with RF
+                        idx_target = ~np.isnan(sessions[ises].celldata['rf_azimuth']) #get all neurons with RF
+                        
+                        idx_source = np.logical_and(idx_source,sessions[ises].celldata['roi_name']==xArea)
+                        idx_target = np.logical_and(idx_target,sessions[ises].celldata['roi_name']==yArea)
+
+                        idx_source = np.logical_and(idx_source,sessions[ises].celldata['redcell']==xRed)
+                        idx_target = np.logical_and(idx_target,sessions[ises].celldata['redcell']==yRed)
+
+                        if thr_tuned:
+                            idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>thr_tuned)
+                            idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>thr_tuned)
+                        
+                        if thr_rf_p<1:
+                            if 'rf_p' in sessions[ises].celldata:
+                                idx_source = np.logical_and(idx_source,sessions[ises].celldata['rf_p']<thr_rf_p)
+                                idx_target = np.logical_and(idx_target,sessions[ises].celldata['rf_p']<thr_rf_p)
+                        
+                        [noiseRFmat_temp,countsRFmat_temp] = compute_NC_map(sourcecells = sessions[ises].celldata[idx_source].reset_index(drop=True),
+                                                                targetcells = sessions[ises].celldata[idx_target].reset_index(drop=True),
+                                                                NC_data = sessions[ises].noise_corr[np.ix_(idx_source, idx_target)],
+                                                                nBins=nBins,binrange=binrange,
+                                                                rotate_deltaprefori=rotate_deltaprefori, rotate_prefori=rotate_prefori)
+                        
+                        noiseRFmat[ixArea*2 + ixRed,iyArea*2 + iyRed,:,:]  += noiseRFmat_temp
+                        countsRFmat[ixArea*2 + ixRed,iyArea*2 + iyRed,:,:] += countsRFmat_temp
+                        
+                        legendlabels[ixArea*2 + ixRed,iyArea*2 + iyRed]  = areas[ixArea] + redcelllabels[ixRed] + '-' + areas[iyArea] + redcelllabels[iyRed]
+
+    # divide the total summed noise correlations by the number of counts in that bin to get the mean:
+    noiseRFmat_mean = noiseRFmat / countsRFmat 
+
+    return noiseRFmat_mean,countsRFmat,binrange,legendlabels
+
+def compute_NC_map(sourcecells,targetcells,NC_data,nBins,binrange,
                    rotate_deltaprefori=False,rotate_prefori=False):
 
     noiseRFmat          = np.zeros(nBins)
@@ -281,7 +414,6 @@ def apply_ori_rot(angle_vec,ori_rots):
         angle_vec[:,idx_ori] = rotation_matrix_oris[:,:,iori] @ angle_vec[:,idx_ori]
 
     return angle_vec
-
 
 
 
