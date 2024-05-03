@@ -27,6 +27,7 @@ from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D,plot_excerp
 from utils.plot_lib import shaded_error
 from utils.RRRlib import regress_out_behavior_modulation
 from utils.corr_lib import *
+from utils.rf_lib import smooth_rf
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - Gratings\\')
 
@@ -39,18 +40,18 @@ session_list        = np.array([['LPE09830','2023_04_10'],
 session_list        = np.array([['LPE11086','2024_01_05']])
 session_list        = np.array([['LPE09830','2023_04_10'],
                                 ['LPE09830','2023_04_12'],
+                                # ['LPE11086','2023_12_15'],
                                 ['LPE11086','2024_01_05'],
                                 ['LPE10884','2023_10_20'],
                                 ['LPE10885','2023_10_19'],
-                                ['LPE10885','2023_10_23'],
+                                # ['LPE10885','2023_10_23'],
                                 ['LPE10919','2023_11_06']])
 
 # load sessions lazy: 
-sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=False, 
-                                    load_calciumdata=False, load_videodata=False, calciumversion='deconv')
+sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
 # sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
 
-#   Load proper data and compute average trial responses:                      
+#%%   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
     sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
     
@@ -71,19 +72,7 @@ for ises in range(nSessions):    # iterate over sessions
     delattr(sessions[ises],'videodata')
     delattr(sessions[ises],'behaviordata')
 
-
-# sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
-#                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
-# # sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
-#                                     # load_calciumdata=True, load_videodata=True, calciumversion='deconv')
-
-# for ises in range(nSessions):
-#     sessions[ises].videodata['pupil_area']    = medfilt(sessions[ises].videodata['pupil_area'] , kernel_size=25)
-#     sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
-#     sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
-
-############################ Compute tuning metrics: ###################################
-
+#%% ########################### Compute tuning metrics: ###################################
 for ises in range(nSessions):
     sessions[ises].celldata['OSI'] = compute_tuning(sessions[ises].respmat,
                                                     sessions[ises].trialdata['Orientation'],
@@ -99,7 +88,7 @@ for ises in range(nSessions):
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-############################ Compute noise correlations: ###################################
+#%% ########################### Compute noise correlations: ###################################
 sessions = compute_noise_correlation(sessions)
 
 #TODO: make noise corr and pairwise functions attributes of session classes
@@ -542,6 +531,10 @@ sourcecell,targetcell = sourcecells[random_cell],targetcells[random_cell]
 fig = plot_noise_pair(sessions[ises],sourcecell,targetcell)
 fig.savefig(os.path.join(savedir,'NoiseCorrelations','NC_example_isotuning2' + '.png'), format = 'png')
 
+#%% Interpolate or smooth RF to get estimate for non perfect fits:
+
+smooth_rf(sessions,sig_thr=0.001,radius=100)
+
 
 #%% #########################################################################################
 # Plot 2D noise correlations as a function of the difference in preferred orientation
@@ -632,7 +625,8 @@ for i in range(2):
                          vmax=np.nanpercentile(noiseRFmat_mean,99),cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
         axes[i,j].set_title(areas[i] + '-' + areas[j])
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Interarea_%dsessions' %nSessions  + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Interarea_%dsessions' %nSessions  + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Interarea_smooth_%dsessions' %nSessions  + '.png'), format = 'png')
 
 #%% Plot Circular tuning:
 
@@ -657,19 +651,23 @@ plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Interarea_%dsess
 # Contrasts: across areas and projection identity      
 
 [noiseRFmat_mean,countsRFmat,binrange,legendlabels] = noisecorr_rfmap_areas_projections(sessions,binresolution=5,
-                                                                 rotate_prefori=False,thr_tuned=0.00,
-                                                                 thr_rf_p=0.01)
+                                                                 rotate_prefori=True,thr_tuned=0.00,
+                                                                 thr_rf_p=1)
 
-# min_counts = 250
-# noiseRFmat_mean[countsRFmat<min_counts] = np.nan
+min_counts = 250
+noiseRFmat_mean[countsRFmat<min_counts] = np.nan
 
 fig,axes = plt.subplots(4,4,figsize=(10,7))
 for i in range(4):
     for j in range(4):
-        axes[i,j].imshow(noiseRFmat_mean[i,j,:,:],vmin=0.03,vmax=0.06,cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
+        axes[i,j].imshow(noiseRFmat_mean[i,j,:,:],vmin=np.nanpercentile(noiseRFmat_mean,10),
+                         vmax=np.nanpercentile(noiseRFmat_mean,98),cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
         axes[i,j].set_title(legendlabels[i,j])
+        axes[i,j].set_xlim([-75,75])
+        axes[i,j].set_ylim([-75,75])
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Area_Proj_%dsessions' %nSessions  + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Area_Proj_%dsessions' %nSessions  + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_rotate_smooth_Area_Proj_%dsessions' %nSessions  + '.png'), format = 'png')
 
 fig,axes = plt.subplots(4,4,figsize=(10,7))
 for i in range(4):
@@ -677,7 +675,8 @@ for i in range(4):
         axes[i,j].imshow(np.log10(countsRFmat[i,j,:,:]),vmax=np.nanpercentile(np.log10(countsRFmat),99.9),cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
         axes[i,j].set_title(legendlabels[i,j])
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Area_Proj_Counts_%dsessions' %nSessions  + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Area_Proj_Counts_%dsessions' %nSessions  + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Area_rotate_Proj_Counts_%dsessions' %nSessions  + '.png'), format = 'png')
 
 ####################################### ####################################### #######################
 #################################### LABELED AND UNLABELED ############################################

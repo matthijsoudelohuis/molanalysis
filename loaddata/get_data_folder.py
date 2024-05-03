@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from operator import itemgetter
 
 # figure out the paths depending on which machine you are on
@@ -19,19 +20,33 @@ def get_data_folder():
 
     return DATA_FOLDER
 
-def get_rawdata_drive(animal_id):
+def get_rawdata_drive(animal_id,protocols):
     if isinstance(animal_id, str):
         animal_id =  [animal_id]
-    print('Make specific for active and passive protocols:\n')
-    drives       = {'LPE09665' : 'G:',
-                    'LPE09830' : 'G:',
-                    'LPE11495' : 'G:',
-                    'LPE10884' : 'H:',
-                    'LPE10885' : 'H:',
-                    'LPE11622' : 'H:',
-                    'LPE10883' : 'I:',
-                    'LPE11086' : 'I:',
-                    'LPE10919' : 'J:'
+    if isinstance(protocols, str):
+        protocols =  [protocols]
+
+    if np.isin(protocols[0], ['IM','GR','GN','SP']):
+        drives       = {'LPE09665' : 'H:',
+                    'LPE09830' : 'H:',
+                    'LPE11495' : 'H:',
+                    'LPE10884' : 'I:',
+                    'LPE10885' : 'I:',
+                    'LPE11622' : 'I:',
+                    'LPE10883' : 'J:',
+                    'LPE11086' : 'J:',
+                    'LPE10919' : 'K:'
+                    }
+    elif np.isin(protocols[0], ['VR','DM','DN','DP']):
+        drives       = {'' : 'L:',
+                    '' : 'L:',
+                    'LPE11495' : 'L:',
+                    'LPE10884' : 'L:',
+                    'LPE11623' : 'L:',
+                    'LPE11622' : 'L:',
+                    'LPE11997' : 'L:',
+                    'LPE11998' : 'M:',
+                    'LPE12013' : 'M:'
                     }
     return itemgetter(*animal_id)(drives) + '\\RawData\\'
 

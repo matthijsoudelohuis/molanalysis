@@ -13,25 +13,20 @@ os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 from preprocessing.preprocesslib import *
 from loaddata.get_data_folder import get_rawdata_drive
 
-rawdatadir      = "I:\\RawData\\"
-procdatadir     = "D:\\Procdata\\"
-# rawdatadir = []
-
-# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\"
-# procdatadir     = "E:\\Procdata\\"
+# rawdatadir      = "I:\\RawData\\"
 
 animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
-animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_01_26']
 # animal_ids          = ['LPE11495'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_02_20','2024_02_21','2024_02_22','2024_02_23','2024_02_26','2024_02_27']
-# date_filter        = ['2024_02_19']
+date_filter        = ['2023_11_06']
 # animal_ids          = ['LPE11997'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_04_17','2024_04_18','2024_04_19']
 
 # protocols           = ['GR','SP','IM','GN']
-protocols           = ['SP','GR']
+protocols           = ['SP']
 # protocols           = ['DP','DM','DN']
 
 processimagingflag  = True
@@ -40,12 +35,12 @@ saveimagingflag     = True
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
     animal_ids = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
+# animal_ids = get_animalids()
 
 for animal_id in animal_ids: #for each animal
 
-    if not rawdatadir:
-        rawdatadir = get_rawdata_drive([animal_id])
-    
+    rawdatadir = get_rawdata_drive(animal_id,protocols)
+
     sessiondates = os.listdir(os.path.join(rawdatadir,animal_id)) 
     
     if any(date_filter): #If dates specified, then process only those:
@@ -59,7 +54,7 @@ for animal_id in animal_ids: #for each animal
             
             if os.path.exists(os.path.join(sesfolder,protocol)):
                 #set output saving dir:
-                outdir          = os.path.join(procdatadir,protocol,animal_id,sessiondate) #construct output save directory string
+                outdir          = os.path.join(get_local_drive(),'Procdata',protocol,animal_id,sessiondate) #construct output save directory string
         
                 if not os.path.exists(outdir): #check if output directory already exists, otherwise make
                     os.makedirs(outdir)
