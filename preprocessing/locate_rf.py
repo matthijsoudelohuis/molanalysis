@@ -150,7 +150,7 @@ def proc_RF(rawdatadir,sessiondata):
     
     return grid_array,RF_timestamps
 
-def locate_rf_session(rawdatadir,animal_id,sessiondate):
+def locate_rf_session(rawdatadir,animal_id,sessiondate,signal='spks'):
     
     sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
 
@@ -190,23 +190,19 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
             ts_plane = np.squeeze(ts_plane) #make 1-dimensional
 
             ##################### load suite2p deconvolved activity output:
-            # F     = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
-            # F     = F[:,protocol_frame_idx_plane==1].transpose()
-            spks    = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
-            spks    = spks[:,protocol_frame_idx_plane==1].transpose()
+            if signal=='Fneu':
+                sig    = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
+            elif signal=='spks':
+                sig     = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
+            elif signal=='F':
+                sig     = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
 
-            # # if imaging was aborted during scanning of a volume, later planes have less frames
-            # # Compensate by duplicating last value
-            # if np.shape(spks)[0]==len(ts_master):
-            #     pass       #do nothing, shapes match
-            # elif np.shape(spks)[0]==len(ts_master)-1: #copy last timestamp of array
-            #     # F           = np.vstack((F, np.tile(F[[-1],:], 1)))
-            #     spks        = np.vstack((spks, np.tile(spks[[-1],:], 1)))
-            #     spks        = np.hstack((spks, np.tile(spks[[-1],:], 1)))
-            # else:
-            #     print("Problem with timestamps and imaging frames")
+            sig    = sig[:,protocol_frame_idx_plane==1].transpose()
 
-            N               = spks.shape[1]
+            # iscell = iscell[:20,:]
+            # sig = sig[:,:20]
+            
+            N               = sig.shape[1]
 
             rfmaps_on        = np.empty([xGrid,yGrid,N])
             rfmaps_off       = np.empty([xGrid,yGrid,N])
@@ -220,9 +216,9 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
                 for g in range(nGrids):
 
                     temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
-                    resp = spks[temp,n].mean()
+                    resp = sig[temp,n].mean()
                     temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
-                    base = spks[temp,n].mean()
+                    base = sig[temp,n].mean()
                 
                     resps[g] = np.max([resp-base,0])
                     # resps[g] = resp-base
@@ -314,6 +310,10 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate):
                     plt.tight_layout(rect=[0, 0, 1, 1])
                     fig.savefig(os.path.join(plane_folder,'RF_Plane%d.jpg' % iplane),dpi=600)
     return 
+
+
+
+
 
 # example_cells = np.where(iscell==1)[0][50:75]
 # # example_cells = 74

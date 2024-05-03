@@ -61,7 +61,7 @@ def compute_noise_correlation(sessions,uppertriangular=True):
                 
     elif np.all(sessiondata['protocol']=='SP'):
         for ises in range(nSessions):
-            sessions[ises].noise_corr                   = np.corrcoef(sessions[ises].calciumdata)
+            sessions[ises].noise_corr                   = np.corrcoef(sessions[ises].calciumdata.T)
     else: 
         print('not yet implemented noise corr for other protocols than GR')
 
@@ -139,7 +139,7 @@ def compute_pairwise_metrics(sessions):
             a = np.array((x[i],y[i],z[i]))
             sessions[ises].distmat_xyz[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
             sessions[ises].distmat_xy[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
-
+        
         if 'rf_azimuth' in sessions[ises].celldata:
             rfaz,rfel = sessions[ises].celldata['rf_azimuth'],sessions[ises].celldata['rf_elevation']
             d = np.array((rfaz,rfel))
@@ -150,6 +150,9 @@ def compute_pairwise_metrics(sessions):
 
         g = np.meshgrid(sessions[ises].celldata['roi_name'],sessions[ises].celldata['roi_name'])
         sessions[ises].areamat = g[0] + '-' + g[1]
+
+        sessions[ises].distmat_xy[~np.logical_or(sessions[ises].areamat=='V1-V1',sessions[ises].areamat=='PM-PM')] = np.nan
+        sessions[ises].distmat_xyz[~np.logical_or(sessions[ises].areamat=='V1-V1',sessions[ises].areamat=='PM-PM')] = np.nan
 
         temp = sessions[ises].celldata['redcell'].replace(0,'unl').replace(1,'lab').to_numpy()
         h = np.meshgrid(temp,temp)
@@ -175,7 +178,8 @@ def compute_pairwise_metrics(sessions):
 
     return sessions
 
-def noisecorr_rfmap(sessions,binresolution=5,rotate_prefori=False,rotate_deltaprefori=False):
+def noisecorr_rfmap(sessions,binresolution=5,rotate_prefori=False,rotate_deltaprefori=False,
+                    thr_tuned=0,thr_rf_p=1):
     # Computes the average noise correlation depending on the difference in receptive field between the two neurons
     # binresolution determines spatial bins in degrees visual angle
     # If rotate_prefori=True then the delta RF is rotated depending on the preferred orientation of the source neuron 
@@ -197,8 +201,15 @@ def noisecorr_rfmap(sessions,binresolution=5,rotate_prefori=False,rotate_deltapr
         idx_source = ~np.isnan(sessions[ises].celldata['rf_azimuth']) #get all neurons with RF
         idx_target = ~np.isnan(sessions[ises].celldata['rf_azimuth']) #get all neurons with RF
 
-        idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>0.05)
-        idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>0.05)
+        if thr_tuned:
+            idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>thr_tuned)
+            idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>thr_tuned)
+                
+        if thr_rf_p<1:
+            if 'rf_p' in sessions[ises].celldata:
+                idx_source = np.logical_and(idx_source,sessions[ises].celldata['rf_p']<thr_rf_p)
+                idx_target = np.logical_and(idx_target,sessions[ises].celldata['rf_p']<thr_rf_p)
+                
         
         [noiseRFmat_ses,countsRFmat_ses] = compute_NC_map(sourcecells = sessions[ises].celldata[idx_source].reset_index(drop=True),
                                                  targetcells = sessions[ises].celldata[idx_target].reset_index(drop=True),
@@ -213,7 +224,8 @@ def noisecorr_rfmap(sessions,binresolution=5,rotate_prefori=False,rotate_deltapr
     
     return noiseRFmat_mean,countsRFmat,binrange
 
-def noisecorr_rfmap_perori(sessions,binresolution=5,rotate_prefori=False,rotate_deltaprefori=False):
+def noisecorr_rfmap_perori(sessions,binresolution=5,rotate_prefori=False,rotate_deltaprefori=False,
+                           thr_tuned=0,thr_rf_p=1):
     # Computes the average noise correlation depending on the difference in receptive field between the two neurons
     # binresolution determines spatial bins in degrees visual angle
     # If rotate_prefori=True then the delta RF is rotated depending on the preferred orientation of the source neuron 
@@ -243,12 +255,15 @@ def noisecorr_rfmap_perori(sessions,binresolution=5,rotate_prefori=False,rotate_
             idx_target = ~np.isnan(sessions[ises].celldata['rf_azimuth'],
                                          sessions[ises].celldata['pref_ori'].between(Ori-30, Ori+30)) #get all neurons with RF
 
-            # idx_source = np.logical_and(idx_source,sessions[ises].celldata['roi_name']=='V1')
-            # idx_target = np.logical_and(idx_target,sessions[ises].celldata['roi_name']=='V1')
-
-            idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>0.05)
-            idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>0.05)
-
+            if thr_tuned:
+                    idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>thr_tuned)
+                    idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>thr_tuned)
+                
+            if thr_rf_p<1:
+                if 'rf_p' in sessions[ises].celldata:
+                    idx_source = np.logical_and(idx_source,sessions[ises].celldata['rf_p']<thr_rf_p)
+                    idx_target = np.logical_and(idx_target,sessions[ises].celldata['rf_p']<thr_rf_p)
+                
             [noiseRFmat_ses,countsRFmat_ses] = compute_NC_map(sourcecells = sessions[ises].celldata[idx_source].reset_index(drop=True),
                                                     targetcells = sessions[ises].celldata[idx_target].reset_index(drop=True),
                                                     NC_data = sessions[ises].noise_corr[np.ix_(idx_source, idx_target)],

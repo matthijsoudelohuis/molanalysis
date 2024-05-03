@@ -28,8 +28,15 @@ def plot_rf_plane(celldata,sig_thr=1):
             idx_area    = celldata['roi_name']==areas[j]
             idx_sig     = celldata['rf_p'] < sig_thr
             idx         = np.logical_and(idx_area,idx_sig)
-
-            sns.scatterplot(data = celldata[idx],x='xloc',y='yloc',
+            
+            # sns.scatterplot(data = celldata[idx],x='xloc',y='yloc',
+            #                 hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
+            
+            if vars[i]=='rf_azimuth':
+                sns.scatterplot(data = celldata[idx],x='xloc',y='yloc',hue_norm=(-135,135),
+                            hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
+            elif vars[i]=='rf_elevation':
+                sns.scatterplot(data = celldata[idx],x='xloc',y='yloc',hue_norm=(-16.7,50.2),
                             hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
             
             box = axes[i,j].get_position()
@@ -44,7 +51,10 @@ def plot_rf_plane(celldata,sig_thr=1):
             axes[i,j].set_facecolor("black")
             axes[i,j].get_legend().remove()
 
-            norm = plt.Normalize(celldata[vars[i]].min(), celldata[vars[i]].max())
+            if vars[i]=='rf_azimuth':
+                norm = plt.Normalize(-135,135)
+            elif vars[i]=='rf_elevation':
+                norm = plt.Normalize(-16.7,50.2)
             sm = plt.cm.ScalarMappable(cmap="gist_rainbow", norm=norm)
             sm.set_array([])
             # Remove the legend and add a colorbar (optional)
@@ -76,7 +86,7 @@ def plot_rf_screen(celldata,sig_thr=1):
         axes[j].set_xticks([])
         axes[j].set_yticks([])
         axes[j].set_xlim([-135,135])
-        axes[j].set_ylim([-20,50])
+        axes[j].set_ylim([-16.7,50.2])
         axes[j].set_title(areas[j],fontsize=15)
         axes[j].set_facecolor("black")
         axes[j].get_legend().remove()
@@ -144,3 +154,18 @@ def interp_rf(sessions,sig_thr=0.001,show_fit=False):
             plot_rf_plane(ses.celldata,sig_thr=1)
     
     return r2
+
+
+def smooth_rf(sessions,sig_thr=0.001,radius=50):
+
+    for ses in sessions:
+
+        idx_RF = ses.celldata['rf_p'] < sig_thr
+        idx_RF = np.logical_and(ses.celldata['rf_azimuth']>0,idx_RF)
+
+        for iN in np.where(~idx_RF)[0]:
+            idx_near = np.logical_and(np.abs(ses.distmat_xy[iN,:]) < radius,idx_RF)
+            ses.celldata.loc[iN,'rf_azimuth']       = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near].index,'rf_azimuth'])
+            ses.celldata.loc[iN,'rf_elevation']     = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near].index,'rf_elevation'])
+       
+    return sessions
