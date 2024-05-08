@@ -50,13 +50,12 @@ session_list        = np.array([['LPE12013','2024_04_25']])
 
 sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion='deconv') #Load specified list of sessions
-sessions,nSessions = filter_sessions([protocol],only_animal_id=['LPE11997','LPE11998'],
-                           load_behaviordata=True,load_calciumdata=True,calciumversion='deconv') #load sessions that meet criteria:
+sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE11997','LPE11998'],
+                           load_behaviordata=True,load_calciumdata=True,calciumversion='dF') #load sessions that meet criteria:
 
 # savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - DN regression\\'
-
 
 # ##############################################################################
 # ## Construct time tensor: 3D 'matrix' of K trials by N neurons by T time bins
@@ -141,7 +140,10 @@ stimtypes   = ['C','N','M']
 snakeplots  = np.empty([N,S,len(stimtypes)])
 
 for iTT in range(len(stimtypes)):
-    snakeplots[:,:,iTT] = np.nanmean(sessions[ises].stensor[:,sessions[ises].trialdata['stimcat'] == stimtypes[iTT],:],axis=1)
+    # snakeplots[:,:,iTT] = np.nanmean(sessions[ises].stensor[:,sessions[ises].trialdata['stimcat'] == stimtypes[iTT],:],axis=1)
+    idx = sessions[ises].trialdata['stimcat'] == stimtypes[iTT]
+    # idx = np.logical_and(idx,sessions[ises].trialdata['lickResponse']==0)
+    snakeplots[:,:,iTT] = np.nanmean(sessions[ises].stensor[:,idx,:],axis=1)
     # idx_trial = np.logical_and(sessions[ises].trialdata['stimcat'] == stimtypes[iTT],sessions[ises].trialdata['lickResponse']==0)
     # snakeplots[:,:,iTT] = np.nanmean(sessions[ises].stensor[:,idx_trial,:],axis=1)
 
@@ -168,7 +170,12 @@ snakeplots  = np.empty([N,S,len(stimtypes)])
 for ises in range(nSessions):
     idx = celldata['session_id']==sessions[ises].sessiondata['session_id'][0]
     for iTT in range(len(stimtypes)):
-        snakeplots[idx,:,iTT] = np.nanmean(sessions[ises].stensor[:,sessions[ises].trialdata['stimcat'] == stimtypes[iTT],:],axis=1)
+        # snakeplots[idx,:,iTT] = np.nanmean(sessions[ises].stensor[:,sessions[ises].trialdata['stimcat'] == stimtypes[iTT],:],axis=1)
+
+        trialidx = sessions[ises].trialdata['stimcat'] == stimtypes[iTT]
+        # trialidx = np.logical_and(trialidx,sessions[ises].trialdata['lickResponse']==0)
+        snakeplots[idx,:,iTT] = np.nanmean(sessions[ises].stensor[:,trialidx,:],axis=1)
+    
 
 #Plot for all loaded sessions together:
 areas   = celldata['roi_name'].unique()

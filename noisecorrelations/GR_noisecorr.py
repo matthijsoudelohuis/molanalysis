@@ -47,30 +47,15 @@ session_list        = np.array([['LPE09830','2023_04_10'],
                                 # ['LPE10885','2023_10_23'],
                                 ['LPE10919','2023_11_06']])
 
-# load sessions lazy: 
+#%% Load sessions lazy: 
 sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
 # sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
 
 #%%   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
-    sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
-    
-    ##############################################################################
-    ## Construct trial response matrix:  N neurons by K trials
-    sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
-                                    t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+    # sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
+    sessions[ises].load_respmat(calciumversion='deconv')
 
-    sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'],
-                                    sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
-                                    t_resp_start=0,t_resp_stop=1,method='mean')
-
-    # sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
-    #                                 sessions[ises].videodata['ts'],sessions[ises].trialdata['tOnset'],
-    #                                 t_resp_start=0,t_resp_stop=1,method='mean')
-
-    delattr(sessions[ises],'calciumdata')
-    delattr(sessions[ises],'videodata')
-    delattr(sessions[ises],'behaviordata')
 
 #%% ########################### Compute tuning metrics: ###################################
 for ises in range(nSessions):
@@ -124,6 +109,14 @@ fig.savefig(os.path.join(savedir,'ExploreFigs','Neural_Behavioral_Traces_' + ses
 
 # fig = plot_excerpt(sessions[sesidx],neural_version='traces')
 # fig = plot_excerpt(sessions[sesidx],trialsel=None,plot_neural=True,plot_behavioral=True,neural_version='traces')
+
+
+
+
+
+        # idx = filter_nearlabeled(sessions[ises],radius=radius)
+
+
 
 #%% #### 
 

@@ -4,12 +4,11 @@ Actual loading happens as method of instances of sessions (session.py)
 Matthijs Oude Lohuis, 2023, Champalimaud Foundation
 """
 
+import os
 import numpy as np
 import pandas as pd
 from loaddata.get_data_folder import get_data_folder
 from loaddata.session import Session
-
-import os
 
 
 def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
@@ -36,7 +35,8 @@ def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdat
 
 def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     load_videodata=False, calciumversion='dF',
-                    only_animal_id=None,min_cells=None, min_trials=None, session_rf=None):
+                    only_animal_id=None,min_cells=None, min_trials=None, session_rf=None,
+                    incl_areas=None,only_areas=None):
         #             only_correct=False, min_units=None,
         #             min_units_per_layer=None, min_channels_per_layer=None,
         #             exclude_NA_layer=False, min_perc_correct=None):
@@ -49,6 +49,9 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
     :param min_trials: To restrict to sessions which have minimum trials
     """
     sessions = []
+    if isinstance(protocols, str):
+        protocols =  [protocols]
+
     if protocols is None:
         protocols = ['VR','IM','GR','GN','RF','SP','DM','DN','DP']
     
@@ -76,7 +79,13 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     sesflag = sesflag and hasattr(ses, 'celldata') and len(ses.celldata) >= min_cells
                 
                 if sesflag and session_rf is not None:
-                    sesflag = sesflag and hasattr(ses, 'celldata') and 'rf_p' in ses.celldata
+                    sesflag = sesflag and hasattr(ses, 'celldata') and 'rf_p_F' in ses.celldata
+
+                if sesflag and incl_areas is not None:
+                    sesflag = sesflag and hasattr(ses, 'celldata') and np.any(np.isin(incl_areas,np.unique(ses.celldata['roi_name'])))
+
+                if sesflag and only_areas is not None:
+                    sesflag = sesflag and hasattr(ses, 'celldata') and np.all(np.isin(np.unique(ses.celldata['roi_name']),incl_areas))
 
                 if sesflag:
                     ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)

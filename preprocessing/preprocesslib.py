@@ -723,12 +723,18 @@ def proc_imaging(sesfolder, sessiondata):
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
 
-        if os.path.exists(os.path.join(plane_folder, 'RF.npy')):
-            RF = np.load(os.path.join(plane_folder, 'RF.npy'))
-            celldata_plane['rf_azimuth']    = RF[0,:]
-            celldata_plane['rf_elevation']  = RF[1,:]
-            celldata_plane['rf_size']       = RF[2,:]
-            celldata_plane['rf_p']          = RF[3,:]
+        if os.path.exists(os.path.join(plane_folder, 'RF_Fneu.npy')) and os.path.exists(os.path.join(plane_folder, 'RF_F.npy')):
+            RF_F = np.load(os.path.join(plane_folder, 'RF_F.npy'))
+            celldata_plane['rf_az_F']   = RF_F[:,0]
+            celldata_plane['rf_el_F']   = RF_F[:,1]
+            celldata_plane['rf_sz_F']   = RF_F[:,2]
+            celldata_plane['rf_p_F']    = RF_F[:,3]
+            
+            RF_Fneu = np.load(os.path.join(plane_folder, 'RF_Fneu.npy'))
+            celldata_plane['rf_az_Fneu']   = RF_Fneu[:,0]
+            celldata_plane['rf_el_Fneu']   = RF_Fneu[:,1]
+            celldata_plane['rf_sz_Fneu']   = RF_Fneu[:,2]
+            celldata_plane['rf_p_Fneu']    = RF_Fneu[:,3]
 
         ##################### load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
@@ -739,6 +745,14 @@ def proc_imaging(sesfolder, sessiondata):
         if np.shape(F_chan2)[0] < np.shape(F)[0]:
             print('ROIs were manually added in suite2p, fabricating red channel data...')
             F_chan2     = np.vstack((F_chan2, np.tile(F_chan2[[-1],:], 1)))
+
+        #If there are bad frames then interpolate these values with median values:
+        if os.path.exists(os.path.join(sesfolder,'bad_frames.npy')):
+            bad_frames              = np.load(os.path.join(sesfolder,'bad_frames.npy'))
+            F[:,bad_frames]         = np.median(F,axis=1,keepdims=True)
+            F_chan2[:,bad_frames]   = np.median(F_chan2,axis=1,keepdims=True)
+            Fneu[:,bad_frames]      = np.median(Fneu,axis=1,keepdims=True)
+            spks[:,bad_frames]      = np.median(spks,axis=1,keepdims=True)
 
         # Correct neuropil and compute dF/F: (Rupprecht et al. 2021)
         dF     = calculate_dff(F, Fneu,coeff_Fneu=0.7,prc=10) #see function below
@@ -815,13 +829,14 @@ def proc_imaging(sesfolder, sessiondata):
     
     #If ROI is unnamed, replace if ROI_1/V1 combi, ROI_2/PM combi, otherwise error:
     if celldata['roi_name'].str.contains('ROI').any():
-        print('An imaging area was not named in scanimage')
         if celldata['roi_name'].isin(['PM']).any():
             celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_2','V1')
             celldata['roi_name'] = celldata['roi_name'].str.replace('ROI 2','V1')
+            print('Unnamed ROI in scanimage inferred to be V1')
         if celldata['roi_name'].isin(['V1']).any():
             celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_1','PM')
             celldata['roi_name'] = celldata['roi_name'].str.replace('ROI 1','PM')
+            print('Unnamed ROI in scanimage inferred to be PM')
         assert not celldata['roi_name'].str.contains('ROI').any(),'unknown area'
 
     #Add recombinase enzym label to red cells:

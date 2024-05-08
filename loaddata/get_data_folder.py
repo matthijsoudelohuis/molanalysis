@@ -30,6 +30,7 @@ def get_rawdata_drive(animal_id,protocols):
         drives       = {'LPE09665' : 'H:',
                     'LPE09830' : 'H:',
                     'LPE11495' : 'H:',
+                    'LPE12013' : 'H:',
                     'LPE10884' : 'I:',
                     'LPE10885' : 'I:',
                     'LPE11622' : 'I:',

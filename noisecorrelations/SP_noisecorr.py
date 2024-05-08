@@ -19,49 +19,23 @@ from utils.plotting_style import * #get all the fixed color schemes
 # from utils.plot_lib import shaded_error
 # from utils.RRRlib import regress_out_behavior_modulation
 from utils.corr_lib import *
+from utils.rf_lib import smooth_rf
 
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - Gratings\\')
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Noisecorrelations\\')
 
-##############################################################################
-session_list        = np.array([['LPE10919','2023_11_06']])
+#%% #############################################################################
+# session_list        = np.array([['LPE10919','2023_11_06']])
 
 # load sessions lazy: 
-sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
+# sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
 sessions,nSessions   = filter_sessions(protocols = ['SP']) 
 
-#   Load proper data and compute average trial responses:                      
+# Load data properly:                      
 for ises in range(nSessions):    # iterate over sessions
     sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
 
-
-##############################################################################
-celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
-
-#%%%% 
-
-areas   = ['V1','PM']
-rf_frac = np.empty((nSessions,len(areas)))
-for ises in range(nSessions):    # iterate over sessions
-    for iarea in range(len(areas)):    # iterate over sessions
-        idx = sessions[ises].celldata['roi_name'] == areas[iarea]
-        rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p'][idx]<0.0001) / np.sum(idx)
-
-fig,ax = plt.subplots(figsize=(4,4))
-# plt.scatter([0,1],rf_frac)
-sns.scatterplot(rf_frac.T,color='black',s=50)
-plt.xlim([-0.5,1.5])
-plt.ylim([0,0.5])
-plt.xticks([0,1],labels=areas)
-# plt.xticks(areas)
-plt.xlabel('Area')
-plt.ylabel('Fraction receptive fields')
-# plt.legend()
-ax.get_legend().remove()
-plt.savefig(os.path.join(savedir,'RF_fraction' + '.png'), format = 'png')
-
-
-############################ Compute noise correlations: ###################################
-sessions = compute_noise_correlation(sessions)
+#%% ########################### Compute noise correlations: ###################################
+sessions = compute_noise_correlation(sessions,binwidth=0.25)
 
 ###################### Plot control figure of signal and noise corrs ##############################
 sesidx = 0
@@ -71,30 +45,13 @@ plt.imshow(sessions[sesidx].noise_corr, cmap='coolwarm',
            vmax=np.nanpercentile(sessions[sesidx].noise_corr,95))
 plt.savefig(os.path.join(savedir,'NoiseCorrelations','NC_SP_Mat_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-
-
 #%% ##################### Compute pairwise neuronal distances: ##############################
 sessions = compute_pairwise_metrics(sessions)
 
-# # construct dataframe with all pairwise measurements:
-# df_allpairs  = pd.DataFrame()
-
-# for ises in range(nSessions):
-#     tempdf  = pd.DataFrame({'NoiseCorrelation': sessions[ises].noise_corr.flatten(),
-#                     # 'DeltaPrefOri': sessions[ises].delta_pref.flatten(),
-#                     'AreaPair': sessions[ises].areamat.flatten(),
-#                     'DistXYPair': sessions[ises].distmat_xy.flatten(),
-#                     'DistXYZPair': sessions[ises].distmat_xyz.flatten(),
-#                     'DistRfPair': sessions[ises].distmat_rf.flatten(),
-#                     'AreaLabelPair': sessions[ises].arealabelmat.flatten(),
-#                     'LabelPair': sessions[ises].labelmat.flatten()}).dropna(how='all') 
-#                     #drop all rows that have all nan (diagonal + repeat below daig)
-#     df_allpairs  = pd.concat([df_allpairs, tempdf], ignore_index=True).reset_index(drop=True)
-
-smooth_rf(sessions,sig_thr=0.01,show_result=False,radius=100)
+smooth_rf(sessions,sig_thr=0.01,show_result=True,radius=100)
 
 # Recompute noise correlations without setting half triangle to nan
-sessions =  compute_noise_correlation(sessions,uppertriangular=False)
+sessions =  compute_noise_correlation(sessions,uppertriangular=False,binwidth=0.5)
 
 rotate_prefori  = False
 min_counts      = 500 # minimum pairwise observation to include bin
@@ -134,11 +91,11 @@ else:
 # Contrast: across areas
 areas   = ['V1','PM']
 
-[noiseRFmat_mean,countsRFmat,binrange] = noisecorr_rfmap_areas(sessions,binresolution=5,
+[noiseRFmat_mean,countsRFmat,binrange] = noisecorr_rfmap_areas(sessions,binresolution=7.5,
                                                                  rotate_prefori=False,thr_tuned=0.0,
-                                                                 thr_rf_p=1)
+                                                                 thr_rf_p=0.001)
 
-min_counts = 1000
+min_counts = 2000
 noiseRFmat_mean[countsRFmat<min_counts] = np.nan
 
 fig,axes = plt.subplots(2,2,figsize=(10,7))
@@ -154,8 +111,8 @@ plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_smooth_Map_Interarea
 # Contrasts: across areas and projection identity      
 
 [noiseRFmat_mean,countsRFmat,binrange,legendlabels] = noisecorr_rfmap_areas_projections(sessions,binresolution=5,
-                                                                 rotate_prefori=False,thr_tuned=0.00,
-                                                                 thr_rf_p=1)
+                                                                 rotate_prefori=False,thr_tuned=0.0,
+                                                                 thr_rf_p=0.01)
 
 min_counts = 50
 noiseRFmat_mean[countsRFmat<min_counts] = np.nan

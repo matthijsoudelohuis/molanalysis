@@ -19,9 +19,9 @@ from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
-rawdatadir          = 'L:\\RawData\\'
-animal_id           = 'LPE11998'
-sessiondate         = '2024_04_23'
+rawdatadir          = 'H:\\RawData\\'
+animal_id           = 'LPE12013'
+sessiondate         = '2024_05_07'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 

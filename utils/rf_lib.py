@@ -13,32 +13,33 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 import seaborn as sns
-
+from utils.corr_lib import compute_pairwise_metrics
 
 def plot_rf_plane(celldata,sig_thr=1):
     
     areas           = np.sort(celldata['roi_name'].unique())[::-1]
-    vars            = ['rf_azimuth','rf_elevation']
+    # vars            = ['rf_azimuth','rf_elevation']
+    vars            = ['rf_az_Fneu','rf_el_Fneu']
 
-    fig,axes        = plt.subplots(2,2,figsize=(5*len(areas),10))
+    fig,axes        = plt.subplots(2,len(areas),figsize=(5*len(areas),10))
 
     for i in range(len(vars)): #for azimuth and elevation
         for j in range(len(areas)): #for areas
             
             idx_area    = celldata['roi_name']==areas[j]
-            idx_sig     = celldata['rf_p'] < sig_thr
+            idx_sig     = celldata['rf_p_Fneu'] < sig_thr
             idx         = np.logical_and(idx_area,idx_sig)
             
             # sns.scatterplot(data = celldata[idx],x='xloc',y='yloc',
             #                 hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
             
-            if vars[i]=='rf_azimuth':
-                sns.scatterplot(data = celldata[idx],x='xloc',y='yloc',hue_norm=(-135,135),
+            if vars[i]=='rf_az_Fneu':
+                sns.scatterplot(data = celldata[idx],x='yloc',y='xloc',hue_norm=(-135,135),
                             hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
-            elif vars[i]=='rf_elevation':
-                sns.scatterplot(data = celldata[idx],x='xloc',y='yloc',hue_norm=(-16.7,50.2),
+            elif vars[i]=='rf_el_Fneu':
+                sns.scatterplot(data = celldata[idx],x='yloc',y='xloc',hue_norm=(-16.7,50.2),
                             hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
-            
+
             box = axes[i,j].get_position()
             axes[i,j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
             axes[i,j].set_xlabel('')
@@ -50,16 +51,19 @@ def plot_rf_plane(celldata,sig_thr=1):
             axes[i,j].set_title(areas[j] + ' - ' + vars[i],fontsize=15)
             axes[i,j].set_facecolor("black")
             axes[i,j].get_legend().remove()
+            axes[i,j].invert_yaxis()
 
-            if vars[i]=='rf_azimuth':
+            if vars[i]=='rf_az_Fneu':
                 norm = plt.Normalize(-135,135)
-            elif vars[i]=='rf_elevation':
+            elif vars[i]=='rf_el_Fneu':
                 norm = plt.Normalize(-16.7,50.2)
             sm = plt.cm.ScalarMappable(cmap="gist_rainbow", norm=norm)
             sm.set_array([])
             # Remove the legend and add a colorbar (optional)
             axes[i,j].figure.colorbar(sm,ax=axes[i,j],pad=0.02,label=vars[i])
-    
+    plt.suptitle(celldata['session_id'][0])
+    plt.tight_layout()
+
     return fig
 
 
@@ -67,16 +71,16 @@ def plot_rf_screen(celldata,sig_thr=1):
     
     areas           = np.sort(celldata['roi_name'].unique())[::-1]
 
-    fig,axes        = plt.subplots(1,2,figsize=(6*len(areas),3))
+    fig,axes        = plt.subplots(1,len(areas),figsize=(6*len(areas),3))
 
     for j in range(len(areas)): #for areas
         idx_area    = celldata['roi_name']==areas[j]
-        idx_sig     = celldata['rf_p'] < sig_thr
+        idx_sig     = celldata['rf_p_Fneu'] < sig_thr
         idx         = np.logical_and(idx_area,idx_sig)
 
         sns.scatterplot(data = celldata[idx],
-                        x='rf_azimuth',y='rf_elevation',
-                        hue='rf_p',ax=axes[j],palette='gist_rainbow',size=9,edgecolor="none")
+                        x='rf_az_Fneu',y='rf_el_Fneu',
+                        hue='rf_p_Fneu',ax=axes[j],palette='hot_r',size=9,edgecolor="none")
 
         box = axes[j].get_position()
         axes[j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
@@ -90,14 +94,16 @@ def plot_rf_screen(celldata,sig_thr=1):
         axes[j].set_title(areas[j],fontsize=15)
         axes[j].set_facecolor("black")
         axes[j].get_legend().remove()
-
         # if j==1:
-        norm = plt.Normalize(celldata['rf_p'][idx].min(), celldata['rf_p'][idx].max())
-        sm = plt.cm.ScalarMappable(cmap="gist_rainbow", norm=norm)
+        norm = plt.Normalize(celldata['rf_p_Fneu'][idx].min(), celldata['rf_p_Fneu'][idx].max())
+        # norm = plt.Normalize(celldata['rf_p_Fneu'][idx].max(), celldata['rf_p_Fneu'][idx].min())
+        sm = plt.cm.ScalarMappable(cmap="hot_r", norm=norm)
         sm.set_array([])
         # Remove the legend and add a colorbar (optional)
-        axes[j].figure.colorbar(sm,ax=axes[j],pad=0.02,label='rf_p')
-    
+        axes[j].figure.colorbar(sm,ax=axes[j],pad=0.02,label='rf_p_Fneu')
+    plt.suptitle(celldata['session_id'][0])
+    plt.tight_layout()
+
     return fig
 
 
@@ -155,7 +161,6 @@ def interp_rf(sessions,sig_thr=0.001,show_fit=False):
     
     return r2
 
-
 def smooth_rf(sessions,sig_thr=0.001,radius=50):
 
     for ses in sessions:
@@ -169,3 +174,13 @@ def smooth_rf(sessions,sig_thr=0.001,radius=50):
             ses.celldata.loc[iN,'rf_elevation']     = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near].index,'rf_elevation'])
        
     return sessions
+
+def filter_nearlabeled(ses,radius=50):
+
+    if not hasattr(ses,'distmat_xyz'):
+        [ses] = compute_pairwise_metrics([ses])
+    temp = ses.distmat_xyz.copy()
+    np.fill_diagonal(temp,0)  #this is to include the labeled neurons themselves
+    closemat = temp[ses.celldata['redcell']==1,:] <= radius
+
+    return np.any(closemat,axis=0)

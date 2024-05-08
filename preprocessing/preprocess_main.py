@@ -8,21 +8,20 @@ Preprocesses behavioral data, task and trial data, facial video data, calcium im
 
 import os, sys
 import numpy as np
-from loaddata.get_data_folder import get_local_drive
+from loaddata.get_data_folder import get_local_drive,get_rawdata_drive
 os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 from preprocessing.preprocesslib import *
-from loaddata.get_data_folder import get_rawdata_drive
 
-# rawdatadir      = "I:\\RawData\\"
+rawdatadir      = "K:\\RawData\\"
 
 animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
-animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_01_26']
-# animal_ids          = ['LPE11495'] #If empty than all animals in folder will be processed
+# animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_02_20','2024_02_21','2024_02_22','2024_02_23','2024_02_26','2024_02_27']
-date_filter        = ['2023_11_06']
-# animal_ids          = ['LPE11997'] #If empty than all animals in folder will be processed
+# date_filter        = ['2023_11_13']
+animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_04_17','2024_04_18','2024_04_19']
 
 # protocols           = ['GR','SP','IM','GN']

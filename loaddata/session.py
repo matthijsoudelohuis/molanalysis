@@ -12,6 +12,7 @@ import os
 import numpy as np
 import pandas as pd
 from loaddata.get_data_folder import get_data_folder
+from utils.psth import compute_respmat
 
 class Session():
 
@@ -105,6 +106,30 @@ class Session():
         self.celldata.loc[self.celldata['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
 
         # return sessions
+
+    def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF'):
+        #combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
+
+        self.load_data(load_behaviordata=load_behaviordata, load_calciumdata=load_calciumdata,
+                       load_videodata=load_videodata,calciumversion=calciumversion)
+        
+        ##############################################################################
+        ## Construct trial response matrix:  N neurons by K trials
+        self.respmat         = compute_respmat(self.calciumdata, self.ts_F, self.trialdata['tOnset'],
+                                        t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+
+        self.respmat_runspeed = compute_respmat(self.behaviordata['runspeed'],
+                                        self.behaviordata['ts'], self.trialdata['tOnset'],
+                                        t_resp_start=0,t_resp_stop=1,method='mean')
+
+        self.respmat_videome = compute_respmat(self.videodata['motionenergy'],
+                                        self.videodata['ts'],self.trialdata['tOnset'],
+                                        t_resp_start=0,t_resp_stop=1,method='mean')
+
+        delattr(self,'calciumdata')
+        delattr(self,'videodata')
+        delattr(self,'behaviordata')
+
 
 
 

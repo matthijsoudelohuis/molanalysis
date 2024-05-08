@@ -19,17 +19,7 @@ from scipy.stats import combine_pvalues #Fisher's method to combine significance
 
 from preprocessing.preprocesslib import align_timestamps
 
-# rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-# rawdatadir          = 'X:\\Rawdata\\'
-
-# # animal_ids          = ['LPE09665','LPE09830','NSH07422','NSH07429'] #If empty than all animals in folder will be processed
-# animal_ids          = [] #If empty than all animals in folder will be processed
-# date_filter         = []
-
-# animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
-# date_filter         = ['2023_04_10']
-
-## Mapping of RF on/off blocks to elevation and azimuth:
+ ## Mapping of RF on/off blocks to elevation and azimuth:
 nblockselevation    = 13
 nblocksazimuth      = 52
 
@@ -41,19 +31,27 @@ t_resp_stop         = 0.6      #post s
 t_base_start        = -2       #pre s
 t_base_stop         = 0        #post s
 
-## Parameters:
-showFig     = True
-minblocks   = 2  #minimum number of adjacent blocks with significant response
-clusterthr  = 5 # this is sum of negative log p values of clustered RF responses
-# e.g. array = [0.001,0.0001,0.05,0.05,0.02] #pvalues of cluster of RF on or off responses
-# np.sum(-np.log10(array))
+# def get_params_4deg():
+#     ## Mapping of RF on/off blocks to elevation and azimuth:
+#     nblockselevation    = 13
+#     nblocksazimuth      = 52
+
+#     vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
+#     vec_azimuth         = [-135,135] #left and right of screen displays
+
+#     t_resp_start        = 0.1        #pre s
+#     t_resp_stop         = 0.6      #post s
+#     t_base_start        = -2       #pre s
+#     t_base_stop         = 0        #post s
+
+# def get_params_9deg():
 
 
-# array_p = rfmaps_on_p[:,:,n]
-# array_p = rfmaps_off_p[:,:,n]
+#     return 
 
 def find_largest_cluster(array_p,minblocks=2): #filters clusters of adjacent significant blocks
-    
+    # minblocks   = minimum number of adjacent blocks with significant response
+
     array_p_thr = array_p<0.05
     labeling, label_count = ndimage.label(array_p_thr) #find clusters of significance
     
@@ -72,6 +70,11 @@ def find_largest_cluster(array_p,minblocks=2): #filters clusters of adjacent sig
     return cluster,cluster_p
 
 def filter_clusters(array,clusterthr=10,minblocks=2): #filters clusters of adjacent significant blocks
+    # minblocks   = minimum number of adjacent blocks with significant response
+    # clusterthr  =  is sum of negative log p values of clustered RF responses
+    # e.g. array = [0.001,0.0001,0.05,0.05,0.02] #pvalues of cluster of RF on or off responses
+    # np.sum(-np.log10(array))
+
     array_p = array<0.05
     labeling, label_count = ndimage.label(array_p == True) #find clusters of significance
     
@@ -151,7 +154,7 @@ def proc_RF(rawdatadir,sessiondata):
 
     return grid_array,RF_timestamps
 
-def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu']):
+def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],showFig=True):
     if isinstance(signals, str):
         signals =  [signals]
 
@@ -252,8 +255,8 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu']):
                     # clusters_on,clusters_on_p     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
                     # clusters_off,clusters_off_p    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
                     
-                    clusters_on,clusters_on_p     = find_largest_cluster(rfmaps_on_p[:,:,n],minblocks=minblocks)
-                    clusters_off,clusters_off_p    = find_largest_cluster(rfmaps_off_p[:,:,n],minblocks=minblocks)
+                    clusters_on,clusters_on_p     = find_largest_cluster(rfmaps_on_p[:,:,n],minblocks=2)
+                    clusters_off,clusters_off_p    = find_largest_cluster(rfmaps_off_p[:,:,n],minblocks=2)
                     
                     #temporary calc of center of mass for each separately:
                     #if far apart then ignore this RF fit:

@@ -27,6 +27,10 @@ from utils.RRRlib import *
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
 
+
+print(' Replace with load respmat and move to pairwise corr folder')
+
+
 #################################################
 # session_list        = np.array([['LPE09665','2023_03_15']])
 session_list        = np.array([['LPE11086','2023_12_16']])
@@ -37,11 +41,6 @@ sessions,nSessions            = load_sessions(protocol = 'IM',session_list=sessi
 
 # sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
 #                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
-
-
-# for ises in range(nSessions):
-#     sessions[ises].videodata['motionenergy']  = medfilt(sessions[ises].videodata['motionenergy'] , kernel_size=25)
-#     sessions[ises].behaviordata['runspeed']   = medfilt(sessions[ises].behaviordata['runspeed'] , kernel_size=51)
 
 
 #Compute average response per trial:
