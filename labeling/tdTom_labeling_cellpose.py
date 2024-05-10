@@ -171,7 +171,7 @@ def gen_red_images(rawdatadir,animal_id,sessiondate):
         
         mimg2 = ops['meanImg_chan2'] #get red channel image from ops
         # mimg2 = im_norm(mimg2,min=2.5,max=100) #scale between 0 and 255
-        mimg2 = im_norm(mimg2,min=0.5,max=99.5) #scale between 0 and 255
+        mimg2 = im_norm(mimg2,min=0.5,max=99.9) #scale between 0 and 255
 
         # mimg2 = im_log(mimg2) #log transform to enhance weakly expressing cells
 

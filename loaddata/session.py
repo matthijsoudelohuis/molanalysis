@@ -107,28 +107,38 @@ class Session():
 
         # return sessions
 
-    def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF'):
+    def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF',keepraw=False):
         #combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
 
         self.load_data(load_behaviordata=load_behaviordata, load_calciumdata=load_calciumdata,
                        load_videodata=load_videodata,calciumversion=calciumversion)
         
+        if self.sessiondata['protocol'][0]=='IM':
+            t_resp_stop = 0.5
+        elif self.sessiondata['protocol'][0]=='GR':
+            t_resp_stop = 0.75
+        elif self.sessiondata['protocol'][0]=='GN':
+            t_resp_stop = 0.75
+        else:
+            print('getting mean response for unknown protocol')
+
         ##############################################################################
         ## Construct trial response matrix:  N neurons by K trials
         self.respmat         = compute_respmat(self.calciumdata, self.ts_F, self.trialdata['tOnset'],
-                                        t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+                                        t_resp_start=0,t_resp_stop=t_resp_stop,method='mean',subtr_baseline=False)
 
         self.respmat_runspeed = compute_respmat(self.behaviordata['runspeed'],
                                         self.behaviordata['ts'], self.trialdata['tOnset'],
-                                        t_resp_start=0,t_resp_stop=1,method='mean')
+                                        t_resp_start=0,t_resp_stop=t_resp_stop,method='mean')
 
         self.respmat_videome = compute_respmat(self.videodata['motionenergy'],
                                         self.videodata['ts'],self.trialdata['tOnset'],
-                                        t_resp_start=0,t_resp_stop=1,method='mean')
+                                        t_resp_start=0,t_resp_stop=t_resp_stop,method='mean')
 
-        delattr(self,'calciumdata')
-        delattr(self,'videodata')
-        delattr(self,'behaviordata')
+        if not keepraw:
+            delattr(self,'calciumdata')
+            delattr(self,'videodata')
+            delattr(self,'behaviordata')
 
 
 

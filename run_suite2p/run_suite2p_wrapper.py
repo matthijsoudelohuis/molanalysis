@@ -19,9 +19,9 @@ from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
-rawdatadir          = 'H:\\RawData\\'
-animal_id           = 'LPE12013'
-sessiondate         = '2024_05_07'
+rawdatadir          = 'I:\\RawData\\'
+animal_id           = 'LPE11622'
+sessiondate         = '2024_03_28'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
@@ -29,7 +29,7 @@ ops['align_by_chan']    = 1 #1-indexed, 1=gcamp,2=tdtomato
 
 ##################    Run registration:  ############################
 suite2p.run_s2p(ops=ops, db=db) 
-
+ 
 ################# tdTomato bleedthrough correction: ################
 # gain1 = 0.6 # gain2 = 0.4
 
@@ -40,13 +40,13 @@ ops['do_registration']      = False
 ops['roidetect']            = True
 # ops['nbinned']              = 2000
 
-ops = suite2p.run_s2p(ops=ops, db=db)
+ops = suite2p.run_s2p(ops=ops, db=db) 
 
 gen_red_images(rawdatadir,animal_id,sessiondate)
 
 ######################## Receptive field localization  ##############
 # Locate receptive field if RF protocol was run in this session: 
-locate_rf_session(rawdatadir,animal_id,sessiondate)
+# locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'])
 
 # proc_labeling_session(rawdatadir,animal_id,sessiondate)
 

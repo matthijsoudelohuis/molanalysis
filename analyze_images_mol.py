@@ -12,10 +12,7 @@ import matplotlib.pyplot as plt
 import scipy.stats as st
 from sklearn import preprocessing
 from loaddata.session_info import filter_sessions,load_sessions
-from scipy.signal import medfilt
 from utils.plotting_style import * #get all the fixed color schemes
-from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-from scipy.stats import binned_statistic
 
 from utils.imagelib import load_natural_images #
 from utils.explorefigs import *
@@ -27,42 +24,23 @@ from utils.RRRlib import *
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
 
-
-print(' Replace with load respmat and move to pairwise corr folder')
-
-
 #################################################
 # session_list        = np.array([['LPE09665','2023_03_15']])
 session_list        = np.array([['LPE11086','2023_12_16']])
 sessions,nSessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
-# sessions            = filter_sessions(protocols = ['IM'],load_behaviordata=True, 
-                                    # load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 
-# sessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
-#                                     load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+#%% Load sessions lazy: 
+sessions,nSessions   = load_sessions(protocol = 'IM',session_list=session_list)
+# sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
 
-
-#Compute average response per trial:
-for ises in range(nSessions):
-    sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
-                                  t_resp_start=0,t_resp_stop=0.5,method='mean',subtr_baseline=False)
-
-    sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'],
-                                                        sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
-                                                        t_resp_start=0,t_resp_stop=0.5,method='mean')
-
-    sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
-                                                    sessions[ises].videodata['timestamps'], sessions[ises].trialdata['tOnset'],
-                                                    t_resp_start=0,t_resp_stop=0.5,method='mean')
-
-    # delattr(sessions[ises],'calciumdata')
-    # delattr(sessions[ises],'videodata')
-    # delattr(sessions[ises],'behaviordata')
+#%%   Load proper data and compute average trial responses:                      
+for ises in range(nSessions):    # iterate over sessions
+    # sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
+    sessions[ises].load_respmat(calciumversion='deconv',keepraw=True)
 
 #### Load the natural images:
 natimgdata = load_natural_images(onlyright=True)
-
 
 ################################################################
 #Show some traces and some stimuli to see responses:
@@ -129,102 +107,7 @@ plt.tight_layout(rect=[0, 0, 1, 1])
 axes[1].set_title('Repetition 2')
 
 
-#%% ##### 
-
-sessions = compute_signal_correlation(sessions)
-
-sessions = compute_pairwise_metrics(sessions)
-
-# construct dataframe with all pairwise measurements:
-df_allpairs  = pd.DataFrame()
-
-for ises in range(nSessions):
-    [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
-
-    tempdf  = pd.DataFrame({'SignalCorrelation': sessions[ises].sig_corr.flatten(),
-                    # 'DeltaPrefOri': sessions[ises].delta_pref.flatten(),
-                    'AreaPair': sessions[ises].areamat.flatten(),
-                    'DistXYPair': sessions[ises].distmat_xy.flatten(),
-                    'DistXYZPair': sessions[ises].distmat_xyz.flatten(),
-                    'DistRfPair': sessions[ises].distmat_rf.flatten(),
-                    'LabelPair': sessions[ises].labelmat.flatten()}).dropna(how='all') 
-                    #drop all rows that have all nan (diagonal + repeat below daig)
-    df_allpairs  = pd.concat([df_allpairs, tempdf], ignore_index=True).reset_index(drop=True)
-
 #%% 
-    
-
-#%% ################## Noise correlations between labeled and unlabeled cells:  #########################
-labelpairs = df_allpairs['LabelPair'].unique()
-labelpairs_legend = ['unl-unl','unl-lab','lab-lab']
-clrs_labelpairs = get_clr_labelpairs(labelpairs)
-
-areapairs = ['V1-V1','V1-PM','PM-PM']
-clrs_areapairs = get_clr_area_pairs(areapairs)
-
-plt.figure(figsize=(9,4))
-for iap,areapair in enumerate(areapairs):
-    ax = plt.subplot(1,3,iap+1)
-    areafilter      = df_allpairs['AreaPair']==areapair
-    # signalfilter    = np.meshgrid(sessions[ises].celldata['skew']>3,sessions[ises].celldata['skew']>3)
-    # signalfilter = np.meshgrid(sessions[ises].celldata['redcell']==0,sessions[ises].celldata['redcell']==0)
-    filter          = areafilter
-    center          = df_allpairs[filter].groupby('LabelPair', as_index=False)['SignalCorrelation'].mean()['SignalCorrelation']
-    err             = df_allpairs[filter].groupby('LabelPair', as_index=False)['SignalCorrelation'].sem()['SignalCorrelation']
-    # sns.barplot(data=center,x='LabelPair',y='NoiseCorrelation')
-    ax.bar(x=labelpairs,height=center,yerr=err,label=labelpairs_legend,color=clrs_labelpairs)
-    ax.set_yticks(np.arange(0, 0.1, step=0.01))
-    ax.set_xticklabels(labelpairs_legend)
-    ax.set_ylim([0,0.075])
-    ax.set_title(areapair)
-    ax.set_ylabel('Signal Correlation')
-
-plt.tight_layout()
-
-#%% ############################################################################################
-################### Signal correlations as a function of pairwise distance: ####################
-############################# Labeled vs unlabeled neurons #######################################
-
-areapairs = ['V1-V1','PM-PM']
-clrs_areapairs = get_clr_area_pairs(areapairs)
-
-labelpairs = df_allpairs['LabelPair'].unique()
-clrs_labelpairs = get_clr_labelpairs(labelpairs)
-
-binedges = np.arange(0,1000,50) 
-nbins= len(binedges)-1      
-binmean = np.empty((nSessions,len(areapairs),len(labelpairs),nbins))
-handles = []
-for iap,areapair in enumerate(areapairs):
-    for ilp,labelpair in enumerate(labelpairs):
-        for ises in range(nSessions):
-            areafilter = sessions[ises].areamat==areapair
-            labelfilter = sessions[ises].labelmat==labelpair
-            # filter = sessions[ises].celldata['tuning_var']>0
-            filter = np.logical_and(areafilter,labelfilter)
-            # filter = np.logical_and(signalfilter,areafilter,labelfilter)
-            if filter.any():
-                binmean[ises,iap,ilp,:] = binned_statistic(x=sessions[ises].distmat_xy[filter].flatten(),
-                                                values=sessions[ises].sig_corr[filter].flatten(),
-                            statistic='mean', bins=binedges)[0]
-
-plt.figure(figsize=(6,3))
-for iap,areapair in enumerate(areapairs):
-    ax = plt.subplot(1,len(areapairs),iap+1)
-    for ilp,labelpair in enumerate(labelpairs):
-        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
-        # handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),error='sem',color=clrs_labelpairs[ilp]))
-        handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,ilp,:].squeeze(),
-                                    yerror=binmean[:,iap,ilp,:].squeeze()/5,color=clrs_labelpairs[ilp]))
-    ax.set(xlabel=r'Anatomical distance ($\mu$m)',ylabel='Signal Correlation',
-           yticks=np.arange(0, 1, step=0.01),xticks=np.arange(0, 600, step=100))
-    ax.set(xlim=[10,500],ylim=[0,0.05])
-    ax.legend(handles,labelpairs,frameon=False,loc='upper right')
-    plt.tight_layout()
-    ax.set_title(areapair)
-# plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-plt.savefig(os.path.join(savedir,'SignalCorrelations','SignalCorr_anatomdistance_perArea_Labeled_%dsessions' % nSessions + '.png'), format = 'png')
-# plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea_regressout' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
 

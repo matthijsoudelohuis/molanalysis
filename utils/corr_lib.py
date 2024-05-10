@@ -77,10 +77,10 @@ def compute_noise_correlation(sessions,uppertriangular=True,binwidth=1):
 
 def mean_resp_image(ses):
     nNeurons = np.shape(ses.respmat)[0]
-    images = np.unique(ses.trialdata['ImageNumber'])
-    respmean = np.empty((nNeurons,len(images)))
-    for im in images:
-        respmean[:,im] = np.mean(ses.respmat[:,ses.trialdata['ImageNumber']==im],axis=1)
+    imageids = np.unique(ses.trialdata['ImageNumber'])
+    respmean = np.empty((nNeurons,len(imageids)))
+    for im,id in enumerate(imageids):
+        respmean[:,im] = np.mean(ses.respmat[:,ses.trialdata['ImageNumber']==id],axis=1)
     return respmean
 
 def mean_resp_oris(ses):
@@ -147,8 +147,8 @@ def compute_pairwise_metrics(sessions):
             sessions[ises].distmat_xyz[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
             sessions[ises].distmat_xy[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
         
-        if 'rf_azimuth' in sessions[ises].celldata:
-            rfaz,rfel = sessions[ises].celldata['rf_azimuth'],sessions[ises].celldata['rf_elevation']
+        if 'rf_az_Fneu' in sessions[ises].celldata:
+            rfaz,rfel = sessions[ises].celldata['rf_az_Fneu'],sessions[ises].celldata['rf_el_Fneu']
             d = np.array((rfaz,rfel))
 
             for i in range(N):
