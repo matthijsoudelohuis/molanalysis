@@ -23,8 +23,8 @@ from utils.plotting_style import * # get all the fixed color schemes
 def compute_dprime(signal,response):
     
     ntrials             = len(signal)
-    hit_rate            = sum((signal == 1) & (response == True)) / ntrials
-    falsealarm_rate     = sum((signal == 0) & (response == True)) / ntrials
+    hit_rate            = sum((signal == 1) & (response == 1)) / sum(signal == 1)
+    falsealarm_rate     = sum((signal == 0) & (response == 1)) / sum(signal == 0)
     
     dprime              = st.norm.ppf(hit_rate) - st.norm.ppf(falsealarm_rate)
     criterion           = -0.5 * (st.norm.ppf(hit_rate) + st.norm.ppf(falsealarm_rate))

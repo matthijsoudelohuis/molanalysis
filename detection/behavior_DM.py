@@ -34,15 +34,15 @@ from utils.behaviorlib import * # get support functions for beh analysis
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\')
 
 ############## Load the data - MaxOnly ####################################
-protocol                = ['DN']
+protocol                = ['DM']
 sessions,nsessions      = filter_sessions(protocol,load_behaviordata=True,load_videodata=True,has_pupil=True)
 
-protocol            = 'DM'
-session_list = np.array([['LPE11495', '2024_02_16'],['LPE11622', '2024_02_16']])
+protocol                = 'DM'
+session_list            = np.array([['LPE11495', '2024_02_16'],['LPE11622', '2024_02_16']])
 sessions,nsessions      = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
 
-sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-nanimals    = len(np.unique(sessiondata['animal_id']))
+sessiondata             = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+nanimals                = len(np.unique(sessiondata['animal_id']))
 
 #### 
 sesidx = 1
@@ -57,11 +57,16 @@ dp_ses_eng  = np.zeros([nsessions])
 cr_ses      = np.zeros([nsessions])
 cr_ses_eng  = np.zeros([nsessions])
 for i,ses in enumerate(sessions):
-    dp_ses[i],cr_ses[i]     = compute_dprime(ses.trialdata['signal']>0,ses.trialdata['lickResponse'])
+    idx = np.isin(ses.trialdata['signal'],[0,100])
+    df = ses.trialdata[idx]
+    dp_ses[i],cr_ses[i]     = compute_dprime(df['signal']>0,df['lickResponse'])
 
     #Engaged only:
-    df = ses.trialdata[ses.trialdata['engaged']==1]
+    idx = np.isin(ses.trialdata['signal'],[0,100])
+    idx = np.logical_and(idx,ses.trialdata['engaged']==1)
+    df = ses.trialdata[idx]
     dp_ses_eng[i],cr_ses_eng[i]     = compute_dprime(df['signal']>0,df['lickResponse'])
+    # dp_ses_eng[i],cr_ses_eng[i]     = compute_dprime(df['signal']==100,df['lickResponse'])
 
 sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 sessiondata['dprime']    = dp_ses #dp_target_eng

@@ -4,9 +4,9 @@ import numpy as np
 import win32api
 import shutil
 
-drive_id        = 6
-sourcedrive     = "K:\\"
-backupdrive     = "D:\\"
+drive_id        = 3
+sourcedrive     = "I:\\"
+backupdrive     = "F:\\"
 
 filetypes_to_backup = np.array([
 'jpg',
@@ -28,7 +28,7 @@ for path, subdirs, files in os.walk(sourcedrive):
         # if np.isin(name,list_to_backup) and not 'RECYCLE' in path:
             print(os.path.join(path, name))
             backuppath = path.replace(sourcedrive,backupdrive)
-            if ~os.path.exists(backuppath):
+            if not os.path.exists(backuppath):
                 os.makedirs(backuppath)
             shutil.copyfile(os.path.join(path, name), os.path.join(backuppath, name))
 
