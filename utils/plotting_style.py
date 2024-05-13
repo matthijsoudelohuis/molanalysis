@@ -126,7 +126,9 @@ def get_clr_outcome(outcomes):
     return itemgetter(*outcomes)(palette)
 
 def get_clr_psy(signals):
-    clrs            = sns.color_palette('Blues', len(signals))
+    # clrs            = sns.color_palette('Blues', len(signals))
+    # clrs            = sns.color_palette('plasma', len(signals))
+    clrs            = sns.color_palette('inferno', len(signals))
     # palette         = {stims[i]: clrs[i] for i in range(len(stims))}
     return clrs
 

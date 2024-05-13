@@ -36,7 +36,7 @@ def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdat
 def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     load_videodata=False, calciumversion='dF',
                     only_animal_id=None,min_cells=None, min_trials=None, session_rf=None,
-                    incl_areas=None,only_areas=None):
+                    incl_areas=None,only_areas=None,has_pupil=False):
         #             only_correct=False, min_units=None,
         #             min_units_per_layer=None, min_channels_per_layer=None,
         #             exclude_NA_layer=False, min_perc_correct=None):
@@ -86,6 +86,10 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
 
                 if sesflag and only_areas is not None:
                     sesflag = sesflag and hasattr(ses, 'celldata') and np.all(np.isin(np.unique(ses.celldata['roi_name']),incl_areas))
+                
+                if sesflag and has_pupil:
+                    ses.load_data(load_videodata=True)
+                    sesflag = sesflag and hasattr(ses, 'videodata') and 'pupil_area' in ses.videodata and np.any(ses.videodata['pupil_area'])
 
                 if sesflag:
                     ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)

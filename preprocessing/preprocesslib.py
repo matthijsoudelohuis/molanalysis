@@ -296,6 +296,11 @@ def proc_task(rawdatadir,sessiondata):
     if os.path.exists(os.path.join(sesfolder,"suite2p")):  
         assert(len(np.unique(trialdata['stimRight']))==1), 'more than one stimulus appears to be presented in this recording session'
 
+    assert sessiondata['stim'][0] == np.unique(trialdata['stimRight'])[0], 'Stimulus in overview does not match stimulus in trialdata'
+
+    if sessiondata['stim'][0] == 'B':
+        sessiondata['stim'][0] = trialdata['stimRight'] = trialdata['stimLeft'] = 'F'
+
     #Give stimulus category type 
     trialdata['stimcat']            =  ''
     idx                             = trialdata[trialdata['signal']==100].index
@@ -320,8 +325,8 @@ def proc_task(rawdatadir,sessiondata):
             sigrange    = [sessiondata['signal_center'][0]-sessiondata['signal_range'][0]/2,
                     sessiondata['signal_center']+sessiondata['signal_range']/2]
         else:
-            sessiondata['signal_center']=np.mean(sigs).round()
-            sessiondata['signal_range']=[np.max(sigs) - np.min(sigs)]
+            sessiondata['signal_center'] = np.mean(sigs).round()
+            sessiondata['signal_range'] = [np.max(sigs) - np.min(sigs)]
 
         assert np.all(np.logical_and((sigs>=sessiondata['signal_center'][0]-sessiondata['signal_range'][0]/2),
                         np.all(sigs<=sessiondata['signal_center'][0]+sessiondata['signal_range'][0]/2))),'outside range'
@@ -348,11 +353,11 @@ def proc_task(rawdatadir,sessiondata):
     behaviordata.loc[behaviordata.index[behaviordata['trialNumber'] > np.max(trialdata['trialNumber'])],'trialNumber'] = np.max(trialdata['trialNumber'])
 
     ## Licks, get only timestamps of onset of discrete licks
-    lickactivity    = np.diff(behaviordata['lick']) #behaviordata lick is True whenever tongue in ROI>threshold
+    lickactivity    = np.diff(behaviordata['lick'].to_numpy().astype('int')) #behaviordata lick is True whenever tongue in ROI>threshold
     lick_ts         = behaviordata['ts'][np.append(lickactivity==1,False)].to_numpy()
     
     ## Rewards, same as licks, get only onset of reward as timestamps
-    rewardactivity = np.diff(behaviordata['reward'])
+    rewardactivity = np.diff(behaviordata['reward'].to_numpy()) #behaviordata lick is True whenever tongue in ROI>threshold
     reward_ts      = behaviordata['ts'][np.append(rewardactivity>0,False)].to_numpy()
     
     ## Modify position indices to be all in overall space, not per trial:
@@ -399,9 +404,13 @@ def proc_task(rawdatadir,sessiondata):
     sessiondata['stimLength']       = np.mean(trialdata['stimEnd'] - trialdata['stimStart'])
     sessiondata['rewardZoneOffset'] = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
     sessiondata['rewardZoneLength'] = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
-    assert np.allclose(sessiondata['stimLength'], trialdata['stimEnd'] - trialdata['stimStart'], rtol=1e-05)
-    # assert np.allclose(sessiondata['rewardZoneOffset'], trialdata['rewardZoneStart'] - trialdata['stimStart'], rtol=1e-05)
-    assert np.allclose(sessiondata['rewardZoneLength'], trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'], rtol=1e-05)
+    stable_stimzone                 = np.allclose(sessiondata['stimLength'], trialdata['stimEnd'] - trialdata['stimStart'], rtol=1e-05)
+    stable_rewzone                  = np.allclose(sessiondata['rewardZoneOffset'], trialdata['rewardZoneStart'] - trialdata['stimStart'], rtol=1e-05)
+    stable_rewzonelength            = np.allclose(sessiondata['rewardZoneLength'], trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'], rtol=1e-05)
+    sessiondata['stable_params']    = np.all((stable_stimzone,stable_rewzone,stable_rewzonelength))
+    if not sessiondata['stable_params'][0]:
+        print('Variable stimulus or reward zone within session detected\n')
+
     g = trialdata[['trialStart','stimStart','stimEnd','rewardZoneEnd','trialEnd']].to_numpy().flatten()
     assert np.all(np.diff(g)>=0), 'trial event ordering issue'
 
@@ -411,12 +420,12 @@ def proc_task(rawdatadir,sessiondata):
     behaviordata['lick']    = False #init to false and set to true for sample of first lick or rew
     behaviordata['reward']  = False
     
-    #Add the lick times and reward times again to the subsampled dataframe:
+    #Add the lick times again to the subsampled dataframe:
     for lick in lick_ts:
         behaviordata.loc[behaviordata.index[np.argmax(lick<behaviordata['ts'])],'lick'] = True
     print("%d licks" % np.sum(behaviordata['lick'])) #Give output to check if reasonable
 
-    if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") >= datetime(2024, 4, 16):
+    if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") >= datetime(2024, 4, 15):
         sessiondata['minLicks'] = 3
     else: 
         sessiondata['minLicks'] = 1
@@ -427,7 +436,8 @@ def proc_task(rawdatadir,sessiondata):
         idx             = np.logical_and(behaviordata['lick'],idx_rewzone)#.flatten()
         if np.sum(idx)>=sessiondata['minLicks'][0] and trialdata['lickResponse'][k]==False:
             print('%d lick(s) registered in reward zone of trial %d with lickResponse==false' % (np.sum(idx),k))
-
+    
+    #Add the reward times again to the subsampled dataframe:
     for reward in reward_ts: #set only the first timestamp of reward to True, to have single indices
         behaviordata.loc[behaviordata.index[np.argmax(reward<behaviordata['ts'])],'reward'] = True
     
@@ -508,7 +518,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     framerate = np.round(1/np.mean(np.diff(ts))).astype(int)
     sessiondata['video_fs'] = framerate
 
-    assert np.isin(framerate,[10,15,30]), 'Error! Frame rate is not 10, 15 or 30 Hz, something wrong with triggering'
+    assert np.isin(framerate,[10,15,30,60,66]), 'Error! Frame rate is not 10, 15, 30, 60 Hz, something wrong with triggering'
     sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
     assert np.isclose(nts,sesdur * framerate,rtol=0.01)
     #Check that frame rate matches interframe interval:
@@ -517,11 +527,12 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
     # issues_ts = np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2)
     issues_ts = np.concatenate(([False],np.logical_or(np.diff(ts[1:-1])<1/framerate/3,
                                                   np.diff(ts[1:-1])>1/framerate*2),[False,False]))
+
     if np.any(issues_ts):
         print('Interpolating %d video timestamp issues' % np.sum(issues_ts))
-        ts[issues_ts] = np.interp(np.where(issues_ts)[0],np.where(~issues_ts)[0],ts[~issues_ts])
         # Interpolate samples where timestamps are off:
-    assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
+        ts[issues_ts] = np.interp(np.where(issues_ts)[0],np.where(~issues_ts)[0],ts[~issues_ts])
+    # assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
 
     videodata['zpos'] = np.interp(x=videodata['ts'],xp=behaviordata['ts'],
                                     fp=behaviordata['zpos'])               

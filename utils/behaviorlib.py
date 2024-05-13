@@ -155,7 +155,7 @@ def noise_to_psy(sessions,filter_engaged=True):
     return sessions
 
 
-def runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+def calc_runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
     ## Parameters for spatial binning
     # s_pre       #pre cm
@@ -186,7 +186,7 @@ def runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
     return runPSTH, bincenters
 
 
-def lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+def calc_lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
     ## Parameters for spatial binning
     # s_pre       #pre cm
@@ -341,7 +341,7 @@ def plot_run_corridor_outcome(trialdata,runPSTH,bincenters):
         idx = trialdata['trialOutcome']==ttype
         data_mean = np.nanmean(runPSTH[idx,:],axis=0)
         data_error = np.nanstd(runPSTH[idx,:],axis=0)# / math.sqrt(sum(idx))
-        ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
+        ax.plot(bincenters,data_mean,label=ttype,color=colors[i],linewidth=2)
         ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
 
     rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])

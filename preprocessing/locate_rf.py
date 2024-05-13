@@ -19,35 +19,14 @@ from scipy.stats import combine_pvalues #Fisher's method to combine significance
 
 from preprocessing.preprocesslib import align_timestamps
 
- ## Mapping of RF on/off blocks to elevation and azimuth:
-nblockselevation    = 13
-nblocksazimuth      = 52
-
+## Mapping of RF on/off blocks to elevation and azimuth:
 vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
 vec_azimuth         = [-135,135] #left and right of screen displays
 
 t_resp_start        = 0.1        #pre s
-t_resp_stop         = 0.6      #post s
+t_resp_stop         = 0.6      #post s #this one is updated based on protocol of 5 or 10 degrees
 t_base_start        = -2       #pre s
 t_base_stop         = 0        #post s
-
-# def get_params_4deg():
-#     ## Mapping of RF on/off blocks to elevation and azimuth:
-#     nblockselevation    = 13
-#     nblocksazimuth      = 52
-
-#     vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
-#     vec_azimuth         = [-135,135] #left and right of screen displays
-
-#     t_resp_start        = 0.1        #pre s
-#     t_resp_stop         = 0.6      #post s
-#     t_base_start        = -2       #pre s
-#     t_base_stop         = 0        #post s
-
-# def get_params_9deg():
-
-
-#     return 
 
 def find_largest_cluster(array_p,minblocks=2): #filters clusters of adjacent significant blocks
     # minblocks   = minimum number of adjacent blocks with significant response
@@ -113,9 +92,14 @@ def proc_RF(rawdatadir,sessiondata):
     with open(os.path.join(sesfolder,log_file[0]) , 'rb') as fid:
         grid_array = np.fromfile(fid, np.int8)
     
-    xGrid           = 52
-    yGrid           = 13
-    nGrids          = 1800
+    if np.mod(len(grid_array),13*52)==0:
+        xGrid           = 52
+        yGrid           = 13
+        nGrids          = 1800
+    elif np.mod(len(grid_array),7*26)==0:
+        xGrid           = 26
+        yGrid           = 7
+        nGrids          = 1200
     
     nGrids_emp = int(len(grid_array)/xGrid/yGrid)
     if nGrids_emp != nGrids:
@@ -184,6 +168,8 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
 
         ### get parameters
         [xGrid , yGrid , nGrids] = np.shape(grid_array)
+        
+        t_resp_stop         = np.diff(RF_timestamps).mean() + 0.1
         
         for iplane,plane_folder in enumerate(plane_folders):
             # for iplane,plane_folder in enumerate(plane_folders[1:]):
@@ -274,8 +260,9 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                     RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters)
                     RF_p[n] = np.nansum((clusters_on_p,clusters_off_p))
 
-                RF_azim = RF_x/nblocksazimuth * np.diff(vec_azimuth) + vec_azimuth[0]
-                RF_elev = RF_y/nblockselevation * np.diff(vec_elevation) + vec_elevation[0]
+                #convert x and y values in grid space to azimuth and elevation:
+                RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
+                RF_elev = RF_y/xGrid * np.diff(vec_elevation) + vec_elevation[0]
 
                 # np.save(os.path.join(plane_folder,'RF.npy'),np.vstack((RF_azim,RF_elev,RF_size,RF_p)))
                 df = pd.DataFrame(data=np.column_stack((RF_azim,RF_elev,RF_size,RF_p)),columns=['RF_azim','RF_elev','RF_size','RF_p'])
@@ -297,7 +284,7 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                             # add every single subplot to the figure with a for loop
                             ax = fig.add_subplot(Rows,Cols,Position[i])
 
-                            data = np.ones((nblockselevation,nblocksazimuth,3))
+                            data = np.ones((xGrid,yGrid,3))
 
                             R = np.divide(-np.log10(rfmaps_on_p_filt[:,:,n]),-np.log10(0.000001)) #red intensity
                             B = np.divide(-np.log10(rfmaps_off_p_filt[:,:,n]),-np.log10(0.000001)) #blue intenstiy

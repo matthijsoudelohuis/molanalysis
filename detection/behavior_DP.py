@@ -8,13 +8,13 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 #TODO
 # filter runspeed
 # plot individual trials locomotion, get sense of variance
-# split script for diff purposes (psy vs max vs noise)
-# allow psy protocol to fit DP and DN with same function
 
 import math
 import pandas as pd
 import os
-os.chdir('T:\\Python\\molanalysis\\')
+os.chdir('d:\\Python\\molanalysis\\')
+from loaddata.get_data_folder import get_local_drive
+
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,18 +22,17 @@ from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 from utils.plotting_style import * # get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 
-savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\')
 
 ########################### Load the data - Psy #######################
 protocol            = ['DP']
-sessions            = filter_sessions(protocol,load_behaviordata=True)
+sessions,nsessions  = filter_sessions(protocol,load_behaviordata=True)
 
 protocol            = 'DP'
 session_list = np.array([['LPE11623', '2024_02_20'],
                          ['LPE11495', '2024_02_20']])
-sessions = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
+sessions,nsessions  = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
 
-nsessions = len(sessions)
 sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 nanimals    = len(np.unique(sessiondata['animal_id']))
 
@@ -43,7 +42,7 @@ nanimals    = len(np.unique(sessiondata['animal_id']))
 sesidx = 0
 print(sessions[sesidx].sessiondata['session_id'])
 ### licking across the trial:
-[sessions[sesidx].lickPSTH,bincenters] = lickPSTH(sessions[sesidx],binsize=5)
+[sessions[sesidx].lickPSTH,bincenters] = calc_lickPSTH(sessions[sesidx],binsize=5)
 
 # fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
 # sessions[sesidx].lickPSTH[-1,:] = 0
@@ -51,7 +50,7 @@ fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].lickPST
 fig.savefig(os.path.join(savedir,'Performance','LickRate_Psy_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ### running across the trial:
-[sessions[sesidx].runPSTH,bincenters] = runPSTH(sessions[sesidx],binsize=5)
+[sessions[sesidx].runPSTH,bincenters] = calc_runPSTH(sessions[sesidx],binsize=5)
 
 fig = plot_run_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
 fig.savefig(os.path.join(savedir,'Performance','RunSpeed_Outcome_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')

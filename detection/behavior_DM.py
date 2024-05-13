@@ -14,7 +14,8 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 import math
 import pandas as pd
 import os
-os.chdir('T:\\Python\\molanalysis\\')
+from loaddata.get_data_folder import get_local_drive
+
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,18 +30,17 @@ from utils.plotting_style import * #get all the fixed color schemes
 # from utils.behaviorlib import compute_dprime,smooth_rate_dprime,plot_psycurve #get support functions for beh analysis 
 from utils.behaviorlib import * # get support functions for beh analysis 
 
-savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
+# savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior\\Detection\\'
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\')
 
 ############## Load the data - MaxOnly ####################################
-protocol            = ['DM']
-sessions            = filter_sessions(protocol,load_behaviordata=True)
+protocol                = ['DN']
+sessions,nsessions      = filter_sessions(protocol,load_behaviordata=True,load_videodata=True,has_pupil=True)
 
 protocol            = 'DM'
 session_list = np.array([['LPE11495', '2024_02_16'],['LPE11622', '2024_02_16']])
-sessions = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
+sessions,nsessions      = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
 
-
-nsessions   = len(sessions)
 sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 nanimals    = len(np.unique(sessiondata['animal_id']))
 
@@ -69,16 +69,16 @@ sessiondata['dprime_eng']    = dp_ses_eng #dp_target_eng
 
 fig, (ax1,ax2) = plt.subplots(1,2,figsize=(5,3),sharey=True)
 
-sns.stripplot(data = sessiondata,x='animal_id',y='dprime',palette='Dark2',size=6,ax=ax1)
+sns.stripplot(data = sessiondata,x='animal_id',y='dprime',hue='animal_id',palette='Dark2',size=6,ax=ax1)
 ax1.axhline(y = 0, color = 'k', linestyle = ':')
 ax1.set_title('Total Session', fontsize=11)
-sns.stripplot(data = sessiondata,x='animal_id',y='dprime_eng',palette='Dark2',size=6,ax=ax2)
+sns.stripplot(data = sessiondata,x='animal_id',y='dprime_eng',hue='animal_id',palette='Dark2',size=6,ax=ax2)
 ax2.axhline(y = 0, color = 'k', linestyle = ':')
 ax2.set_title('Engaged Only', fontsize=11)
 plt.tight_layout()
 
 # plt.savefig(os.path.join(savedir,'Performance','Dprime_LPE10884_1ses' + '.png'), format = 'png')
-plt.savefig(os.path.join(savedir,'Performance','Dprime_%d' % nanimals + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Performance','Dprime_%danimals' % nanimals + '.png'), format = 'png')
 
 # # plot the mean line
 # sns.boxplot(showmeans=True, 
@@ -143,17 +143,17 @@ plt.savefig(os.path.join(savedir,'Performance','Dprime_acrosssession_indiv' + '.
 
 sesidx = 1
 ### licking across the trial:
-[sessions[sesidx].lickPSTH,bincenters] = lickPSTH(sessions[sesidx],binsize=5)
+[sessions[sesidx].lickPSTH,bincenters] = calc_lickPSTH(sessions[sesidx],binsize=5)
 
 # fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
 # sessions[sesidx].lickPSTH[-1,:] = 0
 fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
-fig.savefig(os.path.join(savedir,'Performance','LickRate_Psy_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'Performance','LickRate_Max_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
 fig.savefig(os.path.join(savedir,'Performance','LickRate_Outcome_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 ### running across the trial:
-[sessions[sesidx].runPSTH,bincenters] = runPSTH(sessions[sesidx],binsize=5)
+[sessions[sesidx].runPSTH,bincenters] = calc_runPSTH(sessions[sesidx],binsize=5)
 
 fig = plot_run_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
 fig.savefig(os.path.join(savedir,'Performance','RunSpeed_Outcome_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
