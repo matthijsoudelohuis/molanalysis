@@ -163,7 +163,7 @@ def compute_pairwise_metrics(sessions):
 
         temp = sessions[ises].celldata['redcell'].replace(0,'unl').replace(1,'lab').to_numpy()
         h = np.meshgrid(temp,temp)
-        sessions[ises].labelmat = h[0] + '-' + h[1] 
+        sessions[ises].labelmat = h[0] + '-' + h[1]
         
         sessions[ises].arealabelmat = g[0] + h[0] + '-' + g[1] + h[1] #combination of area and label
         

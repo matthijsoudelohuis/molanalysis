@@ -41,7 +41,7 @@ def find_largest_cluster(array_p,minblocks=2): #filters clusters of adjacent sig
     #find the largest cluster based on histogram of nd image label indices:
     largest_cluster = []
     if np.any(labeling):
-        largest_cluster = np.argmax(np.histogram(labeling,range(label_count+1))[0][1:])+1
+        largest_cluster = np.argmax(np.histogram(labeling,range(label_count+2))[0][1:])+1
 
     cluster         = np.isin(labeling,largest_cluster) #keep only largest cluster
     cluster_p       = combine_pvalues(array_p[np.isin(labeling,largest_cluster)])[1] #get combined p-value, Fisher's test
@@ -100,6 +100,8 @@ def proc_RF(rawdatadir,sessiondata):
         xGrid           = 26
         yGrid           = 7
         nGrids          = 1200
+    else: 
+        print('unknown dimensions of grid array in RF protocol')
     
     nGrids_emp = int(len(grid_array)/xGrid/yGrid)
     if nGrids_emp != nGrids:
@@ -135,6 +137,8 @@ def proc_RF(rawdatadir,sessiondata):
         #rework from last timestamp: triggerdata[1,-1]
         RF_timestamps = np.linspace(triggerdata[-1,1]-nGrids*0.5, triggerdata[-1,1], num=nGrids, endpoint=True)
         RF_timestamps = RF_timestamps + 1.2 #specific offset for LPE09665 - 2023_03_14
+
+    assert np.shape(grid_array)[2]==len(RF_timestamps),'number of timestamps does not match number of grids presented'
 
     return grid_array,RF_timestamps
 

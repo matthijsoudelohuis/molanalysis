@@ -85,12 +85,11 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     sesflag = sesflag and hasattr(ses, 'celldata') and np.any(np.isin(incl_areas,np.unique(ses.celldata['roi_name'])))
 
                 if sesflag and only_areas is not None:
-                    sesflag = sesflag and hasattr(ses, 'celldata') and np.all(np.isin(np.unique(ses.celldata['roi_name']),incl_areas))
+                    sesflag = sesflag and hasattr(ses, 'celldata') and np.all(np.isin(np.unique(ses.celldata['roi_name']),only_areas))
                 
                 if sesflag and has_pupil:
                     ses.load_data(load_videodata=True)
                     sesflag = sesflag and hasattr(ses, 'videodata') and 'pupil_area' in ses.videodata and np.any(ses.videodata['pupil_area'])
-
                 if sesflag:
                     ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
                     sessions.append(ses)

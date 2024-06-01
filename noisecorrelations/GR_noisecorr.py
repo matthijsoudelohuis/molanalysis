@@ -40,16 +40,15 @@ session_list        = np.array([['LPE09830','2023_04_10'],
 session_list        = np.array([['LPE11086','2024_01_05']])
 session_list        = np.array([['LPE09830','2023_04_10'],
                                 ['LPE09830','2023_04_12'],
-                                # ['LPE11086','2023_12_15'],
                                 ['LPE11086','2024_01_05'],
                                 ['LPE10884','2023_10_20'],
                                 ['LPE10885','2023_10_19'],
-                                # ['LPE10885','2023_10_23'],
+                                ['LPE10885','2023_10_20'],
                                 ['LPE10919','2023_11_06']])
 
 #%% Load sessions lazy: 
 sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
-# sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
+sessions,nSessions   = filter_sessions(protocols = ['GR'])
 
 #%%   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
@@ -112,15 +111,13 @@ fig.savefig(os.path.join(savedir,'ExploreFigs','Neural_Behavioral_Traces_' + ses
 
 
 
-
-
-        # idx = filter_nearlabeled(sessions[ises],radius=radius)
+# idx = filter_nearlabeled(sessions[ises],radius=radius)
 
 
 
 #%% #### 
 
-sesidx = 3
+sesidx = 0
 fig = plot_PCA_gratings_3D(sessions[sesidx])
 fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
@@ -606,7 +603,7 @@ areas   = ['V1','PM']
 
 [noiseRFmat_mean,countsRFmat,binrange] = noisecorr_rfmap_areas(sessions,binresolution=5,
                                                                  rotate_prefori=False,thr_tuned=0.0,
-                                                                 thr_rf_p=0.001)
+                                                                 thr_rf_p=0.01)
 
 min_counts = 250
 noiseRFmat_mean[countsRFmat<min_counts] = np.nan
@@ -643,9 +640,9 @@ plt.savefig(os.path.join(savedir,'NoiseCorrelations','2D_NC_Map_Interarea_smooth
 #%% #########################################################################################
 # Contrasts: across areas and projection identity      
 
-[noiseRFmat_mean,countsRFmat,binrange,legendlabels] = noisecorr_rfmap_areas_projections(sessions,binresolution=5,
-                                                                 rotate_prefori=True,thr_tuned=0.00,
-                                                                 thr_rf_p=1)
+[noiseRFmat_mean,countsRFmat,binrange,legendlabels] = noisecorr_rfmap_areas_projections(sessions,binresolution=7.5,
+                                                                 rotate_prefori=False,thr_tuned=0.00,
+                                                                 thr_rf_p=0.05)
 
 min_counts = 250
 noiseRFmat_mean[countsRFmat<min_counts] = np.nan
@@ -653,8 +650,10 @@ noiseRFmat_mean[countsRFmat<min_counts] = np.nan
 fig,axes = plt.subplots(4,4,figsize=(10,7))
 for i in range(4):
     for j in range(4):
-        axes[i,j].imshow(noiseRFmat_mean[i,j,:,:],vmin=np.nanpercentile(noiseRFmat_mean,10),
-                         vmax=np.nanpercentile(noiseRFmat_mean,98),cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
+        axes[i,j].imshow(noiseRFmat_mean[i,j,:,:],vmin=np.nanpercentile(noiseRFmat_mean[i,j,:,:],10),
+                         vmax=np.nanpercentile(noiseRFmat_mean[i,j,:,:],96),cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
+        # axes[i,j].imshow(noiseRFmat_mean[i,j,:,:],vmin=np.nanpercentile(noiseRFmat_mean,10),
+                        #  vmax=np.nanpercentile(noiseRFmat_mean,98),cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
         axes[i,j].set_title(legendlabels[i,j])
         axes[i,j].set_xlim([-75,75])
         axes[i,j].set_ylim([-75,75])

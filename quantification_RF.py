@@ -32,7 +32,7 @@ sessions,nSessions = filter_sessions(protocols = ['GR'],only_animal_id=['LPE0966
                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
 sessions,nSessions = filter_sessions(protocols = ['SP','GR','IM','GN'],session_rf=True,only_areas=['V1','PM'])
 
-sig_thr = 0.001 #cumulative significance of receptive fields clusters
+sig_thr = 0.005 #cumulative significance of receptive fields clusters
 
 #%%%% Show fraction of receptive fields per session:
 areas   = ['V1','PM']
@@ -40,8 +40,8 @@ rf_frac = np.empty((nSessions,len(areas)))
 for ises in range(nSessions):    # iterate over sessions
     for iarea in range(len(areas)):    # iterate over sessions
         idx = sessions[ises].celldata['roi_name'] == areas[iarea]
-        # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_Fneu'][idx]<0.01) / np.sum(idx)
-        rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_F'][idx]<0.0001) / np.sum(idx)
+        # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_Fneu'][idx]<sig_thr) / np.sum(idx)
+        rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_F'][idx]<sig_thr) / np.sum(idx)
 
 fig,ax = plt.subplots(figsize=(4,4))
 # plt.scatter([0,1],rf_frac)
@@ -60,10 +60,44 @@ for ises in range(nSessions):
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr) 
     fig.savefig(os.path.join(savedir,'V1_PM_az_el_inplane_Fneu_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
+
+#%% ##################### Scatter between individual RF location and neuropil estimation #####################
+celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+# ## remove any double cells (for example recorded in both GR and RF)
+celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
+
+
+logpdata   = -np.log10(celldata['rf_p_F'])
+dev_az      = np.abs(celldata['rf_az_F'] - celldata['rf_az_Fneu'])
+dev_el      = np.abs(celldata['rf_el_F'] - celldata['rf_el_Fneu'])
+
+pticks = 1/np.power(10,np.arange(1,10))
+
+fig,axes   = plt.subplots(2,2,figsize=(8,8))
+
+axes[0,0].scatter(logpdata,dev_az,s=3,alpha=0.2)
+axes[0,0].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
+axes[0,0].set_xlim([1,10])
+
+axes[0,1].scatter(logpdata,dev_az,s=3,alpha=0.2)
+axes[0,1].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
+axes[0,1].set_xlim([1,10])
+axes[0,1].set_ylim([0,15])
+
+axes[1,0].scatter(logpdata,dev_el,s=3,alpha=0.2)
+axes[1,0].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
+axes[1,0].set_xlim([1,10])
+
+axes[1,1].scatter(logpdata,dev_el,s=3,alpha=0.2)
+axes[1,1].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
+axes[1,1].set_xlim([1,10])
+axes[1,1].set_ylim([0,15])
+
 #%% ##### Plot locations of receptive fields and scale by probability ##############################
 
 for ises in range(nSessions):
-    fig = plot_rf_screen(sessions[ises].celldata,sig_thr=0.001) 
+    fig = plot_rf_screen(sessions[ises].celldata,sig_thr=0.005) 
     fig.savefig(os.path.join(savedir,'V1_PM_az_el_inscreen_Fneu_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% 
@@ -74,7 +108,6 @@ sessions = compute_pairwise_metrics(sessions)
 # r2 = interp_rf(sessions,sig_thr=0.01,show_fit=True)
 
 ###### Smooth RF with local good fits (spatial location of somata): ######
-
 for ises in range(nSessions):
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr) 
     fig.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
@@ -89,9 +122,6 @@ for ises in range(nSessions):
 
 ## Combine cell data from all loaded sessions to one dataframe:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
-
-# ## remove any double cells (for example recorded in both GR and RF)
-# celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
 ###################### Retinotopic mapping within V1 and PM #####################
 
