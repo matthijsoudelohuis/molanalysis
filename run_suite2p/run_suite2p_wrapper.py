@@ -19,9 +19,9 @@ from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
-rawdatadir          = 'M:\\RawData\\'
-animal_id           = 'LPE11998'
-sessiondate         = '2024_05_01'
+rawdatadir          = 'L:\\RawData\\'
+animal_id           = 'LPE11622'
+sessiondate         = '2024_02_21'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
@@ -46,7 +46,7 @@ gen_red_images(rawdatadir,animal_id,sessiondate)
 
 ######################## Receptive field localization  ##############
 # Locate receptive field if RF protocol was run in this session: 
-# locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'])
+locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'])
 
 # proc_labeling_session(rawdatadir,animal_id,sessiondate)
 

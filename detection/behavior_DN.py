@@ -22,10 +22,11 @@ from utils.behaviorlib import * # get support functions for beh analysis
 
 savedir = 'D:\\OneDrive\\PostDoc\\Figures\\Detection\\'
 
-########################### Load the data - Psy #######################
+########################### Load the data  #######################
 protocol            = ['DN']
 sessions,nsessions  = filter_sessions(protocol,load_behaviordata=True)
 sessions,nsessions  = filter_sessions(protocol,load_behaviordata=True,only_animal_id='LPE11622')
+sessions,nsessions  = filter_sessions(protocol,load_behaviordata=True,only_animal_id='LPE12385')
 
 protocol            = 'DN'
 session_list = np.array([['LPE10884', '2024_01_16']])
@@ -33,43 +34,12 @@ session_list = np.array([['LPE11622', '2024_02_20']])
 session_list = np.array([['LPE12013', '2024_04_25']])
 sessions,nsessions = load_sessions(protocol,session_list,load_behaviordata=True) #no behav or ca data
 
-
-##################### Spatial plots ####################################
-# Behavior as a function of distance within the corridor:
-sesidx = 0
-
-### licking across the trial:
-[sessions[sesidx].lickPSTH,bincenters] = calc_lickPSTH(sessions[sesidx],binsize=5)
-
-fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
-fig.savefig(os.path.join(savedir,'Noise','LickRate_Outcome_%s.png' % sessions[sesidx].session_id))
-
-fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
-fig.savefig(os.path.join(savedir,'Noise','LickRate_Psy_%s.png' % sessions[sesidx].session_id))
-
-### running across the trial:
-[sessions[sesidx].runPSTH,bincenters] = calc_runPSTH(sessions[sesidx],binsize=5)
-
-fig = plot_run_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
-fig.savefig(os.path.join(savedir,'Noise','RunSpeed_Outcome_%s.png' % sessions[sesidx].session_id))
-fig = plot_run_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
-fig.savefig(os.path.join(savedir,'Noise','RunSpeed_Psy_%s.png' % sessions[sesidx].session_id))
-
-##################### Plot psychometric curve #########################
-
-fig = plot_psycurve([sessions[12]])
-fig = plot_psycurve(sessions,filter_engaged=True)
-fig.savefig(os.path.join(savedir,'Noise','Psy_%s.png' % sessions[sesidx].session_id))
-
-fig = plot_psycurve(sessions,filter_engaged=True)
-fig.savefig(os.path.join(savedir,'Noise','Psy_%s_Engaged.png' % sessions[sesidx].session_id))
-
 #%% ### Show for all sessions which region of the psychometric curve the noise spans #############
 sessions = noise_to_psy(sessions,filter_engaged=True)
 
 idx_inclthr = np.empty(nsessions).astype('int')
 for ises,ses in enumerate(sessions):
-    idx_inclthr[ises] = int(np.logical_and(np.any(sessions[ises].trialdata['signal_psy']<0),np.any(sessions[ises].trialdata['signal_psy']>0)))
+    idx_inclthr[ises] = int(np.logical_and(np.any(sessions[ises].trialdata['signal_psy']<=0),np.any(sessions[ises].trialdata['signal_psy']>=0)))
     ses.sessiondata['incl_thr'] = idx_inclthr[ises]
 
 stepsize = 0.5
@@ -107,6 +77,71 @@ axes[1].set_yticklabels([s.sessiondata['session_id'][0] for s in sessions])
 plt.tight_layout()
 
 fig.savefig(os.path.join(savedir,'Noise','Signal_Psy_Span_%d.png' % nsessions))
+sessions = [ses for ises,ses in enumerate(sessions) if ses.sessiondata['incl_thr'][0]]
+nsessions = len(sessions)
+
+#%% ############################ Spatial plots: Licking ###################################
+#### Behavior as a function of distance within the corridor
+
+trialdata   = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
+sessions    = noise_to_psy(sessions,filter_engaged=True)
+
+### licking across the trial:
+for ises,ses in enumerate(sessions):
+    [ses.lickPSTH,bincenters] = calc_lickPSTH(ses,binsize=2.5)
+
+sesidx = 15
+fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Noise','LickRate_Outcome_%s.png' % sessions[sesidx].session_id))
+
+fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Noise','LickRate_Psy_%s.png' % sessions[sesidx].session_id))
+
+#Concatenate sessions:
+lickPSTH    = np.concatenate([ses.lickPSTH for ses in sessions],axis=0)
+lickPSTH[lickPSTH>10] = np.nan
+
+idx = trialdata['engaged']==1
+
+fig = plot_lick_corridor_outcome(trialdata.loc[idx,:],lickPSTH[idx,:],bincenters)
+fig.savefig(os.path.join(savedir,'Noise','LickRate_Outcome_%ssessions.png' % nsessions),bbox_inches='tight')
+fig = plot_lick_corridor_psy(trialdata.loc[idx,:],lickPSTH[idx,:],bincenters,version='signal_psy',hitonly=True)
+fig.savefig(os.path.join(savedir,'Noise','LickRate_Psy_%ssessions.png' % nsessions),bbox_inches='tight')
+
+############################# Spatial plots: Running ###################################
+### running across the trial:
+for ises,ses in enumerate(sessions):
+    [ses.runPSTH,bincenters] = calc_runPSTH(ses,binsize=2.5)
+
+sesidx = 3
+
+fig = plot_run_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Noise','RunSpeed_Outcome_%s.png' % sessions[sesidx].session_id))
+
+fig = plot_run_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Noise','RunSpeed_Psy_%s.png' % sessions[sesidx].session_id))
+
+#Concatenate sessions:
+runPSTH    = np.concatenate([ses.runPSTH for ses in sessions],axis=0)
+
+idx = trialdata['engaged']==1
+
+fig = plot_run_corridor_outcome(trialdata.loc[idx,:],runPSTH[idx,:],bincenters)
+fig.savefig(os.path.join(savedir,'Noise','RunSpeed_Outcome_%ssessions.png' % nsessions))
+fig = plot_run_corridor_psy(trialdata.loc[idx,:],runPSTH[idx,:],bincenters,version='signal')
+fig.savefig(os.path.join(savedir,'Noise','RunSpeed_Psy_%ssessions.png' % nsessions),bbox_inches='tight')
+
+fig = plot_run_corridor_psy(trialdata.loc[idx,:],runPSTH[idx,:],bincenters,version='signal_psy',hitonly=True)
+fig.savefig(os.path.join(savedir,'Noise','RunSpeed_SignalPsy_%ssessions.png' % nsessions),bbox_inches='tight')
+
+#%% ################### Plot psychometric curve #########################
+sesidx = np.where([ses.sessiondata['session_id'][0]=='LPE12013_2024_04_29' for ses in sessions])[0][0]
+sesidx = np.where([ses.sessiondata['session_id'][0]=='LPE11622_2024_02_27' for ses in sessions])[0][0]
+fig = plot_psycurve([sessions[sesidx]],filter_engaged=True)
+fig.savefig(os.path.join(savedir,'Noise','Psy_%s.png' % sessions[sesidx].session_id))
+
+fig = plot_psycurve(sessions,filter_engaged=True)
+fig.savefig(os.path.join(savedir,'Noise','Psy_%s_Engaged.png' % sessions[sesidx].session_id))
 
 #%% 
 

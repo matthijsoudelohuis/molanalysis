@@ -193,7 +193,7 @@ def plot_corr_redgreen(im1,im2):
     
     xseq = np.linspace(-15000, 32000, num=32000)
     # Plot regression line
-    ax1.plot(xseq, a + b * xseq, color="k", lw=1.5);
+    ax1.plot(xseq, a + b * xseq, color="k", lw=1.5)
     
     ax1.set_xlim(np.percentile(im2.flatten()*1.05,(0,100)))
     ax1.set_ylim(np.percentile(im1.flatten()*1.05,(0,100)))

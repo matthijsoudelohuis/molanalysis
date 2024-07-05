@@ -229,14 +229,14 @@ def plot_lick_corridor_outcome(trialdata,lickPSTH,bincenters):
         idx = trialdata['trialOutcome']==ttype
         data_mean = np.nanmean(lickPSTH[idx,:],axis=0)
         data_error = np.nanstd(lickPSTH[idx,:],axis=0) / math.sqrt(sum(idx))
-        ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
+        ax.plot(bincenters,data_mean,label=ttype,color=colors[i],linewidth=2)
         ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
 
     rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
     rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
 
     ax.legend()
-    ax.set_ylim(0,2)
+    ax.set_ylim(0,1.5)
     ax.set_xlim(bincenters[0],bincenters[-1])
     ax.set_xlabel('Position rel. to stimulus onset (cm)')
     ax.set_ylabel('Lick Rate (licks/cm)')
@@ -247,70 +247,124 @@ def plot_lick_corridor_outcome(trialdata,lickPSTH,bincenters):
                             linewidth = 0))
     ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,3, 
                             fill = True, alpha=0.2,
-                            color = "green",
+                            color = "grey",
                             linewidth = 0))
 
-    plt.text(5, 1.8, 'Stim',fontsize=12)
-    plt.text(25, 1.8, 'Reward',fontsize=12)
+    plt.text(5, 1.4, 'Stim',fontsize=11)
+    plt.text(27, 1.4, 'Reward',fontsize=11)
+    plt.tight_layout()
 
     return fig
 
-def plot_lick_corridor_psy(trialdata,lickPSTH,bincenters):
+def plot_lick_corridor_psy(trialdata,lickPSTH,bincenters,version='signal',hitonly=False):
     # Plot licking rate as a function of trial type:
 
     fig, ax = plt.subplots()
-    ttypes = np.sort(pd.unique(trialdata['signal']))
-    colors = get_clr_psy(ttypes)
-    for i,ttype in enumerate(ttypes):
-        # idx = np.logical_and(trialdata['signal']==ttype,trialdata['lickResponse']==1)
-        idx = trialdata['signal']==ttype
-        data_mean = np.nanmean(lickPSTH[idx,:],axis=0)
-        data_error = np.nanstd(lickPSTH[idx,:],axis=0) / math.sqrt(sum(idx))
-        ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
-        ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
+    if version=='signal':
+        ttypes = np.sort(pd.unique(trialdata['signal']))
+        colors = get_clr_psy(ttypes)
+        for i,ttype in enumerate(ttypes):
+            idx = trialdata[version]==ttype
+            
+            if hitonly:
+                idx = np.logical_and(idx,trialdata['lickResponse']==1)
+
+            data_mean = np.nanmean(lickPSTH[idx,:],axis=0)
+            data_error = np.nanstd(lickPSTH[idx,:],axis=0) #/ math.sqrt(sum(idx))
+            ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
+            ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
+
+    elif version=='signal_psy':
+        resolution=0.4
+        edges = np.hstack((-10,np.arange(start=-2-resolution/2,stop=2+resolution/2,step=resolution),10))
+        colors = get_clr_psy(edges[:-1])
+
+        for i,lims in enumerate(zip(edges[:-1],edges[1:])):
+            idx = np.logical_and(trialdata[version]>lims[0],trialdata[version]<lims[1])
+
+            if hitonly:
+                idx = np.logical_and(idx,trialdata['lickResponse']==1)
+
+            data_mean = np.nanmean(lickPSTH[idx,:],axis=0)
+            data_error = np.nanstd(lickPSTH[idx,:],axis=0) #/ math.sqrt(sum(idx))
+            ax.plot(bincenters,data_mean,label=np.mean(lims).round(1),color=colors[i])
+            ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
+
 
     rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
     rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
 
-    ax.legend()
-    ax.set_ylim(0,3)
+    # Shrink current axis by 20%
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+
+    # Put a legend to the right of the current axis
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5),title=version)
+    
+    ax.set_ylim(0,1.75)
     ax.set_xlim(bincenters[0],bincenters[-1])
     ax.set_xlabel('Position rel. to stimulus onset (cm)')
     ax.set_ylabel('Lick Rate (licks/cm)')
     # ax.fill_between([0,30], [0,50], [0,50],alpha=0.5)
-    ax.add_patch(matplotlib.patches.Rectangle((0,0),20,3, 
+    ax.add_patch(matplotlib.patches.Rectangle((0,0),20,2, 
                             fill = True, alpha=0.2,
                             color = "blue",
                             linewidth = 0))
     ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,3, 
                             fill = True, alpha=0.2,
-                            color = "green",
+                            color = "grey",
                             linewidth = 0))
 
-    plt.text(5, 1.8, 'Stim',fontsize=12)
-    plt.text(25, 1.8, 'Reward',fontsize=12)
 
+    plt.text(5, 1.6, 'Stim',fontsize=11)
+    plt.text(27, 1.6, 'Reward',fontsize=11)
+    plt.tight_layout()
     return fig
 
-def plot_run_corridor_psy(trialdata,runPSTH,bincenters):
+def plot_run_corridor_psy(trialdata,runPSTH,bincenters,version='signal',hitonly=False):
     ### Plot licking rate as a function of trial type:
 
     fig, ax = plt.subplots()
-    ttypes = np.sort(pd.unique(trialdata['signal']))
-    colors = get_clr_psy(ttypes)
+    if version=='signal':
+        ttypes = np.sort(pd.unique(trialdata['signal']))
+        colors = get_clr_psy(ttypes)
+        for i,ttype in enumerate(ttypes):
+            idx = trialdata[version]==ttype
+            
+            if hitonly:
+                idx = np.logical_and(idx,trialdata['lickResponse']==1)
 
-    for i,ttype in enumerate(ttypes):
-        # idx = np.logical_and(trialdata['signal']==ttype,trialdata['lickResponse']==1)
-        idx = trialdata['signal']==ttype
-        data_mean = np.nanmean(runPSTH[idx,:],axis=0)
-        data_error = np.nanstd(runPSTH[idx,:],axis=0) #/ math.sqrt(sum(idx))
-        ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
-        ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
+            data_mean = np.nanmean(runPSTH[idx,:],axis=0)
+            data_error = np.nanstd(runPSTH[idx,:],axis=0) #/ math.sqrt(sum(idx))
+            ax.plot(bincenters,data_mean,label=ttype,color=colors[i])
+            ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
+
+    elif version=='signal_psy':
+        resolution=0.4
+        edges = np.hstack((-10,np.arange(start=-2-resolution/2,stop=2+resolution/2,step=resolution),10))
+        colors = get_clr_psy(edges[:-1])
+
+        for i,lims in enumerate(zip(edges[:-1],edges[1:])):
+            idx = np.logical_and(trialdata[version]>lims[0],trialdata[version]<lims[1])
+
+            if hitonly:
+                idx = np.logical_and(idx,trialdata['lickResponse']==1)
+
+            data_mean = np.nanmean(runPSTH[idx,:],axis=0)
+            data_error = np.nanstd(runPSTH[idx,:],axis=0) #/ math.sqrt(sum(idx))
+            ax.plot(bincenters,data_mean,label=np.mean(lims).round(1),color=colors[i])
+            ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
 
     rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
     rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
 
-    ax.legend()
+    # Shrink current axis by 20%
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+
+    # Put a legend to the right of the current axis
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5),title=version)
+
     ax.set_ylim(0,50)
     ax.set_xlim(bincenters[0],bincenters[-1])
     ax.set_xlabel('Position rel. to stimulus onset (cm)')
@@ -321,12 +375,13 @@ def plot_run_corridor_psy(trialdata,runPSTH,bincenters):
                             linewidth = 0))
     ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,50, 
                             fill = True, alpha=0.2,
-                            color = "green",
+                            color = "grey",
                             linewidth = 0))
 
-    plt.text(5, 45, 'Stim',fontsize=12)
-    plt.text(25, 45, 'Reward',fontsize=12)
-
+    plt.text(5, 45, 'Stim',fontsize=11)
+    plt.text(27, 45, 'Reward',fontsize=11)
+    plt.tight_layout()
+    
     return fig
 
 def plot_run_corridor_outcome(trialdata,runPSTH,bincenters):
@@ -340,9 +395,9 @@ def plot_run_corridor_outcome(trialdata,runPSTH,bincenters):
     for i,ttype in enumerate(ttypes):
         idx = trialdata['trialOutcome']==ttype
         data_mean = np.nanmean(runPSTH[idx,:],axis=0)
-        data_error = np.nanstd(runPSTH[idx,:],axis=0)# / math.sqrt(sum(idx))
+        data_error = np.nanstd(runPSTH[idx,:],axis=0) #/ math.sqrt(sum(idx))
         ax.plot(bincenters,data_mean,label=ttype,color=colors[i],linewidth=2)
-        ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
+        ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.2, linewidth=0,color=colors[i])
 
     rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
     rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
@@ -358,11 +413,12 @@ def plot_run_corridor_outcome(trialdata,runPSTH,bincenters):
                             linewidth = 0))
     ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,50, 
                             fill = True, alpha=0.2,
-                            color = "green",
+                            color = "grey",
                             linewidth = 0))
 
-    plt.text(5, 45, 'Stim',fontsize=12)
-    plt.text(25, 45, 'Reward',fontsize=12)
+    plt.text(5, 45, 'Stim',fontsize=11)
+    plt.text(27, 45, 'Reward',fontsize=11)
+    plt.tight_layout()
 
     return fig
 

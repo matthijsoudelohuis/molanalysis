@@ -463,7 +463,7 @@ def proc_task(rawdatadir,sessiondata):
         if np.any(idx):
             trialdata.loc[k,'tReward'] = behaviordata['ts'].iloc[np.where(idx)[0][0]]
             trialdata.loc[k,'sReward'] = behaviordata['zpos'].iloc[np.where(idx)[0][0]]
-    
+     
     if ~np.all(trialdata['tReward'][trialdata['rewardGiven']==1]):
         print('a rewarded trial has no timestamp of reward' % trialdata['tReward'][trialdata['rewardGiven']==1].isnull().count())
     if np.any(trialdata['tReward'][trialdata['rewardGiven']==0]):
@@ -613,7 +613,7 @@ def proc_imaging(sesfolder, sessiondata):
     for line in meta_si:
         meta_dict[line.split(' = ')[0]] = line.split(' = ')[1]
    
-    #put some general information in the sessiondata
+    #put some general information in the sessiondata  
     sessiondata = sessiondata.assign(nplanes = ops['nplanes'])
     sessiondata = sessiondata.assign(roi_xpix = ops['Lx'])
     sessiondata = sessiondata.assign(roi_ypix = ops['Ly'])

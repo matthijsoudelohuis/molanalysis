@@ -13,7 +13,7 @@ from loaddata.get_data_folder import get_local_drive,get_rawdata_drive
 os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 from preprocessing.preprocesslib import *
 
-rawdatadir      = "I:\\RawData\\"
+rawdatadir      = "M:\\RawData\\"
 
 animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
@@ -22,14 +22,14 @@ date_filter         = []
 # animal_ids          = ['LPE11495','LPE09665','LPE09830'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_02_20','2024_02_21  ','2024_02_22','2024_02_23','2024_02_26','2024_02_27']
 # date_filter        = ['2024_05_06']
-animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE12013'] #If empty than all animals in folder will be processed
 
-protocols           = ['GR','SP','IM','GN']
-# protocols           = ['SP']
+# protocols           = ['GR','SP','IM','GN']
+protocols           = ['DN']
 # protocols           = ['DP','DM','DN']
  
 # grating speed not in preprogreammed speeds for 10919 - 2023-11-13 and 2023-12-11 as well
-# not the same nmber of tiffs as triggers for 12013 - 2024-05-06 IM
+# not the same number of tiffs as triggers for 12013 - 2024-05-06 IM
 
 processimagingflag  = True
 saveimagingflag     = True

@@ -115,10 +115,14 @@ def get_clr_GN_svars(labels):
 
 
 def get_clr_outcome(outcomes):
-    palette       = {'CR': '#89A6FA',
-                'MISS' : '#FADB89',
-                'HIT' : '#89FA95',
-                'FA' : '#FA89AD'}
+    palette       = {'CR': '#070f7a',
+            'MISS' : '#806900',
+            'HIT' : '#0b7a07',
+            'FA' : '#7a070b'}
+    # palette       = {'CR': '#89A6FA',
+    #         'MISS' : '#FADB89',
+    #         'HIT' : '#89FA95',
+    #         'FA' : '#FA89AD'}
     # palette       = {'CR': '#0026C7',
     #             'MISS' : '#C79400',
     #             'HIT' : '#00C722',

@@ -37,7 +37,9 @@ def get_rawdata_drive(animal_id,protocols):
                     'LPE11622' : 'I:',
                     'LPE10883' : 'J:',
                     'LPE11086' : 'J:',
-                    'LPE10919' : 'K:'
+                    'LPE10919' : 'K:',
+                    'LPE12223' : 'K:',
+                    'LPE12385' : 'K:'
                     }
     elif np.isin(protocols[0], ['VR','DM','DN','DP']):
         drives       = {'LPE09667' : 'L:',
@@ -50,7 +52,9 @@ def get_rawdata_drive(animal_id,protocols):
                     'LPE11622' : 'L:',
                     'LPE11997' : 'L:',
                     'LPE11998' : 'M:',
-                    'LPE12013' : 'M:'
+                    'LPE12013' : 'M:',
+                    'LPE12223' : 'M:',
+                    'LPE12385' : 'M:'
                     }
     return itemgetter(*animal_id)(drives) + '\\RawData\\'
 
