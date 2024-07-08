@@ -30,7 +30,7 @@ import sklearn.metrics
 from loaddata.session_info import load_sessions
 from utils.psth import compute_tensor
 
-from applyFA_dim import apply_FA
+from interarea.applyFA_dim import apply_FA
 
 ##################################################
 session_list        = np.array([['LPE09830','2023_04_12']])
@@ -89,8 +89,6 @@ for i,ori in enumerate(oris):
 
 bin_width = 1
 subset = []
-
-V1_data = 
 
 FA_output = apply_FA(V1_data, t_axis, bin_width, subset)
 

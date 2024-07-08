@@ -20,9 +20,9 @@ from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
 rawdatadir          = 'L:\\RawData\\'
-animal_id           = 'LPE11622'
-sessiondate         = '2024_02_21'
-
+animal_id           = 'LPE10884'
+sessiondate         = '2024_01_18'
+ 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
 ops['align_by_chan']    = 1 #1-indexed, 1=gcamp,2=tdtomato

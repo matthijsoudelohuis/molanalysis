@@ -6,13 +6,13 @@ import shutil
 
 drive_id        = 3
 sourcedrive     = "I:\\"
-backupdrive     = "F:\\"
+backupdrive     = "G:\\"
 
 filetypes_to_backup = np.array([
 'jpg',
 'png',
 'npy'])
-
+ 
 # perform check before overwriting stuff:
 sourcedrive_name = win32api.GetVolumeInformation(sourcedrive)[0]
 backupdrive_name = win32api.GetVolumeInformation(backupdrive)[0]
