@@ -779,7 +779,7 @@ trialidx    = np.isin(sessions[ises].trialdata['stimRight'],['A','B','C','D'])
 
 data        = sessions[ises].stensor[np.ix_(np.arange(N),trialidx,binsubidx)]
 
-lda_line_context(data,sessions[ises].trialdata[trialidx],binsub)
+lda_scatterses_context(data,sessions[ises].trialdata[trialidx],binsub)
 plt.savefig(os.path.join(savedir,'LDA','LDA_Line_stimResponse_allAreas_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_allAreas_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
@@ -787,7 +787,7 @@ plt.savefig(os.path.join(savedir,'LDA','LDA_Line_stimResponse_allAreas_' + sessi
 for iarea,area in enumerate(areas):
     idx         = sessions[ises].celldata['roi_name'] == area
     data        = sessions[ises].stensor[np.ix_(idx,trialidx,binsubidx)]
-    lda_line_context(data,sessions[ises].trialdata[trialidx],binsub)
+    lda_scatterses_context(data,sessions[ises].trialdata[trialidx],binsub)
     plt.suptitle(area,fontsize=14)
     plt.savefig(os.path.join(savedir,'LDA_Line_context_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
     # plt.savefig(os.path.join(savedir,'LDA_Line_deconv_stimResponse_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
