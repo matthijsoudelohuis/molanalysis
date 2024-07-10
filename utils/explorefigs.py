@@ -113,7 +113,7 @@ def plot_behavioral_traces(Session,ax,trialsel=None,nvideoPCs=8,counter=0):
     example_tstart  = Session.trialdata['tOnset'][trialsel[0]-1]
     example_tstop   = Session.trialdata['tOnset'][trialsel[1]-1]
 
-    ts_V            = Session.videodata['timestamps']
+    ts_V            = Session.videodata['ts']
     idx_V           = np.logical_and(ts_V>example_tstart,ts_V<example_tstop)
     handles         = []
     labels          = []

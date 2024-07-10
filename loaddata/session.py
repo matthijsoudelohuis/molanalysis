@@ -134,7 +134,8 @@ class Session():
         self.respmat_videome = compute_respmat(self.videodata['motionenergy'],
                                         self.videodata['ts'],self.trialdata['tOnset'],
                                         t_resp_start=0,t_resp_stop=t_resp_stop,method='mean')
-
+        print('\npupil respmat here!!!!\n')
+        # pupil respmat here!!!! 
         if not keepraw:
             delattr(self,'calciumdata')
             delattr(self,'videodata')
