@@ -30,7 +30,7 @@ def im_norm8(I,min=0,max=100):
 
 def load_natural_images(onlyright=False):
 
-    mat_fname = os.path.join(os.getcwd(),'images','images_natimg2800_all.mat')
+    mat_fname = os.path.join(os.getcwd(),'naturalimages','images_natimg2800_all.mat')
     mat_contents = sio.loadmat(mat_fname)
     natimgdata = mat_contents['imgs']
 

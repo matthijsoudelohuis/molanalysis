@@ -5,64 +5,67 @@ dataset with labeled projection neurons. The visual stimuli are natural images.
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
+#Import general libs
 import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as st
 from sklearn import preprocessing
+
+#Import personal lib funcs
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.plotting_style import * #get all the fixed color schemes
-
 from utils.imagelib import load_natural_images #
 from utils.explorefigs import *
 from utils.psth import compute_tensor,compute_respmat,construct_behav_matrix_ts_F
 from loaddata.get_data_folder import get_local_drive
 from utils.corr_lib import mean_resp_image,compute_signal_correlation, compute_pairwise_metrics
-from utils.plot_lib import shaded_error
-from utils.RRRlib import *
+
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
 
-#################################################
-# session_list        = np.array([['LPE09665','2023_03_15']])
-session_list        = np.array([['LPE11086','2023_12_16']])
-sessions,nSessions            = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
+#%% Load one session including raw data: ################################################
+session_list            = np.array([['LPE11086','2023_12_16']]) #example session with good responses
 
-#%% Load sessions lazy: 
+# Load sessions lazy: (no calciumdata, behaviordata etc.,)
 sessions,nSessions   = load_sessions(protocol = 'IM',session_list=session_list)
-# sessions,nSessions   = filter_sessions(protocols = ['GR'],load_behaviordata=True, 
 
-#%%   Load proper data and compute average trial responses:                      
+# Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
-    # sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
     sessions[ises].load_respmat(calciumversion='deconv',keepraw=True)
 
-#### Load the natural images:
+
+# #%% Load all IM sessions including raw data: ################################################
+# sessions,nSessions   = filter_sessions(protocols = ['IM']) 
+# for ises in range(nSessions):    # iterate over sessions
+#     sessions[ises].load_respmat(calciumversion='deconv',keepraw=False)
+
+#%% ### Load the natural images:
 natimgdata = load_natural_images(onlyright=True)
 
-################################################################
+#%% ###############################################################
 #Show some traces and some stimuli to see responses:
 
 sesidx = 0
 
+#Plot random excerpt with traces:
 fig = plot_excerpt(sessions[sesidx],trialsel=None,plot_neural=True,plot_behavioral=False)
 
-trialsel = [3294, 3374]
+trialsel = [3294, 3374] #plot specific trials with a lot behavior related modulation:
 fig = plot_excerpt(sessions[sesidx],trialsel=trialsel,plot_neural=True,plot_behavioral=True,neural_version='traces')
 # fig.savefig(os.path.join(savedir,'TraceExcerpt_dF_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 fig.savefig(os.path.join(savedir,'Excerpt_Traces_deconv_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+#Plot random excerpt as a Rastermap (Stringer et al 2023 BioRxiv):
 
 fig = plot_excerpt(sessions[sesidx],trialsel=None,plot_neural=True,plot_behavioral=True,neural_version='raster')
 fig = plot_excerpt(sessions[sesidx],trialsel=trialsel,plot_neural=True,plot_behavioral=True,neural_version='raster')
 fig.savefig(os.path.join(savedir,'Excerpt_Raster_dF_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
-########################### Show PCA ##########################
+#%% ########################## Show PCA to get sense of dominant variability ##########################
 sesidx = 0
-# fig = PCA_gratings_3D(sessions[sesidx])
-# fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 fig = plot_PCA_images(sessions[sesidx])
 fig.savefig(os.path.join(savedir,'PCA','PCA_Gratings_All_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
@@ -71,9 +74,8 @@ fig = plt.figure()
 sns.histplot(sessions[sesidx].respmat_runspeed,binwidth=0.5)
 plt.ylim([0,100])
 
-
+#%% 
 sesidx = 0
-
 
 sessions[sesidx].trialdata['repetition'] = np.r_[np.zeros([2800]),np.ones([2800])]
 
@@ -107,10 +109,6 @@ plt.tight_layout(rect=[0, 0, 1, 1])
 axes[1].set_title('Repetition 2')
 
 
-#%% 
-
-
-
 #%% ##### Show response-triggered frame for cells:
 for ises in range(nSessions):
     nImages = len(np.unique(sessions[ises].trialdata['ImageNumber']))
@@ -123,7 +121,7 @@ for ises in range(nSessions):
     sessions[ises].RTA = np.empty((*np.shape(natimgdata)[:2],nNeurons))
 
     for iN in range(nNeurons):
-        print(iN)
+        print(f"\rComputing average response for neuron {iN+1} / {nNeurons}",end='\r')
         sessions[ises].RTA[:,:,iN] = np.average(natimgdata, axis=2, weights=sessions[ises].respmat_image[iN,:])
 
 #%% #### Plot X examples from V1 and PM with high variance in the average image (capturing some consistent preference): ####
@@ -135,11 +133,6 @@ areas           = ['V1', 'PM']
 for area in areas: 
     temp = RTA_var
     temp[sessions[ises].celldata['roi_name'] != area] = 0
-    
-    # temp_ranked     = np.argsort(RTA_var)
-    # temp_ranked     = temp_ranked[np.intersect1d(temp_ranked,
-    #                                  np.where(sessions[ises].celldata['roi_name'] == area)[0],
-    #                                  return_indices=True)[1]]
 
     example_cells   = np.argsort(temp)[-nExamples:]
 
@@ -160,86 +153,19 @@ for area in areas:
         ax.set_title("%d" % n)
     plt.suptitle(area, fontsize=18)
     plt.tight_layout(rect=[0, 0, 1, 1])
-    fig.savefig(os.path.join(savedir,'ResponseTriggeredAverageImage_%s' % area + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-
-#%% ##################### Plot control figure of signal corrs ##############################
-sesidx = 0
-fig = plt.subplots(figsize=(8,5))
-plt.imshow(sessions[sesidx].sig_corr, cmap='coolwarm',vmin=-0.02,vmax=0.04)
-plt.savefig(os.path.join(savedir,'SignalCorrelations','Signal_Correlation_Images_Mat_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-
-#%% ###### Regress out behavioral state related activity  #################################
-
-X = np.column_stack((sessions[sesidx].respmat_runspeed,sessions[sesidx].respmat_videome))
-Y = sessions[sesidx].respmat.T
-
-fig = plot_PCA_images(sessions[sesidx])
-
-sessions[sesidx].respmat = regress_out_behavior_modulation(sessions[sesidx],X,Y,nvideoPCs = 30,rank=2).T
-
-sessions[sesidx].respmat[sessions[sesidx].respmat>np.percentile(sessions[sesidx].respmat,99.5)] = np.percentile(sessions[sesidx].respmat,99.5)
-sessions[sesidx].respmat[sessions[sesidx].respmat<np.percentile(sessions[sesidx].respmat,0.5)] = np.percentile(sessions[sesidx].respmat,0.5)
-EV(sessions[sesidx].calciumdata,sessions[sesidx].calciumdata2)
-fig = plot_PCA_images(sessions[sesidx])
-
-# sessions[sesidx].respmat = regress_out_behavior_modulation(sessions[sesidx],X,Y,nvideoPCs = 30,rank=2).T
-sessions[sesidx].respmat = regress_out_behavior_modulation(sessions[sesidx],nvideoPCs = 30,rank=5).T
-
-
-sessions[sesidx].calciumdata2 = regress_out_behavior_modulation(sessions[sesidx],nvideoPCs = 30,rank=15)
-#Compute average response per trial:
-for ises in range(nSessions):
-    sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata2, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
-                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
-
-fig = plot_PCA_images(sessions[sesidx])
-
+    #fig.savefig(os.path.join(savedir,'ResponseTriggeredAverageImage_%s' % area + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
 ####
 
-
-
 respmean = mean_resp_image(sessions[sesidx])
 
 
+## We start working from here with convolutional feature maps / deep generative models:
 
-# %% LM model run
-B_hat = LM(Y=D, X=S, lam=10)
-# B_hat = LM(X, Y, lam=0.01)
-D_hat = S @ B_hat
+# https://github.com/cajal/inception_loop2019
 
-B_hat_lr = RRR(D, S, B_hat, r=2, mode='left')
-B_hat_lr = RRR(D, S, B_hat, r=2, mode='right')
-D_hat_lr = S @ B_hat_lr
+# https://github.com/sacadena/Cadena2019PlosCB
 
-fig,(ax1,ax2,ax3) = plt.subplots(1,3,figsize=(8,4))
-ax1.imshow(D[:1000,:100].T,vmin=0,vmax=1000,aspect='auto')
-ax2.imshow(D_hat[:1000,:100].T,vmin=0,vmax=1000,aspect='auto')
-ax3.imshow(D_hat_lr[:1000,:100].T,vmin=0,vmax=1000,aspect='auto')
-
-# %% xval lambda
-n = 1000
-k = 5
-lam = xval_ridge_reg_lambda(Y[:n,:], X[:n,:], k)
-
-
-
-
-# %% cheat
-lam = 35
-
-# %% LM model run
-B_hat = LM(Y, X, lam=lam)
-Y_hat = X @ B_hat
-
-print("LM model error:")
-print("LM: %5.3f " % Rss(Y,Y_hat))
-
-
-S,Slabels = construct_behav_matrix_ts_F(sessions[sesidx],nvideoPCs=nvideoPCs)
-
-sns.heatmap(np.corrcoef(S,rowvar=False),xticklabels=Slabels,yticklabels=Slabels)
+# https://github.com/dicarlolab/convmap
 
