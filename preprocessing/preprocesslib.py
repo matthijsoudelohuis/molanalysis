@@ -753,6 +753,10 @@ def proc_imaging(sesfolder, sessiondata):
         Fneu                = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
         spks                = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
         
+        #Correct overcorrected fluorescence by shifting fluorescence to at least the neuropil:
+        idx = np.percentile(F,5,axis=1)<0
+        offset = np.percentile(Fneu[idx,:],5,axis=1,keepdims=True) - np.percentile(F[idx,:],5,axis=1,keepdims=True)
+        F[idx,:] = F[idx,:] + offset
         if np.shape(F_chan2)[0] < np.shape(F)[0]:
             print('ROIs were manually added in suite2p, fabricating red channel data...')
             F_chan2     = np.vstack((F_chan2, np.tile(F_chan2[[-1],:], 1)))
@@ -857,10 +861,6 @@ def proc_imaging(sesfolder, sessiondata):
         celldata.loc[celldata['roi_name']==area,'recombinase'] = sessiondata[temprecombinase].to_list()[0]
     celldata.loc[celldata['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
 
-    # Correct for suite2p artefact where first roi is a cell, but metrics are wrong. Based on skew or npix_soma:
-    # celldata.iloc[np.where(celldata['npix_soma']<5)[0],celldata.columns.get_loc('iscell')] = 0
-    # celldata.iloc[np.where(celldata['skew']<5)[0],celldata.columns.get_loc('iscell')] = 0
-
     ## identify moments of large tdTomato fluorescence change across the session:
     tdTom_absROI    = np.abs(st.zscore(Fchan2data,axis=0)) #get zscored tdtom fluo for rois and take absolute
     tdTom_meanZ     = st.zscore(np.mean(tdTom_absROI,axis=1)) #average across ROIs and zscore again
@@ -871,7 +871,6 @@ def proc_imaging(sesfolder, sessiondata):
     celldata['session_id']      = sessiondata['session_id'][0]
     dFdata['session_id']        = sessiondata['session_id'][0]
     deconvdata['session_id']    = sessiondata['session_id'][0]
-
 
     return sessiondata,celldata,dFdata,deconvdata
 

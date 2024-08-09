@@ -56,18 +56,44 @@ def get_rawdata_drive(animal_id,protocols):
                     'LPE12223' : 'M:',
                     'LPE12385' : 'M:'
                     }
+        
+    if animal_id[0] == 'all': #Get all animals for this protocol if animal key is 'all'
+        animal_id = list(drives.keys())
+
     return itemgetter(*animal_id)(drives) + '\\RawData\\'
 
-# person = {"name": "Alice", "age": 25, "occupation": "Engineer"}
+def get_animals_protocol(protocols):
+    if np.isin(protocols[0], ['IM','GR','GN','SP']):
+        animal_ids       = ['LPE09665',
+                    'LPE09830',
+                    'LPE11495',
+                    'LPE11998',
+                    'LPE12013',
+                    'LPE10884',
+                    'LPE10885',
+                    'LPE11622',
+                    'LPE10883',
+                    'LPE11086',
+                    'LPE10919',
+                    'LPE12223',
+                    'LPE12385']
+    elif np.isin(protocols[0], ['VR','DM','DN','DP']):
+        animal_ids       = ['LPE09667',
+                    'LPE09829',
+                    'LPE11081',
+                    'LPE11086',
+                    'LPE11495',
+                    'LPE10884',
+                    'LPE11623',
+                    'LPE11622',
+                    'LPE11997',
+                    'LPE11998',
+                    'LPE12013',
+                    'LPE12223',
+                    'LPE12385']
+    return animal_ids
+        
 
-# name_and_occupation = itemgetter("name")
-# print(name_and_occupation(person))
-
-# drives       = {'LPE09665' : 'G:',
-#                 'LPE09830' : 'G:',
-#                 'LPE11495' : 'G:',
-#                 'LPE09885' : 'H:'}
-# itemgetter(*animal_id)
 def get_local_drive():
     user = os.environ['USERDOMAIN']
 
