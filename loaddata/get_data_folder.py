@@ -21,7 +21,7 @@ def get_data_folder():
         DATA_FOLDER = 'D:/Procdata'
 
     elif user == 'ULTINTELLIGENCE':
-        DATA_FOLDER = 'C:\\Users\\asimo\\Documents\\BCCN\\Lab Rotations\\Petreanu Lab\\Procdata'
+        DATA_FOLDER = 'C:\\Users\\asimo\\Documents\\BCCN\\Lab Rotations\\Petreanu Lab\\molanalysis\\data'
 
     return DATA_FOLDER
 
