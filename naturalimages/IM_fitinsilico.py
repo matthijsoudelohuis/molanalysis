@@ -1,3 +1,4 @@
+# %% # Imports
 # -*- coding: utf-8 -*-
 """
 This script analyzes neural and behavioral data in a multi-area calcium imaging
@@ -13,6 +14,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as st
 from sklearn import preprocessing
+
+os.chdir('../')  # set working directory to the root of the git repo
 
 # Import personal lib funcs
 from loaddata.session_info import filter_sessions, load_sessions
