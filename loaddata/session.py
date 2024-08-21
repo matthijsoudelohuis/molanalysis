@@ -35,6 +35,8 @@ class Session():
         self.behaviordata_path  = os.path.join(self.data_folder, 'behaviordata.csv')
         self.videodata_path     = os.path.join(self.data_folder, 'videodata.csv')
         self.calciumdata_path   = os.path.join(self.data_folder, '%sdata.csv' % calciumversion)
+        self.Ftsdata_path       = os.path.join(self.data_folder, 'Ftsdata.csv')
+        self.Fchan2data_path    = os.path.join(self.data_folder, 'Fchan2data.csv')
 
         assert(os.path.exists(self.sessiondata_path)), 'Could not find data in {}'.format(self.sessiondata_path)
 
@@ -64,14 +66,15 @@ class Session():
 
         if load_calciumdata:
             print('Loading calcium data at {}'.format(self.calciumdata_path))
-            self.calciumdata         = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
-            self.calciumdata         = self.calciumdata.drop('session_id',axis=1)
+            self.calciumdata        = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
+            self.ts_F               = pd.read_csv(self.Ftsdata_path, sep=',', index_col=0)
+            self.F_chan2            = pd.read_csv(self.Fchan2data_path, sep=',', index_col=0)
 
-            self.ts_F                = self.calciumdata['timestamps']
-            self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
+            # self.ts_F                = self.calciumdata['timestamps']
+            # self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
 
-            self.F_chan2             = self.calciumdata['F_chan2']
-            self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
+            # self.F_chan2             = self.calciumdata['F_chan2']
+            # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
 
             self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells],axis=1)
             

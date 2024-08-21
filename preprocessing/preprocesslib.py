@@ -170,8 +170,9 @@ def proc_GR(rawdatadir,sessiondata):
     assert(np.allclose(np.diff(trialdata['tOnset']),2,atol=0.1)) #total trial duration all around 2s
 
     trialdata['session_id']     = sessiondata['session_id'][0]
+    sessiondata['ntrials']      = len(trialdata) #add number of trials
 
-    return trialdata
+    return sessiondata,trialdata
 
 
 def proc_GN(rawdatadir,sessiondata):
@@ -220,8 +221,9 @@ def proc_GN(rawdatadir,sessiondata):
     assert(np.allclose(np.diff(trialdata['tOnset']),2,atol=0.1)) #total trial duration all around 2s
 
     trialdata['session_id']     = sessiondata['session_id'][0]
-
-    return trialdata
+    sessiondata['ntrials']      = len(trialdata) #add number of trials
+    
+    return sessiondata,trialdata
 
 """
  ### #     #    #     #####  #######  #####  
@@ -244,8 +246,9 @@ def proc_IM(rawdatadir,sessiondata):
     trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=0)
     
     trialdata['session_id']     = sessiondata['session_id'][0]
+    sessiondata['ntrials']      = len(trialdata) #add number of trials
 
-    return trialdata
+    return sessiondata,trialdata
 
 
 
@@ -486,7 +489,8 @@ def proc_task(rawdatadir,sessiondata):
 
     behaviordata['session_id']  = sessiondata['session_id'][0] #Store unique session_id
     trialdata['session_id']     = sessiondata['session_id'][0]
-    
+    sessiondata['ntrials']      = len(trialdata) #add number of trials
+
     return sessiondata, trialdata, behaviordata
 
 """
@@ -532,7 +536,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
         print('Interpolating %d video timestamp issues' % np.sum(issues_ts))
         # Interpolate samples where timestamps are off:
         ts[issues_ts] = np.interp(np.where(issues_ts)[0],np.where(~issues_ts)[0],ts[~issues_ts])
-    # assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
+    assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
 
     videodata['zpos'] = np.interp(x=videodata['ts'],xp=behaviordata['ts'],
                                     fp=behaviordata['zpos'])               
@@ -568,14 +572,13 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
             ypos = zscore(videodata['pupil_ypos'])
             area = zscore(videodata['pupil_area'])
 
-            idx = np.logical_or(np.abs(xpos)>5,np.abs(ypos)>5 ,np.abs(area)>5)
+            idx = np.any((np.abs(xpos)>5,np.abs(ypos)>5,np.abs(area)>5,videodata['pupil_area']==0),axis=0)
             print('set %1.4f percent of video frames with pupil fit outlier samples to nan \n' % (np.sum(idx) / len(videodata['pupil_xpos'])))
             videodata.iloc[idx,videodata.columns.get_loc("pupil_xpos")] = np.nan
             videodata.iloc[idx,videodata.columns.get_loc("pupil_ypos")] = np.nan
             videodata.iloc[idx,videodata.columns.get_loc("pupil_area")] = np.nan
     else:
         print('#######################  Could not locate facemapdata...')
-
 
     videodata['session_id']  = sessiondata['session_id'][0]
 
@@ -685,6 +688,7 @@ def proc_imaging(sesfolder, sessiondata):
         
         [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
 
+        chan2_prob          = np.load(os.path.join(plane_folder, 'redcell.npy'))
         iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
         stat                = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
         
@@ -692,7 +696,7 @@ def proc_imaging(sesfolder, sessiondata):
             redcell_seg         = np.load(os.path.join(plane_folder,'redim_plane%d_seg.npy' %iplane), allow_pickle=True).item()
             masks_cp_red        = redcell_seg['masks']
             Nredcells_plane     = len(np.unique(masks_cp_red))-1 # number of labeled cells overall, minus 1 because 0 for all nonlabeled pixels
-            redcell = proc_labeling_plane(iplane,plane_folder,showcells=False,overlap_threshold=0.5)
+            redcell         = proc_labeling_plane(iplane,plane_folder,showcells=False,overlap_threshold=0.5)
         else: 
             print('\n\n Warning: cellpose results not found, setting labeling to zero\n\n')
             redcell             = np.zeros((len(iscell),3))
@@ -706,7 +710,6 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane            = celldata_plane.assign(iscell_prob   = iscell[:,1])
 
         celldata_plane            = celldata_plane.assign(skew          = np.empty([ncells_plane,1]))
-        celldata_plane            = celldata_plane.assign(chan2_prob    = np.empty([ncells_plane,1]))
         celldata_plane            = celldata_plane.assign(radius        = np.empty([ncells_plane,1]))
         celldata_plane            = celldata_plane.assign(npix_soma     = np.empty([ncells_plane,1]))
         celldata_plane            = celldata_plane.assign(npix          = np.empty([ncells_plane,1]))
@@ -724,6 +727,7 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['redcell']           = redcell[:,0]
         celldata_plane['frac_of_ROI_red']   = redcell[:,1]
         celldata_plane['frac_red_in_ROI']   = redcell[:,2]
+        celldata_plane['chan2_prob']        = chan2_prob[:,1]
         celldata_plane['nredcells']         = Nredcells_plane
 
         celldata_plane['plane_idx']     = iplane
@@ -757,6 +761,8 @@ def proc_imaging(sesfolder, sessiondata):
         idx = np.percentile(F,5,axis=1)<0
         offset = np.percentile(Fneu[idx,:],5,axis=1,keepdims=True) - np.percentile(F[idx,:],5,axis=1,keepdims=True)
         F[idx,:] = F[idx,:] + offset
+        
+        # If ROIs were manually added, no FChan2 might be made in earlier versions of suite2p
         if np.shape(F_chan2)[0] < np.shape(F)[0]:
             print('ROIs were manually added in suite2p, fabricating red channel data...')
             F_chan2     = np.vstack((F_chan2, np.tile(F_chan2[[-1],:], 1)))
@@ -826,11 +832,11 @@ def proc_imaging(sesfolder, sessiondata):
         
         #Save both deconvolved and fluorescence data:
         dFdata_plane                    = pd.DataFrame(dF, columns=cell_ids)
-        dFdata_plane['timestamps']      = ts_master    #add timestamps
+        dFdata_plane['ts']              = ts_master    #add timestamps
         deconvdata_plane                = pd.DataFrame(spks, columns=cell_ids)   
-        deconvdata_plane['timestamps']  = ts_master    #add timestamps
+        deconvdata_plane['ts']          = ts_master    #add timestamps
         Fchan2data_plane                = pd.DataFrame(F_chan2, columns=cell_ids)
-        Fchan2data_plane['timestamps']  = ts_master    #add timestamps
+        Fchan2data_plane['ts']          = ts_master    #add timestamps
         #Fchan2data is not saved but average across neurons, see below
         
         if iplane == 0:
@@ -842,6 +848,8 @@ def proc_imaging(sesfolder, sessiondata):
             deconvdata = deconvdata.merge(deconvdata_plane)
             Fchan2data = Fchan2data.merge(Fchan2data_plane)
     
+    celldata.reset_index(inplace=True,drop=True) #remove index based on within plane idx
+
     #If ROI is unnamed, replace if ROI_1/V1 combi, ROI_2/PM combi, otherwise error:
     if celldata['roi_name'].str.contains('ROI').any():
         if celldata['roi_name'].isin(['PM']).any():
@@ -854,6 +862,9 @@ def proc_imaging(sesfolder, sessiondata):
             print('Unnamed ROI in scanimage inferred to be PM')
         assert not celldata['roi_name'].str.contains('ROI').any(),'unknown area'
 
+    #Assign layers to the cells based on recording depth and area:
+    celldata = assign_layer(celldata)
+    
     #Add recombinase enzym label to red cells:
     labelareas = ['V1','PM']
     for area in labelareas:
@@ -862,17 +873,24 @@ def proc_imaging(sesfolder, sessiondata):
     celldata.loc[celldata['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
 
     ## identify moments of large tdTomato fluorescence change across the session:
-    tdTom_absROI    = np.abs(st.zscore(Fchan2data,axis=0)) #get zscored tdtom fluo for rois and take absolute
-    tdTom_meanZ     = st.zscore(np.mean(tdTom_absROI,axis=1)) #average across ROIs and zscore again
-    
-    dFdata['F_chan2']           = tdTom_meanZ.to_numpy() #store in dFdata and deconvdata
-    deconvdata['F_chan2']       = tdTom_meanZ.to_numpy()
+    tdTom_absROI        = np.abs(st.zscore(Fchan2data,axis=0)) #get zscored tdtom fluo for rois and take absolute
+    Fchan2data          = pd.DataFrame(st.zscore(np.mean(tdTom_absROI,axis=1)),columns=['Fchan2']) #average across ROIs and zscore again
+    # dFdata['F_chan2']           = tdTom_meanZ.to_numpy() #store in dFdata and deconvdata
+    # deconvdata['F_chan2']       = tdTom_meanZ.to_numpy()
+
+    Ftsdata             = pd.DataFrame(dFdata['ts'], columns=['ts'])
+    dFdata              = dFdata.drop('ts',axis=1)
+    deconvdata          = deconvdata.drop('ts',axis=1)
+
+    # self.F_chan2             = self.calciumdata['F_chan2']
+    # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
+    assert(np.shape(dFdata)[1]==np.shape(celldata)[0]), '# of cells unequal in cell data and fluo data'
 
     celldata['session_id']      = sessiondata['session_id'][0]
-    dFdata['session_id']        = sessiondata['session_id'][0]
-    deconvdata['session_id']    = sessiondata['session_id'][0]
+    # dFdata['session_id']        = sessiondata['session_id'][0]
+    # deconvdata['session_id']    = sessiondata['session_id'][0]
 
-    return sessiondata,celldata,dFdata,deconvdata
+    return sessiondata,celldata,dFdata,deconvdata,Ftsdata,Fchan2data
 
 
 """
@@ -918,25 +936,41 @@ def align_timestamps(sessiondata, ops, triggerdata):
     nTriggers = np.shape(triggerdata)[0]
     assert nTiffFiles==nTriggers,"Not the same number of tiffs as triggers"
 
-    timestamps = np.empty([protocol_nframes,1]) #init empty array for the timestamps
+    timestamps = np.empty(protocol_nframes) #init empty array for the timestamps
 
     #set the timestamps by interpolating the timestamps from the trigger moment to the next:
     for i in np.arange(nTriggers):
         startidx    = sum(protocol_tif_nframes[0:i]) 
         endidx      = startidx + protocol_tif_nframes[i]
-        start_ts    = triggerdata[i,1]
+        if i>0:
+            start_ts    = np.max((timestamps[startidx-1] + 1/ops['fs'],triggerdata[i,1]))
+        else: 
+            start_ts    = triggerdata[i,1]
         tempts      = np.linspace(start_ts,start_ts+(protocol_tif_nframes[i]-1)*1/ops['fs'],num=protocol_tif_nframes[i])
-        timestamps[startidx:endidx,0] = tempts
-        
+        timestamps[startidx:endidx] = tempts
+   
+    # legacy code: 
+    # #set the timestamps by interpolating the timestamps from the trigger moment to the next:
+    # temp        = np.cumsum(np.concatenate(([-0.5],protocol_tif_nframes[:-1])))+0.5
+    # tempts      = np.interp(np.arange(protocol_nframes),temp,triggerdata[:,1])
+
+    # from sklearn.linear_model import LinearRegression
+    # reg = LinearRegression().fit(np.reshape(temp,(-1,1)),np.reshape(triggerdata[:,1],(-1,1)))
+    # tempts2      = reg.predict(np.reshape(np.arange(protocol_nframes),(-1,1)))
+
     #Verification of alignment:
     idx         = np.append([0],np.cumsum(protocol_tif_nframes[:]).astype('int64')-1)
-    reconstr    = timestamps[idx,0]
+    reconstr    = timestamps[idx]
     target      = triggerdata[:,1]
     diffvec     = reconstr[0:len(target)] - target
-    h           = np.diff(timestamps[:,0])
+    # h           = np.diff(timestamps[:,0])
+    h           = np.diff(timestamps)
     if any(h<0) or any(h>1) or any(diffvec>0) or any(diffvec<-1):
         print('Problem with aligning trigger timestamps to imaging frames')
-        
+    
+    #Check that all interframe intervals are relatively close to imaging frame rate:
+    assert np.allclose(1/sessiondata['fs'],np.diff(timestamps,axis=0),rtol=0.3),'Ifis too dissimilar to imaging frame rate'
+
     return timestamps, protocol_frame_idx
 
 
@@ -976,3 +1010,63 @@ def plot_pupil_dist(videodata):
     axes[2].set_ylabel('Y Position')
     plt.tight_layout()
     return
+
+def assign_layer(celldata):
+    celldata['layer'] = ''
+
+    # V1:
+    idx = celldata[np.all((celldata['roi_name'] == 'V1',celldata['depth'] < 250),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L2/3'
+    idx = celldata[np.all((celldata['roi_name'] == 'V1',celldata['depth'] > 250,celldata['depth'] < 350),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L4'
+    idx = celldata[np.all((celldata['roi_name'] == 'V1',celldata['depth'] > 350),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L5'
+
+    # PM:
+    idx = celldata[np.all((celldata['roi_name'] == 'PM',celldata['depth'] < 250),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L2/3'
+    idx = celldata[np.all((celldata['roi_name'] == 'PM',celldata['depth'] > 250,celldata['depth'] < 325),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L4'
+    idx = celldata[np.all((celldata['roi_name'] == 'PM',celldata['depth'] > 325),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L5'
+
+    # AL:
+    idx = celldata[np.all((celldata['roi_name'] == 'AL',celldata['depth'] < 250),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L2/3'
+    idx = celldata[np.all((celldata['roi_name'] == 'AL',celldata['depth'] > 250,celldata['depth'] < 325),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L4'
+    idx = celldata[np.all((celldata['roi_name'] == 'AL',celldata['depth'] > 325),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L5'
+
+    # RSP:
+    idx = celldata[np.all((celldata['roi_name'] == 'RSP',celldata['depth'] < 300),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L2/3'
+    idx = celldata[np.all((celldata['roi_name'] == 'RSP',celldata['depth'] > 300),axis=0)].index
+    celldata.loc[idx,'layer'] = 'L5'
+    
+    assert(celldata['layer'].notnull().all()), 'problematice assignment of layer based on ROI and depth'
+    
+    #References: 
+    # V1: 
+    # Niell & Stryker, 2008 Journal of Neuroscience
+    # Gilman, et al. 2017 eNeuro
+    # RSC/PM:
+    # Zilles 1995 Rat cortex areal and laminar structure
+
+    return celldata
+
+def add_session_bounds(sessiondata,data):
+    if 'trialNumber' in data or 'TrialNumber' in data:
+        sessiondata['tStart']       = np.min(data['tOnset']) - 3 #add session start timestamp
+        sessiondata['tEnd']         = np.max(data['tOffset']) + 3 #add session stop timestamp
+    else: 
+        sessiondata['tStart']       = np.min(data['ts']) #add session start timestamp 
+        sessiondata['tEnd']         = np.max(data['ts']) #add session start timestamp 
+
+    return sessiondata
+
+def trim_session_bounds(sessiondata,data):
+    # trim data to tStart and tEnd:
+    data = data[data['ts']>sessiondata['tStart'][0]].reset_index(drop=True)
+    data = data[data['ts']<sessiondata['tEnd'][0]].reset_index(drop=True)
+    return data

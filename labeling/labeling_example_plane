@@ -3,11 +3,12 @@ Analyzes labeling of tdtomato expressing cells using cellpose software (Pachitar
 optimized for green + red channel mesoscopic 2p Ca2+ imaging recordings
 Matthijs Oude Lohuis, 2023, Champalimaud Foundation
 """
+
 import os
-try:
-    os.chdir('t:\\Python\\molanalysis\\')
-except:
-    os.chdir('e:\\Python\\molanalysis\\')
+# try:
+#     os.chdir('t:\\Python\\molanalysis\\')
+# except:
+#     os.chdir('e:\\Python\\molanalysis\\')
 from labeling.tdTom_labeling_cellpose import plotseq_labeling_plane
 
 rawdatadir          = 'I:\\RawData\\'
