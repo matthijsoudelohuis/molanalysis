@@ -164,6 +164,11 @@ class Session():
                                                  self.videodata['ts'], self.trialdata['tOnset'],
                                                  t_resp_start=0, t_resp_stop=t_resp_stop, method='mean')
 
+        if not keepraw:
+            delattr(self, 'calciumdata')
+            delattr(self, 'videodata')
+            delattr(self, 'behaviordata')
+
 
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,
 #                    center_lfp=True):
