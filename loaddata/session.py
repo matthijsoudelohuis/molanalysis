@@ -164,10 +164,30 @@ class Session():
                                                  self.videodata['ts'], self.trialdata['tOnset'],
                                                  t_resp_start=0, t_resp_stop=t_resp_stop, method='mean')
 
+        # Throw respmat_pupilarea through a lowpass filter to create respmat_pupilareaderiv:
+        # TODO: Test these values!
+        lowcut = 0.1
+        highcut = 0.5
+        sampling_rate = 1 / np.mean(np.diff(self.ts_F))
+        b, a = self._make_butterworth_window(
+            lowcut, highcut, sampling_rate, order=5)
+        self.respmat_pupilareaderiv = scipy.signal.filtfilt(
+            b, a, self.respmat_pupilarea, axis=0)
+
+        self.respmat_pupilareaderiv = np.gradient(
+            self.respmat_pupilareaderiv, axis=0)
+
         if not keepraw:
             delattr(self, 'calciumdata')
             delattr(self, 'videodata')
             delattr(self, 'behaviordata')
+
+    def _make_butterworth_window(self, lowcut, highcut, sampling_rate, order):
+        nyquist_frequency = sampling_rate / 2
+        lowcut = lowcut / nyquist_frequency
+        highcut = highcut / nyquist_frequency
+        b, a = scipy.signal.butter(order, [lowcut, highcut], btype='band')
+        return b, a
 
 
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,
