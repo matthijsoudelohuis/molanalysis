@@ -179,7 +179,7 @@ class Session():
     def lowpass_filter(self, respmat, sampling_rate, lowcut=0.1, highcut=0.5, order=10):
         b, a = self._make_butterworth_window(
             lowcut, highcut, sampling_rate, order)
-        respmat_filtered = self.replace_nan_with_avg(respmat)
+        respmat_filtered = self._replace_nan_with_avg(respmat)
         respmat_filtered = scipy.signal.filtfilt(
             b, a, respmat_filtered, axis=0)
         return respmat_filtered
