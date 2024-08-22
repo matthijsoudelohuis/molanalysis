@@ -5,8 +5,9 @@ dataset with labeled projection neurons. The visual stimuli are oriented grating
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
-####################################################
+#%% ###################################################
 import math, os
+os.chdir('e:\\Python\\molanalysis')
 from loaddata.get_data_folder import get_local_drive
 os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 
@@ -31,30 +32,28 @@ from utils.rf_lib import smooth_rf
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - Gratings\\')
 
-##############################################################################
+#%% #############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
-session_list        = np.array([['LPE10885','2023_10_23']])
-session_list        = np.array([['LPE09830','2023_04_10']])
-session_list        = np.array([['LPE09830','2023_04_10'],
-                                ['LPE09830','2023_04_12']])
-session_list        = np.array([['LPE11086','2024_01_05']])
-session_list        = np.array([['LPE09830','2023_04_10'],
-                                ['LPE09830','2023_04_12'],
-                                ['LPE11086','2024_01_05'],
-                                ['LPE10884','2023_10_20'],
-                                ['LPE10885','2023_10_19'],
-                                ['LPE10885','2023_10_20'],
-                                ['LPE10919','2023_11_06']])
+# session_list        = np.array([['LPE10885','2023_10_23']])
+# session_list        = np.array([['LPE09830','2023_04_10']])
+# session_list        = np.array([['LPE09830','2023_04_10'],
+#                                 ['LPE09830','2023_04_12']])
+# session_list        = np.array([['LPE11086','2024_01_05']])
+# session_list        = np.array([['LPE09830','2023_04_10'],
+#                                 ['LPE09830','2023_04_12'],
+#                                 ['LPE11086','2024_01_05'],
+#                                 ['LPE10884','2023_10_20'],
+#                                 ['LPE10885','2023_10_19'],
+#                                 ['LPE10885','2023_10_20'],
+#                                 ['LPE10919','2023_11_06']])
 
 #%% Load sessions lazy: 
 sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
-sessions,nSessions   = filter_sessions(protocols = ['GR'])
+# sessions,nSessions   = filter_sessions(protocols = ['GR'])
 
 #%%   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
-    # sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
-    sessions[ises].load_respmat(calciumversion='deconv')
-
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
 
 #%% ########################### Compute tuning metrics: ###################################
 for ises in range(nSessions):
@@ -169,7 +168,7 @@ for ises in range(nSessions):
     idx_ses = np.isin(celldata['session_id'],sessions[ises].celldata['session_id'])
     mean_resp_speedsplit[idx_ses,:,:] = resp_meanori_pref
 
-# ########### Make the figure ##################################################################
+#%% ########### Make the figure ##################################################################
 
 redcells    = np.unique(celldata['redcell'])
 redcell_labels = ['Nonlabeled','Labeled']
