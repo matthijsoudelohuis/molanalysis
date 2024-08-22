@@ -165,7 +165,7 @@ class Session():
                                                  t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil area')
 
         sampling_rate = 1 / np.mean(np.diff(self.ts_F))
-        self.respmat_pupilareaderiv = lowpass_filter(
+        self.respmat_pupilareaderiv = self.lowpass_filter(
             self.respmat_pupilarea, sampling_rate, lowcut=None, highcut=0.7, order=6)
         self.respmat_pupilareaderiv = np.gradient(
             self.respmat_pupilareaderiv, axis=0)
@@ -177,9 +177,9 @@ class Session():
 
     # Throw respmat_pupilarea through a lowpass filter to create respmat_pupilareaderiv:
     def lowpass_filter(self, respmat, sampling_rate, lowcut=0.1, highcut=0.5, order=10):
-        b, a = _make_butterworth_window(
+        b, a = self._make_butterworth_window(
             lowcut, highcut, sampling_rate, order)
-        respmat_filtered = replace_nan_with_avg(respmat)
+        respmat_filtered = self.replace_nan_with_avg(respmat)
         respmat_filtered = scipy.signal.filtfilt(
             b, a, respmat_filtered, axis=0)
         return respmat_filtered
