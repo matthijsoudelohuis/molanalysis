@@ -4,8 +4,10 @@ This script analyzes the quality of the recordings and their relation
 to various factors such as depth of recording, being labeled etc.
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
-
+#%% Import the libraries and functions
 import os
+os.chdir('e:\\Python\\molanalysis')
+
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -37,12 +39,12 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
 threshold = 0.5
-sessions = reset_label_threshold(sessions,threshold)
+for ses in sessions:
+    ses.reset_label_threshold(threshold)
+
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 celldata.loc[celldata['redcell']==0,'recombinase'] = 'non'
-
-# celldata['noise_level'].values[celldata['noise_level'] > 5] = 0
 
 #%% ####### Show histogram of ROI overlaps: #######################
 fig, (ax1,ax2) = plt.subplots(2,1,figsize=(3.5,3),sharex=True)
@@ -94,6 +96,10 @@ plt.ylabel('frac_of_ROI_red')
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Scatter_Overlap_Twoways_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 
+#%% Find some cells that have overlap of red in ROI, but low ROI is red:
+idx = np.logical_and(celldata['frac_red_in_ROI']>0.9,celldata['frac_of_ROI_red']<0.4)
+celldata['cell_id'][idx] 
+
 #%% ####### Show scatter of chan2prob from suite2p and frac red in ROI #######################
 fig, ax = plt.subplots(figsize=(3.5,3))
 sns.scatterplot(data=celldata,x='frac_red_in_ROI',y='chan2_prob',hue='redcell',ax=ax,
@@ -107,9 +113,27 @@ plt.ylabel('Channel 2 probability')
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Scatter_Overlap_Chan2Prob_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 
-#%% Find some cells that should be labeled according to the metric of suite2p, but not through cellpose:
-idx = np.logical_and(celldata['frac_red_in_ROI']<0.1,celldata['chan2_prob']>0.9)
+#%% Find some cells that have full tdtomato within, but only little of the suite2p ROI:
+idx = np.where((celldata['frac_of_ROI_red']>0.9) & (celldata['frac_red_in_ROI']<0.5))[0]
 celldata['cell_id'][idx] 
+
+#%% Find some cells that have full tdtomato within, but only little of the suite2p ROI:
+idx = np.where((celldata['frac_of_ROI_red']<0.4) & (celldata['frac_red_in_ROI']>0.9))[0]
+celldata['cell_id'][idx] 
+
+#%% Find some cells that should be labeled according to the metric of suite2p, but not through cellpose:
+# idx = np.where((celldata['frac_red_in_ROI']<0.5) & (celldata['chan2_prob']>0.8) & (celldata['chan2_prob']<1))[0]
+# # idx = np.logical_and(celldata['frac_red_in_ROI']<0.5,celldata['chan2_prob']>0.8)
+# g = celldata['cell_id'][idx] 
+# g[400:450]
+
+# idx = celldata['cell_id']=='LPE12013_2024_05_07_0_0177'
+# idx = celldata['cell_id']=='LPE11495_2024_02_27_5_0028'
+# celldata['chan2_prob'][idx] 
+# celldata['frac_red_in_ROI'][idx]
+
+# celldata['cell_id'][1341]
+# celldata['frac_red_in_ROI'][1341]
 
 #%% Get the colors and names of the areas:
 areas = celldata['roi_name'].unique()
@@ -200,11 +224,18 @@ plt.savefig(os.path.join(savedir,'Frac_labeled_area_%dplanes' % len(planedata) +
 #%% Bar plot of difference between cre and flp:
 enzymes = ['cre','flp']
 clrs_enzymes = get_clr_recombinase(enzymes)
+enzymelabels = ['retroAAV-pgk-Cre + \n AAV5-CAG-Flex-tdTomato','retroAAV-EF1a-Flpo + \n AAV1-Ef1a-fDIO-tdTomato']
 
-fig, ax = plt.subplots(figsize=(3,2.5))
+fig, ax = plt.subplots(figsize=(4,3))
 sns.barplot(data=planedata,x='recombinase',y='frac_labeled',palette=clrs_enzymes,ax=ax,errorbar='se')
 plt.ylabel('Fraction labeled in plane')
 plt.xlabel(r'Recombinase')
+ax.set_xticks([0,1])
+ax.set_xticklabels(['\n\nCre','\n\nFlp'], fontsize=11)
+ax.set_xticks([0.01,1.01],  minor=True)
+ax.set_xticklabels(enzymelabels,fontsize=6, minor=True)
+
+# ax.set_xticklabels(enzymelabels,fontsize=6)
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Frac_labeled_enzymes_%dplanes' % len(planedata) + '.png'), format = 'png')
 

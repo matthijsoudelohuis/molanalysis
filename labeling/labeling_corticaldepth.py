@@ -15,8 +15,8 @@ from sklearn.preprocessing import minmax_scale
 from utils.plotting_style import *
 
 ## Directories: 
-rawdatadir      = 'G:\\Stacks\\'
-savedir         = 'D:\\OneDrive\\PostDoc\\Figures\\Neural - Labeling\\Stack\\'
+rawdatadir      = 'F:\\Stacks\\'
+savedir         = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - Labeling\\Stack\\'
 
 recomblist = np.array([['NSH07429','flp'], #which recombinase is causing expression in V1, by design other one in PM
 ['NSH07422','cre'],
@@ -34,15 +34,19 @@ recomblist = np.array([['NSH07429','flp'], #which recombinase is causing express
 ['LPE11495','cre'],
 ['LPE11997','flp'],
 ['LPE11998','flp'],
-['LPE12013','flp']])
+['LPE12013','flp'],
+['LPE12223','flp'],
+['LPE12385','cre']])
 
 ## Pretrained models to label tdtomato expressing cells:
-model_red       = models.CellposeModel(pretrained_model = 'D:\\Python\\cellpose\\redlib_tiff\\trainingdata\\models\\redcell_20231107')
+# model_red       = models.CellposeModel(pretrained_model = 'E:\\Python\\cellpose\\redlib_tiff\\trainingdata\\
+# models\\redcell_20231107')
+model_red       = models.CellposeModel(pretrained_model = 'E:\\Python\\cellpose\\models\\redcell_20231107')
 # model_type='cyto' or 'nuclei' or 'cyto2'
 # model_red = models.CellposeModel(pretrained_model = 'T:\\Python\\cellpose\\testdir\\models\\MOL_20230814_redcells')
 # model_green     = models.Cellpose(model_type='cyto')
 
-def get_stack_data(direc,model=model_red):
+def get_stack_data_v1(direc,model=model_red):
 
     nslices         = len(os.listdir(direc))
     assert nslices==75, 'wrong number of slices'
@@ -57,11 +61,69 @@ def get_stack_data(direc,model=model_red):
     for i,x in enumerate(os.listdir(direc)):
         print(f"Averaging frames for slice {i+1}",end='\r')
         if x.endswith(".tif"):
-                fname               = Path(os.path.join(direc,x))
-                reader              = imread(str(fname))
-                Data                = reader.data()
-                greenstack[:,:,i]   = np.average(Data[0::2,:,:], axis=0)
-                redstack[:,:,i]     = np.average(Data[1::2,:,:], axis=0)
+            fname               = Path(os.path.join(direc,x))
+            reader              = imread(str(fname))
+            Data                = reader.data()
+            greenstack[:,:,i]   = np.average(Data[0::2,:,:], axis=0)
+            redstack[:,:,i]     = np.average(Data[1::2,:,:], axis=0)
+
+    # nTdTomCells_V1       = np.zeros(nslices)
+    # nTdTomCells_PM       = np.zeros(nslices)
+    nTdTomCells       = np.zeros(nslices)
+    print('\n')
+    ### Get number of tdTomato labeled cells (using cellpose):
+    for i in range(nslices):
+        print(f"Labeling cells for slice {i+1}",end='\r')
+        img_red = np.zeros((512, 512, 3), dtype=np.uint8)
+        img_red[:,:,0] = im_norm8(redstack[:,:,i])
+
+        masks_cp_red, flows, styles = model.eval(img_red, diameter=diam, channels=chan)
+        nTdTomCells[i]      = len(np.unique(masks_cp_red))-1 #zero is counted as unique
+
+    ### Get the mean fluorescence for each plane:
+    meanF2       = [np.mean(redstack[:,:,i]) for i in range(nslices)]
+    # meanF1       = [np.mean(greenstack[:,:,i]) for i in range(nslices)]
+
+    data = np.vstack((meanF2,nTdTomCells))
+
+    return data
+
+def get_stack_data_v2(direc,model=model_red):
+
+    nslices         = 75
+    nrepeats        = len(os.listdir(direc))
+    # assert nslices==75, 'wrong number of slices'
+
+    diam            = 12
+    chan            = [[1,0]] # grayscale=0, R=1, G=2, B=3 # channels = [cytoplasm, nucleus]
+    nchannels       = 2 #whether image has both red and green channel acquisition (PMT)
+
+    # ### Stack loading:
+    # greenstack  = np.empty([512,512,nslices])
+    # redstack    = np.empty([512,512,nslices])
+    # for i,x in enumerate(os.listdir(direc)):
+    #     print(f"Averaging frames for slice {i+1}",end='\r')
+    #     if x.endswith(".tif"):
+    #         fname               = Path(os.path.join(direc,x))
+    #         reader              = imread(str(fname))
+    #         Data                = reader.data()
+    #         greenstack[:,:,i]   = np.average(Data[0::2,:,:], axis=0)
+    #         redstack[:,:,i]     = np.average(Data[1::2,:,:], axis=0)
+
+    ### Stack loading:
+    greenstack  = np.empty([512,512,nslices,nrepeats])
+    redstack    = np.empty([512,512,nslices,nrepeats])
+    for i,x in enumerate(os.listdir(direc)):
+        print(f"Loading data for repeat {i+1}",end='\r')
+        if x.endswith(".tif"):
+            fname               = Path(os.path.join(direc,x))
+            reader              = imread(str(fname))
+            Data                = reader.data()
+            greenstack[:,:,:,i]   = np.transpose(Data[0::2,:,:],[1,2,0])
+            redstack[:,:,:,i]     = np.transpose(Data[1::2,:,:],[1,2,0])
+
+    greenstack   = np.average(greenstack, axis=3)
+    redstack     = np.average(redstack, axis=3)
 
     # nTdTomCells_V1       = np.zeros(nslices)
     # nTdTomCells_PM       = np.zeros(nslices)
@@ -104,6 +166,8 @@ nanimals        = len(animal_ids)
 nslices         = 75
 slicedepths     = np.linspace(0,10*(nslices-1),nslices)
 
+animal_ids = ['LPE12223', 'LPE12385']
+
 #################################################################
 ## Load data and run model for all animals 
 
@@ -113,8 +177,12 @@ for iA,animal_id in enumerate(animal_ids): #for each animal
     assert len(os.listdir(animaldir))==1, 'multiple stacks found per animal'
     sesdir      = os.path.join(animaldir,os.listdir(animaldir)[0])
 
-    dataV1 = get_stack_data(os.path.join(sesdir,'STACK_V1'))
-    dataPM = get_stack_data(os.path.join(sesdir,'STACK_PM'))
+    if animal_id in ['LPE12223', 'LPE12385']:
+        dataV1 = get_stack_data_v2(os.path.join(sesdir,'STACK_V1'))
+        dataPM = get_stack_data_v2(os.path.join(sesdir,'STACK_PM'))
+    else: 
+        dataV1 = get_stack_data_v1(os.path.join(sesdir,'STACK_V1'))
+        dataPM = get_stack_data_v1(os.path.join(sesdir,'STACK_PM'))
 
     np.save(os.path.join(rawdatadir,'stackdata_%s.npy' % animal_id),(dataV1,dataPM))
 
