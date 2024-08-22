@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import binned_statistic
 from scipy.interpolate import CubicSpline
+from tqdm.auto import tqdm
 
 """
  ####### ####### #     #  #####  ####### ######  
@@ -22,7 +23,7 @@ from scipy.interpolate import CubicSpline
 """
 
 
-def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='interpolate'):
+def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='interpolate', *args, **kwargs):
     """
     This function constructs a tensor: a 3D 'matrix' of N neurons by K trials by T time bins
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
@@ -68,7 +69,10 @@ def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='in
 
         tensor = np.empty([N, K, T])
 
-        for n in range(N):
+        label = f'Computing temporal tensor for {kwargs.get("label", "trial")}'
+        progress_bar = kwargs.get('progress_bar', True)
+        leave = kwargs.get('leave', False)
+        for n in tqdm(range(N), desc=label, disable=not progress_bar, leave=leave):
             print(f"\rComputing tensor for neuron {n+1} / {N}", end='\r')
             for k in range(K):
                 if method == 'binmean':
@@ -101,7 +105,7 @@ def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='in
 # method='binmean'
 
 
-def compute_tensor_space(data, ts_F, z_T, zpos_F, trialnum_F, s_pre=-100, s_post=100, binsize=5, method='interpolate'):
+def compute_tensor_space(data, ts_F, z_T, zpos_F, trialnum_F, s_pre=-100, s_post=100, binsize=5, method='interpolate', *args, **kwargs):
     """
     This function constructs a tensor: a 3D 'matrix' of N neurons by K trials by S spatial bins
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
@@ -130,8 +134,10 @@ def compute_tensor_space(data, ts_F, z_T, zpos_F, trialnum_F, s_pre=-100, s_post
 
     tensor = np.empty([N, K, S])
 
-    for k in range(K):
-        print(f"\rComputing tensor for trial  {k+1} / {K}", end='\r')
+    label = f'Computing spatial tensor for {kwargs.get("label", "trial")}'
+    progress_bar = kwargs.get('progress_bar', True)
+    leave = kwargs.get('leave', False)
+    for k in tqdm(range(K), desc=label, disable=not progress_bar, leave=leave):
         # idx_trial = trialnum_F==k+1
         for s, (bin_start, bin_end) in enumerate(zip(binedges[:-1], binedges[1:])):
             # idx_bin = bin_start <= zpos_F[idx]-z_T[k] < bin_end
@@ -191,7 +197,7 @@ def compute_tensor_space(data, ts_F, z_T, zpos_F, trialnum_F, s_pre=-100, s_post
 
 
 def compute_respmat(data, ts_F, ts_T, t_resp_start=0, t_resp_stop=1,
-                    t_base_start=-1, t_base_stop=0, subtr_baseline=False, method='mean'):
+                    t_base_start=-1, t_base_stop=0, subtr_baseline=False, method='mean', *args, **kwargs):
     """
     This function constructs a 2D matrix of N neurons by K trials
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
@@ -217,8 +223,10 @@ def compute_respmat(data, ts_F, ts_T, t_resp_start=0, t_resp_stop=1,
     respmat = np.empty([N, K])  # init output matrix
     # print(f"\n")
     # loop across trials, for every trial, slice through activity matrix and compute response across neurons:
-    for k in range(K):
-        print(f"\rComputing average response for trial {k+1} / {K}", end='\r')
+    label = f'Computing average response for {kwargs.get("label", "trial")}'
+    progress_bar = kwargs.get('progress_bar', True)
+    leave = kwargs.get('leave', False)
+    for k in tqdm(range(K), desc=label, disable=not progress_bar, leave=leave):
         respmat[:, k] = data[np.logical_and(
             ts_F > ts_T[k]+t_resp_start, ts_F < ts_T[k]+t_resp_stop)].mean(axis=0)
 
@@ -231,7 +239,7 @@ def compute_respmat(data, ts_F, ts_T, t_resp_start=0, t_resp_stop=1,
 
 
 def compute_respmat_space(data, ts_F, z_T, zpos_F, trialnum_F, s_resp_start=0, s_resp_stop=20,
-                          s_base_start=-80, s_base_stop=-60, subtr_baseline=False, method='mean'):
+                          s_base_start=-80, s_base_stop=-60, subtr_baseline=False, method='mean', *args, **kwargs):
     """
     This function constructs a 2D matrix of N neurons by K trials
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
@@ -258,8 +266,10 @@ def compute_respmat_space(data, ts_F, z_T, zpos_F, trialnum_F, s_resp_start=0, s
     respmat = np.empty([N, K])  # init output matrix
 
     # loop across trials, for every trial, slice through activity matrix and compute response across neurons:
-    for k in range(K):
-        print(f"\rComputing response for trial {k+1} / {K}", end='\r')
+    label = f'Computing average response for {kwargs.get("label", "trial")}'
+    progress_bar = kwargs.get('progress_bar', True)
+    leave = kwargs.get('leave', False)
+    for k in tqdm(range(K), desc=label, disable=not progress_bar, leave=leave):
         idx_K = trialnum_F == k+1
         idx_S = np.logical_and(
             zpos_F-z_T[k] > s_resp_start, zpos_F-z_T[k] < s_resp_stop)

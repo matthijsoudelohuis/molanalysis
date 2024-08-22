@@ -142,38 +142,31 @@ class Session():
         ##############################################################################
         # Construct trial response matrix:  N neurons by K trials
         self.respmat = compute_respmat(self.calciumdata, self.ts_F, self.trialdata['tOnset'],
-                                       t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', subtr_baseline=False)
+                                       t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', subtr_baseline=False, label='response matrix')
 
         self.respmat_runspeed = compute_respmat(self.behaviordata['runspeed'],
                                                 self.behaviordata['ts'], self.trialdata['tOnset'],
-                                                t_resp_start=0, t_resp_stop=t_resp_stop, method='mean')
+                                                t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='runspeed')
 
         self.respmat_videome = compute_respmat(self.videodata['motionenergy'],
                                                self.videodata['ts'], self.trialdata['tOnset'],
-                                               t_resp_start=0, t_resp_stop=t_resp_stop, method='mean')
+                                               t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='motion energy')
 
         self.respmat_pupilx = compute_respmat(self.videodata['pupil_xpos'],
                                               self.videodata['ts'], self.trialdata['tOnset'],
-                                              t_resp_start=0, t_resp_stop=t_resp_stop, method='mean')
+                                              t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil x position')
 
         self.respmat_pupily = compute_respmat(self.videodata['pupil_ypos'],
                                               self.videodata['ts'], self.trialdata['tOnset'],
-                                              t_resp_start=0, t_resp_stop=t_resp_stop, method='mean')
+                                              t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil y position')
 
         self.respmat_pupilarea = compute_respmat(self.videodata['pupil_area'],
                                                  self.videodata['ts'], self.trialdata['tOnset'],
-                                                 t_resp_start=0, t_resp_stop=t_resp_stop, method='mean')
+                                                 t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil area')
 
-        # Throw respmat_pupilarea through a lowpass filter to create respmat_pupilareaderiv:
-        # TODO: Test these values!
-        lowcut = 0.1
-        highcut = 0.5
         sampling_rate = 1 / np.mean(np.diff(self.ts_F))
-        b, a = self._make_butterworth_window(
-            lowcut, highcut, sampling_rate, order=5)
-        self.respmat_pupilareaderiv = scipy.signal.filtfilt(
-            b, a, self.respmat_pupilarea, axis=0)
-
+        self.respmat_pupilareaderiv = lowpass_filter(
+            self.respmat_pupilarea, sampling_rate, lowcut=None, highcut=0.7, order=6)
         self.respmat_pupilareaderiv = np.gradient(
             self.respmat_pupilareaderiv, axis=0)
 
@@ -182,12 +175,45 @@ class Session():
             delattr(self, 'videodata')
             delattr(self, 'behaviordata')
 
+    # Throw respmat_pupilarea through a lowpass filter to create respmat_pupilareaderiv:
+    def lowpass_filter(self, respmat, sampling_rate, lowcut=0.1, highcut=0.5, order=10):
+        b, a = _make_butterworth_window(
+            lowcut, highcut, sampling_rate, order)
+        respmat_filtered = replace_nan_with_avg(respmat)
+        respmat_filtered = scipy.signal.filtfilt(
+            b, a, respmat_filtered, axis=0)
+        return respmat_filtered
+
     def _make_butterworth_window(self, lowcut, highcut, sampling_rate, order):
         nyquist_frequency = sampling_rate / 2
-        lowcut = lowcut / nyquist_frequency
-        highcut = highcut / nyquist_frequency
-        b, a = scipy.signal.butter(order, [lowcut, highcut], btype='band')
+        if lowcut:
+            lowcut = lowcut / nyquist_frequency
+        if highcut:
+            highcut = highcut / nyquist_frequency
+        if lowcut and highcut:
+            b, a = scipy.signal.butter(order, [lowcut, highcut], btype='band')
+        elif lowcut:
+            b, a = scipy.signal.butter(order, lowcut, btype='highpass')
+        elif highcut:
+            b, a = scipy.signal.butter(order, highcut, btype='lowpass')
+        else:
+            raise ValueError('Either lowcut or highcut must be specified')
         return b, a
+
+    def _replace_nan_with_avg(self, arr):
+        nan_indices = np.where(np.isnan(arr))[0]  # Get indices of NaN values
+
+        for i in nan_indices:
+            # Handle cases where NaN is at the start or end of the array
+            if i == 0:
+                arr[i] = arr[i + 1]
+            elif i == len(arr) - 1:
+                arr[i] = arr[i - 1]
+            else:
+                # Replace NaN with the average of adjacent values
+                arr[i] = np.nanmean([arr[i - 1], arr[i + 1]])
+
+        return arr
 
 
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,
