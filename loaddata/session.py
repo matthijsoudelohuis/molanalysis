@@ -17,24 +17,19 @@ from utils.psth import compute_respmat
 class Session():
 
     def __init__(self, protocol='',animal_id='', session_id='', verbose=1):
-
-        # print('\nInitializing Session object for: \n- animal ID: {}'
-            #   '\n- Session ID: {}\n'.format(animal_id, session_id))
         self.data_folder = os.path.join(get_data_folder(), protocol, animal_id, session_id)
         self.verbose = verbose
         self.protocol = protocol
         self.animal_id = animal_id
         self.session_id = session_id
 
-    def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
-        #Calciumversion can be 'dF' or 'deconv'
-
+    def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF', cellfilter=None):
         self.sessiondata_path   = os.path.join(self.data_folder, 'sessiondata.csv')
         self.trialdata_path     = os.path.join(self.data_folder, 'trialdata.csv')
         self.celldata_path      = os.path.join(self.data_folder, 'celldata.csv')
         self.behaviordata_path  = os.path.join(self.data_folder, 'behaviordata.csv')
         self.videodata_path     = os.path.join(self.data_folder, 'videodata.csv')
-        self.calciumdata_path   = os.path.join(self.data_folder, '%sdata.csv' % calciumversion)
+        self.calciumdata_path   = os.path.join(self.data_folder, '%sdata.csv' % calciumversion) #Calciumversion can be 'dF' or 'deconv'
         self.Ftsdata_path       = os.path.join(self.data_folder, 'Ftsdata.csv')
         self.Fchan2data_path    = os.path.join(self.data_folder, 'Fchan2data.csv')
 
@@ -42,19 +37,25 @@ class Session():
 
         self.sessiondata  = pd.read_csv(self.sessiondata_path, sep=',', index_col=0)
 
-        if not self.protocol in ['SP','RF']:
+        if not self.protocol in ['SP','RF']: #These protocols are not trial-based
             self.trialdata  = pd.read_csv(self.trialdata_path, sep=',', index_col=0)
         else:
             self.trialdata = None
     
         if os.path.exists(self.celldata_path):
             self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
-            # get only good cells (selected ROIs by suite2p):
-            goodcells               = self.celldata['iscell'] == 1
-            self.celldata           = self.celldata[goodcells].reset_index(drop=True)
+            # get only good cells (selected ROIs by suite2p): #not used anymore, only good cells are saved anyways
+            # goodcells               = self.celldata['iscell'] == 1
+            # self.celldata           = self.celldata[goodcells].reset_index(drop=True)
         
+            if cellfilter is not None:
+                if isinstance(cellfilter, pd.DataFrame):
+                    cellfilter = cellfilter.to_numpy().squeeze()
+                assert np.shape(self.celldata)[0]==len(cellfilter)
+                assert np.array_equal(cellfilter, cellfilter.astype(bool)), 'Cell filter not boolean'
+                self.celldata = self.celldata.iloc[cellfilter,:]
+
         if load_behaviordata:
-            # print('Loading behavior data at {}'.format(self.behaviordata_path))
             self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
         else:
             self.behaviordata = None
@@ -67,17 +68,24 @@ class Session():
         if load_calciumdata:
             print('Loading calcium data at {}'.format(self.calciumdata_path))
             self.calciumdata        = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
-            self.ts_F               = pd.read_csv(self.Ftsdata_path, sep=',', index_col=0)
-            self.F_chan2            = pd.read_csv(self.Fchan2data_path, sep=',', index_col=0)
+            self.ts_F               = pd.read_csv(self.Ftsdata_path, sep=',', index_col=0).to_numpy().squeeze()
+            self.F_chan2            = pd.read_csv(self.Fchan2data_path, sep=',', index_col=0).to_numpy().squeeze()
+
+            if cellfilter is not None:
+                if isinstance(cellfilter, pd.DataFrame):
+                    cellfilter = cellfilter.to_numpy().squeeze()
+                assert np.shape(self.calciumdata)[1]==len(cellfilter)
+                assert np.array_equal(cellfilter, cellfilter.astype(bool)), 'Cell filter not boolean'
+                
+                self.calciumdata = self.calciumdata.iloc[:,cellfilter]
+                # self.celldata = self.celldata.iloc[cellfilter,:]
 
             # self.ts_F                = self.calciumdata['timestamps']
             # self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
 
             # self.F_chan2             = self.calciumdata['F_chan2']
             # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
-
-            self.calciumdata         = self.calciumdata.drop(self.calciumdata.columns[~goodcells],axis=1)
-            
+         
             assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
 
         if load_calciumdata and load_behaviordata:
@@ -108,8 +116,6 @@ class Session():
             self.celldata.loc[self.celldata['roi_name']==area,'recombinase'] = self.sessiondata[temprecombinase].to_list()[0]
         self.celldata.loc[self.celldata['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
 
-        # return sessions
-
     def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF',keepraw=False):
         #combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
 
@@ -137,8 +143,14 @@ class Session():
         self.respmat_videome = compute_respmat(self.videodata['motionenergy'],
                                         self.videodata['ts'],self.trialdata['tOnset'],
                                         t_resp_start=0,t_resp_stop=t_resp_stop,method='mean')
-        print('\npupil respmat here!!!!\n')
-        # pupil respmat here!!!! 
+        
+        if 'pupil_area' in self.videodata:
+            self.respmat_pupilarea = compute_respmat(self.videodata['pupil_area'],
+                                        self.videodata['ts'],self.trialdata['tOnset'],
+                                        t_resp_start=0,t_resp_stop=t_resp_stop,method='mean')
+        else: 
+            self.respmat_pupilarea = None
+
         if not keepraw:
             delattr(self,'calciumdata')
             delattr(self,'videodata')
@@ -223,39 +235,12 @@ class Session():
 #         trial_info = self.get_trial_info(trial_number)
 #         return trial_info['correctResponse'].iloc[0]
 
-#     def get_stimulus_change_of_trial(self, trial_number):
-#         trial_info = self.get_trial_info(trial_number)
-#         trial_type = self.get_type_of_trial(trial_number)
-#         if trial_type == 'X':
-#             stim = trial_info['visualOriChangeNorm'].iloc[0]
-#         elif trial_type == 'Y':
-#             stim = trial_info['audioFreqChangeNorm'].iloc[0]
-#         elif trial_type == 'P':
-#             stim = 0
-#         else:
-#             raise ValueError('Stimulus identity for which modality?')
-#         return stim
-
 #     def get_lick_time_of_trial(self, trial_number):
 #         trial_info = self.get_trial_info(trial_number)
 #         return trial_info['firstlickTime'].iloc[0]
 
 #     def get_lick_time_of_trials(self, trial_numbers):
 #         return [self.get_lick_time_of_trial(t) for t in trial_numbers]
-
-#     def get_stimulus_identity_of_trial(self, trial_number):
-#         trial_info = self.get_trial_info(trial_number)
-#         trial_type = self.get_type_of_trial(trial_number)
-#         if trial_type == 'X':
-#             stim = trial_info['visualOriPostChangeNorm'].iloc[0]
-#         elif trial_type == 'Y':
-#             stim = trial_info['audioFreqPostChangeNorm'].iloc[0]
-#         elif trial_type == 'P':
-#             stim = 0
-#         else:
-#             raise ValueError('Stimulus identity for which modality?')
-#         return stim
-
 
 #     def select_units(self, area=None, layer=None, min_isolation_distance=None,
 #                      min_coverage=None, max_perc_isi_spikes=None,
