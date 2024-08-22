@@ -182,7 +182,6 @@ def compute_tensor_space(data,ts_F,z_T,zpos_F,trialnum_F,s_pre=-100,s_post=100,b
                                                   
 """
 
-
 def compute_respmat(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
                     t_base_start=-1,t_base_stop=0,subtr_baseline=False,method='mean'):
     """
@@ -208,10 +207,10 @@ def compute_respmat(data,ts_F,ts_T,t_resp_start=0,t_resp_stop=1,
     # print(f"\n")
     for k in range(K): #loop across trials, for every trial, slice through activity matrix and compute response across neurons:
         print(f"\rComputing average response for trial {k+1} / {K}",end='\r')
-        respmat[:,k]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop)].mean(axis=0)
+        respmat[:,k]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop),:].mean(axis=0)
 
         if subtr_baseline: #subtract baseline activity if requested:
-            base                = data[np.logical_and(ts_F>ts_T[k]+t_base_start,ts_F<ts_T[k]+t_base_stop)].mean(axis=0)
+            base                = data[np.logical_and(ts_F>ts_T[k]+t_base_start,ts_F<ts_T[k]+t_base_stop),:].mean(axis=0)
             respmat[:,k]        = np.subtract(respmat[:,k],base)
     
     return np.squeeze(respmat)
