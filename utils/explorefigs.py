@@ -253,18 +253,72 @@ def plot_neural_raster(Session,ax,trialsel=None,counter=0):
 
     return counter
 
-def plot_PCA_gratings(ses,size='runspeed',filter=None):
+
+# Function that takes in the tensor and computes the average response for some example neurons:
+def plot_tuned_response(calciumdata, trialdata, t_axis, example_cells):
+    """
+    The plot_tuned_response function is used to visualize the average response of specific neurons to different orientations. It takes in four inputs:
+    calciumdata: a 3D tensor containing calcium imaging data for multiple cells, trials, and timepoints.
+    trialdata: a pandas DataFrame containing trial information, including orientation.
+    t_axis: a 1D array representing the time axis.
+    example_cells: a list of cell indices to plot.
+    returns: a figure with subplots for each cell and each orientation.
+    """
+    if calciumdata.ndim != 3:
+        raise ValueError("calciumdata must have shape (n_cells, n_trials, n_timepoints)")
+
+    if t_axis.ndim != 1:
+        raise ValueError("t_axis must be a 1D array")
+
+    T = len(t_axis)
+    oris = np.sort(pd.Series.unique(trialdata['Orientation']))
+    resp_meanori = np.empty([len(example_cells), len(oris), T])
+
+    for i, cell in enumerate(example_cells):
+        for j, ori in enumerate(oris):
+            resp_meanori[i, j, :] = np.nanmean(calciumdata[np.ix_([cell], trialdata['Orientation'] == ori,range(T))], axis=1)
+
+    fig, axs = plt.subplots(len(example_cells), len(oris), figsize=[12, 8], sharex=True, sharey=False)
+    axs = axs.flatten()
+
+    colors = plt.cm.tab20(np.linspace(0, 1, len(oris)))  # assume this is the color palette used in plot_PCA_gratings
+    pal = sns.color_palette('husl', len(oris))
+    pal = np.tile(sns.color_palette('husl', int(len(oris)/2)),(2,1))
+
+    for i, cell in enumerate(example_cells):
+        row_max = 0
+
+        for j, ori in enumerate(oris):
+            axs[i * len(oris) + j].plot(t_axis, resp_meanori[i, j, :],color=pal[j])
+            # axs[i * len(oris) + j].set_title(f'Cell {cell}, {ori} deg')
+            axs[i * len(oris) + j].set_xticks([])
+            axs[i * len(oris) + j].set_yticks([])
+            # REMOVE axis borders
+            axs[i * len(oris) + j].axis('off')
+            row_max = max(row_max, np.max(resp_meanori[i, j, :]))
+        
+        for j in range(len(oris)):
+            axs[i * len(oris) + j].set_ylim(top=row_max * 1.1)  # add 10% padding
+            # Add vertical dotted line at t=0
+            # axs[i * len(oris) + j].axvline(x=0, color='k', linestyle=':', linewidth=1, ymin=axs[i * len(oris) + j].get_ylim()[0], ymax=row_max*0.7)
+            axs[i * len(oris) + j].axvline(x=0, color='k', linestyle=':', linewidth=1)
+
+    return fig
+
+def plot_PCA_gratings(ses,size='runspeed',cellfilter=None,apply_zscore=True):
 
     ########### PCA on trial-averaged responses ############
     ######### plot result as scatter by orientation ########
+    respmat = ses.respmat
 
-    respmat_zsc = zscore(ses.respmat,axis=1) # zscore for each neuron across trial responses
+    if apply_zscore is True:
+        respmat = zscore(respmat,axis=1) # zscore for each neuron across trial responses
 
-    if filter is not None:
-        respmat_zsc = respmat_zsc[filter,:]
+    if cellfilter is not None:
+        respmat = respmat[cellfilter,:]
 
     pca         = PCA(n_components=15) #construct PCA object with specified number of components
-    Xp          = pca.fit_transform(respmat_zsc.T).T #fit pca to response matrix (n_samples by n_features)
+    Xp          = pca.fit_transform(respmat.T).T #fit pca to response matrix (n_samples by n_features)
     #dimensionality is now reduced from N by K to ncomp by K
     
     ori         = ses.trialdata['Orientation']

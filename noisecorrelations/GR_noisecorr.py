@@ -9,7 +9,6 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 import math, os
 os.chdir('e:\\Python\\molanalysis')
 from loaddata.get_data_folder import get_local_drive
-os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 
 import numpy as np
 import pandas as pd
@@ -48,12 +47,13 @@ session_list        = np.array([['LPE10919','2023_11_06']])
 #                                 ['LPE10919','2023_11_06']])
 
 #%% Load sessions lazy: 
-sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
-# sessions,nSessions   = filter_sessions(protocols = ['GR'])
+# sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
+sessions,nSessions   = filter_sessions(protocols = ['GR'],filter_areas=['V1','PM'])
 
 #%%   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
-    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion='deconv')
 
 #%% ########################### Compute tuning metrics: ###################################
 for ises in range(nSessions):
@@ -109,9 +109,7 @@ fig.savefig(os.path.join(savedir,'ExploreFigs','Neural_Behavioral_Traces_' + ses
 # fig = plot_excerpt(sessions[sesidx],trialsel=None,plot_neural=True,plot_behavioral=True,neural_version='traces')
 
 
-
 # idx = filter_nearlabeled(sessions[ises],radius=radius)
-
 
 
 #%% #### 
@@ -122,7 +120,7 @@ fig.savefig(os.path.join(savedir,'PCA','PCA_3D_' + sessions[sesidx].sessiondata[
 
 fig = plot_PCA_gratings_3D(sessions[sesidx],export_animation=True)
 
-fig = plot_PCA_gratings(sessions[sesidx],filter=sessions[sesidx].celldata['redcell'].to_numpy()==1)
+fig = plot_PCA_gratings(sessions[sesidx],cellfilter=sessions[sesidx].celldata['redcell'].to_numpy()==1)
 fig.savefig(os.path.join(savedir,'PCA','PCA_Gratings_All_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% ############################### Show response with and without running #################

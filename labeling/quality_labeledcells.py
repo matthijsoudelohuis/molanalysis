@@ -83,7 +83,7 @@ ax2.plot([0,1],[1,1],transform=ax2.transAxes,**kwargs)
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Overlap_Dist_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 
-#%% ####### Show scatter of chan2prob from suite2p and frac red in ROI #######################
+#%% ####### Show scatter of the two overlap metrics: frac red in ROI and frac of ROI red #######################
 fig, ax = plt.subplots(figsize=(3.5,3))
 sns.scatterplot(data=celldata,x='frac_red_in_ROI',y='frac_of_ROI_red',hue='redcell',ax=ax,
                 palette=get_clr_labeled(),s=5)
@@ -100,6 +100,14 @@ plt.savefig(os.path.join(savedir,'Scatter_Overlap_Twoways_%dcells_%dsessions' % 
 idx = np.logical_and(celldata['frac_red_in_ROI']>0.9,celldata['frac_of_ROI_red']<0.4)
 celldata['cell_id'][idx] 
 
+#%% Find some cells that have full tdtomato within, but only little of the suite2p ROI:
+idx = np.where((celldata['frac_of_ROI_red']>0.9) & (celldata['frac_red_in_ROI']<0.5))[0]
+celldata['cell_id'][idx] 
+
+#%% Find some cells that have full tdtomato within, but only little of the suite2p ROI:
+idx = np.where((celldata['frac_of_ROI_red']<0.4) & (celldata['frac_red_in_ROI']>0.9))[0]
+celldata['cell_id'][idx] 
+
 #%% ####### Show scatter of chan2prob from suite2p and frac red in ROI #######################
 fig, ax = plt.subplots(figsize=(3.5,3))
 sns.scatterplot(data=celldata,x='frac_red_in_ROI',y='chan2_prob',hue='redcell',ax=ax,
@@ -113,27 +121,26 @@ plt.ylabel('Channel 2 probability')
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Scatter_Overlap_Chan2Prob_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 
-#%% Find some cells that have full tdtomato within, but only little of the suite2p ROI:
-idx = np.where((celldata['frac_of_ROI_red']>0.9) & (celldata['frac_red_in_ROI']<0.5))[0]
-celldata['cell_id'][idx] 
-
-#%% Find some cells that have full tdtomato within, but only little of the suite2p ROI:
-idx = np.where((celldata['frac_of_ROI_red']<0.4) & (celldata['frac_red_in_ROI']>0.9))[0]
-celldata['cell_id'][idx] 
-
 #%% Find some cells that should be labeled according to the metric of suite2p, but not through cellpose:
-# idx = np.where((celldata['frac_red_in_ROI']<0.5) & (celldata['chan2_prob']>0.8) & (celldata['chan2_prob']<1))[0]
-# # idx = np.logical_and(celldata['frac_red_in_ROI']<0.5,celldata['chan2_prob']>0.8)
-# g = celldata['cell_id'][idx] 
-# g[400:450]
+idx = np.where((celldata['frac_red_in_ROI']<0.5) & (celldata['chan2_prob']>0.7) 
+               & (celldata['chan2_prob']<1) & (celldata['skew']>3) & 
+               (celldata['session_id'] != 'LPE10885_2023_10_12') & 
+               (celldata['session_id'] != 'LPE10883_2023_10_23') & 
+               (celldata['session_id'] != 'LPE10919_2023_11_06'))[0]
+# idx = np.logical_and(celldata['frac_red_in_ROI']<0.5,celldata['chan2_prob']>0.8)
+g = celldata['cell_id'][idx] 
+g[:25]
+g[45:75]
 
-# idx = celldata['cell_id']=='LPE12013_2024_05_07_0_0177'
-# idx = celldata['cell_id']=='LPE11495_2024_02_27_5_0028'
-# celldata['chan2_prob'][idx] 
-# celldata['frac_red_in_ROI'][idx]
+idx = celldata['cell_id']=='LPE11998_2024_05_10_1_0132'
+idx = celldata['cell_id']=='LPE11086_2024_01_10_2_0094'
+idx = celldata['cell_id']=='LPE12013_2024_05_07_0_0177'
+idx = celldata['cell_id']=='LPE11495_2024_02_27_5_0028'
+celldata['chan2_prob'][idx] 
+celldata['frac_red_in_ROI'][idx]
 
-# celldata['cell_id'][1341]
-# celldata['frac_red_in_ROI'][1341]
+celldata['cell_id'][1341]
+celldata['frac_red_in_ROI'][1341]
 
 #%% Get the colors and names of the areas:
 areas = celldata['roi_name'].unique()

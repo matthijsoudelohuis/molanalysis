@@ -96,7 +96,6 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                 
                 ## go through specified conditions that have to be met for the session to be included:
                 sesflag = True
-                cellfilter=None
                 
                 # SELECT BASED ON # TRIALS
                 if only_animal_id is not None:
@@ -127,14 +126,14 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     # sesflag = sesflag and hasattr(ses, 'celldata') and np.all(np.isin(np.unique(ses.celldata['roi_name']),only_all_areas))
                 
                 if sesflag and filter_areas is not None and hasattr(ses, 'celldata'):
-                    cellfilter = np.isin(ses.celldata['roi_name'],filter_areas)
+                    ses.cellfilter = np.isin(ses.celldata['roi_name'],filter_areas)
                 
                 if sesflag and has_pupil:
                     ses.load_data(load_videodata=True)
                     sesflag = sesflag and hasattr(ses, 'videodata') and 'pupil_area' in ses.videodata and np.any(ses.videodata['pupil_area'])
                 
                 if sesflag: #if session meets all criteria, load data and append to list of sessions:
-                    ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion,cellfilter=cellfilter)
+                    ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
                     sessions.append(ses)
 
     report_sessions(sessions)            

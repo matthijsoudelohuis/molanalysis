@@ -22,8 +22,9 @@ class Session():
         self.protocol = protocol
         self.animal_id = animal_id
         self.session_id = session_id
+        self.cellfilter = None
 
-    def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF', cellfilter=None):
+    def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
         self.sessiondata_path   = os.path.join(self.data_folder, 'sessiondata.csv')
         self.trialdata_path     = os.path.join(self.data_folder, 'trialdata.csv')
         self.celldata_path      = os.path.join(self.data_folder, 'celldata.csv')
@@ -48,12 +49,12 @@ class Session():
             # goodcells               = self.celldata['iscell'] == 1
             # self.celldata           = self.celldata[goodcells].reset_index(drop=True)
         
-            if cellfilter is not None:
-                if isinstance(cellfilter, pd.DataFrame):
-                    cellfilter = cellfilter.to_numpy().squeeze()
-                assert np.shape(self.celldata)[0]==len(cellfilter)
-                assert np.array_equal(cellfilter, cellfilter.astype(bool)), 'Cell filter not boolean'
-                self.celldata = self.celldata.iloc[cellfilter,:]
+            if self.cellfilter is not None:
+                if isinstance(self.cellfilter, pd.DataFrame):
+                    self.cellfilter = self.cellfilter.to_numpy().squeeze()
+                assert np.shape(self.celldata)[0]==len(self.cellfilter)
+                assert np.array_equal(self.cellfilter, self.cellfilter.astype(bool)), 'Cell filter not boolean'
+                self.celldata = self.celldata.iloc[self.cellfilter,:]
 
         if load_behaviordata:
             self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
@@ -71,13 +72,13 @@ class Session():
             self.ts_F               = pd.read_csv(self.Ftsdata_path, sep=',', index_col=0).to_numpy().squeeze()
             self.F_chan2            = pd.read_csv(self.Fchan2data_path, sep=',', index_col=0).to_numpy().squeeze()
 
-            if cellfilter is not None:
-                if isinstance(cellfilter, pd.DataFrame):
-                    cellfilter = cellfilter.to_numpy().squeeze()
-                assert np.shape(self.calciumdata)[1]==len(cellfilter)
-                assert np.array_equal(cellfilter, cellfilter.astype(bool)), 'Cell filter not boolean'
+            if self.cellfilter is not None:
+                if isinstance(self.cellfilter, pd.DataFrame):
+                    self.cellfilter = self.cellfilter.to_numpy().squeeze()
+                assert np.shape(self.calciumdata)[1]==len(self.cellfilter)
+                assert np.array_equal(self.cellfilter, self.cellfilter.astype(bool)), 'Cell filter not boolean'
                 
-                self.calciumdata = self.calciumdata.iloc[:,cellfilter]
+                self.calciumdata = self.calciumdata.iloc[:,self.cellfilter]
                 # self.celldata = self.celldata.iloc[cellfilter,:]
 
             # self.ts_F                = self.calciumdata['timestamps']
@@ -86,6 +87,9 @@ class Session():
             # self.F_chan2             = self.calciumdata['F_chan2']
             # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
          
+            print("Shape of self.calciumdata:", np.shape(self.calciumdata))
+            print("Shape of self.celldata:", np.shape(self.celldata))
+
             assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
 
         if load_calciumdata and load_behaviordata:
@@ -116,7 +120,7 @@ class Session():
             self.celldata.loc[self.celldata['roi_name']==area,'recombinase'] = self.sessiondata[temprecombinase].to_list()[0]
         self.celldata.loc[self.celldata['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
 
-    def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF',keepraw=False):
+    def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF',keepraw=False, cellfilter=None):
         #combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
 
         self.load_data(load_behaviordata=load_behaviordata, load_calciumdata=load_calciumdata,
