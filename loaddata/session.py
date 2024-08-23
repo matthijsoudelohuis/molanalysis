@@ -14,14 +14,16 @@ import pandas as pd
 from loaddata.get_data_folder import get_data_folder
 from utils.psth import compute_respmat
 import scipy
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Session():
 
     def __init__(self, protocol='', animal_id='', session_id='', verbose=1):
-
-        # print('\nInitializing Session object for: \n- animal ID: {}'
-        #   '\n- Session ID: {}\n'.format(animal_id, session_id))
+        logger.debug(
+            'Initializing Session object for: \n- animal ID: {}' '\n- Session ID: {}\n'.format(animal_id, session_id))
         self.data_folder = os.path.join(
             get_data_folder(), protocol, animal_id, session_id)
         self.verbose = verbose
@@ -62,7 +64,8 @@ class Session():
             self.celldata = self.celldata[goodcells].reset_index(drop=True)
 
         if load_behaviordata:
-            # print('Loading behavior data at {}'.format(self.behaviordata_path))
+            logger.debug('Loading behavior data at {}'.format(
+                self.behaviordata_path))
             self.behaviordata = pd.read_csv(
                 self.behaviordata_path, sep=',', index_col=0)
         else:
@@ -75,7 +78,7 @@ class Session():
             self.videodata = None
 
         if load_calciumdata:
-            print('Loading calcium data at {}'.format(self.calciumdata_path))
+            logger.info(f'Loading calcium data at {self.calciumdata_path}')
             self.calciumdata = pd.read_csv(
                 self.calciumdata_path, sep=',', index_col=0)
             self.calciumdata = self.calciumdata.drop('session_id', axis=1)
@@ -107,11 +110,12 @@ class Session():
         #                             fp=self.behaviordata['zpos'])
 
     def reset_label_threshold(self, threshold):
-        print('Setting new labeling threshold based on %1.2f overlap' % threshold)
+        logger.info(
+            'Setting new labeling threshold based on %1.2f overlap' % threshold)
         # self.celldata['redcell'] = self.celldata['redcell_prob']>0.4
         self.celldata['redcell'] = self.celldata['frac_red_in_ROI'] >= threshold
         # print('Need to set cre non flp again\n')
-        print('put lower and upper threshold\n')
+        logger.info('put lower and upper threshold')
 
         # Add recombinase enzym label to red cells:
         labelareas = ['V1', 'PM']
@@ -137,7 +141,7 @@ class Session():
         elif self.sessiondata['protocol'][0] == 'GN':
             t_resp_stop = 0.75
         else:
-            print('getting mean response for unknown protocol')
+            logger.warning('getting mean response for unknown protocol')
 
         ##############################################################################
         # Construct trial response matrix:  N neurons by K trials

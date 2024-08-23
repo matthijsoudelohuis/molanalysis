@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 from loaddata.get_data_folder import get_data_folder
 from loaddata.session import Session
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
@@ -126,15 +129,14 @@ def report_sessions(sessions):
         if hasattr(ses, 'celldata'):
             celldata = pd.concat([celldata, ses.celldata])
 
-    print("{protocol} dataset: {nmice} mice, {nsessions} sessions, {ntrials} trials".format(
-        protocol=pd.unique(sessiondata['protocol']),
-        nmice=len(pd.unique(sessiondata['animal_id'])),
-        nsessions=len(sessiondata),
-        ntrials=len(trialdata)))
+    logger.info(
+        f'{pd.unique(sessiondata["protocol"])} dataset: {len(pd.unique(sessiondata["animal_id"]))} mice, {len(sessiondata)} sessions, {len(trialdata)} trials')
 
     if np.any(celldata):
-        print("Neurons in area:")
-        print(celldata.groupby('roi_name')['roi_name'].count())
+        for area in np.unique(celldata['roi_name']):
+            logger.info(
+                f"Number of neurons in {area}: {len(celldata[celldata['roi_name'] == area])}")
+        logger.info(f"Total number of neurons: {len(celldata)}")
 
     # print("{nneurons} dataset: {nsessions} sessions, {ntrials} trials".format(
         # protocol = sessions[0].sessiondata.protocol,nsessions = len(sessiondata),ntrials = len(trialdata))
