@@ -55,6 +55,7 @@ class Session():
                 assert np.shape(self.celldata)[0]==len(self.cellfilter)
                 assert np.array_equal(self.cellfilter, self.cellfilter.astype(bool)), 'Cell filter not boolean'
                 self.celldata = self.celldata.iloc[self.cellfilter,:]
+                self.celldata.reset_index(drop=True, inplace=True)
 
         if load_behaviordata:
             self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
@@ -86,9 +87,6 @@ class Session():
 
             # self.F_chan2             = self.calciumdata['F_chan2']
             # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
-         
-            print("Shape of self.calciumdata:", np.shape(self.calciumdata))
-            print("Shape of self.celldata:", np.shape(self.celldata))
 
             assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
 
@@ -127,31 +125,46 @@ class Session():
                        load_videodata=load_videodata,calciumversion=calciumversion)
         
         if self.sessiondata['protocol'][0]=='IM':
-            t_resp_stop = 0.5
+            if calciumversion=='deconv':
+                t_resp_start = 0
+                t_resp_stop = 0.75
+            elif calciumversion=='dF':
+                t_resp_start = 0.5
+                t_resp_stop = 1.5
         elif self.sessiondata['protocol'][0]=='GR':
-            t_resp_stop = 0.75
+            if calciumversion=='deconv':
+                t_resp_start = 0
+                t_resp_stop = 1
+            elif calciumversion=='dF':
+                t_resp_start = 0.5
+                t_resp_stop = 1.5
         elif self.sessiondata['protocol'][0]=='GN':
-            t_resp_stop = 0.75
+            if calciumversion=='deconv':
+                t_resp_start = 0
+                t_resp_stop = 1
+            elif calciumversion=='dF':
+                t_resp_start = 0.5
+                t_resp_stop = 1.5
         else:
             print('getting mean response for unknown protocol')
 
         ##############################################################################
         ## Construct trial response matrix:  N neurons by K trials
         self.respmat         = compute_respmat(self.calciumdata, self.ts_F, self.trialdata['tOnset'],
-                                        t_resp_start=0,t_resp_stop=t_resp_stop,method='mean',subtr_baseline=False)
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean',subtr_baseline=False)
 
         self.respmat_runspeed = compute_respmat(self.behaviordata['runspeed'],
                                         self.behaviordata['ts'], self.trialdata['tOnset'],
-                                        t_resp_start=0,t_resp_stop=t_resp_stop,method='mean')
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean')
 
         self.respmat_videome = compute_respmat(self.videodata['motionenergy'],
                                         self.videodata['ts'],self.trialdata['tOnset'],
-                                        t_resp_start=0,t_resp_stop=t_resp_stop,method='mean')
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean')
         
         if 'pupil_area' in self.videodata:
             self.respmat_pupilarea = compute_respmat(self.videodata['pupil_area'],
                                         self.videodata['ts'],self.trialdata['tOnset'],
-                                        t_resp_start=0,t_resp_stop=t_resp_stop,method='mean')
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean')
         else: 
             self.respmat_pupilarea = None
 

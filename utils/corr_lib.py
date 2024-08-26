@@ -135,11 +135,13 @@ def compute_pairwise_metrics(sessions):
         ## Compute euclidean distance matrix based on soma center:
         sessions[ises].distmat_xyz     = np.zeros((N,N))
         sessions[ises].distmat_xy      = np.zeros((N,N))
-        sessions[ises].distmat_rf      = np.zeros((N,N))
+        sessions[ises].distmat_rf      = np.full((N,N),np.NaN)
         sessions[ises].areamat         = np.empty((N,N),dtype=object)
         sessions[ises].labelmat        = np.empty((N,N),dtype=object)
 
-        x,y,z = sessions[ises].celldata['xloc'],sessions[ises].celldata['yloc'],sessions[ises].celldata['depth']
+        x = sessions[ises].celldata['xloc'].to_numpy()
+        y = sessions[ises].celldata['yloc'].to_numpy()
+        z = sessions[ises].celldata['depth'].to_numpy()
         b = np.array((x,y,z))
         for i in range(N):
             print(f"\rComputing pairwise distances for neuron {i+1} / {N}",end='\r')
@@ -147,8 +149,12 @@ def compute_pairwise_metrics(sessions):
             sessions[ises].distmat_xyz[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
             sessions[ises].distmat_xy[i,:] = np.linalg.norm(a[:2,np.newaxis]-b[:2,:],axis=0)
         
-        if 'rf_az_Fneu' in sessions[ises].celldata:
-            rfaz,rfel = sessions[ises].celldata['rf_az_Fneu'],sessions[ises].celldata['rf_el_Fneu']
+        # if 'rf_az_Fneu' in sessions[ises].celldata:
+        if 'rf_az_F' in sessions[ises].celldata:
+            # rfaz = sessions[ises].celldata['rf_az_Fneu'].to_numpy()
+            # rfel = sessions[ises].celldata['rf_el_Fneu'].to_numpy()
+            rfaz = sessions[ises].celldata['rf_az_F'].to_numpy()
+            rfel = sessions[ises].celldata['rf_el_F'].to_numpy()
             d = np.array((rfaz,rfel))
 
             for i in range(N):
@@ -211,7 +217,7 @@ def noisecorr_rfmap(sessions,binresolution=5,rotate_prefori=False,rotate_deltapr
         if thr_tuned:
             idx_source = np.logical_and(idx_source,sessions[ises].celldata['tuning_var']>thr_tuned)
             idx_target = np.logical_and(idx_target,sessions[ises].celldata['tuning_var']>thr_tuned)
-                
+        
         if thr_rf_p<1:
             if 'rf_p' in sessions[ises].celldata:
                 idx_source = np.logical_and(idx_source,sessions[ises].celldata['rf_p']<thr_rf_p)
