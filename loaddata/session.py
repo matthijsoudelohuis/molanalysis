@@ -129,8 +129,8 @@ class Session():
                 t_resp_start = 0
                 t_resp_stop = 0.75
             elif calciumversion=='dF':
-                t_resp_start = 0.5
-                t_resp_stop = 1.5
+                t_resp_start = 0.25
+                t_resp_stop = 1.25
         elif self.sessiondata['protocol'][0]=='GR':
             if calciumversion=='deconv':
                 t_resp_start = 0
@@ -146,7 +146,8 @@ class Session():
                 t_resp_start = 0.5
                 t_resp_stop = 1.5
         else:
-            print('getting mean response for unknown protocol')
+            print('skipping mean response for unknown protocol')
+            return
 
         ##############################################################################
         ## Construct trial response matrix:  N neurons by K trials

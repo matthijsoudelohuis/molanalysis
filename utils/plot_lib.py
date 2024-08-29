@@ -9,6 +9,9 @@ def shaded_error(ax,x,y,yerror=None,center='mean',error='std',color='black'):
     x = np.array(x)
     y = np.array(y)
 
+    if np.ndim(y)==1:
+        y = y[np.newaxis,:]
+
     if yerror is None:
         if center=='mean':
             ycenter = np.nanmean(y,axis=0)
