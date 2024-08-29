@@ -13,11 +13,19 @@ import numpy as np
 import pandas as pd
 from loaddata.get_data_folder import get_data_folder
 from utils.psth import compute_respmat
+import scipy
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class Session():
 
-    def __init__(self, protocol='',animal_id='', session_id='', verbose=1):
-        self.data_folder = os.path.join(get_data_folder(), protocol, animal_id, session_id)
+    def __init__(self, protocol='', animal_id='', session_id='', verbose=1):
+        logger.debug(
+            'Initializing Session object for: \n- animal ID: {}' '\n- Session ID: {}\n'.format(animal_id, session_id))
+        self.data_folder = os.path.join(
+            get_data_folder(), protocol, animal_id, session_id)
         self.verbose = verbose
         self.protocol = protocol
         self.animal_id = animal_id
@@ -25,6 +33,7 @@ class Session():
         self.cellfilter = None
 
     def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
+
         self.sessiondata_path   = os.path.join(self.data_folder, 'sessiondata.csv')
         self.trialdata_path     = os.path.join(self.data_folder, 'trialdata.csv')
         self.celldata_path      = os.path.join(self.data_folder, 'celldata.csv')
@@ -42,8 +51,9 @@ class Session():
             self.trialdata  = pd.read_csv(self.trialdata_path, sep=',', index_col=0)
         else:
             self.trialdata = None
-    
+
         if os.path.exists(self.celldata_path):
+
             self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
             # get only good cells (selected ROIs by suite2p): #not used anymore, only good cells are saved anyways
             # goodcells               = self.celldata['iscell'] == 1
@@ -63,11 +73,13 @@ class Session():
             self.behaviordata = None
 
         if load_videodata:
-            self.videodata  = pd.read_csv(self.videodata_path, sep=',', index_col=0)
+            self.videodata = pd.read_csv(
+                self.videodata_path, sep=',', index_col=0)
         else:
             self.videodata = None
 
         if load_calciumdata:
+
             print('Loading calcium data at {}'.format(self.calciumdata_path))
             self.calciumdata        = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
             self.ts_F               = pd.read_csv(self.Ftsdata_path, sep=',', index_col=0).to_numpy().squeeze()
@@ -91,32 +103,35 @@ class Session():
             assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
 
         if load_calciumdata and load_behaviordata:
-            ## Get interpolated values for behavioral variables at imaging frame rate:
-            self.zpos_F      = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
+            # Get interpolated values for behavioral variables at imaging frame rate:
+            self.zpos_F = np.interp(x=self.ts_F, xp=self.behaviordata['ts'],
                                     fp=self.behaviordata['zpos'])
-            self.runspeed_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
-                                    fp=self.behaviordata['runspeed'])
+            self.runspeed_F = np.interp(x=self.ts_F, xp=self.behaviordata['ts'],
+                                        fp=self.behaviordata['runspeed'])
             if 'trialNumber' in self.behaviordata:
-                self.trialnum_F  = np.interp(x=self.ts_F,xp=self.behaviordata['ts'],
-                                    fp=self.behaviordata['trialNumber'])
-                
+                self.trialnum_F = np.interp(x=self.ts_F, xp=self.behaviordata['ts'],
+                                            fp=self.behaviordata['trialNumber'])
+
         # if load_videodata and load_behaviordata:
         #     self.load_videodata['zpos'] = np.interp(x=self.videodata['ts'],xp=self.behaviordata['ts'],
         #                             fp=self.behaviordata['zpos'])
 
-    def reset_label_threshold(self,threshold):
-        print('Setting new labeling threshold based on %1.2f overlap' % threshold)
+    def reset_label_threshold(self, threshold):
+        logger.info(
+            'Setting new labeling threshold based on %1.2f overlap' % threshold)
         # self.celldata['redcell'] = self.celldata['redcell_prob']>0.4
-        self.celldata['redcell'] = self.celldata['frac_red_in_ROI']>=threshold
+        self.celldata['redcell'] = self.celldata['frac_red_in_ROI'] >= threshold
         # print('Need to set cre non flp again\n')
-        print('put lower and upper threshold\n')
+        logger.info('put lower and upper threshold')
 
-        #Add recombinase enzym label to red cells:
-        labelareas = ['V1','PM']
+        # Add recombinase enzym label to red cells:
+        labelareas = ['V1', 'PM']
         for area in labelareas:
-            temprecombinase =  area + '_recombinase'
-            self.celldata.loc[self.celldata['roi_name']==area,'recombinase'] = self.sessiondata[temprecombinase].to_list()[0]
-        self.celldata.loc[self.celldata['redcell']==0,'recombinase'] = 'non' #set all nonlabeled cells to 'non'
+            temprecombinase = area + '_recombinase'
+            self.celldata.loc[self.celldata['roi_name'] == area,
+                              'recombinase'] = self.sessiondata[temprecombinase].to_list()[0]
+        # set all nonlabeled cells to 'non'
+        self.celldata.loc[self.celldata['redcell'] == 0, 'recombinase'] = 'non'
 
     def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF',keepraw=False, cellfilter=None):
         #combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
@@ -152,29 +167,85 @@ class Session():
         ##############################################################################
         ## Construct trial response matrix:  N neurons by K trials
         self.respmat         = compute_respmat(self.calciumdata, self.ts_F, self.trialdata['tOnset'],
-                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean',subtr_baseline=False)
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean',subtr_baseline=False, label = "response matrix")
 
         self.respmat_runspeed = compute_respmat(self.behaviordata['runspeed'],
                                         self.behaviordata['ts'], self.trialdata['tOnset'],
-                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean')
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "runspeed")
 
         self.respmat_videome = compute_respmat(self.videodata['motionenergy'],
                                         self.videodata['ts'],self.trialdata['tOnset'],
-                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean')
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "motion energy")
+        
+        if 'pupil_xpos' in self.videodata:
+            self.respmat_pupilx = compute_respmat(self.videodata['pupil_xpos'],
+                                                self.videodata['ts'], self.trialdata['tOnset'],
+                                                t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil x position')
+            
+        if 'pupil_ypos' in self.videodata:
+            self.respmat_pupily = compute_respmat(self.videodata['pupil_ypos'],
+                                                self.videodata['ts'], self.trialdata['tOnset'],
+                                                t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil y position')
+
         
         if 'pupil_area' in self.videodata:
             self.respmat_pupilarea = compute_respmat(self.videodata['pupil_area'],
                                         self.videodata['ts'],self.trialdata['tOnset'],
-                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean')
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "pupil area")
+            
+            sampling_rate = 1 / np.mean(np.diff(self.ts_F))
+            self.respmat_pupilareaderiv = self.lowpass_filter(
+                self.respmat_pupilarea, sampling_rate, lowcut=None, highcut=0.7, order=6)
+            self.respmat_pupilareaderiv = np.gradient(
+                self.respmat_pupilareaderiv, axis=0)
         else: 
             self.respmat_pupilarea = None
+            self.respmat_pupilareaderiv = None
 
         if not keepraw:
-            delattr(self,'calciumdata')
-            delattr(self,'videodata')
-            delattr(self,'behaviordata')
+            delattr(self, 'calciumdata')
+            delattr(self, 'videodata')
+            delattr(self, 'behaviordata')
 
+    # Throw respmat_pupilarea through a lowpass filter to create respmat_pupilareaderiv:
+    def lowpass_filter(self, respmat, sampling_rate, lowcut=0.1, highcut=0.5, order=10):
+        b, a = self._make_butterworth_window(
+            lowcut, highcut, sampling_rate, order)
+        respmat_filtered = self._replace_nan_with_avg(respmat)
+        respmat_filtered = scipy.signal.filtfilt(
+            b, a, respmat_filtered, axis=0)
+        return respmat_filtered
 
+    def _make_butterworth_window(self, lowcut, highcut, sampling_rate, order):
+        nyquist_frequency = sampling_rate / 2
+        if lowcut:
+            lowcut = lowcut / nyquist_frequency
+        if highcut:
+            highcut = highcut / nyquist_frequency
+        if lowcut and highcut:
+            b, a = scipy.signal.butter(order, [lowcut, highcut], btype='band')
+        elif lowcut:
+            b, a = scipy.signal.butter(order, lowcut, btype='highpass')
+        elif highcut:
+            b, a = scipy.signal.butter(order, highcut, btype='lowpass')
+        else:
+            raise ValueError('Either lowcut or highcut must be specified')
+        return b, a
+
+    def _replace_nan_with_avg(self, arr):
+        nan_indices = np.where(np.isnan(arr))[0]  # Get indices of NaN values
+
+        for i in nan_indices:
+            # Handle cases where NaN is at the start or end of the array
+            if i == 0:
+                arr[i] = arr[i + 1]
+            elif i == len(arr) - 1:
+                arr[i] = arr[i - 1]
+            else:
+                # Replace NaN with the average of adjacent values
+                arr[i] = np.nanmean([arr[i - 1], arr[i + 1]])
+
+        return arr
 
 
 #     def initialize(self, session_data, trial_data, spike_data=None, lfp_data=None,
@@ -356,7 +427,6 @@ class Session():
 #         return aligned_trial_times
 
 
-
 #     def make_frequency_bands(self, low, mid, high, spacing_low, spacing_high):
 #         low_freqs = np.arange(low, mid + 1, spacing_low)
 #         high_freqs = np.arange(mid + spacing_high, high + 1, spacing_high)
@@ -486,8 +556,6 @@ class Session():
 #         #return self.filtered_lfp, self.lfp_phase, self.lfp_energy
 
 
-
-
 #     def make_filters(self, filter_type='kaiser'):
 #         """
 #         This is a shortcut to generate all the filters, useful if we want
@@ -527,7 +595,6 @@ class Session():
 #         sns.despine()
 #         plt.tight_layout(rect=(0, 0, 0.7, 1))
 #         return f
-
 
 
 #     def plot_impulse_response_filters(self, artifact_attenuation=1000,
@@ -836,7 +903,6 @@ class Session():
 #         return interp_lfp
 
 
-
 #     def interpolate_filtered_lfp_per_trial(self, spike_bin_centers):
 
 #         """
@@ -866,7 +932,6 @@ class Session():
 #                 interp_filtered_lfp[channel_id].append(interp_filtered_lfp_trial)
 
 #         return interp_filtered_lfp
-
 
 
 #     @staticmethod
@@ -1066,7 +1131,6 @@ class Session():
 #         pass
 
 
-
 #     def select_channels(self, area, layer=None, in_the_middle=False, q=0.1):
 
 #         selected_channel_inds = []
@@ -1108,7 +1172,6 @@ class Session():
 #         return selected_ids
 
 
-
 #     def get_random_channel_id(self, area, layer=None, in_the_middle=False,
 #                               q=0.1):
 
@@ -1140,7 +1203,6 @@ class Session():
 #               '\n --- Depth : {}'.format(selected_id, area, layer, sl_ch_depth))
 
 #         return selected_id
-
 
 
 #     def get_freq_band_index_from_freq_band(self, band):
@@ -1217,7 +1279,6 @@ class Session():
 #                   plot_array.shape[0] - 0.5, -0.5)
 
 #         return plot_array, extent
-
 
 
 #     def slice_lfp_by_time(self, lfp_channel_id, t_start, t_stop):
@@ -1320,7 +1381,6 @@ class Session():
 #     def get_layer_from_channel_id(self, channel_id):
 #         channel_ind = self.get_lfp_channel_index_from_channel_id(channel_id)
 #         return self.lfp_data['layer'][channel_ind]
-
 
 
 #     def get_cell_id(self, cell_index, shortened_id=False):

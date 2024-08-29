@@ -9,9 +9,12 @@ import numpy as np
 import pandas as pd
 from loaddata.get_data_folder import get_data_folder
 from loaddata.session import Session
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
+def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
     """
     This function loads and outputs the session objects that have to be loaded.
     session_list is a 2D np array with animal_id and session_id pairs (each row one session)
@@ -20,19 +23,22 @@ def load_sessions(protocol,session_list,load_behaviordata=False, load_calciumdat
     sessions = load_sessions(protocol='GR',session_list)
     """
     sessions = []
-    
-    assert np.shape(session_list)[1]==2, 'session list does not seem to have two columns for animal and dates'
-    
+
+    assert np.shape(session_list)[
+        1] == 2, 'session list does not seem to have two columns for animal and dates'
+
     # iterate over sessions in requested array:
-    for i,ses in enumerate(session_list):
-        ses = Session(protocol=protocol,animal_id=session_list[i,0],session_id=session_list[i,1])
-        ses.load_data(load_behaviordata, load_calciumdata,load_videodata,calciumversion)
-        
+    for i, ses in enumerate(session_list):
+        ses = Session(
+            protocol=protocol, animal_id=session_list[i, 0], session_id=session_list[i, 1])
+        ses.load_data(load_behaviordata, load_calciumdata,
+                      load_videodata, calciumversion)
+
         sessions.append(ses)
-    
-    report_sessions(sessions)            
-    
-    return sessions,len(sessions)
+
+    report_sessions(sessions)
+
+    return sessions, len(sessions)
 
 def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     load_videodata=False, calciumversion='dF',only_animal_id=None,
@@ -81,22 +87,24 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
     """
     sessions = []
     if isinstance(protocols, str):
-        protocols =  [protocols]
+        protocols = [protocols]
 
     if protocols is None:
-        protocols = ['VR','IM','GR','GN','RF','SP','DM','DN','DP']
-    
+        protocols = ['VR', 'IM', 'GR', 'GN', 'RF', 'SP', 'DM', 'DN', 'DP']
+
     # iterate over files in that directory
     for protocol in protocols:
-        for animal_id in os.listdir(os.path.join(get_data_folder(),protocol)):
-            for session_id in os.listdir(os.path.join(get_data_folder(),protocol,animal_id)):
-                
-                ses = Session(protocol=protocol,animal_id=animal_id,session_id=session_id)
-                ses.load_data(load_behaviordata=False, load_calciumdata=False, load_videodata=False)
-                
-                ## go through specified conditions that have to be met for the session to be included:
+        for animal_id in os.listdir(os.path.join(get_data_folder(), protocol)):
+            for session_id in os.listdir(os.path.join(get_data_folder(), protocol, animal_id)):
+
+                ses = Session(protocol=protocol,
+                              animal_id=animal_id, session_id=session_id)
+                ses.load_data(load_behaviordata=False,
+                              load_calciumdata=False, load_videodata=False)
+
+                # go through specified conditions that have to be met for the session to be included:
                 sesflag = True
-                
+
                 # SELECT BASED ON # TRIALS
                 if only_animal_id is not None:
                     sesflag = sesflag and animal_id in only_animal_id
@@ -104,7 +112,7 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                 # SELECT BASED ON # TRIALS
                 if min_trials is not None:
                     sesflag = sesflag and len(ses.trialdata) >= min_trials
-                
+
                 # SELECT BASED ON # CELLS
                 if sesflag and min_cells is not None:
                     sesflag = sesflag and hasattr(ses, 'celldata') and len(ses.celldata) >= min_cells
@@ -116,7 +124,8 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     sesflag = sesflag and hasattr(ses, 'celldata') and np.sum(np.logical_and(ses.celldata['roi_name']=='PM',ses.celldata['redcell']==1)) >= min_lab_cells_V1
 
                 if sesflag and session_rf is not None:
-                    sesflag = sesflag and hasattr(ses, 'celldata') and 'rf_p_F' in ses.celldata
+                    sesflag = sesflag and hasattr(
+                        ses, 'celldata') and 'rf_p_F' in ses.celldata
 
                 if sesflag and any_of_areas is not None:
                     sesflag = sesflag and hasattr(ses, 'celldata') and np.any(np.isin(any_of_areas,np.unique(ses.celldata['roi_name'])))
@@ -136,45 +145,43 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
                     sessions.append(ses)
 
-    report_sessions(sessions)            
-    
-    return sessions,len(sessions)
+    report_sessions(sessions)
+
+    return sessions, len(sessions)
+
 
 def report_sessions(sessions):
-
     """
     This function reports show stats about the loaded sessions 
     """
-    
-    sessiondata     = pd.DataFrame()
-    trialdata       = pd.DataFrame()
-    celldata        = pd.DataFrame()
-    
-    for ses in sessions:
-        sessiondata     = pd.concat([sessiondata,ses.sessiondata])
-        trialdata       = pd.concat([trialdata,ses.trialdata])
-        if hasattr(ses, 'celldata'):
-            celldata        = pd.concat([celldata,ses.celldata])
 
-    print("{protocol} dataset: {nmice} mice, {nsessions} sessions, {ntrials} trials".format(
-        protocol    = pd.unique(sessiondata['protocol']),
-        nmice       = len(pd.unique(sessiondata['animal_id'])),
-        nsessions   = len(sessiondata),
-        ntrials     = len(trialdata)))
+    sessiondata = pd.DataFrame()
+    trialdata = pd.DataFrame()
+    celldata = pd.DataFrame()
+
+    for ses in sessions:
+        sessiondata = pd.concat([sessiondata, ses.sessiondata])
+        trialdata = pd.concat([trialdata, ses.trialdata])
+        if hasattr(ses, 'celldata'):
+            celldata = pd.concat([celldata, ses.celldata])
+
+    logger.info(
+        f'{pd.unique(sessiondata["protocol"])} dataset: {len(pd.unique(sessiondata["animal_id"]))} mice, {len(sessiondata)} sessions, {len(trialdata)} trials')
 
     if np.any(celldata):
-        print("Neurons in area:")
-        print(celldata.groupby('roi_name')['roi_name'].count())
-    
+        for area in np.unique(celldata['roi_name']):
+            logger.info(
+                f"Number of neurons in {area}: {len(celldata[celldata['roi_name'] == area])}")
+        logger.info(f"Total number of neurons: {len(celldata)}")
+
     # print("{nneurons} dataset: {nsessions} sessions, {ntrials} trials".format(
         # protocol = sessions[0].sessiondata.protocol,nsessions = len(sessiondata),ntrials = len(trialdata))
-                    
+
     # # SELECT BASED ON NUMBER OF UNITS PER AREA
     # if min_units is not None:
     #     units_df = make_units_overview()
     #     units_df = units_df[units_df['n_units'] >= min_units]
     #     sel_df = pd.merge(units_df, trial_df, on=['animal_id', 'session_id'])
-
 
     # # SELECT BASED ON NUMBER OF UNITS/CHANNELS PER AREA/LAYER
     # if min_units_per_layer is not None or min_channels_per_layer is not None:
@@ -197,8 +204,6 @@ def report_sessions(sessions):
     #     return sel_df
     # except NameError:
     #     return trial_df
-
-
 
 
 # if __name__ == '__main__':
@@ -232,7 +237,6 @@ def report_sessions(sessions):
 #         trial_df = trial_df[trial_df['perc_corr'] >= min_perc_correct]
 
 
-
 #     if min_units is not None:
 #         units_df = make_units_overview()
 
@@ -254,7 +258,6 @@ def report_sessions(sessions):
 #             layers_df = layers_df[layers_df['layer'] != 'NA']
 
 #         sel_df = pd.merge(layers_df, trial_df, on=['animal_id', 'session_id'])
-
 
 
 # def make_trial_overview():
@@ -286,7 +289,6 @@ def report_sessions(sessions):
 #     return df
 
 
-
 # def make_units_overview():
 
 #     dfs = []
@@ -301,4 +303,3 @@ def report_sessions(sessions):
 #             dfs.append(df)
 
 #     return pd.concat(dfs)
-
