@@ -40,6 +40,13 @@ def get_clr_labeled():
     # clrs            = ['black','red']
     return ['gray','indianred']
 
+def get_clr_area_labeled(area_labeled):
+    palette       = {'V1unl': sns.xkcd_rgb['seaweed'],
+        'V1lab' : sns.xkcd_rgb['rose'],
+        'PMunl' : sns.xkcd_rgb['barney'],
+        'PMlab' : sns.xkcd_rgb['red']}
+    return itemgetter(*area_labeled)(palette)
+
 def get_clr_recombinase(enzymes):
     palette       = {'non': 'gray',
         'cre' : 'orangered',

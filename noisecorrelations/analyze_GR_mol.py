@@ -5,13 +5,10 @@ dataset with labeled projection neurons. The visual stimuli are oriented grating
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
-####################################################
+#%%  ###################################################
 import math, os
-try:
-    os.chdir('t:\\Python\\molanalysis\\')
-except:
-    os.chdir('e:\\Python\\molanalysis\\')
-os.chdir('c:\\Python\\molanalysis\\')
+os.chdir('e:\\Python\\molanalysis\\')
+from loaddata.get_data_folder import get_local_drive
 
 import numpy as np
 import pandas as pd
@@ -23,62 +20,58 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from sklearn.decomposition import PCA
 from scipy.stats import zscore, pearsonr,spearmanr
-from utils.explorefigs import plot_excerpt,PCA_gratings
+from utils.explorefigs import plot_excerpt,plot_PCA_gratings,plot_tuned_response
 
-savedir = 'C:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\'
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - Gratings\\')
 
-##################################################
+#%% #################################################
 session_list        = np.array([['LPE09830','2023_04_10']])
 session_list        = np.array([['LPE11086','2024_01_10']])
-sessions            = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
-                                    load_calciumdata=True, load_videodata=False, calciumversion='dF')
-# sessions            = filter_sessions(protocols = ['GR'])
-nSessions = len(sessions)
+sessions,nSessions  = load_sessions(protocol = 'GR',session_list=session_list,load_behaviordata=True, 
+                                    load_calciumdata=True, load_videodata=True, calciumversion='deconv')
 
 sesidx      = 0
 randomseed  = 5
 
-######################################
+#%% #####################################
 #Show some traces and some stimuli to see responses:
 example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
 fig = plot_excerpt(sessions[0])
 
-##############################################################################
+#%% #############################################################################
 ## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
 ## Parameters for temporal binning
 t_pre       = -1    #pre s
 t_post      = 2     #post s
 binsize     = 0.2   #temporal binsize in s
 
-for i in range(nSessions):
-    [sessions[i].tensor,t_axis] = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], 
-                                 t_pre, t_post, binsize,method='interp_lin')
+for ises in range(nSessions):
+    [sessions[ises].tensor,t_axis] = compute_tensor(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'], 
+                                 t_pre, t_post, binsize,method='nearby')
+    
+for ises in range(nSessions):
+    sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
+                                        t_resp_start=0,t_resp_stop=1,subtr_baseline=False)
+    sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'], sessions[ises].behaviordata['ts'],
+                                    sessions[ises].trialdata['tOnset'],t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+    sessions[ises].respmat_videome  = compute_respmat(sessions[ises].videodata['motionenergy'], sessions[ises].videodata['ts'], sessions[ises].trialdata['tOnset'],
+                                        t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
 
-# [tensor,t_axis] = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], t_pre, t_post, binsize,method='binmean')
+#%% Plot the averaged response for some tuned neurons: 
 
-# [tensor,t_axis] = compute_tensor(calciumdata, ts_F, trialdata['tOnset'], t_pre, t_post, binsize,method='interp_lin')
-[tensor,t_axis] = compute_tensor(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'], 
-                                 t_pre, t_post, binsize,method='interp_lin')
-[N,K,T]         = np.shape(tensor) #get dimensions of tensor
-respmat         = tensor[:,:,np.logical_and(t_axis > 0,t_axis < 1)].mean(axis=2)
+example_cells = [3,56,58,62,70]
+fig = plot_tuned_response(sessions[sesidx].tensor,sessions[sesidx].trialdata,t_axis,example_cells)
+# save the figure
+fig.savefig(os.path.join(savedir,'ExploreFigs','TunedResponse_dF_%s.png' % sessions[sesidx].session_id))
+# fig.savefig(os.path.join(savedir,'ExploreFigs','TunedResponse_deconv_%s.png' % sessions[sesidx].session_id))
 
-#Alternative method, much faster:
-respmat         = compute_respmat(sessions[0].calciumdata, sessions[0].ts_F, sessions[0].trialdata['tOnset'],
-                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=True)
-[N,K]           = np.shape(respmat) #get dimensions of response matrix
+#%% ############################################################################
 
-#hacky way to create dataframe of the runspeed with F x 1 with F number of samples:
-temp = pd.DataFrame(np.reshape(np.array(sessions[0].behaviordata['runspeed']),(len(sessions[0].behaviordata['runspeed']),1)))
-respmat_runspeed = compute_respmat(temp, sessions[0].behaviordata['ts'], sessions[0].trialdata['tOnset'],
-                                   t_resp_start=0,t_resp_stop=1,method='mean')
-respmat_runspeed = np.squeeze(respmat_runspeed)
-
-#############################################################################
 resp_meanori    = np.empty([N,16])
-oris            = np.sort(pd.Series.unique(sessions[0].trialdata['Orientation']))
+oris            = np.sort(pd.Series.unique(sessions[ises].trialdata['Orientation']))
 
 for i,ori in enumerate(oris):
-    resp_meanori[:,i] = np.nanmean(respmat[:,sessions[0].trialdata['Orientation']==ori],axis=1)
+    resp_meanori[:,i] = np.nanmean(sessions[ises].respmat[:,sessions[ises].trialdata['Orientation']==ori],axis=1)
 
 prefori  = np.argmax(resp_meanori,axis=1)
 
@@ -100,21 +93,35 @@ plt.tight_layout(rect=[0.1, 0.1, 0.9, 0.9])
 ax.set_xlabel('Orientation (deg)')
 ax.set_ylabel('Neuron')
 
-# plt.close('all')
+#%% PCA plot: 
+plot_PCA_gratings(sessions[sesidx],apply_zscore=False)
 
-PCA_gratings(sessions[sesidx])
+#%% 
+maxdF = np.max(sessions[sesidx].calciumdata,axis=0)
+sns.histplot(maxdF,stat='count',color='g',alpha=0.5)#,binwidth=0.3
+maxdFTrials = np.max(sessions[sesidx].respmat,axis=1)
+sns.histplot(maxdFTrials,stat='count',color='k',alpha=0.5)#,,binwidth=0.3
+# plt.xlim([0,15])
+plt.xlabel('Max dF/F')
+plt.ylabel('Count')
+plt.legend(['Full session','Trials'])
 
-################## PCA on full session neural data and correlate with running speed
+#%% PCA plot: 
+plot_PCA_gratings(sessions[sesidx],apply_zscore=False,cellfilter=maxdF>0)
+plot_PCA_gratings(sessions[sesidx],apply_zscore=True)
+plot_PCA_gratings(sessions[sesidx],apply_zscore=True,cellfilter=maxdF>np.percentile(maxdF,75))
+
+#%% ################# PCA on full session neural data and correlate with running speed
 
 X           = zscore(sessions[0].calciumdata,axis=0)
 
 pca         = PCA(n_components=15) #construct PCA object with specified number of components
 Xp          = pca.fit_transform(X) #fit pca to response matrix (n_samples by n_features)
-#dimensionality is now reduced from time by N to time by ncomp
+#dimensionality is now reduced from time by N neurons to time by ncomp
 
 ## Get interpolated values for behavioral variables at imaging frame rate:
-runspeed_F  = np.interp(x=sessions[0].ts_F,xp=sessions[0].behaviordata['ts'],
-                        fp=sessions[0].behaviordata['runspeed'])
+runspeed_F  = np.interp(x=sessions[sesidx].ts_F,xp=sessions[sesidx].behaviordata['ts'],
+                        fp=sessions[sesidx].behaviordata['runspeed'])
 
 plotncomps  = 5
 Xp_norm     = preprocessing.MinMaxScaler().fit_transform(Xp)
@@ -126,22 +133,22 @@ for icomp in range(plotncomps):
 
 plt.figure()
 for icomp in range(plotncomps):
-    sns.lineplot(x=sessions[0].ts_F,y=Xp_norm[:,icomp]+icomp,linewidth=0.5)
-sns.lineplot(x=sessions[0].ts_F,y=Rs_norm.reshape(-1)+plotncomps,linewidth=0.5,color='k')
+    sns.lineplot(x=sessions[sesidx].ts_F,y=Xp_norm[:,icomp]+icomp,linewidth=0.5)
+sns.lineplot(x=sessions[sesidx].ts_F,y=Rs_norm.reshape(-1)+plotncomps,linewidth=0.5,color='k')
 
-plt.xlim([sessions[0].trialdata['tOnset'][300],sessions[0].trialdata['tOnset'][800]])
+plt.xlim([sessions[sesidx].trialdata['tOnset'][300],sessions[sesidx].trialdata['tOnset'][800]])
 for icomp in range(plotncomps):
-    plt.text(x=sessions[0].trialdata['tOnset'][500],y=icomp+0.25,s='r=%1.3f' %cmat[icomp])
+    plt.text(x=sessions[sesidx].trialdata['tOnset'][500],y=icomp+0.25,s='r=%1.3f' %cmat[icomp])
 
 plt.ylim([0,plotncomps+1])
 
-##############################
+#%%#############################
 # PCA on trial-concatenated matrix:
-# Reorder such that tensor is N by K x T (not K by N by T)
-# then reshape to N by KxT (each row is now the activity of all trials over time concatenated for one neuron)
+# Reshape tensor to N by KxT (each row is now the activity of all trials over time concatenated for one neuron)
 
-mat_zsc     = tensor.transpose((1,0,2)).reshape(N,K*T,order='F') 
-mat_zsc     = zscore(mat_zsc,axis=4)
+N,K,T = np.shape(sessions[sesidx].tensor)
+mat_zsc     = sessions[sesidx].tensor.reshape(N,K*T,order='F') 
+mat_zsc     = zscore(mat_zsc,axis=1)
 
 pca               = PCA(n_components=100) #construct PCA object with specified number of components
 Xp                = pca.fit_transform(mat_zsc) #fit pca to response matrix
@@ -154,6 +161,8 @@ plt.figure()
 sns.lineplot(data=pca.explained_variance_ratio_)
 plt.xlim([-1,100])
 plt.ylim([0,0.15])
+# plt.xscale('log')
+# plt.yscale('log')
 
 ##############################
 ## Make dataframe of tensor with all trial, time information etc.

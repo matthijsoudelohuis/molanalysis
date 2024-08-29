@@ -13,6 +13,8 @@ direc = 'W:\\Users\\Matthijs\\Rawdata\\LPE09829\\2023_03_29\\suite2p\\plane1'
 
 direc = 'W:\\Users\\Matthijs\\Rawdata\\LPE09830\\2023_04_10\\suite2p\\plane1'
 
+direc = 'K:\\RawData\\LPE12385\\2024_06_13\\suite2p\\plane7'
+
 os.chdir(direc)
 # Load the data of this plane:
 F       = np.load('F.npy')
@@ -181,3 +183,21 @@ plt.figure(figsize=(5,4))
 plt.scatter(event_rate[iscell[:,0]==1],noise_level[iscell[:,0]==1],s=8,c='k')
 plt.xlabel('event rate')
 plt.ylabel('noise level ')
+
+#%% ###################
+
+dF = calculate_dff(F, Fneu, coeff_Fneu=0.7, prc=10) #Rupprecht et al. 2021
+
+iN = 16
+
+plt.figure()
+# plt.subplot()
+plt.plot(F[iN,:],linewidth=0.3,c='r')
+plt.plot(spks[iN,:],linewidth=0.3,c='k')
+plt.plot(dF[iN,:]*1000,linewidth=0.3,c='b')
+
+plt.figure()
+plt.plot(F[5,:100])
+plt.plot(Fneu[5,:100])
+plt.plot(dF[5,:100])
+

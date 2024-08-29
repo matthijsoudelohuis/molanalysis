@@ -30,44 +30,45 @@ class Session():
         self.protocol = protocol
         self.animal_id = animal_id
         self.session_id = session_id
+        self.cellfilter = None
 
     def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
-        # Calciumversion can be 'dF' or 'deconv'
 
-        self.sessiondata_path = os.path.join(
-            self.data_folder, 'sessiondata.csv')
-        self.trialdata_path = os.path.join(self.data_folder, 'trialdata.csv')
-        self.celldata_path = os.path.join(self.data_folder, 'celldata.csv')
-        self.behaviordata_path = os.path.join(
-            self.data_folder, 'behaviordata.csv')
-        self.videodata_path = os.path.join(self.data_folder, 'videodata.csv')
-        self.calciumdata_path = os.path.join(
-            self.data_folder, '%sdata.csv' % calciumversion)
+        self.sessiondata_path   = os.path.join(self.data_folder, 'sessiondata.csv')
+        self.trialdata_path     = os.path.join(self.data_folder, 'trialdata.csv')
+        self.celldata_path      = os.path.join(self.data_folder, 'celldata.csv')
+        self.behaviordata_path  = os.path.join(self.data_folder, 'behaviordata.csv')
+        self.videodata_path     = os.path.join(self.data_folder, 'videodata.csv')
+        self.calciumdata_path   = os.path.join(self.data_folder, '%sdata.csv' % calciumversion) #Calciumversion can be 'dF' or 'deconv'
+        self.Ftsdata_path       = os.path.join(self.data_folder, 'Ftsdata.csv')
+        self.Fchan2data_path    = os.path.join(self.data_folder, 'Fchan2data.csv')
 
-        assert (os.path.exists(self.sessiondata_path)
-                ), 'Could not find data in {}'.format(self.sessiondata_path)
+        assert(os.path.exists(self.sessiondata_path)), 'Could not find data in {}'.format(self.sessiondata_path)
 
-        self.sessiondata = pd.read_csv(
-            self.sessiondata_path, sep=',', index_col=0)
+        self.sessiondata  = pd.read_csv(self.sessiondata_path, sep=',', index_col=0)
 
-        if not self.protocol in ['SP', 'RF']:
-            self.trialdata = pd.read_csv(
-                self.trialdata_path, sep=',', index_col=0)
+        if not self.protocol in ['SP','RF']: #These protocols are not trial-based
+            self.trialdata  = pd.read_csv(self.trialdata_path, sep=',', index_col=0)
         else:
             self.trialdata = None
 
         if os.path.exists(self.celldata_path):
-            self.celldata = pd.read_csv(
-                self.celldata_path, sep=',', index_col=0)
-            # get only good cells (selected ROIs by suite2p):
-            goodcells = self.celldata['iscell'] == 1
-            self.celldata = self.celldata[goodcells].reset_index(drop=True)
+
+            self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
+            # get only good cells (selected ROIs by suite2p): #not used anymore, only good cells are saved anyways
+            # goodcells               = self.celldata['iscell'] == 1
+            # self.celldata           = self.celldata[goodcells].reset_index(drop=True)
+        
+            if self.cellfilter is not None:
+                if isinstance(self.cellfilter, pd.DataFrame):
+                    self.cellfilter = self.cellfilter.to_numpy().squeeze()
+                assert np.shape(self.celldata)[0]==len(self.cellfilter)
+                assert np.array_equal(self.cellfilter, self.cellfilter.astype(bool)), 'Cell filter not boolean'
+                self.celldata = self.celldata.iloc[self.cellfilter,:]
+                self.celldata.reset_index(drop=True, inplace=True)
 
         if load_behaviordata:
-            logger.debug('Loading behavior data at {}'.format(
-                self.behaviordata_path))
-            self.behaviordata = pd.read_csv(
-                self.behaviordata_path, sep=',', index_col=0)
+            self.behaviordata  = pd.read_csv(self.behaviordata_path, sep=',', index_col=0)
         else:
             self.behaviordata = None
 
@@ -78,22 +79,28 @@ class Session():
             self.videodata = None
 
         if load_calciumdata:
-            logger.info(f'Loading calcium data at {self.calciumdata_path}')
-            self.calciumdata = pd.read_csv(
-                self.calciumdata_path, sep=',', index_col=0)
-            self.calciumdata = self.calciumdata.drop('session_id', axis=1)
 
-            self.ts_F = self.calciumdata['timestamps']
-            self.calciumdata = self.calciumdata.drop('timestamps', axis=1)
+            print('Loading calcium data at {}'.format(self.calciumdata_path))
+            self.calciumdata        = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
+            self.ts_F               = pd.read_csv(self.Ftsdata_path, sep=',', index_col=0).to_numpy().squeeze()
+            self.F_chan2            = pd.read_csv(self.Fchan2data_path, sep=',', index_col=0).to_numpy().squeeze()
 
-            self.F_chan2 = self.calciumdata['F_chan2']
-            self.calciumdata = self.calciumdata.drop('F_chan2', axis=1)
+            if self.cellfilter is not None:
+                if isinstance(self.cellfilter, pd.DataFrame):
+                    self.cellfilter = self.cellfilter.to_numpy().squeeze()
+                assert np.shape(self.calciumdata)[1]==len(self.cellfilter)
+                assert np.array_equal(self.cellfilter, self.cellfilter.astype(bool)), 'Cell filter not boolean'
+                
+                self.calciumdata = self.calciumdata.iloc[:,self.cellfilter]
+                # self.celldata = self.celldata.iloc[cellfilter,:]
 
-            self.calciumdata = self.calciumdata.drop(
-                self.calciumdata.columns[~goodcells], axis=1)
+            # self.ts_F                = self.calciumdata['timestamps']
+            # self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
 
-            assert (np.shape(self.calciumdata)[
-                    1] == np.shape(self.celldata)[0])
+            # self.F_chan2             = self.calciumdata['F_chan2']
+            # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
+
+            assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
 
         if load_calciumdata and load_behaviordata:
             # Get interpolated values for behavioral variables at imaging frame rate:
@@ -126,53 +133,74 @@ class Session():
         # set all nonlabeled cells to 'non'
         self.celldata.loc[self.celldata['redcell'] == 0, 'recombinase'] = 'non'
 
-        # return sessions
-
-    def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF', keepraw=False):
-        # combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
+    def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF',keepraw=False, cellfilter=None):
+        #combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
 
         self.load_data(load_behaviordata=load_behaviordata, load_calciumdata=load_calciumdata,
-                       load_videodata=load_videodata, calciumversion=calciumversion)
-
-        if self.sessiondata['protocol'][0] == 'IM':
-            t_resp_stop = 0.5
-        elif self.sessiondata['protocol'][0] == 'GR':
-            t_resp_stop = 0.75
-        elif self.sessiondata['protocol'][0] == 'GN':
-            t_resp_stop = 0.75
+                       load_videodata=load_videodata,calciumversion=calciumversion)
+        
+        if self.sessiondata['protocol'][0]=='IM':
+            if calciumversion=='deconv':
+                t_resp_start = 0
+                t_resp_stop = 0.75
+            elif calciumversion=='dF':
+                t_resp_start = 0.25
+                t_resp_stop = 1.25
+        elif self.sessiondata['protocol'][0]=='GR':
+            if calciumversion=='deconv':
+                t_resp_start = 0
+                t_resp_stop = 1
+            elif calciumversion=='dF':
+                t_resp_start = 0.5
+                t_resp_stop = 1.5
+        elif self.sessiondata['protocol'][0]=='GN':
+            if calciumversion=='deconv':
+                t_resp_start = 0
+                t_resp_stop = 1
+            elif calciumversion=='dF':
+                t_resp_start = 0.5
+                t_resp_stop = 1.5
         else:
-            logger.warning('getting mean response for unknown protocol')
+            print('skipping mean response for unknown protocol')
+            return
 
         ##############################################################################
-        # Construct trial response matrix:  N neurons by K trials
-        self.respmat = compute_respmat(self.calciumdata, self.ts_F, self.trialdata['tOnset'],
-                                       t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', subtr_baseline=False, label='response matrix')
+        ## Construct trial response matrix:  N neurons by K trials
+        self.respmat         = compute_respmat(self.calciumdata, self.ts_F, self.trialdata['tOnset'],
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean',subtr_baseline=False, label = "response matrix")
 
         self.respmat_runspeed = compute_respmat(self.behaviordata['runspeed'],
-                                                self.behaviordata['ts'], self.trialdata['tOnset'],
-                                                t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='runspeed')
+                                        self.behaviordata['ts'], self.trialdata['tOnset'],
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "runspeed")
 
         self.respmat_videome = compute_respmat(self.videodata['motionenergy'],
-                                               self.videodata['ts'], self.trialdata['tOnset'],
-                                               t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='motion energy')
+                                        self.videodata['ts'],self.trialdata['tOnset'],
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "motion energy")
+        
+        if 'pupil_xpos' in self.videodata:
+            self.respmat_pupilx = compute_respmat(self.videodata['pupil_xpos'],
+                                                self.videodata['ts'], self.trialdata['tOnset'],
+                                                t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil x position')
+            
+        if 'pupil_ypos' in self.videodata:
+            self.respmat_pupily = compute_respmat(self.videodata['pupil_ypos'],
+                                                self.videodata['ts'], self.trialdata['tOnset'],
+                                                t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil y position')
 
-        self.respmat_pupilx = compute_respmat(self.videodata['pupil_xpos'],
-                                              self.videodata['ts'], self.trialdata['tOnset'],
-                                              t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil x position')
-
-        self.respmat_pupily = compute_respmat(self.videodata['pupil_ypos'],
-                                              self.videodata['ts'], self.trialdata['tOnset'],
-                                              t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil y position')
-
-        self.respmat_pupilarea = compute_respmat(self.videodata['pupil_area'],
-                                                 self.videodata['ts'], self.trialdata['tOnset'],
-                                                 t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil area')
-
-        sampling_rate = 1 / np.mean(np.diff(self.ts_F))
-        self.respmat_pupilareaderiv = self.lowpass_filter(
-            self.respmat_pupilarea, sampling_rate, lowcut=None, highcut=0.7, order=6)
-        self.respmat_pupilareaderiv = np.gradient(
-            self.respmat_pupilareaderiv, axis=0)
+        
+        if 'pupil_area' in self.videodata:
+            self.respmat_pupilarea = compute_respmat(self.videodata['pupil_area'],
+                                        self.videodata['ts'],self.trialdata['tOnset'],
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "pupil area")
+            
+            sampling_rate = 1 / np.mean(np.diff(self.ts_F))
+            self.respmat_pupilareaderiv = self.lowpass_filter(
+                self.respmat_pupilarea, sampling_rate, lowcut=None, highcut=0.7, order=6)
+            self.respmat_pupilareaderiv = np.gradient(
+                self.respmat_pupilareaderiv, axis=0)
+        else: 
+            self.respmat_pupilarea = None
+            self.respmat_pupilareaderiv = None
 
         if not keepraw:
             delattr(self, 'calciumdata')
@@ -296,39 +324,12 @@ class Session():
 #         trial_info = self.get_trial_info(trial_number)
 #         return trial_info['correctResponse'].iloc[0]
 
-#     def get_stimulus_change_of_trial(self, trial_number):
-#         trial_info = self.get_trial_info(trial_number)
-#         trial_type = self.get_type_of_trial(trial_number)
-#         if trial_type == 'X':
-#             stim = trial_info['visualOriChangeNorm'].iloc[0]
-#         elif trial_type == 'Y':
-#             stim = trial_info['audioFreqChangeNorm'].iloc[0]
-#         elif trial_type == 'P':
-#             stim = 0
-#         else:
-#             raise ValueError('Stimulus identity for which modality?')
-#         return stim
-
 #     def get_lick_time_of_trial(self, trial_number):
 #         trial_info = self.get_trial_info(trial_number)
 #         return trial_info['firstlickTime'].iloc[0]
 
 #     def get_lick_time_of_trials(self, trial_numbers):
 #         return [self.get_lick_time_of_trial(t) for t in trial_numbers]
-
-#     def get_stimulus_identity_of_trial(self, trial_number):
-#         trial_info = self.get_trial_info(trial_number)
-#         trial_type = self.get_type_of_trial(trial_number)
-#         if trial_type == 'X':
-#             stim = trial_info['visualOriPostChangeNorm'].iloc[0]
-#         elif trial_type == 'Y':
-#             stim = trial_info['audioFreqPostChangeNorm'].iloc[0]
-#         elif trial_type == 'P':
-#             stim = 0
-#         else:
-#             raise ValueError('Stimulus identity for which modality?')
-#         return stim
-
 
 #     def select_units(self, area=None, layer=None, min_isolation_distance=None,
 #                      min_coverage=None, max_perc_isi_spikes=None,

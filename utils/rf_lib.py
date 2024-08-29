@@ -15,11 +15,11 @@ from sklearn.metrics import r2_score
 import seaborn as sns
 from utils.corr_lib import compute_pairwise_metrics
 
-def plot_rf_plane(celldata,sig_thr=1):
+def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
     
     areas           = np.sort(celldata['roi_name'].unique())[::-1]
     # vars            = ['rf_azimuth','rf_elevation']
-    vars            = ['rf_az_Fneu','rf_el_Fneu']
+    vars            = ['rf_az_' + rf_type,'rf_el_' + rf_type]
 
     fig,axes        = plt.subplots(2,len(areas),figsize=(5*len(areas),10))
 
@@ -33,10 +33,10 @@ def plot_rf_plane(celldata,sig_thr=1):
             # sns.scatterplot(data = celldata[idx],x='xloc',y='yloc',
             #                 hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
             
-            if vars[i]=='rf_az_Fneu':
+            if vars[i]=='rf_az_' + rf_type:
                 sns.scatterplot(data = celldata[idx],x='yloc',y='xloc',hue_norm=(-135,135),
                             hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
-            elif vars[i]=='rf_el_Fneu':
+            elif vars[i]=='rf_el_' + rf_type:
                 sns.scatterplot(data = celldata[idx],x='yloc',y='xloc',hue_norm=(-16.7,50.2),
                             hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
 
@@ -53,9 +53,9 @@ def plot_rf_plane(celldata,sig_thr=1):
             axes[i,j].get_legend().remove()
             axes[i,j].invert_yaxis()
 
-            if vars[i]=='rf_az_Fneu':
+            if vars[i]=='rf_az_' + rf_type:
                 norm = plt.Normalize(-135,135)
-            elif vars[i]=='rf_el_Fneu':
+            elif vars[i]=='rf_el_' + rf_type:
                 norm = plt.Normalize(-16.7,50.2)
             sm = plt.cm.ScalarMappable(cmap="gist_rainbow", norm=norm)
             sm.set_array([])
@@ -67,7 +67,7 @@ def plot_rf_plane(celldata,sig_thr=1):
     return fig
 
 
-def plot_rf_screen(celldata,sig_thr=1):
+def plot_rf_screen(celldata,sig_thr=1,rf_type='Fneu'):
     
     areas           = np.sort(celldata['roi_name'].unique())[::-1]
 
@@ -75,12 +75,12 @@ def plot_rf_screen(celldata,sig_thr=1):
 
     for j in range(len(areas)): #for areas
         idx_area    = celldata['roi_name']==areas[j]
-        idx_sig     = celldata['rf_p_Fneu'] < sig_thr
+        idx_sig     = celldata['rf_p_' + rf_type] < sig_thr
         idx         = np.logical_and(idx_area,idx_sig)
 
         sns.scatterplot(data = celldata[idx],
-                        x='rf_az_Fneu',y='rf_el_Fneu',
-                        hue='rf_p_Fneu',ax=axes[j],palette='hot_r',size=9,edgecolor="none")
+                        x='rf_az_' + rf_type,y='rf_el_' + rf_type,
+                        hue='rf_p_' + rf_type,ax=axes[j],palette='hot_r',size=9,edgecolor="none")
 
         box = axes[j].get_position()
         axes[j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
@@ -95,12 +95,12 @@ def plot_rf_screen(celldata,sig_thr=1):
         axes[j].set_facecolor("black")
         axes[j].get_legend().remove()
         # if j==1:
-        norm = plt.Normalize(celldata['rf_p_Fneu'][idx].min(), celldata['rf_p_Fneu'][idx].max())
+        norm = plt.Normalize(celldata['rf_p_' + rf_type][idx].min(), celldata['rf_p_' + rf_type][idx].max())
         # norm = plt.Normalize(celldata['rf_p_Fneu'][idx].max(), celldata['rf_p_Fneu'][idx].min())
         sm = plt.cm.ScalarMappable(cmap="hot_r", norm=norm)
         sm.set_array([])
         # Remove the legend and add a colorbar (optional)
-        axes[j].figure.colorbar(sm,ax=axes[j],pad=0.02,label='rf_p_Fneu')
+        axes[j].figure.colorbar(sm,ax=axes[j],pad=0.02,label='rf_p_' + rf_type)
     plt.suptitle(celldata['session_id'][0])
     plt.tight_layout()
 
