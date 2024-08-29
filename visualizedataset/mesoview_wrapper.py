@@ -1,25 +1,38 @@
+"""
+Author: Matthijs Oude Lohuis, Champalimaud Research
+2022-2025
+
+This script makes an average image of the mesoview data for each session
+2Pram Mesoscope data
+
+"""
+
 import os
+os.chdir('e:\\Python\\molanalysis')
+
 from loaddata.get_data_folder import get_local_drive,get_data_folder
-os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
+# os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 import numpy as np
 import tifffile
 from utils.twoplib import split_mROIs
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from labeling.label_lib import bleedthrough_correction, estimate_correc_coeff
+import time
 
-rawdatadir      = "G:\\Mesoviews\\"
+rawdatadir      = "F:\\Mesoviews\\"
 # rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\PILOTS\\"
 outputdir           = os.path.join(get_data_folder(),"OV")
 
 animal_ids          = [] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE11998'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE09830','LPE09831'] #If empty than all animals in folder will be processed
 
 cmred = LinearSegmentedColormap.from_list(
         "Custom", [(0, 0, 0), (1, 0, 0)], N=100)
 cmgreen = LinearSegmentedColormap.from_list(
         "Custom", [(0, 0, 0), (0, 1, 0)], N=100)
+
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -42,10 +55,10 @@ for animal_id in animal_ids: #for each animal
             for x in os.listdir(ovfolder):
                 if x.endswith(".tif"):
                     mROI_data, meta = split_mROIs(os.path.join(ovfolder,x))
-                    
+
                     # for iframe in range(np.shape(mROI_data[0])[0])
                     c           = np.concatenate(mROI_data[:], axis=2) #reshape to full ROI (size frames by xpix by ypix)
-                    
+
                     if np.shape(greenframe)[0]==0:
                         greenframe  = np.empty(np.shape(c)[1:])
                         redframe    = np.empty(np.shape(c)[1:])
@@ -55,6 +68,8 @@ for animal_id in animal_ids: #for each animal
 
                     cmax        = np.max(c[1::2,:,:], axis=0)
                     redframe    = np.stack([redframe,cmax],axis=2).max(axis=2)
+                    del mROI_data,c,cmax #free up memory
+                    time.sleep(0.5) #for memory management
             
             # coeff       = estimate_correc_coeff(greenframe,redframe)
 
@@ -68,50 +83,23 @@ for animal_id in animal_ids: #for each animal
             fH = open(outpath,'wb') #as fH:
             tifffile.imwrite(fH,redframe.astype('int16'), bigtiff=True)
             
-            fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10,6.5))
-
-            ax1.imshow(greenframe,cmap=cmgreen,vmin=np.percentile(greenframe,1),vmax=np.percentile(greenframe,99))
-            ax1.set_title('Mean Image Chan 1')
-            ax2.imshow(redframe,cmap=cmred,vmin=np.percentile(redframe,15),vmax=np.percentile(redframe,99))
-            ax2.set_title('Mean Image Chan 2')
-            plt.setp(plt.gcf().get_axes(), xticks=[], yticks=[]);
-            plt.tight_layout()
-            
             if not os.path.exists(os.path.join(outputdir,animal_id)):
                 os.makedirs(os.path.join(outputdir,animal_id))
 
+            fig1, ax1 = plt.subplots(figsize=(10,10))
+            ax1.imshow(greenframe,cmap=cmgreen,vmin=np.percentile(greenframe,1),vmax=np.percentile(greenframe,99))
+            plt.axis('off')
+            plt.setp(plt.gcf().get_axes(), xticks=[], yticks=[]);
+            plt.tight_layout()
             # Save the full figure...
-            outpath = os.path.join(outputdir,animal_id,animal_id + '_' + sessiondate + '.png')
+            outpath = os.path.join(outputdir,animal_id,animal_id + '_' + sessiondate + '_green.png')
+            fig1.savefig(outpath, bbox_inches='tight', pad_inches=0)
 
-            fig.savefig(outpath)
-
-# animal_id = animal_ids[0] #for each animal
-# sessiondate = sessiondates[1] #for each animal
-# x = os.listdir(ovfolder)[0]
-# nchannels = 2 #whether image has both red and green channel acquisition (PMT)
-# greenframe = np.empty([4014,3976])
-# redframe = np.empty([4014,3976])
-
-# for x in os.listdir(direc):
-#     if x.endswith(".tif"):
-#             mROI_data, meta = split_mROIs(os.path.join(direc,x))
-#             nROIs = len(mROI_data)
-#             c           = np.concatenate(mROI_data[:], axis=2)  # ValueError: all the input arrays must have same number of dimensions 
-#             cmax        = np.max(c[0::2,:,:], axis=0)
-#             greenframe  = np.stack([greenframe,cmax],axis=2).max(axis=2)
-#             # greenframe  = np.max(greenframe, axis=0)
-#             cmax        = np.max(c[1::2,:,:], axis=0)
-#             redframe    = np.stack([redframe,cmax],axis=2).max(axis=2)
-#             # redframe    = np.concatenate([redframe,c[1::2,:,:]],axis=0)
-#             # redframe    = np.max(redframe, axis=0)
-          
-# outpath = outputdirec + 'NSH07429_greenwindow_max.tif'
-# fH = open(outpath,'wb') #as fH:
-# tifffile.imwrite(fH,greenframe.astype('int16'), bigtiff=True)
-
-# outpath = outputdirec + 'NSH07429_redwindow_max.tif'
-# fH = open(outpath,'wb') #as fH:
-# tifffile.imwrite(fH,redframe.astype('int16'), bigtiff=True)
-
-
-
+            fig2, ax2 = plt.subplots(figsize=(10,10))
+            ax2.imshow(redframe,cmap=cmred,vmin=np.percentile(redframe,15),vmax=np.percentile(redframe,99))
+            plt.axis('off')
+            plt.setp(plt.gcf().get_axes(), xticks=[], yticks=[]);
+            plt.tight_layout()
+            # Save the full figure...
+            outpath = os.path.join(outputdir,animal_id,animal_id + '_' + sessiondate + '_red.png')
+            fig2.savefig(outpath, bbox_inches='tight', pad_inches=0)

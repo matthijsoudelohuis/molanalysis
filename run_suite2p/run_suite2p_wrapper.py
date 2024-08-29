@@ -19,9 +19,9 @@ from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
-rawdatadir          = 'L:\\RawData\\'
-animal_id           = 'LPE10884'
-sessiondate         = '2024_01_18'
+rawdatadir          = 'H:\\RawData\\'
+animal_id           = 'LPE11998'
+sessiondate         = '2024_05_10'
  
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
@@ -38,7 +38,7 @@ ops = run_bleedthrough_corr(db,ops) #if no gain parameters, autom fit bleedthrou
 ########################## ROI detection ###########################
 ops['do_registration']      = False
 ops['roidetect']            = True
-# ops['nbinned']              = 2000
+ops['nbinned']              = 2000
 
 ops = suite2p.run_s2p(ops=ops, db=db) 
 

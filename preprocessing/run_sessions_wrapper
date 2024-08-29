@@ -12,12 +12,12 @@ from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_sessio
 from loaddata.get_data_folder import get_rawdata_drive
 from preprocessing.locate_rf import locate_rf_session
 
-rawdatadir          = 'K:\\RawData\\'
+rawdatadir          = 'J:\\RawData\\'
 # rawdatadir          = 'W:\\Users\\Matthijs\\Rawdata\\'
-# animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
-animal_ids          = [] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
+# animal_ids          = [] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE09665','LPE09830','LPE11495'] #If empty than all animals in folder will be processed
-# date_filter         = ['2024_05_02']
+# date_filter         = ['2023_12_15']
 date_filter         = []
 
 ## Loop over all selected animals and folders
@@ -37,6 +37,6 @@ for animal_id in animal_ids: #for each animal
     for sessiondate in sessiondates: #for each of the sessions for this animal
         print('')
         ###################  Run one of these functions for all selected sessions:  ################
-        # gen_red_images(rawdatadir,animal_id,sessiondate)
+        gen_red_images(rawdatadir,animal_id,sessiondate)
         # proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=False)
-        locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'])
+        # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'])

@@ -195,9 +195,9 @@ def compute_tensor_space(data, ts_F, z_T, zpos_F, trialnum_F, s_pre=-100, s_post
                                                   
 """
 
-
 def compute_respmat(data, ts_F, ts_T, t_resp_start=0, t_resp_stop=1,
                     t_base_start=-1, t_base_stop=0, subtr_baseline=False, method='mean', *args, **kwargs):
+
     """
     This function constructs a 2D matrix of N neurons by K trials
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
@@ -222,19 +222,15 @@ def compute_respmat(data, ts_F, ts_T, t_resp_start=0, t_resp_stop=1,
 
     respmat = np.empty([N, K])  # init output matrix
     # print(f"\n")
-    # loop across trials, for every trial, slice through activity matrix and compute response across neurons:
-    label = f'Computing average response for {kwargs.get("label", "trial")}'
-    progress_bar = kwargs.get('progress_bar', True)
-    leave = kwargs.get('leave', False)
-    for k in tqdm(range(K), desc=label, disable=not progress_bar, leave=leave):
-        respmat[:, k] = data[np.logical_and(
-            ts_F > ts_T[k]+t_resp_start, ts_F < ts_T[k]+t_resp_stop)].mean(axis=0)
 
-        if subtr_baseline:  # subtract baseline activity if requested:
-            base = data[np.logical_and(
-                ts_F > ts_T[k]+t_base_start, ts_F < ts_T[k]+t_base_stop)].mean(axis=0)
-            respmat[:, k] = np.subtract(respmat[:, k], base)
+    for k in range(K): #loop across trials, for every trial, slice through activity matrix and compute response across neurons:
+        print(f"\rComputing average response for trial {k+1} / {K}",end='\r')
+        respmat[:,k]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop),:].mean(axis=0)
 
+        if subtr_baseline: #subtract baseline activity if requested:
+            base                = data[np.logical_and(ts_F>ts_T[k]+t_base_start,ts_F<ts_T[k]+t_base_stop),:].mean(axis=0)
+            respmat[:,k]        = np.subtract(respmat[:,k],base)
+    
     return np.squeeze(respmat)
 
 

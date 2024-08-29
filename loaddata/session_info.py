@@ -18,8 +18,9 @@ def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumd
     """
     This function loads and outputs the session objects that have to be loaded.
     session_list is a 2D np array with animal_id and session_id pairs (each row one session)
-
-    sessions = load_sessions(protocol,session_list)
+    example:
+    session_list = np.array([['LPE11086', '2024_01_05']])
+    sessions = load_sessions(protocol='GR',session_list)
     """
     sessions = []
 
@@ -39,21 +40,50 @@ def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumd
 
     return sessions, len(sessions)
 
-
-def filter_sessions(protocols, load_behaviordata=False, load_calciumdata=False,
-                    load_videodata=False, calciumversion='dF',
-                    only_animal_id=None, min_cells=None, min_trials=None, session_rf=None,
-                    incl_areas=None, only_areas=None, has_pupil=False):
-    #             only_correct=False, min_units=None,
-    #             min_units_per_layer=None, min_channels_per_layer=None,
-    #             exclude_NA_layer=False, min_perc_correct=None):
+def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
+                    load_videodata=False, calciumversion='dF',only_animal_id=None,
+                    min_cells=None, min_lab_cells_V1=None, min_lab_cells_PM=None, 
+                    filter_areas=None,min_trials=None, session_rf=None,
+                    any_of_areas=None,only_all_areas=None,has_pupil=False):
     """
-    This function outputs a list of session objects with all the sessions which
-    respond to the given criteria. Usage is as follows:
+    This function filters and returns a list of session objects that meet specific 
+    criteria based on the input arguments. It allows the user to specify conditions 
+    related to the behavioral data, calcium imaging data, video data, and session-specific 
+    parameters like the number of trials and cell counts.
+    Usage is as follows:
 
-    sessions = filter_sessions(protocol,min_trials=100)
+    sessions = filter_sessions(protocols,min_trials=100)
+    
+    'protocols' Specifies the experimental protocols to filter sessions by. 
+    If a single string is provided, it's treated as one protocol. If a list is provided, 
+    it filters by any of the listed protocols. If None, it defaults to a list of all protocols 
+    (['VR','IM','GR','GN','RF','SP','DM','DN','DP']).
 
-    :param min_trials: To restrict to sessions which have minimum trials
+    min_lab_cells_V1:
+    Description: Filters sessions to include only those with at least this many labeled 
+    cells in the V1 region. If None, no filtering by labeled cell count in V1 is applied.
+    Example: 10
+
+    min_lab_cells_PM:
+    Description: Filters sessions to include only those with at least this many labeled 
+    cells in the PM region. If None, no filtering by labeled cell count in PM is applied.
+    Example: 10
+
+    any_of_areas (list of str, default: None):
+    Description: Filters sessions to include only those with cells in any of the specified brain areas. 
+    Example: ['V1', 'PM']
+
+    only_all_areas (list of str, default: None):
+    Description: Filters sessions to include only those that have cells in all the specified brain areas.
+    Additional areas are allowed 
+    Example: ['V1', 'PM']
+
+    filter_areas (list of str, default: None):
+    Description: Filters data to include only those that have cells in the specified brain areas. 
+    Example: ['V1', 'PM']
+    
+    has_pupil (bool, default: False): Filters sessions to include only those that have pupil data available.
+    Example: True    
     """
     sessions = []
     if isinstance(protocols, str):
@@ -85,28 +115,34 @@ def filter_sessions(protocols, load_behaviordata=False, load_calciumdata=False,
 
                 # SELECT BASED ON # CELLS
                 if sesflag and min_cells is not None:
-                    sesflag = sesflag and hasattr(
-                        ses, 'celldata') and len(ses.celldata) >= min_cells
+                    sesflag = sesflag and hasattr(ses, 'celldata') and len(ses.celldata) >= min_cells
+                
+                # SELECT BASED ON # LABELED CELLS
+                if sesflag and min_lab_cells_V1 is not None:
+                    sesflag = sesflag and hasattr(ses, 'celldata') and np.sum(np.logical_and(ses.celldata['roi_name']=='V1',ses.celldata['redcell']==1)) >= min_lab_cells_V1
+                if sesflag and min_lab_cells_PM is not None:
+                    sesflag = sesflag and hasattr(ses, 'celldata') and np.sum(np.logical_and(ses.celldata['roi_name']=='PM',ses.celldata['redcell']==1)) >= min_lab_cells_V1
 
                 if sesflag and session_rf is not None:
                     sesflag = sesflag and hasattr(
                         ses, 'celldata') and 'rf_p_F' in ses.celldata
 
-                if sesflag and incl_areas is not None:
-                    sesflag = sesflag and hasattr(ses, 'celldata') and np.any(
-                        np.isin(incl_areas, np.unique(ses.celldata['roi_name'])))
+                if sesflag and any_of_areas is not None:
+                    sesflag = sesflag and hasattr(ses, 'celldata') and np.any(np.isin(any_of_areas,np.unique(ses.celldata['roi_name'])))
 
-                if sesflag and only_areas is not None:
-                    sesflag = sesflag and hasattr(ses, 'celldata') and np.all(
-                        np.isin(np.unique(ses.celldata['roi_name']), only_areas))
-
+                if sesflag and only_all_areas is not None:
+                    sesflag = sesflag and hasattr(ses, 'celldata') and np.all(np.isin(only_all_areas,np.unique(ses.celldata['roi_name'])))
+                    # sesflag = sesflag and hasattr(ses, 'celldata') and np.all(np.isin(np.unique(ses.celldata['roi_name']),only_all_areas))
+                
+                if sesflag and filter_areas is not None and hasattr(ses, 'celldata'):
+                    ses.cellfilter = np.isin(ses.celldata['roi_name'],filter_areas)
+                
                 if sesflag and has_pupil:
                     ses.load_data(load_videodata=True)
-                    sesflag = sesflag and hasattr(
-                        ses, 'videodata') and 'pupil_area' in ses.videodata and np.any(ses.videodata['pupil_area'])
-                if sesflag:
-                    ses.load_data(load_behaviordata, load_calciumdata,
-                                  load_videodata, calciumversion)
+                    sesflag = sesflag and hasattr(ses, 'videodata') and 'pupil_area' in ses.videodata and np.any(ses.videodata['pupil_area'])
+                
+                if sesflag: #if session meets all criteria, load data and append to list of sessions:
+                    ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
                     sessions.append(ses)
 
     report_sessions(sessions)
