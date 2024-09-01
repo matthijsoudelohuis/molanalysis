@@ -126,24 +126,10 @@ axes[1].set_ylabel('Neuron')
 plt.tight_layout(rect=[0, 0, 1, 1])
 axes[1].set_title('Repetition 2')
 
-
 # %% ##### Show response-triggered frame for cells:
-for ises in range(nSessions):
-    nImages = len(np.unique(sessions[ises].trialdata['ImageNumber']))
-    nNeurons = np.shape(sessions[ises].respmat)[0]
-    sessions[ises].respmat_image = np.empty((nNeurons, nImages))
-    for iIm in range(nImages):
-        sessions[ises].respmat_image[:, iIm] = np.mean(
-            sessions[sesidx].respmat[:, sessions[sesidx].trialdata['ImageNumber'] == iIm], axis=1)
 
-    # Compute response triggered average image:
-    sessions[ises].RTA = np.empty((*np.shape(natimgdata)[:2], nNeurons))
-
-    for iN in range(nNeurons):
-        print(
-            f"\rComputing average response for neuron {iN+1} / {nNeurons}", end='\r')
-        sessions[ises].RTA[:, :, iN] = np.average(
-            natimgdata, axis=2, weights=sessions[ises].respmat_image[iN, :])
+for ses in sessions:
+    ses = get_response_triggered_image(ses, natimgdata)
 
 # %% #### Plot X examples from V1 and PM with high variance in the average image (capturing some consistent preference): ####
 RTA_var = np.var(sessions[ises].RTA, axis=(0, 1))

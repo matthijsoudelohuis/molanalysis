@@ -37,13 +37,14 @@ session_list        = np.array([['LPE10919','2023_11_06']])
 # session_list        = np.array([['LPE09830','2023_04_10'],
 #                                 ['LPE09830','2023_04_12']])
 # session_list        = np.array([['LPE11086','2024_01_05']])
-# session_list        = np.array([['LPE09830','2023_04_10'],
-#                                 ['LPE09830','2023_04_12'],
-#                                 ['LPE11086','2024_01_05'],
-#                                 ['LPE10884','2023_10_20'],
-#                                 ['LPE10885','2023_10_19'],
-#                                 ['LPE10885','2023_10_20'],
-#                                 ['LPE10919','2023_11_06']])
+
+#Sessions with good receptive field mapping in both V1 and PM:
+session_list        = np.array([['LPE09665','2023_03_21'], #GR
+                                ['LPE10884','2023_10_20'], #GR
+                                # ['LPE11998','2024_05_02'], #GN
+                                # ['LPE12013','2024_05_02'], #GN
+                                # ['LPE12013','2024_05_07'], #GN
+                                ['LPE10919','2023_11_06']]) #GR
 
 #%% Load sessions lazy: 
 # sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
@@ -71,9 +72,7 @@ for ises in range(nSessions):
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 #%% ########################### Compute noise correlations: ###################################
-sessions = compute_noise_correlation(sessions,uppertriangular=False)
-
-#TODO: make noise corr and pairwise functions attributes of session classes
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 
 #%% ##################### Compute pairwise neuronal distances: ##############################
 sessions = compute_pairwise_metrics(sessions)
@@ -131,6 +130,10 @@ clr_labeled = get_clr_labeled()
 sns.histplot(data=celldata,x='tuning_var',y='noise_corr_avg',hue='redcell',palette=clr_labeled,
              bins=40,alpha=0.5,cbar=True,cbar_kws={'norm': 1})
 plt.savefig(os.path.join(savedir,'NoiseCorrelations','Tuning Variance vs NC' + '.png'), format = 'png')
+
+#%% Plot fraction of visuall responsive: 
+
+
 
 # #%%  construct dataframe with all pairwise measurements:
 # df_allpairs  = pd.DataFrame()
@@ -270,7 +273,8 @@ pairs = [('V1-V1','V1-PM'),('PM-PM','V1-PM')] #for statistics
 center = np.zeros((nSessions,len(areapairs)))
 for ises in range(nSessions):
     for iap,areapair in enumerate(areapairs):
-        areafilter = sessions[ises].areamat==areapair
+        areafilter =  filter_2d_areapair(sessions[ises],areapair)
+  
         # signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>0.1,sessions[ises].celldata['tuning_var']>0.1)
         # signalfilter = np.meshgrid(sessions[ises].celldata['skew']>3,sessions[ises].celldata['skew']>3)
         # signalfilter = np.meshgrid(sessions[ises].celldata['event_rate']>0.05,sessions[ises].celldata['skew']>0.05)
@@ -304,28 +308,11 @@ plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_average_%dsessio
 areapairs = ['V1-V1','PM-PM']
 clrs_areapairs = get_clr_area_pairs(areapairs)
 
-fig,ax=plt.subplots(figsize=(5,4))
-binedges = np.arange(0,1000,10) 
-nbins= len(binedges)-1      
-binmean = np.zeros((nSessions,len(areapairs),nbins))
-handles = []
-for iap,areapair in enumerate(areapairs):
-    for ises in range(nSessions):
-        cellfilter = sessions[ises].areamat==areapair
-        binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xyz[cellfilter].flatten(),
-                                            #    values=sessions[ises].noise_cov[cellfilter].flatten(),
-                                               values=sessions[ises].noise_corr[cellfilter].flatten(),
-                        statistic='mean', bins=binedges)[0]
-    handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
-plt.xlabel(r'Anatomical distance ($\mu$m)')
-plt.ylabel('Noise Correlation')
-plt.yticks(np.arange(0, 1, step=0.005))
-plt.legend(handles,areapairs)
-plt.xlim([10,600])
-plt.ylim([0.04,0.08])
-plt.tight_layout()
-# plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_anatomdistance_perArea_%dsessions' % nSessions + '.png'), format = 'png')
+[binmean,binedges] = bin_corr_distance(sessions,areapairs,corr_type='noise_corr',normalize=False)
+
+#%% Make the figure per protocol:
+fig = plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type='noise_corr')
+fig.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_anatomdistance_perArea_%dsessions' % nSessions + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'NoiseCorr_anatomdistance_perArea_regressout' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% ###################################################################
@@ -345,59 +332,26 @@ fig.savefig(os.path.join(savedir,'Distribution_deltaRF_%dsessions' %nSessions + 
 areapairs = ['V1-V1','PM-PM','V1-PM']
 clrs_areapairs = get_clr_area_pairs(areapairs)
 
-binedges = np.arange(0,120,2.5) 
-# bincenters = np.arange(0,120,10) 
-nbins= len(binedges)-1
-# binmean = np.zeros((nSessions,len(areapairs),nbins))
-binmean = np.full((nSessions,len(areapairs),nbins),np.nan)
+[binmean,binedges] = bin_corr_distance(sessions,areapairs,corr_type='noise_corr',normalize=False)
 
-handles = []
-for iap,areapair in enumerate(areapairs):
-    for ises in range(nSessions-1):
-        # signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>0.05,sessions[ises].celldata['tuning_var']>0.05)
-        # signalfilter = np.meshgrid(sessions[ises].celldata['tuning_var']>0,sessions[ises].celldata['tuning_var']>0)
-        # signalfilter = np.meshgrid(sessions[ises].celldata['rf_p_F']<0.05,sessions[ises].celldata['rf_p_F']<0.05)
-        # signalfilter = np.meshgrid(~np.isnan(sessions[ises].celldata['rf_az_Fneu']),~np.isnan(sessions[ises].celldata['rf_az_Fneu']))
-        # signalfilter = np.meshgrid(~np.isnan(sessions[ises].celldata['rf_az_F']),~np.isnan(sessions[ises].celldata['rf_az_F']))
-        # signalfilter = np.meshgrid(sessions[ises].celldata['rf_p_Fneu']<0.001,sessions[ises].celldata['rf_p_Fneu']<0.001)
-        signalfilter = np.meshgrid(sessions[ises].celldata['rf_p_F']<0.001,sessions[ises].celldata['rf_p_F']<0.001)
-        # signalfilter = np.meshgrid(sessions[ises].celldata['skew']>3,sessions[ises].celldata['skew']>3)
-        # signalfilter = np.meshgrid(sessions[ises].celldata['redcell']==0,sessions[ises].celldata['redcell']==0)
-        signalfilter = np.logical_and(signalfilter[0],signalfilter[1])
-        
-        proxfilter = (sessions[ises].distmat_xy>20) | (np.isnan(sessions[ises].distmat_xy))
-        areafilter = sessions[ises].areamat==areapair
-        cellfilter = np.all((signalfilter,areafilter,proxfilter),axis=0)
-        binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
-                                                values=sessions[ises].noise_corr[cellfilter].flatten(),
-                                                statistic='mean', bins=binedges)[0]
+#%% Make the figure per protocol:
 
-#%% Normalize the result: 
-# subtract mean NC from every session:
-binmean = binmean - binmean[:,:,binedges[:-1]<50].mean(axis=2,keepdims=True)
+fig = plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type='noise_corr')
 
-#%% Make the figure
-fig,ax = plt.subplots(figsize=(5,4))
-plt.xlabel('Delta RF')
-plt.ylabel('Delta NoiseCorrelation')
-plt.xlim([-2,50])
-# plt.ylim([0.025,0.1])
-plt.ylim([-0.015,0.04])
-plt.tight_layout()
-for iap,areapair in enumerate(areapairs):
-    for ises in range(nSessions):
-        plt.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.5,color=clrs_areapairs[iap])
-    handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
-    # plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_distRF_%dsessions_' %nSessions + areapair + '.png'), format = 'png')
-    # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-plt.legend(handles,areapairs)
-# plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_distRF_%dsessions_' %nSessions + '.png'), format = 'png')
+#%% ################ Pairwise trace correlations as a function of pairwise delta RF: #####################
+areapairs = ['V1-V1','PM-PM','V1-PM']
+clrs_areapairs = get_clr_area_pairs(areapairs)
+
+[binmean,binedges] =  bin_corr_deltarf(sessions,areapairs,corr_type='noise_corr',normalize=True)
+
+#%% Make the figure:
+fig = plot_bin_corr_deltarf(sessions,binmean,binedges,areapairs,corr_type='noise_corr')
+
+fig.savefig(os.path.join(savedir,'TraceCorr_distRF_Protocols_%dsessions_' %nSessions + areapair + '.png'), format = 'png')
 
 #%% 
-
 # idx = filter_nearlabeled(sessions[ises],radius=radius)
-
 
 #%% ###################################################################
 

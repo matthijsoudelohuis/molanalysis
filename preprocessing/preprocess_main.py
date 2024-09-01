@@ -23,7 +23,7 @@ date_filter         = []
 # animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
 
 protocols           = ['GR','SP','IM','GN']
-# protocols           = ['GR']
+protocols           = ['RF']
 # protocols           = ['DP','DM','DN']
 
 processimagingflag  = True

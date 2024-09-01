@@ -71,7 +71,7 @@ for ises in range(nSessions):
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 #%% ########################### Compute noise correlations: ###################################
-sessions = compute_noise_correlation(sessions,uppertriangular=False)
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 
 #TODO: make noise corr and pairwise functions attributes of session classes
 

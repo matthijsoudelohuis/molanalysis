@@ -13,7 +13,12 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 import seaborn as sns
-from utils.corr_lib import compute_pairwise_metrics
+from utils.corr_lib import compute_pairwise_metrics, mean_resp_image
+from tqdm import tqdm
+from utils.plotting_style import * #get all the fixed color schemes
+from scipy import ndimage
+from scipy.stats import zscore
+from utils.imagelib import load_natural_images
 
 def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
     
@@ -27,11 +32,8 @@ def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
         for j in range(len(areas)): #for areas
             
             idx_area    = celldata['roi_name']==areas[j]
-            idx_sig     = celldata['rf_p_Fneu'] < sig_thr
+            idx_sig     = celldata['rf_p_' + rf_type] < sig_thr
             idx         = np.logical_and(idx_area,idx_sig)
-            
-            # sns.scatterplot(data = celldata[idx],x='xloc',y='yloc',
-            #                 hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
             
             if vars[i]=='rf_az_' + rf_type:
                 sns.scatterplot(data = celldata[idx],x='yloc',y='xloc',hue_norm=(-135,135),
@@ -66,45 +68,100 @@ def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
 
     return fig
 
-
 def plot_rf_screen(celldata,sig_thr=1,rf_type='Fneu'):
     
     areas           = np.sort(celldata['roi_name'].unique())[::-1]
-
-    fig,axes        = plt.subplots(1,len(areas),figsize=(6*len(areas),3))
+    clr_areas       = get_clr_areas(areas)
+    rf_sizes        = [15,30]
+    # fig,axes        = plt.subplots(1,len(areas),figsize=(6*len(areas),3))
+    fig,ax        = plt.subplots(1,1,figsize=(6,2))
 
     for j in range(len(areas)): #for areas
         idx_area    = celldata['roi_name']==areas[j]
         idx_sig     = celldata['rf_p_' + rf_type] < sig_thr
         idx         = np.logical_and(idx_area,idx_sig)
-
         sns.scatterplot(data = celldata[idx],
-                        x='rf_az_' + rf_type,y='rf_el_' + rf_type,
-                        hue='rf_p_' + rf_type,ax=axes[j],palette='hot_r',size=9,edgecolor="none")
-
-        box = axes[j].get_position()
-        axes[j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
-        # axes[i,j].legend(loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis
-        axes[j].set_xlabel('')
-        axes[j].set_ylabel('')
-        axes[j].set_xticks([])
-        axes[j].set_yticks([])
-        axes[j].set_xlim([-135,135])
-        axes[j].set_ylim([-16.7,50.2])
-        axes[j].set_title(areas[j],fontsize=15)
-        axes[j].set_facecolor("black")
-        axes[j].get_legend().remove()
-        # if j==1:
-        norm = plt.Normalize(celldata['rf_p_' + rf_type][idx].min(), celldata['rf_p_' + rf_type][idx].max())
-        # norm = plt.Normalize(celldata['rf_p_Fneu'][idx].max(), celldata['rf_p_Fneu'][idx].min())
-        sm = plt.cm.ScalarMappable(cmap="hot_r", norm=norm)
-        sm.set_array([])
-        # Remove the legend and add a colorbar (optional)
-        axes[j].figure.colorbar(sm,ax=axes[j],pad=0.02,label='rf_p_' + rf_type)
-    plt.suptitle(celldata['session_id'][0])
+                        x='rf_az_' + rf_type,y='rf_el_' + rf_type,linewidth=0.5,alpha=0.5,
+                        marker="o", ax=ax,s=np.pi * rf_sizes[j]**2,facecolor="none",edgecolor=clr_areas[j])
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.axvline(x=45,color = 'white', linestyle = '--')
+        ax.axvline(x=-45,color = 'white', linestyle = '--')
+        ax.set_xlim([-135,135])
+        ax.set_ylim([-16.7,50.2])
+        ax.set_facecolor("black")
+    ax.legend(labels=areas,loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis
+    ax.set_title(celldata['session_id'][0])
     plt.tight_layout()
 
     return fig
+
+def plot_RF_frac(sessions,rf_type,sig_thr):
+    areas   = ['V1','PM']
+
+    rf_frac = np.empty((len(sessions),len(areas)))
+    for iarea in range(len(areas)):    # iterate over sessions
+        for ises in range(len(sessions)):    # iterate over sessions
+            idx = sessions[ises].celldata['roi_name'] == areas[iarea]
+            # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_Fneu'][idx]<sig_thr) / np.sum(idx)
+            # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_F'][idx]<sig_thr) / np.sum(idx)
+            rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_' + rf_type][idx]<sig_thr) / np.sum(idx)
+        print('%2.1f +- %2.1f %% neurons with RF in area %s\n'  % (np.mean(rf_frac[:,iarea])*100,np.std(rf_frac[:,iarea])*100,areas[iarea]))
+    fig,ax = plt.subplots(figsize=(3,3))
+    # sns.scatterplot(rf_frac.T,color='black',s=50)
+    sns.stripplot(rf_frac,s=6,jitter=0.1,palette=get_clr_areas(areas),ax=ax)
+    plt.xlim([-0.5,1.5])
+    plt.ylim([0,1])
+    plt.xticks([0,1],labels=areas)
+    plt.xlabel('Area')
+    plt.ylabel('Fraction receptive fields')
+    plt.tight_layout()
+    # ax.get_legend().remove()
+
+    return fig,rf_frac
+
+# def plot_rf_screen(celldata,sig_thr=1,rf_type='Fneu'):
+    
+#     areas           = np.sort(celldata['roi_name'].unique())[::-1]
+#     get_clr
+#     fig,axes        = plt.subplots(1,len(areas),figsize=(6*len(areas),3))
+
+#     for j in range(len(areas)): #for areas
+#         idx_area    = celldata['roi_name']==areas[j]
+#         idx_sig     = celldata['rf_p_' + rf_type] < sig_thr
+#         idx         = np.logical_and(idx_area,idx_sig)
+
+#         sns.scatterplot(data = celldata[idx],
+#                         x='rf_az_' + rf_type,y='rf_el_' + rf_type,
+#                         hue='rf_p_' + rf_type,ax=axes[j],palette='hot_r',size=15,facecolor="none")
+
+#         box = axes[j].get_position()
+#         axes[j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
+#         # axes[i,j].legend(loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis
+#         axes[j].set_xlabel('')
+#         axes[j].set_ylabel('')
+#         axes[j].set_xticks([])
+#         axes[j].set_yticks([])
+#         axes[j].set_xlim([-135,135])
+#         axes[j].set_ylim([-16.7,50.2])
+#         axes[j].set_title(areas[j],fontsize=15)
+#         axes[j].set_facecolor("black")
+#         axes[j].get_legend().remove()
+#         # if j==1:
+#         norm = plt.Normalize(celldata['rf_p_' + rf_type][idx].min(), celldata['rf_p_' + rf_type][idx].max())
+#         # norm = plt.Normalize(celldata['rf_p_Fneu'][idx].max(), celldata['rf_p_Fneu'][idx].min())
+#         sm = plt.cm.ScalarMappable(cmap="hot_r", norm=norm)
+#         sm.set_array([])
+#         # Remove the legend and add a colorbar (optional)
+#         axes[j].figure.colorbar(sm,ax=axes[j],pad=0.02,label='rf_p_' + rf_type)
+#     plt.suptitle(celldata['session_id'][0])
+#     plt.tight_layout()
+
+#     return fig
 
 
 def interp_rf(sessions,sig_thr=0.001,show_fit=False):
@@ -161,18 +218,48 @@ def interp_rf(sessions,sig_thr=0.001,show_fit=False):
     
     return r2
 
+
+def exclude_outlier_rf(sessions,radius=100,rf_thr=50):
+    # Filter out neurons with receptive fields that are too far from the local neuropil receptive field:
+    #radius specifies cortical distance of neuropil to include for local rf center
+    #rf_thr specifies cutoff of deviation from local rf center to be excluded
+    # for ses in sessions:
+    for ses in tqdm(sessions,total=len(sessions),desc= 'Setting outlier RFs to NaN: '):
+        if 'rf_az_Fneu' in ses.celldata:
+            rf_az_Fneu_avg = np.full(len(ses.celldata),np.NaN)
+            rf_el_Fneu_avg = np.full(len(ses.celldata),np.NaN)
+            for iN in range(len(ses.celldata)):
+
+                # idx_near = np.abs(ses.distmat_xy[iN,:]) < radius
+                idx_near = np.all((np.abs(ses.distmat_xy[iN,:]) < radius,ses.celldata['rf_p_Fneu']<0.001),axis=0)
+                if np.any(~np.isnan(ses.celldata.loc[ses.celldata[idx_near].index,'rf_az_Fneu'])):
+                    rf_az_Fneu_avg[iN]         = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near].index,'rf_az_Fneu'])
+                    rf_el_Fneu_avg[iN]         = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near].index,'rf_el_Fneu'])
+
+            rf_dist_F_Fneu = np.sqrt( (ses.celldata['rf_az_F'] - rf_az_Fneu_avg)**2 + (ses.celldata['rf_el_F'] - rf_el_Fneu_avg)**2 )
+            #now set all neurons outside the criterium rf_thr to NaN
+            ses.celldata.loc[rf_dist_F_Fneu > rf_thr,['rf_az_F','rf_el_F','rf_p_F']] = np.NaN
+    return sessions
+
 def smooth_rf(sessions,sig_thr=0.001,radius=50):
 
-    for ses in sessions:
-
-        idx_RF = ses.celldata['rf_p'] < sig_thr
-        idx_RF = np.logical_and(ses.celldata['rf_azimuth']>0,idx_RF)
-
-        for iN in np.where(~idx_RF)[0]:
-            idx_near = np.logical_and(np.abs(ses.distmat_xy[iN,:]) < radius,idx_RF)
-            ses.celldata.loc[iN,'rf_azimuth']       = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near].index,'rf_azimuth'])
-            ses.celldata.loc[iN,'rf_elevation']     = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near].index,'rf_elevation'])
-       
+    # for ses in sessions:
+    for ses in tqdm(sessions,total=len(sessions),desc= 'Smoothed interpolation of missing RF: '):
+        if 'rf_az_Fneu' in ses.celldata:
+            ses.celldata['rf_az_Fsmooth']          = ses.celldata['rf_az_F']
+            ses.celldata['rf_el_Fsmooth']          = ses.celldata['rf_el_F']
+            ses.celldata['rf_p_Fsmooth']           = ses.celldata['rf_p_F']
+            
+            for iN in np.where(~(ses.celldata['rf_p_F'] < sig_thr))[0]:
+                idx_near_Fneu = np.all((np.abs(ses.distmat_xy[iN,:]) < radius,ses.celldata['rf_p_Fneu']<sig_thr),axis=0)
+                if np.sum(idx_near_Fneu)>10:
+                    # idx_near = np.logical_and(np.abs(ses.distmat_xy[iN,:]) < radius,idx_RF)
+                    ses.celldata.loc[iN,'rf_az_Fsmooth']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
+                    ses.celldata.loc[iN,'rf_el_Fsmooth']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
+                    ses.celldata.loc[iN,'rf_p_Fsmooth']           = 0
+                    # ses.celldata.loc[iN,'rf_az_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
+                    # ses.celldata.loc[iN,'rf_el_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
+                    # ses.celldata.loc[iN,'rf_p_F']           = 0.0009
     return sessions
 
 def filter_nearlabeled(ses,radius=50):
@@ -184,3 +271,91 @@ def filter_nearlabeled(ses,radius=50):
     closemat = temp[ses.celldata['redcell']==1,:] <= radius
 
     return np.any(closemat,axis=0)
+
+
+def get_response_triggered_image(ses, natimgdata):
+    
+    respmean,imageids = mean_resp_image(ses)
+    
+    N = np.shape(ses.respmat)[0]
+
+    # nImages = np.unique(ses.trialdata['ImageNumber'])
+    # ses.respmat_image = np.empty((N, nImages))
+    # for iIm,imid in enumerate(imageids):
+    #     ses.respmat_image[:, iIm] = np.mean(
+    #         sessions[sesidx].respmat[:, sessions[sesidx].trialdata['ImageNumber'] == imid], axis=1)
+
+    # Compute response triggered average image:
+    ses.RTA = np.empty((*np.shape(natimgdata)[:2], N))
+    # N = 100
+    for iN in range(N):
+        print(
+            f"\rComputing average response for neuron {iN+1} / {N}", end='\r')
+        ses.RTA[:, :, iN] = np.average(
+            natimgdata, axis=2, weights=respmean[iN, :])
+        
+    return ses
+
+
+def estimate_rf_IM(sessions,show_fig=False): 
+    # for ses in tqdm(sessions,total=len(sessions),desc= 'Smoothed interpolation of missing RF: '):
+    for ses in sessions:
+        if not 'rf_az_Feneu' in ses.celldata:
+            ses.celldata['rf_az_F'] = ses.celldata['rf_el_F'] = ses.celldata['rf_p_F'] = np.nan
+            # natimgdata = load_natural_images(onlyright=True) #Load the natural images:
+            natimgdata = load_natural_images(onlyright=False) #Load the natural images:
+
+            ses         = get_response_triggered_image(ses, natimgdata)
+
+            # az_lims     = [45, 135]
+            az_lims     = [-135, 135]
+            el_lims     = [50.2, -16.7]
+
+            ypix,xpix,N = np.shape(ses.RTA)
+            xmap        = np.linspace(*az_lims,xpix)
+            ymap        = np.linspace(*el_lims,ypix)
+            # N = 100
+            zthr        = 3
+
+            for iN in range(N):
+                dev = zscore(ses.RTA[:, :, iN].copy()-128,axis=None)
+                dev[np.abs(dev)<zthr]=0
+                if np.any(dev):
+                    (y, x) = np.round(ndimage.center_of_mass(np.abs(dev))).astype(int)
+                    ses.celldata.loc[iN,'rf_az_F'] = xmap[x]
+                    ses.celldata.loc[iN,'rf_el_F'] = ymap[y]
+                    ses.celldata.loc[iN,'rf_p_F'] = np.sum(dev>zthr)
+            
+            if show_fig:
+                RTA_var = np.var(ses.RTA, axis=(0, 1))
+
+                nExamples = 25
+
+                example_cells = np.argsort(RTA_var)[-nExamples:]
+
+                Rows = int(np.floor(np.sqrt(nExamples)))
+                Cols = nExamples // Rows  # Compute Rows required
+                if nExamples % Rows != 0:  # If one additional row is necessary -> add one:
+                    Cols += 1
+                Position = range(1, nExamples + 1)  # Create a Position index
+
+                fig = plt.figure(figsize=[18, 9])
+                # for iN in range(N):
+                for i, iN in enumerate(example_cells):
+                    # add every single subplot to the figure with a for loop
+                    ax = fig.add_subplot(Rows, Cols, Position[i])
+                    ax.imshow(ses.RTA[:, :, iN]-128, cmap='gray',vmin=-15,vmax=15)
+
+                    dev = zscore(ses.RTA[:, :, iN].copy()-128,axis=None)
+                    dev[np.abs(dev)<zthr]=0
+                    if np.any(dev):
+                        (y, x) = np.round(ndimage.center_of_mass(np.abs(dev))).astype(int)
+                        
+                    ax.plot(x, y, 'r+')
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                    ax.set_aspect('auto')
+                    ax.set_title("%d" % iN)
+                plt.tight_layout(rect=[0, 0, 1, 1])
+
+    return sessions

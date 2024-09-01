@@ -15,55 +15,73 @@ from statannotations.Annotator import Annotator
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.rf_lib import *
 from loaddata.get_data_folder import get_local_drive
-from utils.corr_lib import compute_pairwise_metrics
+from utils.corr_lib import compute_pairwise_anatomical_distance
+from utils.plotting_style import * #get all the fixed color schemes
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - RF\\')
 
 #%% ################### Loading the data ##############################
 
 session_list        = np.array([['LPE11086','2024_01_08']])
-session_list        = np.array([['LPE09830','2023_04_10']])
-session_list        = np.array([['LPE10919','2023_11_06']])
-session_list        = np.array([['LPE10884','2023_10_20']])
-session_list        = np.array([['LPE10885','2023_10_19']])
+session_list        = np.array([['LPE12013','2024_05_02']])
+
+#Sessions with good receptive field mapping in both V1 and PM:
+session_list        = np.array([['LPE09665','2023_03_21'], #GR
+                                ['LPE10884','2023_10_20'], #GR
+                                # ['LPE11998','2024_05_02'], #GN
+                                # ['LPE12013','2024_05_02'], #GN
+                                # ['LPE12013','2024_05_07'], #GN
+                                # ['LPE11086','2023_12_15'], #GR
+                                ['LPE10919','2023_11_06']]) #GR
+
 sessions,nSessions = load_sessions(protocol = 'SP',session_list=session_list)
 
-# sessions,nSessions = filter_sessions(protocols = ['GR'],only_animal_id='LPE09830')
 # sessions,nSessions = filter_sessions(protocols = ['GR'],only_animal_id=['LPE09665','LPE09830'],session_rf=True)
 # # sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
 sessions,nSessions = filter_sessions(protocols = ['SP','GR','IM','GN'],session_rf=True,filter_areas=['V1','PM'])
 
-sig_thr = 0.005 #cumulative significance of receptive fields clusters
+sig_thr = 0.05 #cumulative significance of receptive fields clusters
 sig_thr = 0.001 #cumulative significance of receptive fields clusters
 
-#%%%% Show fraction of receptive fields per session:
-areas   = ['V1','PM']
-rf_frac = np.empty((nSessions,len(areas)))
-for ises in range(nSessions):    # iterate over sessions
-    for iarea in range(len(areas)):    # iterate over sessions
-        idx = sessions[ises].celldata['roi_name'] == areas[iarea]
-        # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_Fneu'][idx]<sig_thr) / np.sum(idx)
-        rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_F'][idx]<sig_thr) / np.sum(idx)
-
-fig,ax = plt.subplots(figsize=(4,4))
-# plt.scatter([0,1],rf_frac)
-sns.scatterplot(rf_frac.T,color='black',s=50)
-plt.xlim([-0.5,1.5])
-plt.ylim([0,1])
-plt.xticks([0,1],labels=areas)
-plt.xlabel('Area')
-plt.ylabel('Fraction receptive fields')
-# plt.legend()
-ax.get_legend().remove()
-# plt.savefig(os.path.join(savedir,'RF_fraction' + '.png'), format = 'png')
+#%% Show fraction of receptive fields per session before any corrections:
+[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='F',sig_thr=sig_thr)
+fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F' + '.png'), format = 'png')
 
 #%% ##################### Retinotopic mapping within V1 and PM #####################
-rf_type = 'Fneu'
+rf_type = 'F'
 for ises in range(nSessions):
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
+#%% Interpolation of receptive fields:
+sessions = compute_pairwise_anatomical_distance(sessions)
+
+sessions = exclude_outlier_rf(sessions,radius=50,rf_thr=50) 
+
+#Show fraction of receptive fields per session after filtering out scattered neurons: 
+[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='F',sig_thr=sig_thr)
+fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_filter' + '.png'), format = 'png')
+
+sessions = smooth_rf(sessions,sig_thr=0.001,radius=50)
+
+#%% Show fraction of receptive fields per session after smoothed interpolation and filtering:
+[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='Fsmooth',sig_thr=sig_thr)
+fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_Fsmooth' + '.png'), format = 'png')
+
+#%% ##################### Retinotopic mapping within V1 and PM #####################
+rf_type = 'F'
+rf_type = 'Fneu'
+# rf_type = 'Fsmooth'
+for ises in range(nSessions):
+    fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
+    fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '_smooth.png'), format = 'png')
+
+#%% ########### Plot locations of receptive fields as on the screen ##############################
+rf_type = 'F'
+for ises in range(nSessions):
+    fig = plot_rf_screen(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
+    fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_rf_screen_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '_smooth.png'), format = 'png')
 
 #%% ##################### Scatter between individual RF location and neuropil estimation #####################
 celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
@@ -76,29 +94,32 @@ dev_az      = np.abs(celldata['rf_az_F'] - celldata['rf_az_Fneu'])
 dev_el      = np.abs(celldata['rf_el_F'] - celldata['rf_el_Fneu'])
 
 pticks = 1/np.power(10,np.arange(1,10))
-
+alphaval = 0.1
+areas   = ['V1','PM']
+spat_dims = ['az','el']
+clrs_areas = get_clr_areas(areas)
 fig,axes   = plt.subplots(2,2,figsize=(8,8))
 
-print('Separate for V1 and PM!!')
+for iarea,area in enumerate(areas):
+    for ispat_dim,spat_dim in enumerate(spat_dims):
+        idx = celldata['roi_name'] == area
 
-axes[0,0].scatter(logpdata,dev_az,s=3,alpha=0.2)
-axes[0,0].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
-axes[0,0].set_xlim([1,10])
+        if spat_dim == 'az':
+            axes[iarea,ispat_dim].scatter(logpdata[idx],dev_az[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
+            axes[iarea,ispat_dim].set_ylim([0,250])
 
-axes[0,1].scatter(logpdata,dev_az,s=3,alpha=0.2)
-axes[0,1].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
-axes[0,1].set_xlim([1,10])
-axes[0,1].set_ylim([0,15])
+        elif spat_dim == 'el':
+            axes[iarea,ispat_dim].scatter(logpdata[idx],dev_el[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
+            axes[iarea,ispat_dim].set_ylim([0,60])
 
-axes[1,0].scatter(logpdata,dev_el,s=3,alpha=0.2)
-axes[1,0].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
-axes[1,0].set_xlim([1,10])
+        axes[iarea,ispat_dim].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
+        axes[iarea,ispat_dim].set_title(area + ' ' + spat_dim)
+        axes[iarea,ispat_dim].set_xlim([1,10])
+        axes[iarea,ispat_dim].set_ylabel('RF Scatter')
 
-axes[1,1].scatter(logpdata,dev_el,s=3,alpha=0.2)
-axes[1,1].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
-axes[1,1].set_xlim([1,10])
-axes[1,1].set_ylim([0,15])
-fig.savefig(os.path.join(savedir,'RF_quantification','RF_scatter' + '.png'), format = 'png')
+plt.tight_layout()
+
+# fig.savefig(os.path.join(savedir,'RF_quantification','RF_scatter' + '.png'), format = 'png')
 
 #%% ##### Plot locations of receptive fields and scale by probability ##############################
 rf_type = 'F'

@@ -7,9 +7,13 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 import os
 import numpy as np
 import pandas as pd
-from scipy.stats import binned_statistic_2d
+from scipy.stats import binned_statistic,binned_statistic_2d
 from skimage.measure import block_reduce
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from utils.plot_lib import shaded_error
+from utils.plotting_style import * #get all the fixed color schemes
+from utils.psth import mean_resp_gn,mean_resp_image,mean_resp_gr
 
 def compute_trace_correlation(sessions,uppertriangular=True,binwidth=1):
     nSessions = len(sessions)
@@ -33,46 +37,13 @@ def compute_trace_correlation(sessions,uppertriangular=True,binwidth=1):
         assert np.all(sessions[ises].trace_corr[~idx_triu] < 1)
     return sessions    
 
-def compute_noise_correlation(sessions,uppertriangular=True,binwidth=1):
-    # computing the pairwise correlation of activity that is residual to any stimuli in stimulation protocols
-    # or spontaneous in SP protocol.
-    nSessions = len(sessions)
+def compute_signal_noise_correlation(sessions,uppertriangular=True):
+    # computing the pairwise correlation of activity that is shared due to mean response (signal correlation)
+    # or residual to any stimuli in GR and GN protocols (noise correlation).
 
-    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing noise corr: '):
-        if sessions[ises].sessiondata['protocol'][0]=='GR':
-            
-            [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
-            oris                            = np.sort(sessions[ises].trialdata['Orientation'].unique())
-            resp_meanori,respmat_res        = mean_resp_oris(sessions[ises])
-
-            prefori                         = oris[np.argmax(resp_meanori,axis=1)]
-            sessions[ises].delta_pref       = np.abs(np.subtract.outer(prefori, prefori))
-
-            respmat_res                     = sessions[ises].respmat.copy()
-
-            # sessions[ises].noise_cov                    = np.cov(respmat_res)
-            sessions[ises].noise_corr                   = np.corrcoef(respmat_res)
-            
-            idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
-            if uppertriangular:
-                sessions[ises].noise_corr[idx_triu] = np.nan
-                sessions[ises].delta_pref[idx_triu] = np.nan
-            else: #set only autocorrelation to nan
-                np.fill_diagonal(sessions[ises].noise_corr,np.nan)
-                np.fill_diagonal(sessions[ises].delta_pref,np.nan)
-
-            assert np.all(sessions[ises].noise_corr[~idx_triu] > -1)
-            assert np.all(sessions[ises].noise_corr[~idx_triu] < 1)
-        
-        else: 
-            print('not yet implemented noise corr for other protocols than GR')
-
-    return sessions
-
-def compute_signal_correlation(sessions,uppertriangular=True):
     for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing signal correlations: '):
         if sessions[ises].sessiondata['protocol'][0]=='IM':
-            respmean                    = mean_resp_image(sessions[ises])
+            [respmean,imageids]         = mean_resp_image(sessions[ises])
             [N,K]                       = np.shape(sessions[ises].respmat) #get dimensions of response matrix
             sessions[ises].sig_corr     = np.corrcoef(respmean)
 
@@ -83,62 +54,56 @@ def compute_signal_correlation(sessions,uppertriangular=True):
         elif sessions[ises].sessiondata['protocol'][0]=='GR':
             [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
             oris                            = np.sort(sessions[ises].trialdata['Orientation'].unique())
-            resp_meanori                    = mean_resp_oris(sessions[ises])[0]
+            resp_meanori,respmat_res        = mean_resp_gr(sessions[ises])
             prefori                         = oris[np.argmax(resp_meanori,axis=1)]
-            # delta_pref                      = np.subtract.outer(prefori, prefori)
             # delta_pref                      = np.subtract.outer(prefori, prefori)
             sessions[ises].delta_pref       = np.abs(np.mod(np.subtract.outer(prefori, prefori),180))
             
             sessions[ises].sig_corr         = np.corrcoef(resp_meanori)
+            sessions[ises].noise_corr       = np.corrcoef(respmat_res)
 
             idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
             if uppertriangular:
+                sessions[ises].noise_corr[idx_triu] = np.nan
                 sessions[ises].sig_corr[idx_triu] = np.nan
                 sessions[ises].delta_pref[idx_triu] = np.nan
             else: #set only autocorrelation to nan
                 np.fill_diagonal(sessions[ises].sig_corr,np.nan)
                 np.fill_diagonal(sessions[ises].delta_pref,np.nan)
+                np.fill_diagonal(sessions[ises].noise_corr,np.nan)
 
             assert np.all(sessions[ises].sig_corr[~idx_triu] > -1)
             assert np.all(sessions[ises].sig_corr[~idx_triu] < 1)
+            assert np.all(sessions[ises].noise_corr[~idx_triu] > -1)
+            assert np.all(sessions[ises].noise_corr[~idx_triu] < 1)
         
+        elif sessions[ises].sessiondata['protocol'][0]=='GN':
+            [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+            oris                            = np.sort(pd.Series.unique(sessions[ises].trialdata['centerOrientation']))
+            speeds                          = np.sort(pd.Series.unique(sessions[ises].trialdata['centerSpeed']))
+            resp_meanori,respmat_res        = mean_resp_gn(sessions[ises])
+            prefori, prefspeed              = np.unravel_index(resp_meanori.reshape(N,-1).argmax(axis=1), (len(oris), len(speeds)))
+            sessions[ises].prefori          = oris[prefori]
+            sessions[ises].prefspeed        = speeds[prefspeed]
 
-        else: 
-            print('Skipping protocol other than GR and IM')
+            sessions[ises].sig_corr         = np.corrcoef(resp_meanori.reshape(N,len(oris)*len(speeds)))
+            sessions[ises].noise_corr       = np.corrcoef(respmat_res)
+
+            idx_triu = np.tri(N,N,k=0)==1   #index upper triangular part
+            if uppertriangular:
+                sessions[ises].sig_corr[idx_triu] = np.nan
+                sessions[ises].noise_corr[idx_triu] = np.nan
+            else: #set autocorrelation to nan
+                np.fill_diagonal(sessions[ises].sig_corr,np.nan)
+                np.fill_diagonal(sessions[ises].noise_corr,np.nan)
+
+            assert np.all(sessions[ises].sig_corr[~idx_triu] > -1)
+            assert np.all(sessions[ises].sig_corr[~idx_triu] < 1)
+            assert np.all(sessions[ises].noise_corr[~idx_triu] > -1)
+            assert np.all(sessions[ises].noise_corr[~idx_triu] < 1)
+        # else, do nothing, skipping protocol other than GR, GN, and IM'
 
     return sessions
-
-def mean_resp_image(ses):
-    nNeurons = np.shape(ses.respmat)[0]
-    imageids = np.unique(ses.trialdata['ImageNumber'])
-    respmean = np.empty((nNeurons,len(imageids)))
-    for im,id in enumerate(imageids):
-        respmean[:,im] = np.mean(ses.respmat[:,ses.trialdata['ImageNumber']==id],axis=1)
-    return respmean
-
-def mean_resp_oris(ses):
-
-    # get signal correlations:
-    [N,K]           = np.shape(ses.respmat) #get dimensions of response matrix
-
-    oris            = np.sort(ses.trialdata['Orientation'].unique())
-    ori_counts      = ses.trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
-    assert(len(ori_counts) == 16 or len(ori_counts) == 8)
-    resp_meanori    = np.empty([N,len(oris)])
-
-    for i,ori in enumerate(oris):
-        resp_meanori[:,i] = np.nanmean(ses.respmat[:,ses.trialdata['Orientation']==ori],axis=1)
-
-    respmat_res                     = ses.respmat.copy()
-
-    ## Compute residuals:
-    for ori in oris:
-        ori_idx     = np.where(ses.trialdata['Orientation']==ori)[0]
-        temp        = np.mean(respmat_res[:,ori_idx],axis=1)
-        respmat_res[:,ori_idx] = respmat_res[:,ori_idx] - np.repeat(temp[:, np.newaxis], len(ori_idx), axis=1)
-
-    return resp_meanori,respmat_res
-
 
 def compute_pairwise_metrics(sessions):
     sessions = compute_pairwise_anatomical_distance(sessions)
@@ -185,9 +150,6 @@ def compute_pairwise_delta_rf(sessions,rf_type='F'):
         if 'rf_az_' + rf_type in sessions[ises].celldata:
             rfaz = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
             rfel = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-        # if 'rf_az_Fneu' in sessions[ises].celldata:
-        #     rfaz = sessions[ises].celldata['rf_az_Fneu'].to_numpy()
-        #     rfel = sessions[ises].celldata['rf_el_Fneu'].to_numpy()
 
             d = np.array((rfaz,rfel))
 
@@ -318,7 +280,7 @@ def noisecorr_rfmap_perori(sessions,corr_type='noise_corr',binresolution=5,rotat
     return noiseRFmat_mean,countsRFmat,binrange
 
 
-def noisecorr_rfmap_areas(sessions,corr_type='noise_corr',binresolution=5,rotate_prefori=True,
+def noisecorr_rfmap_areas(sessions,corr_type='noise_corr',binresolution=5,rotate_prefori=False,
                             rotate_deltaprefori=False,thr_tuned=0,thr_rf_p=1,rf_type='F'):
 
     areas               = ['V1','PM']
@@ -334,7 +296,7 @@ def noisecorr_rfmap_areas(sessions,corr_type='noise_corr',binresolution=5,rotate
     countsRFmat         = np.zeros((2,2,*nBins))
 
     for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D noise corr histograms maps: '):
-        if 'rf_az_' + rf_type in sessions[ises].celldata:
+        if 'rf_az_' + rf_type in sessions[ises].celldata and hasattr(sessions[ises], corr_type):
             for ixArea,xArea in enumerate(areas):
                 for iyArea,yArea in enumerate(areas):
 
@@ -548,6 +510,153 @@ def compute_noisecorr_rfmap_v2(sessions,binresolution=5,rotate_prefori=False,spl
     
     return noiseRFmat_mean,countsRFmat,binrange
 
+def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False):
+    binedges = np.arange(0,1000,20) 
+    nbins= len(binedges)-1
+    binmean = np.full((len(sessions),len(areapairs),nbins),np.nan)
+    for ises in tqdm(range(len(sessions)),desc= 'Computing trace correlations per pairwise distance: '):
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+            # corrdata[corrdata>0] = np.nan
+            for iap,areapair in enumerate(areapairs):
+                areafilter      = filter_2d_areapair(sessions[ises],areapair)
+                nanfilter       = ~np.isnan(corrdata)
+                cellfilter      = np.all((areafilter,nanfilter),axis=0)
+                binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xyz[cellfilter].flatten(),
+                                                    values=corrdata[cellfilter].flatten(),
+                                                    statistic='mean', bins=binedges)[0]
+            
+    if normalize: # subtract mean NC from every session:
+        binmean = binmean - np.nanmean(binmean[:,:,binedges[:-1]<600],axis=2,keepdims=True)
+
+    return binmean,binedges
+
+def plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type):
+    sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+    protocols = np.unique(sessiondata['protocol'])
+    clrs_areapairs = get_clr_area_pairs(areapairs)
+    fig,axes = plt.subplots(1,len(protocols),figsize=(4*len(protocols),4))
+    handles = []
+    for iprot,protocol in enumerate(protocols):
+        sesidx = np.where(sessiondata['protocol']== protocol)[0]
+        if len(protocols)>1:
+            ax = axes[iprot]
+        else:
+            ax = axes
+
+        for iap,areapair in enumerate(areapairs):
+            for ises in sesidx:
+                ax.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
+            handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[sesidx,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
+            # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+        ax.legend(handles,areapairs,loc='upper right',frameon=False)	
+        ax.set_xlabel('Anatomical distance ($\mu$m)')
+        ax.set_ylabel('Correlation')
+        ax.set_xlim([10,600])
+        ax.set_title('%s (%s)' % (corr_type,protocol))
+        # ax.set_ylim([-0.01,0.04])
+        ax.set_ylim([0,0.09])
+        ax.set_aspect('auto')
+        ax.tick_params(axis='both', which='major', labelsize=8)
+
+    plt.tight_layout()
+    return fig
+
+
+def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False):
+    binedges = np.arange(0,1000,10) 
+    nbins= len(binedges)-1
+    binmean = np.full((len(sessions),len(areapairs),nbins),np.nan)
+    for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by pairwise anatomical distance: '):
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+            # corrdata[corrdata>0] = np.nan
+            for iap,areapair in enumerate(areapairs):
+                areafilter      = filter_2d_areapair(sessions[ises],areapair)
+                nanfilter       = ~np.isnan(corrdata)
+                cellfilter      = np.all((areafilter,nanfilter),axis=0)
+                binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xyz[cellfilter].flatten(),
+                                                    values=corrdata[cellfilter].flatten(),
+                                                    statistic='mean', bins=binedges)[0]
+            
+    if normalize: # subtract mean NC from every session:
+        binmean = binmean - np.nanmean(binmean[:,:,binedges[:-1]<600],axis=2,keepdims=True)
+
+    return binmean,binedges
+
+def bin_corr_deltarf(sessions,areapairs,corr_type='trace_corr',normalize=False,rf_type = 'F'):
+    binedges    = np.arange(0,120,5) 
+    nbins       = len(binedges)-1
+    binmean     = np.full((len(sessions),len(areapairs),nbins),np.nan)
+    sig_thr     = 0.001
+
+    for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by delta receptive field: '):
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+            # corrdata[corrdata<np.percentile(corrdata,1)] = np.nan
+            # corrdata[corrdata>np.percentile(corrdata,99)] = np.nan
+            if 'rf_p_F' in sessions[ises].celldata:
+                for iap,areapair in enumerate(areapairs):
+                    signalfilter    = np.meshgrid(sessions[ises].celldata['rf_p_' + rf_type]<sig_thr,sessions[ises].celldata['rf_p_'  + rf_type]<sig_thr)
+                    signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+                    
+                    areafilter      = filter_2d_areapair(sessions[ises],areapair)
+                    nanfilter       = ~np.isnan(corrdata)
+                    proxfilter      = ~(sessions[ises].distmat_xy<20)
+                    
+                    cellfilter      = np.all((signalfilter,areafilter,proxfilter,nanfilter),axis=0)
+                    # if np.sum(cellfilter)>50:
+                    binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
+                                                        values=corrdata[cellfilter].flatten(),
+                                                        statistic='mean', bins=binedges)[0]
+    if normalize: # subtract mean correlation from every session:
+        binmean = binmean - np.nanmean(binmean[:,:,binedges[:-1]<600],axis=2,keepdims=True)
+
+    return binmean,binedges
+
+
+def plot_bin_corr_deltarf(sessions,binmean,binedges,areapairs,corr_type):
+    sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+    protocols = np.unique(sessiondata['protocol'])
+    clrs_areapairs = get_clr_area_pairs(areapairs)
+
+    fig,axes = plt.subplots(1,len(protocols),figsize=(4*len(protocols),4))
+    handles = []
+    for iprot,protocol in enumerate(protocols):
+        sesidx = np.where(sessiondata['protocol']== protocol)[0]
+        if len(protocols)>1:
+            ax = axes[iprot]
+        else:
+            ax = axes
+
+        for iap,areapair in enumerate(areapairs):
+            for ises in sesidx:
+                ax.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
+            handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[sesidx,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
+
+        ax.legend(handles,areapairs,loc='upper right',frameon=False)	
+        ax.set_xlabel('Delta RF')
+        ax.set_ylabel('Correlation')
+        ax.set_xlim([-2,50])
+        ax.set_title('%s (%s)' % (corr_type,protocol))
+        # ax.set_ylim([-0.015,0.04])
+        ax.set_ylim([0,0.09])
+        ax.set_aspect('auto')
+        ax.tick_params(axis='both', which='major', labelsize=8)
+
+    plt.tight_layout()
+    return fig
+
+# Define function to filter neuronpairs based on area combination
+def filter_2d_areapair(ses,areapair):
+    area1,area2 = areapair.split('-')
+    areafilter1 = np.meshgrid(ses.celldata['roi_name']==area1,ses.celldata['roi_name']==area2)
+    areafilter1 = np.logical_and(areafilter1[0],areafilter1[1])
+    areafilter2 = np.meshgrid(ses.celldata['roi_name']==area1,ses.celldata['roi_name']==area2)
+    areafilter2 = np.logical_and(areafilter2[0],areafilter2[1])
+
+    return np.logical_or(areafilter1,areafilter2)
 
 # for ises in range(nSessions):
 #     print('computing 2d receptive field hist of noise correlations for session %d / %d' % (ises+1,nSessions))
