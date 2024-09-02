@@ -271,7 +271,7 @@ clrs_areapairs = get_clr_area_pairs(areapairs)
 pairs = [('V1-V1','V1-PM'),('PM-PM','V1-PM')] #for statistics
 
 center = np.zeros((nSessions,len(areapairs)))
-for ises in range(nSessions):
+for ises in tqdm(range(nSessions),desc= 'Averaging noise correlations within and across areas: '):
     for iap,areapair in enumerate(areapairs):
         areafilter =  filter_2d_areapair(sessions[ises],areapair)
   
@@ -282,8 +282,8 @@ for ises in range(nSessions):
         # signalfilter = np.logical_and(signalfilter[0],signalfilter[1])
         # cellfilter = np.logical_and(areafilter,signalfilter)
         cellfilter = np.logical_and(areafilter,areafilter)
-        center[ises,iap] = np.nanmean(sessions[ises].noise_corr[cellfilter])
-        # center[ises,iap] = np.nanmean(sessions[ises].noise_cov[cellfilter])
+        # center[ises,iap] = np.nanmean(sessions[ises].noise_corr[cellfilter])
+        center[ises,iap] = np.nanmean(sessions[ises].trace_corr[cellfilter])
 df = pd.DataFrame(data=center,columns=areapairs)
 
 #%% Make a barplot with error bars of the mean NC across sessions conditioned on area pairs:
@@ -560,7 +560,7 @@ fig.savefig(os.path.join(savedir,'NoiseCorrelations','NC_example_isotuning2' + '
 # sessions[ises].respmat = regress_out_behavior_modulation(sessions[ises],X,Y,nvideoPCs = 30,rank=2).T
 
 # Recompute noise correlations without setting half triangle to nan
-sessions =  compute_noise_correlation(sessions,uppertriangular=False)
+sessions =  compute_signal_noise_correlation(sessions,uppertriangular=False)
 
 rotate_prefori  = False
 min_counts      = 500 # minimum pairwise observation to include bin
@@ -773,30 +773,33 @@ redcells            = [0,1]
 redcelllabels       = ['unl','lab']
 legendlabels        = np.empty((4,4),dtype='object')
 
-minNcells           = 25
+minNcells           = 0
 
 noisemat            = np.full((4,4,nSessions),np.nan)
 
-for ixArea,xArea in enumerate(areas):
-    for iyArea,yArea in enumerate(areas):
-        for ixRed,xRed in enumerate(redcells):
-            for iyRed,yRed in enumerate(redcells):
-                for ises in range(len(sessions)):
+for ises in tqdm(range(nSessions),desc='Averaging correlations across sessions'):
+    # idx_nearfilter = filter_nearlabeled(sessions[ises],radius=100)
+    for ixArea,xArea in enumerate(areas):
+        for iyArea,yArea in enumerate(areas):
+            for ixRed,xRed in enumerate(redcells):
+                for iyRed,yRed in enumerate(redcells):
 
-                    idx_source = sessions[ises].celldata['roi_name']==xArea
-                    idx_target = sessions[ises].celldata['roi_name']==yArea
+                        idx_source = sessions[ises].celldata['roi_name']==xArea
+                        idx_target = sessions[ises].celldata['roi_name']==yArea
 
-                    idx_source = np.logical_and(idx_source,sessions[ises].celldata['redcell']==xRed)
-                    idx_target = np.logical_and(idx_target,sessions[ises].celldata['redcell']==yRed)
+                        idx_source = np.logical_and(idx_source,sessions[ises].celldata['redcell']==xRed)
+                        idx_target = np.logical_and(idx_target,sessions[ises].celldata['redcell']==yRed)
 
-                    # idx_source = np.logical_and(idx_source,filter_nearlabeled(sessions[ises],radius=100))
-                    # idx_target = np.logical_and(idx_target,filter_nearlabeled(sessions[ises],radius=100))
+                        # idx_source = np.logical_and(idx_source,idx_nearfilter)
+                        # idx_target = np.logical_and(idx_target,idx_nearfilter)
 
-                    if np.sum(idx_source)>minNcells and np.sum(idx_target)>minNcells:	
-                        noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(sessions[ises].noise_corr[np.ix_(idx_source, idx_target)])
-                    # noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(sessions[ises].noise_cov[np.ix_(idx_source, idx_target)])
-                    
-                legendlabels[ixArea*2 + ixRed,iyArea*2 + iyRed]  = areas[ixArea] + redcelllabels[ixRed] + '-' + areas[iyArea] + redcelllabels[iyRed]
+                        if np.sum(idx_source)>minNcells and np.sum(idx_target)>minNcells:	
+                            # noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(sessions[ises].noise_corr[np.ix_(idx_source, idx_target)])
+                            noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(sessions[ises].trace_corr[np.ix_(idx_source, idx_target)])
+                            # noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(np.abs(sessions[ises].trace_corr[np.ix_(idx_source, idx_target)]))
+                        # noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(sessions[ises].noise_cov[np.ix_(idx_source, idx_target)])
+                        
+                        legendlabels[ixArea*2 + ixRed,iyArea*2 + iyRed]  = areas[ixArea] + redcelllabels[ixRed] + '-' + areas[iyArea] + redcelllabels[iyRed]
 
 # assuming legendlabels is a 4x4 array
 legendlabels_upper_tri = legendlabels[np.triu_indices(4, k=0)]
@@ -807,27 +810,52 @@ noisemat_upper_tri = noisemat[upper_tri_indices[0], upper_tri_indices[1], :]
 
 df = pd.DataFrame(data=noisemat_upper_tri.T,columns=legendlabels_upper_tri)
 
+colorder = [0,1,4,7,8,9,2,3,5,6]
+legendlabels_upper_tri = legendlabels_upper_tri[colorder]
+df = df[legendlabels_upper_tri]
+
+#%% Filter certain protocols:
+sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM','SP']))[0]
+# sessions_subset = [sessions[i] for i in sessions_in_list]
+df = df.loc[sessions_in_list,:]
+
+print('%d areapairs interpolated due to missing data' % np.sum(df.isna().sum(axis=1)/4))
+df = df.fillna(df.mean())
+
 #%% Make a barplot with error bars of the mean NC across sessions conditioned on area pairs:
-fig,ax = plt.subplots(figsize=(6,4))
+
+fig,ax = plt.subplots(figsize=(5,4))
+sns.barplot(data=df,estimator="mean",errorbar='se')#,labels=legendlabels_upper_tri)
 plt.plot(df.T,linewidth=0.25,c='k',alpha=0.5)	
-sns.barplot(data=df,estimator="mean",errorbar='se')
-sns.stripplot(data=df,palette='dark:k',ax=ax,size=3,alpha=0.5,jitter=0.05)
+sns.stripplot(data=df,palette='dark:k',ax=ax,size=3,alpha=0.5,jitter=0.1)
 ax.set_xticklabels(labels=legendlabels_upper_tri,rotation=90,fontsize=8)
-ax.set_ylim([0,0.1])
-plt.savefig(os.path.join(savedir,'NoiseCorrelations','NoiseCorr_labeling_areas_%dsessions' %nSessions + '.png'), format = 'png')
+ax.set_ylim([0,0.15])
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'TraceCorr_labeling_areas_Indiv%dsessions' %nSessions + '.png'), format = 'png')
 
-# pairs = [('V1unl-V1unl','V1lab-V1lab'),
-#          ('V1unl-V1unl','V1unl-V1lab')] #for statistics
-
+#%% With stats:
+fig,ax = plt.subplots(figsize=(5,4))
+sns.barplot(data=df,estimator="mean",errorbar='se')#,labels=legendlabels_upper_tri)
+ax.set_xticklabels(labels=legendlabels_upper_tri,rotation=90,fontsize=8)
 pairs = [('V1unl-V1unl','V1lab-V1lab'),
          ('V1unl-V1unl','V1unl-V1lab'),
+         ('V1unl-V1lab','V1lab-V1lab'),
          ('PMunl-PMunl','PMunl-PMlab'),
-         ('PMunl-PMunl','PMlab-PMlab')] #for statistics
+         ('PMunl-PMunl','PMlab-PMlab'),
+         ('PMunl-PMlab','PMlab-PMlab'),
+         ('V1unl-PMlab','V1lab-PMlab'),
+         ('V1lab-PMunl','V1lab-PMlab'),
+         ('V1unl-PMunl','V1lab-PMlab'),
+         ] #for statistics
 
-# annotator = Annotator(ax, pairs, data=df,order=legendlabels_upper_tri)
+annotator = Annotator(ax, pairs, data=df,order=list(legendlabels_upper_tri))
 # annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
-# # annotator.configure(test='t-test_paired', text_format='star', loc='inside')
-# annotator.apply_and_annotate()
+annotator.configure(test='t-test_paired', text_format='star', loc='inside')
+annotator.apply_and_annotate()
+ax.set_ylim([0,0.13])
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'TraceCorr_labeling_areas_%dsessions' %nSessions + '.png'), format = 'png')
 
 #%% ############################################################################################
 ################### Noise correlations as a function of pairwise distance: ####################

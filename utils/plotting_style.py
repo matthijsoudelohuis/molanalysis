@@ -54,11 +54,15 @@ def get_clr_recombinase(enzymes):
     return itemgetter(*enzymes)(palette)
 
 def get_clr_protocols(protocols):
-    palette       = {'GR': sns.xkcd_rgb['bright blue'],
+    palette       = {'GR': sns.xkcd_rgb['pinky red'],
+                    'GN': sns.xkcd_rgb['bright blue'],
                     'SP' : sns.xkcd_rgb['coral'],
                     'RF' : sns.xkcd_rgb['emerald'],
-                    'VR' : sns.xkcd_rgb['emerald'],
-                    'IM' : sns.xkcd_rgb['maroon']}
+                    'IM' : sns.xkcd_rgb['very dark green'],
+                    'DM' : sns.xkcd_rgb['grape'],
+                    'DN' : sns.xkcd_rgb['emerald'],
+                    'DP' : sns.xkcd_rgb['neon blue']
+}
     return itemgetter(*protocols)(palette)
 
 def get_clr_stimuli_vr(stimuli):
