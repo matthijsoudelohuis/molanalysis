@@ -55,6 +55,12 @@ class Session():
         if os.path.exists(self.celldata_path):
 
             self.celldata  = pd.read_csv(self.celldata_path, sep=',', index_col=0)
+
+            if os.path.exists(os.path.join(self.data_folder,'IMrfdata.csv')):
+                IMrfdata = pd.read_csv(os.path.join(self.data_folder,'IMrfdata.csv'), sep=',', index_col=0)
+                assert np.shape(IMrfdata)[0]==np.shape(self.celldata)[0], 'dimensions of IMrfdata and celldata do not match'
+                self.celldata = self.celldata.join(IMrfdata,lsuffix='_old')
+            
             # get only good cells (selected ROIs by suite2p): #not used anymore, only good cells are saved anyways
             # goodcells               = self.celldata['iscell'] == 1
             # self.celldata           = self.celldata[goodcells].reset_index(drop=True)

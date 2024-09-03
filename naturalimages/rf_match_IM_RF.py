@@ -1,4 +1,3 @@
-# %% # Imports
 # -*- coding: utf-8 -*-
 """
 This script analyzes neural and behavioral data in a multi-area calcium imaging
@@ -6,6 +5,7 @@ dataset with labeled projection neurons. The visual stimuli are natural images.
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
+# %% # Imports
 # Import general libs
 import os
 import numpy as np
@@ -14,20 +14,21 @@ import matplotlib.pyplot as plt
 from sklearn import preprocessing
 os.chdir('e:\\Python\\molanalysis')
 
-os.chdir('../')  # set working directory to the root of the git repo
+# os.chdir('../')  # set working directory to the root of the git repo
 
 # Import personal lib funcs
 from loaddata.session_info import load_sessions
 from utils.plotting_style import *  # get all the fixed color schemes
 from utils.imagelib import load_natural_images
 from loaddata.get_data_folder import get_local_drive
-from utils.corr_lib import compute_pairwise_anatomical_distance
+from utils.pair_lib import compute_pairwise_anatomical_distance
 from utils.rf_lib import estimate_rf_IM, exclude_outlier_rf, smooth_rf
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - RF\\')
 
 # %% Load IM session with receptive field mapping ################################################
 session_list = np.array([['LPE10885', '2023_10_20']])
+session_list = np.array([['LPE09665', '2023_03_15']])
 
 # Load sessions lazy: (no calciumdata, behaviordata etc.,)
 sessions, nSessions = load_sessions(protocol='IM', session_list=session_list)
@@ -59,9 +60,9 @@ old_celldata    = pd.DataFrame({'rf_az_F': sessions[0].celldata['rf_az_Fneu'],
 #%% Get response-triggered frame for cells and then estimate receptive field from that:
 sessions    = estimate_rf_IM(sessions,show_fig=False)
 
-#%% Flip elevation axis:
-vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
-sessions[0].celldata['rf_el_F'] = -(sessions[0].celldata['rf_el_F']-np.mean(vec_elevation)) + np.mean(vec_elevation)
+# #%% Flip elevation axis:
+# vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
+# sessions[0].celldata['rf_el_F'] = -(sessions[0].celldata['rf_el_F']-np.mean(vec_elevation)) + np.mean(vec_elevation)
 
 #%% Make a ascatter of azimuth estimated through rf mapping and by linear model of average triggered image:
 areas       = ['V1', 'PM']
@@ -97,3 +98,36 @@ plt.tight_layout()
 fig.savefig(os.path.join(savedir,'Alignment_IM_RF_%s' % sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 # %%
+
+x = -np.log10(old_celldata['rf_p_F'])
+y = sessions[0].celldata['rf_p_F']
+
+fig,axes    = plt.subplots(1,1,figsize=(10,10))
+
+sns.scatterplot(ax=axes,x=x,y=y,s=5,c='k',alpha=0.5)
+
+#%% ##################### Retinotopic mapping within V1 and PM #####################
+
+# from utils.rf_lib import plot_rf_plane,plot_rf_screen
+
+# oldp = sessions[ises].celldata['rf_p_F']
+
+# g = -np.log10(sessions[ises].celldata['rf_p_F'])
+# g = 10**-sessions[ises].celldata['rf_p_F']
+# g = 1.01**-sessions[ises].celldata['rf_p_F']
+# plt.hist(g,bins=np.arange(0,0.1,0.001))
+
+# sessions[ises].celldata['rf_p_F'] = 1.015**-oldp
+
+sig_thr = 0.01
+rf_type = 'F'
+for ises in range(nSessions):
+    fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
+    # fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
+
+
+#%% ########### Plot locations of receptive fields as on the screen ##############################
+rf_type = 'F'
+for ises in range(nSessions):
+    fig = plot_rf_screen(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
+    # fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_rf_screen_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '_smooth.png'), format = 'png')
