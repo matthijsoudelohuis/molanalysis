@@ -738,13 +738,14 @@ def proc_imaging(sesfolder, sessiondata):
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
 
-        if os.path.exists(os.path.join(plane_folder, 'RF_Fneu.npy')) and os.path.exists(os.path.join(plane_folder, 'RF_F.npy')):
+        if os.path.exists(os.path.join(plane_folder, 'RF_F.npy')):
             RF_F = np.load(os.path.join(plane_folder, 'RF_F.npy'))
             celldata_plane['rf_az_F']   = RF_F[:,0]
             celldata_plane['rf_el_F']   = RF_F[:,1]
             celldata_plane['rf_sz_F']   = RF_F[:,2]
             celldata_plane['rf_p_F']    = RF_F[:,3]
             
+        if os.path.exists(os.path.join(plane_folder, 'RF_Fneu.npy')):
             RF_Fneu = np.load(os.path.join(plane_folder, 'RF_Fneu.npy'))
             celldata_plane['rf_az_Fneu']   = RF_Fneu[:,0]
             celldata_plane['rf_el_Fneu']   = RF_Fneu[:,1]
@@ -881,7 +882,7 @@ def proc_imaging(sesfolder, sessiondata):
     Ftsdata             = pd.DataFrame(dFdata['ts'], columns=['ts'])
     dFdata              = dFdata.drop('ts',axis=1)
     deconvdata          = deconvdata.drop('ts',axis=1)
-
+    
     # self.F_chan2             = self.calciumdata['F_chan2']
     # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
     assert(np.shape(dFdata)[1]==np.shape(celldata)[0]), '# of cells unequal in cell data and fluo data'

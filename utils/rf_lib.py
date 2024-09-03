@@ -13,12 +13,13 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 import seaborn as sns
-from utils.corr_lib import compute_pairwise_metrics, mean_resp_image
 from tqdm import tqdm
 from utils.plotting_style import * #get all the fixed color schemes
 from scipy import ndimage
 from scipy.stats import zscore
 from utils.imagelib import load_natural_images
+from utils.pair_lib import *
+from utils.psth import mean_resp_image
 
 def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
     
@@ -275,87 +276,80 @@ def filter_nearlabeled(ses,radius=50):
 
 def get_response_triggered_image(ses, natimgdata):
     
-    respmean,imageids = mean_resp_image(ses)
-    
-    N = np.shape(ses.respmat)[0]
+    respmean,imageids   = mean_resp_image(ses)
 
-    # nImages = np.unique(ses.trialdata['ImageNumber'])
-    # ses.respmat_image = np.empty((N, nImages))
-    # for iIm,imid in enumerate(imageids):
-    #     ses.respmat_image[:, iIm] = np.mean(
-    #         sessions[sesidx].respmat[:, sessions[sesidx].trialdata['ImageNumber'] == imid], axis=1)
+    N                   = np.shape(ses.respmat)[0]
 
     # Compute response triggered average image:
-    ses.RTA = np.empty((*np.shape(natimgdata)[:2], N))
     # N = 100
-    for iN in range(N):
-        print(
-            f"\rComputing average response for neuron {iN+1} / {N}", end='\r')
-        ses.RTA[:, :, iN] = np.average(
-            natimgdata, axis=2, weights=respmean[iN, :])
+    # for iN in range(N):
+    ses.RTA             = np.empty((*np.shape(natimgdata)[:2], N))
+    for iN in tqdm(range(N),desc='Computing average response for neuron'):
+        ses.RTA[:, :, iN] = np.average(natimgdata[:,:,imageids], axis=2, weights=respmean[iN, :])
         
     return ses
 
 
-def estimate_rf_IM(sessions,show_fig=False): 
-    # for ses in tqdm(sessions,total=len(sessions),desc= 'Smoothed interpolation of missing RF: '):
-    for ses in sessions:
-        if not 'rf_az_Feneu' in ses.celldata:
-            ses.celldata['rf_az_F'] = ses.celldata['rf_el_F'] = ses.celldata['rf_p_F'] = np.nan
-            # natimgdata = load_natural_images(onlyright=True) #Load the natural images:
-            natimgdata = load_natural_images(onlyright=False) #Load the natural images:
+def estimate_rf_IM(ses,show_fig=False): 
+    ses.celldata['rf_az_F'] = ses.celldata['rf_el_F'] = ses.celldata['rf_p_F'] = np.nan
+    # natimgdata = load_natural_images(onlyright=True) #Load the natural images:
+    natimgdata = load_natural_images(onlyright=False) #Load the natural images:
 
-            ses         = get_response_triggered_image(ses, natimgdata)
+    if not hasattr(ses,'RTA'):
+        ses         = get_response_triggered_image(ses, natimgdata)
 
-            # az_lims     = [45, 135]
-            az_lims     = [-135, 135]
-            el_lims     = [50.2, -16.7]
+    # az_lims     = [45, 135]
+    az_lims     = [-135, 135]
+    # el_lims     = [50.2, -16.7]
+    el_lims     = [-16.7,50.2] #bottom and top of screen displays
 
-            ypix,xpix,N = np.shape(ses.RTA)
-            xmap        = np.linspace(*az_lims,xpix)
-            ymap        = np.linspace(*el_lims,ypix)
-            # N = 100
-            zthr        = 3
+    ypix,xpix,N = np.shape(ses.RTA)
+    xmap        = np.linspace(*az_lims,xpix)
+    ymap        = np.linspace(*el_lims,ypix)
+    # N = 100
+    zthr        = 3
+    rf_data     = pd.DataFrame(data=np.full((N,4),np.nan),columns=['rf_az_F','rf_el_F','rf_sz_F','rf_p_F'])
 
-            for iN in range(N):
-                dev = zscore(ses.RTA[:, :, iN].copy()-128,axis=None)
-                dev[np.abs(dev)<zthr]=0
-                if np.any(dev):
-                    (y, x) = np.round(ndimage.center_of_mass(np.abs(dev))).astype(int)
-                    ses.celldata.loc[iN,'rf_az_F'] = xmap[x]
-                    ses.celldata.loc[iN,'rf_el_F'] = ymap[y]
-                    ses.celldata.loc[iN,'rf_p_F'] = np.sum(dev>zthr)
-            
-            if show_fig:
-                RTA_var = np.var(ses.RTA, axis=(0, 1))
+    for iN in range(N):
+        dev = zscore(ses.RTA[:, :, iN].copy()-128,axis=None)
+        dev[np.abs(dev)<zthr]=0
+        if np.any(dev):
+            (y, x) = np.round(ndimage.center_of_mass(np.abs(dev))).astype(int)
+            rf_data.loc[iN,'rf_az_F'] = xmap[x]
+            rf_data.loc[iN,'rf_el_F'] = ymap[y]
+            rf_data.loc[iN,'rf_sz_F'] = np.sum(dev>zthr)
+            rf_data.loc[iN,'rf_p_F'] = 1.015**-(np.sum(np.abs(dev))) #get some significance metric from the total deviation
+    
+    if show_fig:
+        RTA_var = np.var(ses.RTA, axis=(0, 1))
 
-                nExamples = 25
+        nExamples = 25
 
-                example_cells = np.argsort(RTA_var)[-nExamples:]
+        example_cells = np.argsort(RTA_var)[-nExamples:]
 
-                Rows = int(np.floor(np.sqrt(nExamples)))
-                Cols = nExamples // Rows  # Compute Rows required
-                if nExamples % Rows != 0:  # If one additional row is necessary -> add one:
-                    Cols += 1
-                Position = range(1, nExamples + 1)  # Create a Position index
+        Rows = int(np.floor(np.sqrt(nExamples)))
+        Cols = nExamples // Rows  # Compute Rows required
+        if nExamples % Rows != 0:  # If one additional row is necessary -> add one:
+            Cols += 1
+        Position = range(1, nExamples + 1)  # Create a Position index
 
-                fig = plt.figure(figsize=[18, 9])
-                # for iN in range(N):
-                for i, iN in enumerate(example_cells):
-                    # add every single subplot to the figure with a for loop
-                    ax = fig.add_subplot(Rows, Cols, Position[i])
-                    ax.imshow(ses.RTA[:, :, iN]-128, cmap='gray',vmin=-15,vmax=15)
+        fig = plt.figure(figsize=[18, 9])
+        # for iN in range(N):
+        for i, iN in enumerate(example_cells):
+            # add every single subplot to the figure with a for loop
+            ax = fig.add_subplot(Rows, Cols, Position[i])
+            ax.imshow(ses.RTA[:, :, iN]-128, cmap='gray',vmin=-15,vmax=15)
 
-                    dev = zscore(ses.RTA[:, :, iN].copy()-128,axis=None)
-                    dev[np.abs(dev)<zthr]=0
-                    if np.any(dev):
-                        (y, x) = np.round(ndimage.center_of_mass(np.abs(dev))).astype(int)
-                        
-                    ax.plot(x, y, 'r+')
-                    ax.set_xticks([])
-                    ax.set_yticks([])
-                    ax.set_aspect('auto')
-                    ax.set_title("%d" % iN)
-                plt.tight_layout(rect=[0, 0, 1, 1])
+            dev = zscore(ses.RTA[:, :, iN].copy()-128,axis=None)
+            dev[np.abs(dev)<zthr]=0
+            if np.any(dev):
+                (y, x) = np.round(ndimage.center_of_mass(np.abs(dev))).astype(int)
+                
+            ax.plot(x, y, 'r+')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_aspect('auto')
+            ax.set_title("%d" % iN)
+        plt.tight_layout(rect=[0, 0, 1, 1])
 
-    return sessions
+    return rf_data

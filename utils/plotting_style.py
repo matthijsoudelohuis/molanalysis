@@ -29,6 +29,7 @@ def get_clr_areas(areas):
 def get_clr_labelpairs(pairs):
     palette       = {'unl-unl': sns.xkcd_rgb['grey'],
         'unl-lab' : sns.xkcd_rgb['rose'],
+        'lab-unl' : sns.xkcd_rgb['orange'],
         'lab-lab' : sns.xkcd_rgb['red']}
     # palette       = {'0-0': sns.xkcd_rgb['grey'],
     #     '0-1' : sns.xkcd_rgb['rose'],

@@ -22,7 +22,6 @@ from statannotations.Annotator import Annotator
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.plot_lib import shaded_error
-# from utils.RRRlib import regress_out_behavior_modulation
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled
 
@@ -35,6 +34,7 @@ session_list        = np.array([['LPE10919','2023_11_06']])
 # sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
 sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
 # sessions,nSessions   = filter_sessions(protocols = ['SP','GN','RF'],filter_areas=['V1','PM']) 
+# sessions,nSessions   = filter_sessions(protocols = ['IM'],filter_areas=['V1','PM']) 
 
 #%%  Load data properly:                      
 for ises in range(nSessions):
@@ -127,19 +127,50 @@ sessions_subset = [sessions[i] for i in sessions_in_list]
 
 #%% ################ Pairwise trace correlations as a function of pairwise delta RF: #####################
 areapairs           = ['V1-V1','PM-PM','V1-PM']
-rf_type             = 'Fsmooth'
+rf_type             = 'F'
 sessions            = compute_pairwise_delta_rf(sessions,rf_type=rf_type)
 
-[binmean,binedges]  =  bin_corr_deltarf_areapairs(sessions_subset,areapairs,corr_type='trace_corr',normalize=False,
+[binmean,binedges]  =  bin_corr_deltarf_areapairs(sessions,areapairs,corr_type='trace_corr',normalize=False,
                                        sig_thr = 0.001,rf_type=rf_type)
 
 #%% Make the figure:
-fig = plot_bin_corr_deltarf_protocols(sessions_subset,binmean,binedges,areapairs,corr_type='trace_corr',normalize=False)
+fig = plot_bin_corr_deltarf_protocols(sessions,binmean,binedges,areapairs,corr_type='trace_corr',normalize=False)
 
-# fig.savefig(os.path.join(savedir,'TraceCorr_distRF_Protocols_%dsessions_' %nSessions + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'TraceCorr_distRF_IM_%dsessions_' %nSessions + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'TraceCorr_distRF_GN_SP_RF_750dF_F_%dsessions_' %nSessions + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'TraceCorr_distRF_GN_SP_RF_0.75dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
 fig.savefig(os.path.join(savedir,'NoiseCorr_distRF_GN_SP_RF_0.75dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
+
+#%% 
+
+redcelllabels = np.array(['unl','lab'])
+for ses in sessions:
+    ses.celldata['labeled'] = ses.celldata['redcell']
+    ses.celldata['labeled'] = ses.celldata['labeled'].astype(int).apply(lambda x: redcelllabels[x])
+
+sessions            = compute_pairwise_delta_rf(sessions,rf_type=rf_type)
+
+#%% ################ Pairwise trace correlations as a function of pairwise delta RF: #####################
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+layerpairs          = ['L2/3-L2/3','L2/3-L5','L5-L2/3','L5-L5']
+projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
+rf_type             = 'F'
+
+# layerpairs          = ' '
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+projpairs           = ' '
+
+[binmean,binedges]  =  bin_corr_deltarf(sessions,layerpairs=layerpairs,areapairs=areapairs,projpairs=projpairs,
+                                        corr_type='trace_corr',normalize=False,binres=5,
+                                       sig_thr = 0.001,rf_type=rf_type,mincount=10)
+
+fig = plot_bin_corr_deltarf_flex(sessions,binmean,binedges,layerpairs=layerpairs,areapairs=areapairs,projpairs=projpairs,corr_type='trace_corr',normalize=False)
+
+# fig.savefig(os.path.join(savedir,'TraceCorr_distRF_GN_SP_RF_750dF_F_%dsessions_' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'TraceCorr_distRF_GN_SP_RF_0.75dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'TraceCorr_distRF_Areas_Layers_IM_0.5dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'TraceCorr_distRF_Areas_Projections_IM_0.5dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
+
 
 #%% ##########################################################################################################
 #   2D     DELTA RECEPTIVE FIELD                 2D
