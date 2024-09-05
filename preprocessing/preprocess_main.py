@@ -19,11 +19,11 @@ animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 # animal_ids          = ['LPE11495','LPE09665','LPE09830'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_02_20','2024_02_21  ','2024_02_22','2024_02_23','2024_02_26','2024_02_27']
-# date_filter        = ['2023_03_21']
-# animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
+date_filter        = ['2023_12_15']
+animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
 
-protocols           = ['GR','SP','IM','GN']
-protocols           = ['RF']
+protocols           = ['GR','SP','IM','GN','RF']
+# protocols           = ['RF']
 # protocols           = ['DP','DM','DN']
 
 processimagingflag  = True

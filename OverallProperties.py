@@ -44,6 +44,22 @@ sns.scatterplot(sessiondata,x='protocol',y='ntrials',hue='protocol')
 plt.ylim([0,5800])
 plt.savefig(os.path.join(savedir,'nTrials_perSession.png'), format = 'png')
 
+#%% Show the number of cells per layer across sessions:
+celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+# Group celldata by session_id and layer, and count the number of cells
+cell_counts = celldata.groupby(['session_id', 'layer']).count().reset_index()
+
+fig = plt.figure(figsize=(4,3))
+# sns.barplot(data=cell_counts,x='layer',y='iscell',hue='layer',palette='tab10')
+sns.stripplot(data=cell_counts,x='layer',y='iscell',hue='layer',palette='tab10')
+plt.xlabel('Layer')
+plt.ylabel('Number of Cells')
+plt.title('Number of Cells per Layer across Sessions')
+# plt.legend(title='Session ID')
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'CellCountsPerLayer_%dsessions_' %nSessions + '.png'), format = 'png')
+
 #%% Load sessions lazy: 
 sessions,nSessions   = filter_sessions(protocols = ['GR'])
 

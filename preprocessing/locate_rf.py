@@ -151,6 +151,7 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
     sessiondata = pd.DataFrame({'protocol': ['RF']})
     sessiondata['animal_id'] = animal_id
     sessiondata['sessiondate'] = sessiondate
+    sessiondata['fs'] = 5.317
 
     suite2p_folder  = os.path.join(sesfolder,"suite2p")
     rf_folder       = os.path.join(sesfolder,'RF','Behavior')
@@ -226,8 +227,11 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                             rfmaps_on[i,j,n] = np.mean(resps[grid_array[i,j,:]==1])
                             rfmaps_off[i,j,n] = np.mean(resps[grid_array[i,j,:]==-1])
                             
-                            rfmaps_on_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
-                            rfmaps_off_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+                            rfmaps_on_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
+                            rfmaps_off_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+
+                            # rfmaps_on_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
+                            # rfmaps_off_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
 
                 RF_x            = np.empty(N)
                 RF_y            = np.empty(N)
@@ -262,7 +266,8 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                     clusters        = np.logical_or(clusters_on,clusters_off)
                     
                     RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters)
-                    RF_p[n] = np.nansum((clusters_on_p,clusters_off_p))
+                    # RF_p[n] = np.nansum((clusters_on_p,clusters_off_p))
+                    RF_p[n] = combine_pvalues((clusters_on_p,clusters_off_p))[1] #get combined p-value, Fisher's test
 
                 #convert x and y values in grid space to azimuth and elevation:
                 RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
