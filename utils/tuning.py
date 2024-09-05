@@ -1,4 +1,113 @@
 import numpy as np
+import pandas as pd
+from tqdm.auto import tqdm
+
+from scipy.stats import ttest_ind,ttest_1samp
+from scipy.stats import wilcoxon
+
+
+def mean_resp_image(ses):
+    nNeurons = np.shape(ses.respmat)[0]
+    imageids = np.unique(ses.trialdata['ImageNumber'])
+    respmean = np.empty((nNeurons,len(imageids)))
+    for im,imid in enumerate(imageids):
+        respmean[:,im] = np.mean(ses.respmat[:,ses.trialdata['ImageNumber']==imid],axis=1)
+    return respmean,imageids
+
+def mean_resp_gr(ses):
+
+    # get signal correlations:
+    [N,K]           = np.shape(ses.respmat) #get dimensions of response matrix
+
+    oris            = np.sort(ses.trialdata['Orientation'].unique())
+    ori_counts      = ses.trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
+    assert(len(ori_counts) == 16 or len(ori_counts) == 8)
+    resp_meanori    = np.empty([N,len(oris)])
+
+    for i,ori in enumerate(oris):
+        resp_meanori[:,i] = np.nanmean(ses.respmat[:,ses.trialdata['Orientation']==ori],axis=1)
+
+    respmat_res                     = ses.respmat.copy()
+
+    ## Compute residuals:
+    for ori in oris:
+        ori_idx     = np.where(ses.trialdata['Orientation']==ori)[0]
+        temp        = np.mean(respmat_res[:,ori_idx],axis=1)
+        respmat_res[:,ori_idx] = respmat_res[:,ori_idx] - np.repeat(temp[:, np.newaxis], len(ori_idx), axis=1)
+
+    return resp_meanori,respmat_res
+
+def mean_resp_gn(ses):
+    # get signal correlations:
+    [N,K]           = np.shape(ses.respmat) #get dimensions of response matrix
+
+    oris            = np.sort(pd.Series.unique(ses.trialdata['centerOrientation'])).astype('int')
+    speeds          = np.sort(pd.Series.unique(ses.trialdata['centerSpeed'])).astype('int')
+    noris           = len(oris) 
+    nspeeds         = len(speeds)
+
+    ### Mean response per condition:
+    resp_mean       = np.empty([N,noris,nspeeds])
+
+    for iO,ori in enumerate(oris):
+        for iS,speed in enumerate(speeds):
+            
+            idx_trial = np.logical_and(ses.trialdata['centerOrientation']==ori,ses.trialdata['centerSpeed']==speed)
+            resp_mean[:,iO,iS] = np.nanmean(ses.respmat[:,idx_trial],axis=1)
+
+    ## Compute residual response:
+    respmat_res = ses.respmat.copy()
+    for iO,ori in enumerate(oris):
+        for iS,speed in enumerate(speeds):
+            
+            idx_trial = np.logical_and(ses.trialdata['centerOrientation']==ori,ses.trialdata['centerSpeed']==speed)
+            tempmean = np.nanmean(ses.respmat[:,idx_trial],axis=1)
+            respmat_res[:,idx_trial] -= tempmean[:,np.newaxis]
+
+    return resp_mean,respmat_res
+
+def get_pref_orispeed(resp_mean,oris,speeds,asindex=True):
+    
+    #Find preferred orientation and speed for each cell
+    pref_ori,pref_speed = np.unravel_index(np.argmax(resp_mean.reshape([np.shape(resp_mean)[0],-1]),axis=1), (len(oris), len(speeds)))
+    
+    if not asindex:
+        pref_ori = oris[pref_ori] #find preferred orientation for each
+        pref_speed = speeds[pref_speed] #find preferred orientation for each 
+        
+    return pref_ori,pref_speed
+
+def comp_grating_responsive(sessions,pthr = 0.001):
+    
+    for ises in tqdm(range(len(sessions)),desc= 'Identifying significant responsive neurons for each session'):
+        if sessions[ises].sessiondata['protocol'][0]=='GR':
+            [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+            oris                            = np.sort(sessions[ises].trialdata['Orientation'].unique())
+            sessions[ises].celldata['vis_resp'] = False
+            
+            for iN in range(N):
+                for iOri,Ori in enumerate(oris):
+                    # pval = ttest_1samp(sessions[ises].respmat[iN,sessions[ises].trialdata['Orientation']==Ori],popmean=0)[1]
+                    pval = wilcoxon(sessions[ises].respmat[iN,sessions[ises].trialdata['Orientation']==Ori])[1]
+                    if pval < pthr:
+                        sessions[ises].celldata.loc[iN,'vis_resp'] = True
+
+        elif sessions[ises].sessiondata['protocol'][0]=='GN':
+            [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+            oris                            = np.sort(pd.Series.unique(sessions[ises].trialdata['centerOrientation']))
+            speeds                          = np.sort(pd.Series.unique(sessions[ises].trialdata['centerSpeed']))
+            sessions[ises].celldata['vis_resp'] = False
+            
+            for iN in range(N):
+                for iOri,Ori in enumerate(oris):
+                    for iS,Speed in enumerate(speeds):
+                        idx_trial = np.logical_and(sessions[ises].trialdata['centerOrientation']==Ori,sessions[ises].trialdata['centerSpeed']==Speed)
+                        # pval = ttest_1samp(sessions[ises].respmat[iN,idx_trial],popmean=0)[1]
+                        pval = wilcoxon(sessions[ises].respmat[iN,idx_trial])[1]
+                        if pval < pthr:
+                            sessions[ises].celldata.loc[iN,'vis_resp'] = True
+
+    return sessions
 
 
 def compute_prefori(response_matrix,conditions_vector):

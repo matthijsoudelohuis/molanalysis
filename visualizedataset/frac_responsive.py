@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from loaddata.session_info import filter_sessions,load_sessions
-from utils.psth import compute_respmat,comp_grating_responsive
+from utils.tuning import comp_grating_responsive
+from utils.psth import compute_respmat
 from utils.plotting_style import * #get all the fixed color schemes
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - Gratings\\')

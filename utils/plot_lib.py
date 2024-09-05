@@ -5,7 +5,7 @@ from matplotlib.lines import Line2D
 from operator import itemgetter
 import matplotlib.pyplot as plt
 
-def shaded_error(ax,x,y,yerror=None,center='mean',error='std',color='black'):
+def shaded_error(ax,x,y,yerror=None,center='mean',error='std',color='black',linestyle='-'):
     x = np.array(x)
     y = np.array(y)
 
@@ -30,7 +30,7 @@ def shaded_error(ax,x,y,yerror=None,center='mean',error='std',color='black'):
         ycenter = y
         yerror = np.array(yerror)
 
-    h, = ax.plot(x,ycenter,color=color)
+    h, = ax.plot(x,ycenter,color=color,linestyle=linestyle)
     ax.fill_between(x, ycenter-yerror, ycenter+yerror,color=color,alpha=0.2)
 
     # ax.errorbar(oris,np.nanmean(mean_resp_speedsplit[idx_neurons,:,0],axis=0),
