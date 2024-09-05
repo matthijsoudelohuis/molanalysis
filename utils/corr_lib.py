@@ -561,9 +561,10 @@ def bin_corr_deltarf_areapairs(sessions,areapairs,corr_type='trace_corr',normali
     for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by delta receptive field: '):
         if hasattr(sessions[ises],corr_type):
             corrdata = getattr(sessions[ises],corr_type).copy()
-            if 'rf_p_F' in sessions[ises].celldata:
+            if 'rf_p_' + rf_type in sessions[ises].celldata:
                 for iap,areapair in enumerate(areapairs):
                     signalfilter    = np.meshgrid(sessions[ises].celldata['rf_p_' + rf_type]<sig_thr,sessions[ises].celldata['rf_p_'  + rf_type]<sig_thr)
+                    # signalfilter    = np.meshgrid(sessions[ises].celldata['rf_p_F']<sig_thr,sessions[ises].celldata['rf_p_F']<sig_thr)
                     signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
                     
                     areafilter      = filter_2d_areapair(sessions[ises],areapair)
@@ -622,7 +623,7 @@ def plot_bin_corr_deltarf_protocols(sessions,binmean,binedges,areapairs,corr_typ
 
 
 def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='trace_corr',
-                     normalize=False,rf_type = 'F',sig_thr = 0.001,binres=2.5,mincount=25):
+                     normalize=False,rf_type = 'F',sig_thr = 0.001,binres=2.5,mincount=25,absolute=True):
     """
     Compute pairwise correlations as a function of pairwise delta receptive field.
     - Sessions are binned by areapairs, layerpairs, and projpairs.
@@ -632,11 +633,11 @@ def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_ty
     ----------
     sessions : list
         list of sessions
-    areapairs : list
+    areapairs : list (if ' ' then all areapairs are used)
         list of areapairs
-    layerpairs : list
+    layerpairs : list  (if ' ' then all layerpairs are used)
         list of layerpairs
-    projpairs : list
+    projpairs : list  (if ' ' then all projpairs are used)
         list of projpairs
     corr_type : str, optional
         type of correlation to use, by default 'trace_corr'
@@ -656,6 +657,10 @@ def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_ty
     for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by delta receptive field: '):
         if hasattr(sessions[ises],corr_type):
             corrdata = getattr(sessions[ises],corr_type).copy()
+
+            if absolute == True:
+                corrdata = np.abs(corrdata)
+
             if 'rf_p_F' in sessions[ises].celldata:
                 for iap,areapair in enumerate(areapairs):
                     for ilp,layerpair in enumerate(layerpairs):
@@ -722,7 +727,7 @@ def plot_bin_corr_deltarf_flex(sessions,binmean,binedges,areapairs=' ',layerpair
             if normalize:
                 ax.set_ylim([-0.015,0.05])
             else: 
-                ax.set_ylim([0,0.12])
+                ax.set_ylim([0,0.15])
             ax.set_aspect('auto')
             ax.tick_params(axis='both', which='major', labelsize=8)
 

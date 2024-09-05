@@ -127,7 +127,7 @@ sessions_subset = [sessions[i] for i in sessions_in_list]
 
 #%% ################ Pairwise trace correlations as a function of pairwise delta RF: #####################
 areapairs           = ['V1-V1','PM-PM','V1-PM']
-rf_type             = 'F'
+rf_type             = 'Fneu'
 sessions            = compute_pairwise_delta_rf(sessions,rf_type=rf_type)
 
 [binmean,binedges]  =  bin_corr_deltarf_areapairs(sessions,areapairs,corr_type='trace_corr',normalize=False,
@@ -136,40 +136,57 @@ sessions            = compute_pairwise_delta_rf(sessions,rf_type=rf_type)
 #%% Make the figure:
 fig = plot_bin_corr_deltarf_protocols(sessions,binmean,binedges,areapairs,corr_type='trace_corr',normalize=False)
 
-fig.savefig(os.path.join(savedir,'TraceCorr_distRF_IM_%dsessions_' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'TraceCorr_distRF_IM_%dsessions_' %nSessions + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'TraceCorr_distRF_GN_SP_RF_750dF_F_%dsessions_' %nSessions + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'TraceCorr_distRF_GN_SP_RF_0.75dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'NoiseCorr_distRF_GN_SP_RF_0.75dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'NoiseCorr_distRF_IM_GN_SP_RF_0.5dF_Fneu_F0.001_%dsessions_' %nSessions + '.png'), format = 'png')
 
-#%% 
+#%% Give redcells a string label
 
 redcelllabels = np.array(['unl','lab'])
 for ses in sessions:
     ses.celldata['labeled'] = ses.celldata['redcell']
     ses.celldata['labeled'] = ses.celldata['labeled'].astype(int).apply(lambda x: redcelllabels[x])
 
+#%% 
+rf_type             = 'F'
 sessions            = compute_pairwise_delta_rf(sessions,rf_type=rf_type)
 
-#%% ################ Pairwise trace correlations as a function of pairwise delta RF: #####################
+#%% 
+sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+# sessions_in_list = np.where(sessiondata['protocol'].isin(['GN','GR']))[0]
+# sessions_in_list = np.where(sessiondata['protocol'].isin(['GR']))[0]
+sessions_in_list = np.where(sessiondata['protocol'].isin(['IM','RF']))[0]
+# sessions_in_list = np.where(sessiondata['protocol'].isin(['SP']))[0]
+# sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','SP','IM','RF']))[0]
+sessions_subset = [sessions[i] for i in sessions_in_list]
+
+#%% ################ Pairwise correlations as a function of pairwise delta RF: #####################
 areapairs           = ['V1-V1','PM-PM','V1-PM']
 layerpairs          = ['L2/3-L2/3','L2/3-L5','L5-L2/3','L5-L5']
 projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
-rf_type             = 'F'
 
-# layerpairs          = ' '
-areapairs           = ['V1-V1','PM-PM','V1-PM']
-projpairs           = ' '
+#If you override any of these then these pairs will be ignored:
+layerpairs          = ' '
+# areapairs           = ' '
+# projpairs           = ' '
 
-[binmean,binedges]  =  bin_corr_deltarf(sessions,layerpairs=layerpairs,areapairs=areapairs,projpairs=projpairs,
-                                        corr_type='trace_corr',normalize=False,binres=5,
-                                       sig_thr = 0.001,rf_type=rf_type,mincount=10)
+[binmean,binedges]  =  bin_corr_deltarf(sessions_subset,layerpairs=layerpairs,areapairs=areapairs,projpairs=projpairs,
+                                        corr_type='sig_corr',normalize=False,binres=5,
+                                       sig_thr = 0.001,rf_type=rf_type,mincount=10,absolute=True)
 
-fig = plot_bin_corr_deltarf_flex(sessions,binmean,binedges,layerpairs=layerpairs,areapairs=areapairs,projpairs=projpairs,corr_type='trace_corr',normalize=False)
+fig = plot_bin_corr_deltarf_flex(sessions_subset,binmean,binedges,layerpairs=layerpairs,areapairs=areapairs,projpairs=projpairs,corr_type='trace_corr',normalize=False)
 
 # fig.savefig(os.path.join(savedir,'TraceCorr_distRF_GN_SP_RF_750dF_F_%dsessions_' %nSessions + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'TraceCorr_distRF_GN_SP_RF_0.75dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'TraceCorr_distRF_Areas_Layers_IM_0.5dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'TraceCorr_distRF_Areas_Projections_IM_0.5dF_F0.0001_%dsessions_' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'TraceCorr_distRF_Areas_Layers_AllProts_0.5dF_F0.001_%dsessions_' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'TraceCorr_distRF_Areas_Layers235_Projections_AllProts_0.5dF_F0.001_%dsessions_' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'Tracecorr_distRF_Areas_Projections_GN_0.5dF_F0.001_%dsessions_' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'Tracecorr_distRF_Areas_Projections_GR_0.5dF_F0.001_%dsessions_' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'NoiseCorr_distRF_Areas_Projections_GRGN_0.5dF_F0.001_%dsessions_' %nSessions + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'AbsSigCorr_distRF_Areas_Projections_IM_0.5dF_F0.001_%dsessions_' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'TraceCorr_distRF_Areas_Projections_AllProts_0.5dF_F0.001_%dsessions_' %nSessions + '.png'), format = 'png')
 
 
 #%% ##########################################################################################################
@@ -298,8 +315,8 @@ df = mean_corr_areas_labeling(sessions,corr_type='sig_corr',absolute=True,minNce
 
 # #%% Filter certain protocols:
 # sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-# sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM','SP']))[0]
-# # sessions_in_list = np.where(sessiondata['protocol'].isin(['GN']))[0]
+# # sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM','SP']))[0]
+# sessions_in_list = np.where(sessiondata['protocol'].isin(['IM']))[0]
 # df = df.loc[sessions_in_list,:]
 
 
@@ -321,17 +338,18 @@ annotator.configure(test='t-test_paired', text_format='star', loc='inside',line_
                     line_height=0,line_offset_to_group=0.01,text_offset=0)
 annotator.apply_and_annotate()
 ax.set_ylim([0.15,0.37])
-ax.set_ylim([0,0.45])
-ax.set_ylabel('Absolute Signal Correlation')
+ax.set_ylim([0,0.15])
+ax.set_ylabel('Abs. Signal Correlation')
 plt.tight_layout()
 fig.savefig(os.path.join(savedir,'SigCorr_NearFilter_labeling_areas_%dsessions' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'AbsSigCorr_IM_NearFilter_labeling_areas_%dsessions' %nSessions + '.png'), format = 'png')
 
 #%% Same but now for noise correlations:
-df = mean_corr_areas_labeling(sessions,corr_type='noise_corr',absolute=True,minNcells=10)
+df = mean_corr_areas_labeling(sessions,corr_type='noise_corr',absolute=False,minNcells=10)
 
 #%% Filter certain protocols:
 sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM','SP']))[0]
+sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM']))[0]
 df = df.loc[sessions_in_list,:]
 
 #%% Drop missing data:
