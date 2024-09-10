@@ -24,7 +24,7 @@ from utils.imagelib import load_natural_images
 from utils.explorefigs import *
 from utils.psth import compute_tensor, compute_respmat, construct_behav_matrix_ts_F
 from loaddata.get_data_folder import get_local_drive
-from utils.corr_lib import mean_resp_image, compute_signal_correlation, compute_pairwise_metrics
+from utils.corr_lib import mean_resp_image, compute_pairwise_metrics
 
 
 # Updated by Anastasia Simonoff for her local computer, etc.
@@ -59,6 +59,8 @@ sesidx = 0
 # Plot random excerpt with traces:
 fig = plot_excerpt(sessions[sesidx], trialsel=None,
                    plot_neural=True, plot_behavioral=False)
+fig.savefig(os.path.join(savedir, 'TraceExcerpt_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format='png')
+fig.savefig(os.path.join(savedir, 'TraceExcerpt_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.pdf'), format='pdf')
 
 # plot specific trials with a lot behavior related modulation:
 trialsel = [3294, 3374]

@@ -25,7 +25,7 @@ def get_rand_trials(Session, ntrials=80):
     return trialsel
 
 
-def plot_excerpt(Session, trialsel=None, plot_neural=True, plot_behavioral=True, neural_version='traces'):
+def plot_excerpt(Session, trialsel=None, neuronsel=None, plot_neural=True, plot_behavioral=True, neural_version='traces'):
     if trialsel is None:
         trialsel = get_rand_trials(Session)
     logger.info('Plotting trials %d to %d' % (trialsel[0], trialsel[1]))
