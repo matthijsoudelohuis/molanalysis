@@ -33,8 +33,9 @@ session_list        = np.array([['LPE10919','2023_11_06']])
 # load sessions lazy: 
 # sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
 sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
-# sessions,nSessions   = filter_sessions(protocols = ['SP','GN','RF'],filter_areas=['V1','PM']) 
+sessions,nSessions   = filter_sessions(protocols = ['SP','GN','RF'],filter_areas=['V1','PM']) 
 # sessions,nSessions   = filter_sessions(protocols = ['IM'],filter_areas=['V1','PM']) 
+# sessions,nSessions   = filter_sessions(protocols = ['GR'],filter_areas=['V1','PM']) 
 
 #%%  Load data properly:                      
 for ises in range(nSessions):
@@ -63,6 +64,7 @@ sessions = smooth_rf(sessions,radius=50)
 sessions = compute_pairwise_delta_rf(sessions,rf_type='F')
 
 # np.save(os.path.join('e:\\Procdata\\','AllProtocols_corrdata_n84sessions.npy'),sessions,allow_pickle = True)
+# np.load(os.path.join('e:\\Procdata\\','AllProtocols_corrdata_n60sessions.npy'),allow_pickle = False)
 np.save(os.path.join('e:\\Procdata\\','GN_RF_SP_Protocols_corrdata_n%sSessions.npy' % nSessions),sessions,allow_pickle = True)
 
 #%% ##########################################################################################################
@@ -264,32 +266,9 @@ plt.savefig(os.path.join(savedir,'2D_NC_Map_smooth_Area_Proj_Counts_%dsessions' 
 
 #%% ##################### Noise correlations within and across areas: #########################
 
-#%% ################## Noise correlations between labeled and unlabeled cells:  #########################
+df = mean_corr_areas_labeling([sessions[0]],corr_type='trace_corr',absolute=True,minNcells=100)
+clrs_area_labelpairs = get_clr_area_labelpairs(list(df.columns))
 
-df = mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=True,minNcells=10)
-
-#%% Filter certain protocols:
-sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM','SP']))[0]
-df = df.loc[sessions_in_list,:]
-
-print('%d areapairs interpolated due to missing data' % np.sum(df.isna().sum(axis=1)/4))
-df = df.fillna(df.mean())
-
-#%% Make a barplot with error bars of the mean corr across sessions conditioned on area pairs:
-fig,ax = plt.subplots(figsize=(5,4))
-sns.barplot(data=df,estimator="mean",errorbar='se')
-plt.plot(df.T,linewidth=0.25,c='k',alpha=0.5)	
-sns.stripplot(data=df,palette='dark:k',ax=ax,size=3,alpha=0.5,jitter=0.1)
-ax.set_xticklabels(labels=df.columns,rotation=90,fontsize=8)
-ax.set_ylim([0,0.15])
-plt.tight_layout()
-fig.savefig(os.path.join(savedir,'TraceCorr_labeling_areas_Indiv%dsessions' %nSessions + '.png'), format = 'png')
-
-#%% With stats:
-fig,ax = plt.subplots(figsize=(5,4))
-sns.barplot(data=df,estimator="mean",errorbar='se')#,labels=legendlabels_upper_tri)
-ax.set_xticklabels(labels=df.columns,rotation=90,fontsize=8)
 pairs = [('V1unl-V1unl','V1lab-V1lab'),
          ('V1unl-V1unl','V1unl-V1lab'),
          ('V1unl-V1lab','V1lab-V1lab'),
@@ -301,14 +280,46 @@ pairs = [('V1unl-V1unl','V1lab-V1lab'),
          ('V1unl-PMunl','V1lab-PMlab'),
          ] #for statistics
 
+
+#%% ################## Noise correlations between labeled and unlabeled cells:  #########################
+df = mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,filterneg=True,filternear=True,minNcells=10)
+
+#%% Filter certain protocols:
+sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM']))[0]
+sessions_in_list = np.where(sessiondata['protocol'].isin(['GN']))[0]
+sessions_in_list = np.where(sessiondata['protocol'].isin(['GR']))[0]
+sessions_in_list = np.where(sessiondata['protocol'].isin(['IM']))[0]
+df = df.loc[sessions_in_list,:]
+
+print('%d areapairs interpolated due to missing data' % np.sum(df.isna().sum(axis=1)/4))
+df = df.fillna(df.mean())
+
+#%% Make a barplot with error bars of the mean corr across sessions conditioned on area pairs:
+fig,ax = plt.subplots(figsize=(5,4))
+sns.barplot(data=df,estimator="mean",errorbar='se',palette=clrs_area_labelpairs)#,labels=legendlabels_upper_tri)
+plt.plot(df.T,linewidth=0.25,c='k',alpha=0.5)	
+sns.stripplot(data=df,palette='dark:k',ax=ax,size=3,alpha=0.5,jitter=0.1)
+ax.set_xticklabels(labels=df.columns,rotation=90,fontsize=8)
+ax.set_ylabel('Correlation')
+# ax.set_ylim([0,0.15])
+plt.tight_layout()
+# fig.savefig(os.path.join(savedir,'TraceCorr_labeling_areas_Indiv%dsessions' %nSessions + '.png'), format = 'png')
+
+#%% With stats:
+fig,ax = plt.subplots(figsize=(5,4))
+sns.barplot(data=df,estimator="mean",errorbar='se',palette=clrs_area_labelpairs)#,labels=legendlabels_upper_tri)
+ax.set_xticklabels(labels=df.columns,rotation=90,fontsize=8)
+ax.invert_yaxis()
 annotator = Annotator(ax, pairs, data=df,order=list(df.columns))
-# annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
-annotator.configure(test='t-test_paired', text_format='star', loc='inside',line_width=1,line_offset_to_group = 0,text_offset=0)
+annotator.configure(test='t-test_paired', text_format='star', loc='inside',line_height=0,line_offset_to_group=-5,text_offset=0, 
+                    line_width=1,comparisons_correction=None)
 annotator.apply_and_annotate()
-ax.set_ylim([0,0.13])
+ax.invert_yaxis()
+# ax.set_ylim([0,0.13])
 ax.set_ylabel('Absolute Trace Correlation')
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'TraceCorr_NearFilter_labeling_areas_%dsessions' %nSessions + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'TraceCorr_NearFilter_labeling_areas_%dsessions' %nSessions + '.png'), format = 'png')
 
 # %% Now for signal correlations:
 df = mean_corr_areas_labeling(sessions,corr_type='sig_corr',absolute=True,minNcells=10)
@@ -317,58 +328,62 @@ df = mean_corr_areas_labeling(sessions,corr_type='sig_corr',absolute=True,minNce
 # sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 # # sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM','SP']))[0]
 # sessions_in_list = np.where(sessiondata['protocol'].isin(['IM']))[0]
-# df = df.loc[sessions_in_list,:]
-
-
-#%% With stats:
-sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-
-fig,ax = plt.subplots(figsize=(5,4))
-for prot in ['GR','GN','IM']:
-    sessions_in_list = np.where(sessiondata['protocol'].isin([prot]))[0]
-    plt.plot(df.iloc[sessions_in_list,:].T,linewidth=0.5,c=get_clr_protocols([prot]),alpha=1)	
-
-df2 = df.dropna() #% Drop missing data
-sns.barplot(data=df2,estimator="mean",errorbar='se')#,labels=legendlabels_upper_tri)
-ax.set_xticklabels(labels=df2.columns,rotation=90,fontsize=8)
-
-annotator = Annotator(ax, pairs, data=df2,order=list(df.columns))
-# annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
-annotator.configure(test='t-test_paired', text_format='star', loc='inside',line_width=1,
-                    line_height=0,line_offset_to_group=0.01,text_offset=0)
-annotator.apply_and_annotate()
-ax.set_ylim([0.15,0.37])
-ax.set_ylim([0,0.15])
-ax.set_ylabel('Abs. Signal Correlation')
-plt.tight_layout()
-fig.savefig(os.path.join(savedir,'SigCorr_NearFilter_labeling_areas_%dsessions' %nSessions + '.png'), format = 'png')
-# fig.savefig(os.path.join(savedir,'AbsSigCorr_IM_NearFilter_labeling_areas_%dsessions' %nSessions + '.png'), format = 'png')
-
-#%% Same but now for noise correlations:
-df = mean_corr_areas_labeling(sessions,corr_type='noise_corr',absolute=False,minNcells=10)
 
 #%% Filter certain protocols:
 sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM']))[0]
-df = df.loc[sessions_in_list,:]
 
-#%% Drop missing data:
-df = df.dropna()
+for corr_type in ['trace_corr','sig_corr','noise_corr']:
+    fig,axes = plt.subplots(2,3,figsize=(12,6),sharex=True,sharey='row')
+    for iprot,prot in enumerate(['GR','GN','IM']):
+        for isign,sign in enumerate(['pos','neg']):
+            ax                  = axes[isign,iprot]
+            ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'] == prot)[0]]
+            df                  = mean_corr_areas_labeling(ses,corr_type=corr_type,filtersign=sign,filternear=True,minNcells=10)
+            df                  = df.fillna(df.mean()) #interpolate occasional missing data
+            if df.any(axis=None):
+                sns.barplot(ax=ax,data=df,estimator="mean",errorbar='se',palette=clrs_area_labelpairs)#,labels=legendlabels_upper_tri)
+                if isign==1:
+                    ax.set_xticklabels(labels=df.columns,rotation=90,fontsize=8)
+                else: ax.set_xticks([])
+                if isign==1: 
+                    ax.invert_yaxis()
+                annotator = Annotator(ax, pairs, data=df,order=list(df.columns))
+                annotator.configure(test='t-test_paired', text_format='star', loc='inside',line_height=0,line_offset_to_group=-5,text_offset=0, 
+                                    line_width=1,comparisons_correction=None)
+                annotator.apply_and_annotate()
+                if isign==1: 
+                    ax.invert_yaxis()
+                ax.set_ylabel('Correlation')
+                ax.set_title('%s' %(prot),fontsize=12)
+    plt.tight_layout()
+    fig.savefig(os.path.join(savedir,'MeanCorr_Labeling_Areas_perProtocol_%s' % corr_type + '.png'), format = 'png')
 
+#%% Filter certain protocols:
+sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
-#%% With stats:
-fig,ax = plt.subplots(figsize=(5,4))
-sns.barplot(data=df,estimator="mean",errorbar='se')#,labels=legendlabels_upper_tri)
-ax.set_xticklabels(labels=df.columns,rotation=90,fontsize=8)
-
-annotator = Annotator(ax, pairs, data=df,order=list(df.columns))
-# annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
-annotator.configure(test='t-test_paired', text_format='star', loc='inside',line_width=1,
-                    line_height=0,line_offset_to_group=0,text_offset=0)
-annotator.apply_and_annotate()
-ax.set_ylim([0,0.17])
-ax.set_ylabel('Absolute Noise Correlation')
+fig,axes = plt.subplots(2,3,figsize=(12,6),sharex=True,sharey='row')
+for icorr,corr_type in enumerate(['trace_corr','sig_corr','noise_corr']):
+    for isign,sign in enumerate(['pos','neg']):
+        ax                  = axes[isign,icorr]
+        df                  = mean_corr_areas_labeling(sessions,corr_type=corr_type,filtersign=sign,filternear=True,minNcells=10)
+        df                  = df.dropna(how='all')
+        df                  = df.fillna(df.mean()) #interpolate occasional missing data
+        if df.any(axis=None):
+            sns.barplot(ax=ax,data=df,estimator="mean",errorbar='se',palette=clrs_area_labelpairs)#,labels=legendlabels_upper_tri)
+            if isign==1:
+                ax.set_xticklabels(labels=df.columns,rotation=90,fontsize=8)
+            else: ax.set_xticks([])
+            if isign==1: 
+                ax.invert_yaxis()
+            annotator = Annotator(ax, pairs, data=df,order=list(df.columns))
+            annotator.configure(test='t-test_paired', text_format='star', loc='inside',line_height=0,line_offset_to_group=-5,text_offset=0, 
+                                line_width=1,comparisons_correction=None,verbose=False)
+            annotator.apply_and_annotate()
+            if isign==1: 
+                ax.invert_yaxis()
+            ax.set_ylabel('Correlation')
+            ax.set_title('%s' %(corr_type),fontsize=12)
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'NoiseCorr_NearFilter_labeling_areas_%dsessions' %nSessions + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'MeanCorr_Labeling_Areas_diffcorrtypes' + '.png'), format = 'png')
 
-# %%
+

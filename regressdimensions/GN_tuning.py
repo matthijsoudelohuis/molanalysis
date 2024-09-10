@@ -95,7 +95,7 @@ for i,ax in enumerate(axes.flatten()):
     ax.set_ylabel('Speed (deg/s)')
     ax.set_title(areas[i])
 fig.tight_layout()
-# fig.savefig(os.path.join(savedir,'Heatmap_ResponsePerArea.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'Heatmap_OriSpeed_Tuning_MeanResponsePerArea.png'), format = 'png')
 
 #%% 
 
@@ -108,7 +108,8 @@ linelabels =  []
 fig,ax = plt.subplots(1,1,figsize=(4,3))
 for iarea,area in enumerate(areas):
     for iredcell in redcells:
-        datatoplot = np.nanmean(fracmat_labeled[:,:,:,iarea,iredcell],axis=0).squeeze()
+        # datatoplot = np.nanmean(fracmat_labeled[:,:,:,iarea,iredcell],axis=0).squeeze()
+        datatoplot = np.nansum(fracmat_labeled[:,:,:,iarea,iredcell],axis=0).squeeze()
         # linehandle = shaded_error(ax,range(len(speeds)),datatoplot.T,center='mean',error='sem',color=clrs_areas[iarea])
         handles.append(shaded_error(ax,range(len(speeds)),datatoplot.T,center='mean',error='sem',
                                        linestyle=lines_redcells[iredcell],color=clrs_areas[iarea]))
@@ -117,19 +118,25 @@ for iarea,area in enumerate(areas):
         # ax.plot(range(len(speeds)),datatoplot,color=clrs_areas[iarea],linestyle=lines_redcells[iredcell],
                 # label=area+redcelllabels[iredcell])
         linelabels.append(area+redcelllabels[iredcell])
-ax.set_ylim([0,0.15])
+ax.set_ylim([0.02,0.45])
 ax.set_xticks(range(len(speeds)),labels=speeds)
 ax.set_xlabel('Speed (deg/s)')
 ax.set_ylabel('Fraction of neurons')
-ax.set_title('Fraction of neurons responsive to any orientation')
+# ax.set_title('Fraction of neurons responsive to any orientation')
 ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.1, frameon=False)
-ax.legend(handles=handles,labels=linelabels,bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.1, frameon=False)
+ax.legend(handles=handles,labels=linelabels,bbox_to_anchor=(1.05, 1), loc='upper left', 
+          borderaxespad=0.1, frameon=False,fontsize=8)
 plt.tight_layout()
-# plt.savefig(os.path.join(savedir,'FractionResponsiveSpeedPerArea.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'FractionResponsiveSpeed_Sum_PerArea_Labeling.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'FractionResponsiveSpeed_Sum_PerArea_Labeling.pdf'), format = 'pdf')
 
 
+#%% ###################################################
+## Compute tuning measure: how much of the variance is due to mean response per stimulus category:
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+for ises in range(nSessions):    
+    sns.histplot(sessions[ises].celldata['tuning_var'],ax=ax,element='step',fill=False,alpha=0.5,
+                 stat='percent',bins=np.arange(0,1,0.025))
+plt.xlim([0,1])
+fig.savefig(os.path.join(savedir,'Tuning_distribution_%sSessions' + nSessions + '.png'), format = 'png')
 
-
-# %%
-ax.plot(range(len(speeds)),datatoplot,color=clrs_areas[iarea],linestyle=lines_redcells[iredcell],
-                label=area+redcelllabels[iredcell])

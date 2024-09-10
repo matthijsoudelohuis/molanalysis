@@ -12,12 +12,6 @@ pd.set_option("display.max_columns", 14)
 ## Series of function that spit out lists of colors for different combinations of 
 ## areas, protocols, mice, stimuli, etc. 
 
-def get_clr_area_pairs(areapairs):
-    palette       = {'V1-V1'  : sns.xkcd_rgb['seaweed'],
-                    'PM-V1' : sns.xkcd_rgb['peacock blue'],
-                    'V1-PM' : sns.xkcd_rgb['orangered'],
-                    'PM-PM' : sns.xkcd_rgb['barney']}
-    return itemgetter(*areapairs)(palette)
 
 def get_clr_areas(areas):
     palette       = {'V1'  : sns.xkcd_rgb['seaweed'],
@@ -25,6 +19,17 @@ def get_clr_areas(areas):
                     'AL' : sns.xkcd_rgb['clear blue'],
                     'RSP' : sns.xkcd_rgb['orangered']}
     return itemgetter(*areas)(palette)
+
+def get_clr_area_pairs(areapairs):
+    palette       = {'V1-V1'  : sns.xkcd_rgb['seaweed'],
+                    'PM-V1' : sns.xkcd_rgb['peacock blue'],
+                    'V1-PM' : sns.xkcd_rgb['orangered'],
+                    'PM-PM' : sns.xkcd_rgb['barney']}
+    return itemgetter(*areapairs)(palette)
+
+def get_clr_labeled():
+    # clrs            = ['black','red']
+    return ['gray','indianred']
 
 def get_clr_labelpairs(pairs):
     palette       = {'unl-unl': sns.xkcd_rgb['grey'],
@@ -37,16 +42,27 @@ def get_clr_labelpairs(pairs):
     #     '1-1' : sns.xkcd_rgb['red']}
     return itemgetter(*pairs)(palette)
 
-def get_clr_labeled():
-    # clrs            = ['black','red']
-    return ['gray','indianred']
-
 def get_clr_area_labeled(area_labeled):
     palette       = {'V1unl': sns.xkcd_rgb['seaweed'],
         'V1lab' : sns.xkcd_rgb['rose'],
         'PMunl' : sns.xkcd_rgb['barney'],
         'PMlab' : sns.xkcd_rgb['red']}
     return itemgetter(*area_labeled)(palette)
+
+
+def get_clr_area_labelpairs(area_labelpairs):
+    palette       = {'V1unl-V1unl': sns.xkcd_rgb['mint'],
+        'V1unl-V1lab': sns.xkcd_rgb['light green'],
+        'V1lab-V1lab': sns.xkcd_rgb['chartreuse'],
+        'PMunl-PMunl': sns.xkcd_rgb['lilac'],
+        'PMunl-PMlab': sns.xkcd_rgb['orchid'],
+        'PMlab-PMlab': sns.xkcd_rgb['plum'],
+        'V1unl-PMunl': sns.xkcd_rgb['tangerine'],
+        'V1unl-PMlab': sns.xkcd_rgb['orange brown'],
+        'V1lab-PMunl': sns.xkcd_rgb['burnt orange'],
+        'V1lab-PMlab': sns.xkcd_rgb['crimson']}
+    
+    return itemgetter(*area_labelpairs)(palette)
 
 def get_clr_recombinase(enzymes):
     palette       = {'non': 'gray',
@@ -103,6 +119,7 @@ def get_clr_gratingnoise_stimuli(oris,speeds):
             clrs[iO,iS,:] = cmap1[iO,] * cmap2[iS]
             labels[iO,iS] = '%d deg - %d deg/s' % (ori,speed)     
 
+    clrs            = np.reshape(sns.color_palette('dark', 9),(3,3,3))
     # cmap1           = plt.colormaps['tab10']((0,0.5,1))[:,:3]
     # cmap2           = plt.colormaps['Accent']((0,0.5,1))[:,:3]
 
@@ -121,7 +138,9 @@ def get_clr_GN_svars(labels):
     palette       = {'Ori': '#2e17c4',
                 'Speed' : '#17c42e',
                 'Running' : '#c417ad',
+                'RunSpeed' : '#c417ad',
                 'Random' : '#021011',
+                'videoME' : '#adc417',
                 'MotionEnergy' : '#adc417'}
     return itemgetter(*labels)(palette)
 

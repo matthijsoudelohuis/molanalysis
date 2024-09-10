@@ -13,7 +13,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from utils.plot_lib import shaded_error
 from utils.plotting_style import * #get all the fixed color schemes
-from utils.psth import mean_resp_gn,mean_resp_image,mean_resp_gr
+from utils.tuning import mean_resp_gn,mean_resp_gr,mean_resp_image 
 from utils.rf_lib import filter_nearlabeled
 from utils.pair_lib import *
 
@@ -43,7 +43,7 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True):
     # computing the pairwise correlation of activity that is shared due to mean response (signal correlation)
     # or residual to any stimuli in GR and GN protocols (noise correlation).
 
-    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing signal correlations: '):
+    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing signal and noise correlations: '):
         if sessions[ises].sessiondata['protocol'][0]=='IM':
             [respmean,imageids]         = mean_resp_image(sessions[ises])
             [N,K]                       = np.shape(sessions[ises].respmat) #get dimensions of response matrix
@@ -734,7 +734,8 @@ def plot_bin_corr_deltarf_flex(sessions,binmean,binedges,areapairs=' ',layerpair
     plt.tight_layout()
     return fig
 
-def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,minNcells=10):
+def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
+                             filternear=True,filtersign=None,minNcells=10):
     areas               = ['V1','PM']
     redcells            = [0,1]
     redcelllabels       = ['unl','lab']
@@ -746,7 +747,13 @@ def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,minN
         idx_nearfilter = filter_nearlabeled(sessions[ises],radius=50)
         if hasattr(sessions[ises],corr_type):
             corrdata = getattr(sessions[ises],corr_type).copy()
-        
+            
+            if filtersign == 'neg':
+                corrdata[corrdata>0] = np.nan
+            
+            if filtersign =='pos':
+                corrdata[corrdata<0] = np.nan
+
             if absolute:
                 corrdata = np.abs(corrdata)
 
@@ -761,8 +768,9 @@ def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,minN
                                 idx_source = np.logical_and(idx_source,sessions[ises].celldata['redcell']==xRed)
                                 idx_target = np.logical_and(idx_target,sessions[ises].celldata['redcell']==yRed)
 
-                                idx_source = np.logical_and(idx_source,idx_nearfilter)
-                                idx_target = np.logical_and(idx_target,idx_nearfilter)
+                                if filternear:
+                                    idx_source = np.logical_and(idx_source,idx_nearfilter)
+                                    idx_target = np.logical_and(idx_target,idx_nearfilter)
 
                                 if np.sum(idx_source)>minNcells and np.sum(idx_target)>minNcells:	
                                     noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(corrdata[np.ix_(idx_source, idx_target)])

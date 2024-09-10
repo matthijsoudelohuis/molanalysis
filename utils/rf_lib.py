@@ -19,7 +19,7 @@ from scipy import ndimage
 from scipy.stats import zscore
 from utils.imagelib import load_natural_images
 from utils.pair_lib import *
-from utils.psth import mean_resp_image
+from utils.tuning import mean_resp_image
 
 def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
     
