@@ -19,7 +19,7 @@ from utils.imagelib import im_norm,im_norm8,im_log,im_sqrt
 # from suite2p.extraction import extract, masks
 # from suite2p.detection.chan2detect import detect,correct_bleedthrough
 
-def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5):
+def proc_labeling_plane(iplane,plane_folder,saveoverlay=True,showcells=True,overlap_threshold=0.5,gcamp_proj='meanImg'):
     stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
     ops         = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
     iscell      = np.load(os.path.join(plane_folder,'iscell.npy'), allow_pickle=True)
@@ -65,17 +65,18 @@ def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5
 
     np.save(os.path.join(plane_folder,'redcell_cellpose.npy'),redcell_cellpose)
 
-    if showcells:
+    if saveoverlay:
          # Get mean green GCaMP image: 
-        mimg = ops['meanImg']
-        mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
+        if gcamp_proj == 'meanImg': 
+            mimg = ops['meanImg']
+            mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
+        elif gcamp_proj == 'max_proj':
+            # Get max projection GCaMP image: 
+            mimg = np.zeros([512,512])
+            mimg[ops['yrange'][0]:ops['yrange'][1],
+            ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
+            mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
         
-        # Get max projection GCaMP image: 
-        # mimg = np.zeros([512,512])
-        # mimg[ops['yrange'][0]:ops['yrange'][1],
-        # ops['xrange'][0]:ops['xrange'][1]]  = ops['max_proj']
-        # mimg = im_norm8(mimg,min=1,max=99) #scale between 0 and 255
-
         ## Get red image:
         mimg2 = ops['meanImg_chan2'] #get red channel image from ops
         mimg2 = im_norm(mimg2,min=0.5,max=99.5) #scale between percentiles
@@ -84,10 +85,6 @@ def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5
         mimg2 = im_sqrt(mimg2) #square root transform to enhance weakly expressing cells
 
         mimg2 = im_norm(mimg2,min=0,max=100) #scale between 0 and 255
-        
-        #scale between 0 and 255
-        # mimg2       = im_log(mimg2) #log transform to enhance weakly expressing cells
-        # mimg2       = im_norm(mimg2,min=0,max=100).astype(np.uint8) #scale between 0 and 255
 
         #Show labeling results in green and red image:
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(18,6))
@@ -101,39 +98,38 @@ def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5
         im3 = np.dstack((mimg2,mimg,np.zeros(np.shape(mimg2)))).astype(np.uint8)
         ax3.imshow(im3,vmin=0,vmax=255)
 
-        outl_green = get_outlines(masks_suite2p)
-        #Filter good cells for visualization laters: 
-        outl_green = np.array(outl_green)[iscell[:,0]==1]
-        
-        # red_filtered = redcell_cellpose[1,iscell[:,0]==1]
-        red_filtered = redcell_cellpose[iscell[:,0]==1,0]
+        if showcells:
+            outl_green = get_outlines(masks_suite2p)
+            #Filter good cells for visualization laters: 
+            outl_green = np.array(outl_green)[iscell[:,0]==1]
+            
+            # red_filtered = redcell_cellpose[1,iscell[:,0]==1]
+            red_filtered = redcell_cellpose[iscell[:,0]==1,0]
 
-        outl_red = get_outlines(masks_cp_red)
+            outl_red = get_outlines(masks_cp_red)
 
-        for i,o in enumerate(outl_green):
-            if iscell[i,0]: #show only good cells
-                ax1.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
-                # ax2.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
-                if red_filtered[i]:
-                    ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
-                # else: 
-                    # ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+            for i,o in enumerate(outl_green):
+                if iscell[i,0]: #show only good cells
+                    ax1.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+                    # ax2.plot(o[:,0], o[:,1], color='g',linewidth=0.6)
+                    if red_filtered[i]:
+                        ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
+                    # else: 
+                        # ax3.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
 
-        for o in outl_red:
-            # ax1.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
-            ax2.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
-            # ax3.plot(o[:,0], o[:,1], color='y',linewidth=0.6)
-            # ax3.plot(o[:,0], o[:,1], color='#ffe601',linewidth=0.6)
+            for o in outl_red:
+                # ax1.plot(o[:,0], o[:,1], color='r',linewidth=0.6)
+                ax2.plot(o[:,0], o[:,1], color='w',linewidth=0.6)
         
         ax1.set_axis_off()
         ax1.set_aspect('auto')
-        ax1.set_title('Suite2p cells (GCaMP)', fontsize=12, color='black', fontweight='bold',loc='center')
+        ax1.set_title('GCaMP', fontsize=12, color='black', fontweight='bold',loc='center')
         ax2.set_axis_off()
         ax2.set_aspect('auto')
-        ax2.set_title('tdTomato cells (tdTomato)', fontsize=12, color='black', fontweight='bold',loc='center')
+        ax2.set_title('tdTomato)', fontsize=12, color='black', fontweight='bold',loc='center')
         ax3.set_axis_off()
         ax3.set_aspect('auto')
-        ax3.set_title('Labeled cells (Merge)', fontsize=12, color='black', fontweight='bold',loc='center')
+        ax3.set_title('Merge', fontsize=12, color='black', fontweight='bold',loc='center')
 
         plt.tight_layout(rect=[0, 0, 1, 1])
 
@@ -141,7 +137,7 @@ def proc_labeling_plane(iplane,plane_folder,showcells=True,overlap_threshold=0.5
 
     return redcell_cellpose
 
-def proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=True):
+def proc_labeling_session(rawdatadir,animal_id,sessiondate,saveoverlay=True,showcells=True,overlap_threshold=0.5,gcamp_proj='meanImg'):
     sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
 
     suite2p_folder  = os.path.join(sesfolder,"suite2p")
@@ -152,7 +148,7 @@ def proc_labeling_session(rawdatadir,animal_id,sessiondate,showcells=True):
 
     for iplane,plane_folder in enumerate(plane_folders):
         # print(iplane)
-        proc_labeling_plane(iplane,plane_folder,showcells=showcells)
+        proc_labeling_plane(iplane,plane_folder,showcells=showcells,saveoverlay=saveoverlay,overlap_threshold=overlap_threshold,gcamp_proj=gcamp_proj)
         
 
 def gen_red_images(rawdatadir,animal_id,sessiondate):
@@ -270,7 +266,7 @@ def plotseq_labeling_plane(plane_folder,savedir,showcells=True,overlap_threshold
         # outl_green = utils.outlines_list(masks_suite2p)
         outl_green = get_outlines(masks_suite2p)
         #Filter good cells for visualization laters: 
-        outl_green = np.array(outl_green)[iscell[:,0]==1]
+        # outl_green = np.array(outl_green)[iscell[:,0]==1]
         
         red_filtered = redcell_cellpose[iscell[:,0]==1,0]
 

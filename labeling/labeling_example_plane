@@ -5,35 +5,31 @@ Matthijs Oude Lohuis, 2023, Champalimaud Foundation
 """
 
 import os
-# try:
-#     os.chdir('t:\\Python\\molanalysis\\')
-# except:
-#     os.chdir('e:\\Python\\molanalysis\\')
+os.chdir('e:\\Python\\molanalysis\\')
 from labeling.tdTom_labeling_cellpose import plotseq_labeling_plane
 
-rawdatadir          = 'I:\\RawData\\'
+rawdatadir          = 'J:\\RawData\\'
 animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
 date_filter         = ['2023_12_16']
 plane               = 5
 
-outdir             = 'T:\\OneDrive\\PostDoc\\Figures\\Labeling\\'
+outdir             = 'E:\\OneDrive\\PostDoc\\Figures\\Labeling\\'
 
-## Loop over all selected animals and folders
+#%% Loop over all selected animals and folders
 if len(animal_ids) == 0:
     animal_ids = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
 
 for animal_id in animal_ids: #for each animal
 
     sessiondates        = os.listdir(os.path.join(rawdatadir,animal_id)) 
-    savedir             = os.path.join(outdir,animal_id,sessiondate)
-    if not os.path.exists(savedir): #check if output directory already exists, otherwise make
-        os.makedirs(savedir)
-
+    
     if any(date_filter): #If dates specified, then process only those:
         sessiondates = [x for x in sessiondates if x in date_filter]
 
     for sessiondate in sessiondates: #for each of the sessions for this animal
-        
+        savedir             = os.path.join(outdir,animal_id,sessiondate)
+        if not os.path.exists(savedir): #check if output directory already exists, otherwise make
+            os.makedirs(savedir)
         plane_folder = os.path.join(rawdatadir,animal_id,sessiondate,"suite2p","plane%d" % plane)
 
         plotseq_labeling_plane(plane_folder,savedir)
