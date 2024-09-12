@@ -86,7 +86,7 @@ class Session():
 
         if load_calciumdata:
 
-            print('Loading calcium data at {}'.format(self.calciumdata_path))
+            # print('Loading calcium data at {}'.format(self.calciumdata_path))
             self.calciumdata        = pd.read_csv(self.calciumdata_path, sep=',', index_col=0)
             self.ts_F               = pd.read_csv(self.Ftsdata_path, sep=',', index_col=0).to_numpy().squeeze()
             self.F_chan2            = pd.read_csv(self.Fchan2data_path, sep=',', index_col=0).to_numpy().squeeze()

@@ -37,10 +37,10 @@ def plot_excerpt(Session, trialsel=None, neuronsel=None, plot_neural=True, plot_
     if plot_neural:
         if neural_version == 'traces':
             counter = plot_neural_traces(
-                Session, ax, trialsel=trialsel, counter=counter)
+                Session, ax, trialsel=trialsel, neuronsel=neuronsel, counter=counter)
         elif neural_version == 'raster':
             counter = plot_neural_raster(
-                Session, ax, trialsel=trialsel, counter=counter)
+                Session, ax, trialsel=trialsel, neuronsel=neuronsel, counter=counter)
         counter -= 1
 
     if plot_behavioral:
@@ -146,8 +146,11 @@ def plot_behavioral_traces(Session, ax, trialsel=None, nvideoPCs=8, counter=0):
             fontsize=9, color='black', horizontalalignment='right')
 
     # motionenergy = Session.videodata['motionenergy'][idx_V]
-    # handles.append(plot_norm_trace(ts_V[idx_V],motionenergy,counter,clr='k'))
-    # labels.append('Motion Energy')
+    # handles.append(plot_norm_trace(
+    #     ts_V[idx_V], motionenergy, counter, clr='maroon'))
+    # # labels.append('Motion Energy')
+    # ax.text(example_tstart, counter, 'video ME', fontsize=9,
+    #         color='black', horizontalalignment='right')
     # counter -= 1
 
     pupil_area = Session.videodata['pupil_area'][idx_V]
@@ -160,7 +163,7 @@ def plot_behavioral_traces(Session, ax, trialsel=None, nvideoPCs=8, counter=0):
 
     pupil_area = Session.videodata['pupil_xpos'][idx_V]
     handles.append(plot_norm_trace(
-        ts_V[idx_V], pupil_area, counter, clr='plum'))
+        ts_V[idx_V], pupil_area, counter, clr='indigo'))
     # labels.append('Pupil X-pos')
     ax.text(example_tstart, counter, 'Pupil X-pos', fontsize=9,
             color='black', horizontalalignment='right')
@@ -189,36 +192,38 @@ def plot_behavioral_traces(Session, ax, trialsel=None, nvideoPCs=8, counter=0):
     return counter
 
 
-def plot_neural_traces(Session, ax, trialsel=None, counter=0, nexcells=8):
+def plot_neural_traces(Session, ax, trialsel, neuronsel=None, counter=0, nexcells=8):
 
-    example_tstart = Session.trialdata['tOffset'][trialsel[0]-1]
-    example_tstop = Session.trialdata['tOnset'][trialsel[1]-1]
+    example_tstart  = Session.trialdata['tOffset'][trialsel[0]-1]
+    example_tstop   = Session.trialdata['tOnset'][trialsel[1]-1]
 
-    scaleddata = np.array(Session.calciumdata)
-    min_max_scaler = preprocessing.MinMaxScaler()
-    scaleddata = min_max_scaler.fit_transform(scaleddata)
-    scaleddata = scaleddata[np.logical_and(
+    scaleddata      = np.array(Session.calciumdata)
+    min_max_scaler  = preprocessing.MinMaxScaler()
+    scaleddata      = min_max_scaler.fit_transform(scaleddata)
+    scaleddata      = scaleddata[np.logical_and(
         Session.ts_F > example_tstart, Session.ts_F < example_tstop)]
 
-    areas = np.unique(Session.celldata['roi_name'])
-    labeled = np.unique(Session.celldata['redcell'])
-    labeltext = ['unlabeled', 'labeled',]
+    areas           = np.unique(Session.celldata['roi_name'])
+    labeled         = np.unique(Session.celldata['redcell'])
+    labeltext       = ['unlabeled', 'labeled',]
 
-    example_cells = np.empty(
-        (len(areas), len(labeled), nexcells)).astype('int64')
+    if neuronsel is not None:
+        example_cells   = np.empty((len(areas), len(labeled), nexcells)).astype('int64')
 
-    for iarea, area in enumerate(areas):
-        for ilabel, label in enumerate(labeled):
+        for iarea, area in enumerate(areas):
+            for ilabel, label in enumerate(labeled):
 
-            idx = np.where(np.logical_and(
-                Session.celldata['roi_name'] == area, Session.celldata['redcell'] == label))[0]
+                idx = np.where(np.logical_and(Session.celldata['roi_name'] == area, 
+                                            Session.celldata['redcell'] == label))[0]
 
-            excerpt_var = np.var(scaleddata, axis=0)
-            example_cells[iarea, ilabel, :] = idx[np.argpartition(
-                excerpt_var[idx], -nexcells)[-nexcells:]]
+                excerpt_var                     = np.var(scaleddata, axis=0)
+                example_cells[iarea, ilabel, :] = idx[np.argpartition(excerpt_var[idx], -nexcells)[-nexcells:]]
 
-            # example_cells[iarea,ilabel,:] = idx[np.argpartition(Session.celldata['skew'][idx], -nexcells)[-nexcells:]]
-            # example_cells[iarea,ilabel,:] = idx[np.argpartition(Session.celldata['noise_level'][idx], nexcells)[:nexcells]]
+                # example_cells[iarea,ilabel,:] = idx[np.argpartition(Session.celldata['skew'][idx], -nexcells)[-nexcells:]]
+                # example_cells[iarea,ilabel,:] = idx[np.argpartition(Session.celldata['noise_level'][idx], nexcells)[:nexcells]]
+
+    else:
+        print('no neuron selection available yet')
 
     clrs = get_clr_labeled()
     for iarea, area in enumerate(areas):
@@ -238,7 +243,7 @@ def plot_neural_traces(Session, ax, trialsel=None, counter=0, nexcells=8):
     return counter
 
 
-def plot_neural_raster(Session, ax, trialsel=None, counter=0):
+def plot_neural_raster(Session, ax, trialsel, neuronsel=None, counter=0):
 
     example_tstart = Session.trialdata['tOffset'][trialsel[0]-1]
     example_tstop = Session.trialdata['tOnset'][trialsel[1]-1]

@@ -649,8 +649,14 @@ def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_ty
         significance threshold for including cells in the analysis, by default 0.001
     """
 
-    binedges    = np.arange(0,120,binres) 
-    nbins       = len(binedges)-1
+    if binres == 'centersurround':
+        binedges    = np.array([0,15,50])
+    else: 
+        assert isinstance(binres,int), 'binres type error'
+        binedges    = np.arange(0,120,binres)
+
+    binpos      = [np.mean(binedges[i:i+2]) for i in range(0, len(binedges)-1)]# find the mean of consecutive bins 
+    nbins       = len(binpos)
     binmean     = np.full((nbins,len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
     bincount    = np.full((nbins,len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
     
@@ -661,13 +667,16 @@ def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_ty
             if absolute == True:
                 corrdata = np.abs(corrdata)
 
-            if 'rf_p_F' in sessions[ises].celldata:
+            if 'rf_p_' + rf_type in sessions[ises].celldata:
                 for iap,areapair in enumerate(areapairs):
                     for ilp,layerpair in enumerate(layerpairs):
                         for ipp,projpair in enumerate(projpairs):
-                            signalfilter    = np.meshgrid(sessions[ises].celldata['rf_p_' + rf_type]<sig_thr,sessions[ises].celldata['rf_p_'  + rf_type]<sig_thr)
-                            signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+                            rffilter    = np.meshgrid(sessions[ises].celldata['rf_p_' + rf_type]<sig_thr,sessions[ises].celldata['rf_p_'  + rf_type]<sig_thr)
+                            rffilter    = np.logical_and(rffilter[0],rffilter[1])
                             
+                            signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<0.2,sessions[ises].celldata['noise_level']<0.2)
+                            signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+
                             areafilter      = filter_2d_areapair(sessions[ises],areapair)
 
                             layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
@@ -675,9 +684,9 @@ def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_ty
                             projfilter      = filter_2d_projpair(sessions[ises],projpair)
 
                             nanfilter       = ~np.isnan(corrdata)
-                            proxfilter      = ~(sessions[ises].distmat_xy<20)
+                            proxfilter      = ~(sessions[ises].distmat_xy<15)
                             
-                            cellfilter      = np.all((signalfilter,areafilter,layerfilter,projfilter,proxfilter,nanfilter),axis=0)
+                            cellfilter      = np.all((rffilter,signalfilter,areafilter,layerfilter,projfilter,proxfilter,nanfilter),axis=0)
                             if np.any(cellfilter):
                                 binmean[:,ises,iap,ilp,ipp] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
                                                                                 values=corrdata[cellfilter].flatten(),
@@ -691,10 +700,10 @@ def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_ty
         binmean = binmean - np.nanmean(binmean[binedges[:-1]<60,:,:,:,:],axis=0,keepdims=True)
 
     # binmean = binmean.squeeze()
-    return binmean,binedges
+    return binmean,binpos
 
 
-def plot_bin_corr_deltarf_flex(sessions,binmean,binedges,areapairs=' ',layerpairs=' ',projpairs=' ',
+def plot_bin_corr_deltarf_flex(sessions,binmean,binpos,areapairs=' ',layerpairs=' ',projpairs=' ',
                                corr_type='trace_corr',normalize=False):
     # sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
     # protocols = np.unique(sessiondata['protocol'])
@@ -707,7 +716,7 @@ def plot_bin_corr_deltarf_flex(sessions,binmean,binedges,areapairs=' ',layerpair
     else:
         clrs_projpairs = get_clr_labelpairs(projpairs)
 
-    fig,axes = plt.subplots(len(areapairs),len(layerpairs),figsize=(4*len(layerpairs),4*len(areapairs)))
+    fig,axes = plt.subplots(len(areapairs),len(layerpairs),figsize=(3*len(layerpairs),3*len(areapairs)))
     axes = axes.reshape(len(areapairs),len(layerpairs))
     for iap,areapair in enumerate(areapairs):
         for ilp,layerpair in enumerate(layerpairs):
@@ -716,8 +725,8 @@ def plot_bin_corr_deltarf_flex(sessions,binmean,binedges,areapairs=' ',layerpair
 
             for ipp,projpair in enumerate(projpairs):
                 for ises in range(len(sessions)):
-                    ax.plot(binedges[:-1],binmean[:,ises,iap,ilp,ipp].squeeze(),linewidth=0.15,color=clrs_projpairs[ipp])
-                handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,:,iap,ilp,ipp].squeeze().T,center='mean',error='sem',color=clrs_projpairs[ipp]))
+                    ax.plot(binpos,binmean[:,ises,iap,ilp,ipp].squeeze(),linewidth=0.15,color=clrs_projpairs[ipp])
+                handles.append(shaded_error(ax=ax,x=binpos,y=binmean[:,:,iap,ilp,ipp].squeeze().T,center='mean',error='sem',color=clrs_projpairs[ipp]))
 
             ax.legend(handles,projpairs,loc='upper right',frameon=False)	
             ax.set_xlabel('Delta RF')
@@ -768,6 +777,9 @@ def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
                                 idx_source = np.logical_and(idx_source,sessions[ises].celldata['redcell']==xRed)
                                 idx_target = np.logical_and(idx_target,sessions[ises].celldata['redcell']==yRed)
 
+                                idx_source = np.logical_and(idx_source,sessions[ises].celldata['noise_level']<0.1)
+                                idx_target = np.logical_and(idx_target,sessions[ises].celldata['noise_level']<0.1)
+
                                 if filternear:
                                     idx_source = np.logical_and(idx_source,idx_nearfilter)
                                     idx_target = np.logical_and(idx_target,idx_nearfilter)
@@ -778,16 +790,16 @@ def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
                                 legendlabels[ixArea*2 + ixRed,iyArea*2 + iyRed]  = areas[ixArea] + redcelllabels[ixRed] + '-' + areas[iyArea] + redcelllabels[iyRed]
 
     # assuming legendlabels is a 4x4 array
-    legendlabels_upper_tri = legendlabels[np.triu_indices(4, k=0)]
+    legendlabels_upper_tri      = legendlabels[np.triu_indices(4, k=0)]
 
     # assuming noisemat is a 4x4xnSessions array
-    upper_tri_indices = np.triu_indices(4, k=0)
-    noisemat_upper_tri = noisemat[upper_tri_indices[0], upper_tri_indices[1], :]
+    upper_tri_indices           = np.triu_indices(4, k=0)
+    noisemat_upper_tri          = noisemat[upper_tri_indices[0], upper_tri_indices[1], :]
 
-    df = pd.DataFrame(data=noisemat_upper_tri.T,columns=legendlabels_upper_tri)
+    df                          = pd.DataFrame(data=noisemat_upper_tri.T,columns=legendlabels_upper_tri)
 
-    colorder = [0,1,4,7,8,9,2,3,5,6]
-    legendlabels_upper_tri = legendlabels_upper_tri[colorder]
-    df = df[legendlabels_upper_tri]
+    colorder                    = [0,1,4,7,8,9,2,3,5,6]
+    legendlabels_upper_tri      = legendlabels_upper_tri[colorder]
+    df                          = df[legendlabels_upper_tri]
 
     return df

@@ -44,6 +44,7 @@ session_list        = np.array([['LPE09665','2023_03_21'], #GR
                                 # ['LPE11998','2024_05_02'], #GN
                                 # ['LPE12013','2024_05_02'], #GN
                                 # ['LPE12013','2024_05_07'], #GN
+                                # ['LPE11086','2023_12_15'], #GN
                                 ['LPE10919','2023_11_06']]) #GR
 
 #%% Load sessions lazy: 
@@ -79,9 +80,16 @@ sessions = compute_pairwise_metrics(sessions)
 
 #%% How are noise correlations distributed
 
+from scipy.stats import skew
+
 # Compute the average noise correlation for each neuron and store in cell data, loop over sessions:
 for ises in range(nSessions):
-    sessions[ises].celldata['noise_corr_avg'] = np.nanmean(sessions[ises].noise_corr,axis=1) 
+    # sessions[ises].celldata['noise_corr_avg'] = np.nanmean(sessions[ises].noise_corr,axis=1) 
+    sessions[ises].celldata['noise_corr_avg'] = np.nanmean(np.abs(sessions[ises].trace_corr),axis=1) 
+    if hasattr(sessions[ises],'respmat'): 
+        sessions[ises].celldata['meandF'] = np.nanmean(sessions[ises].respmat,axis=1) 
+        sessions[ises].celldata['mediandF'] = np.nanmedian(sessions[ises].respmat,axis=1)
+        sessions[ises].celldata['skewrespmat'] = skew(sessions[ises].respmat,axis=1)
     # sessions[ises].celldata['noise_corr_avg'] = np.nanmean(np.abs(sessions[ises].noise_corr),axis=1) 
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
@@ -91,30 +99,65 @@ def plot_corr_NC_var(sessions,vartoplot):
     cdata = []
     plt.figure(figsize=(4,4))
     for ses in sessions:
-        plt.scatter(ses.celldata[vartoplot],ses.celldata['noise_corr_avg'],s=6,marker='.',alpha=0.5)
-        cdata.append(np.corrcoef(ses.celldata[vartoplot],ses.celldata['noise_corr_avg'])[0,1])
+        if vartoplot in ses.celldata:
+            plt.scatter(ses.celldata[vartoplot],ses.celldata['noise_corr_avg'],s=6,marker='.',alpha=0.5)
+            cdata.append(np.corrcoef(ses.celldata[vartoplot],ses.celldata['noise_corr_avg'],rowvar=True)[0,1])
+    plt.xlim(np.nanpercentile(celldata[vartoplot],[0.1,99.9]))
     plt.xlabel(vartoplot)
-    plt.ylabel('Avg. NC')
-    plt.text(x=np.percentile(ses.celldata[vartoplot],25),y=0.12,s='Mean correlation: %1.3f +- %1.3f' % (np.mean(cdata),np.std(cdata)))
-    plt.savefig(os.path.join(savedir,'NoiseCorrelations','%s_vs_NC' % vartoplot + '.png'), format = 'png')
+    plt.ylabel('Correlation')
+    plt.ylim(0,0.2)
+    plt.text(x=np.nanpercentile(celldata[vartoplot],25),y=0.18,s='Mean correlation: %1.3f +- %1.3f' % (np.nanmean(cdata),np.nanstd(cdata)))
+    # plt.savefig(os.path.join(savedir,'NoiseCorrelations','%s_vs_NC' % vartoplot + '.png'), format = 'png')
+    plt.tight_layout()
+    plt.savefig(os.path.join(savedir,'AbsTC_vs_%s' % vartoplot + '.png'), format = 'png')
 
-#%%  Scatter plot of average noise correlations versus skew:
+#%%  Scatter plot of average correlations versus skew:
 plot_corr_NC_var(sessions,vartoplot = 'skew')
 
-#%%  Scatter plot of average noise correlations versus depth:
+#%%  Scatter plot of average correlations versus depth:
 plot_corr_NC_var(sessions,vartoplot = 'depth')
 
-#%%  Scatter plot of average noise correlations versus tuning variance:
+#%%  Scatter plot of average correlations versus tuning variance:
 plot_corr_NC_var(sessions,vartoplot = 'tuning_var')
 
-#%%  Scatter plot of average noise correlations versus noise level:
+#%%  Scatter plot of average correlations versus noise level:
 plot_corr_NC_var(sessions,vartoplot = 'noise_level')
 
-#%%  Scatter plot of average noise correlations versus event rate level:
+#%%  Scatter plot of average correlations versus event rate level:
 plot_corr_NC_var(sessions,vartoplot = 'event_rate')
 
-#%%  Scatter plot of average noise correlations versus fluorescence channel 2:
+#%%  Scatter plot of average correlations versus fluorescence channel 2:
+plot_corr_NC_var(sessions,vartoplot = 'meanF')
+
+#%%  Scatter plot of average correlations versus fluorescence channel 2:
 plot_corr_NC_var(sessions,vartoplot = 'meanF_chan2')
+
+#%%  Scatter plot of average correlations versus tdTomato in ROI:
+plot_corr_NC_var(sessions,vartoplot = 'frac_red_in_ROI')
+
+#%%  Scatter plot of average correlations versus fraction of ROI that has tdtomato cell body:
+plot_corr_NC_var(sessions,vartoplot = 'frac_of_ROI_red')
+
+#%%  Scatter plot of average correlations versus receptive field fit:
+plot_corr_NC_var(sessions,vartoplot = 'rf_p_F')
+
+#%%  Scatter plot of average correlations versus mean response across trials:
+plot_corr_NC_var(sessions,vartoplot = 'meandF')
+
+#%%  Scatter plot of average correlations versus median response across trials:
+plot_corr_NC_var(sessions,vartoplot = 'mediandF')
+
+#%%  Scatter plot of average correlations versus mean response across trials:
+plot_corr_NC_var(sessions,vartoplot = 'skewrespmat')
+
+#%% 
+
+celldata['cell_id'][celldata['meandF']<0]
+celldata['cell_id'][celldata['meandF']>4]
+
+
+celldata['cell_id'][celldata['noise_corr_avg']>0.19]
+
 
 #%% Show relationships between multiple cell data properties at the same time:
 plotvars = ['noise_corr_avg','skew','chan2_prob','depth','redcell','tuning_var','event_rate']

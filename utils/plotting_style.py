@@ -46,7 +46,11 @@ def get_clr_area_labeled(area_labeled):
     palette       = {'V1unl': sns.xkcd_rgb['seaweed'],
         'V1lab' : sns.xkcd_rgb['rose'],
         'PMunl' : sns.xkcd_rgb['barney'],
-        'PMlab' : sns.xkcd_rgb['red']}
+        'PMlab' : sns.xkcd_rgb['red'],
+        'V1_UNL': sns.xkcd_rgb['seaweed'],
+        'V1_LAB' : sns.xkcd_rgb['rose'],
+        'PM_UNL' : sns.xkcd_rgb['barney'],
+        'PM_LAB' : sns.xkcd_rgb['red']}
     return itemgetter(*area_labeled)(palette)
 
 

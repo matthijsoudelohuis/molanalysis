@@ -282,16 +282,109 @@ def compute_tuning_var(resp_mat,resp_res):
 
     return tuning_var
 
-# # Example usage:
-# orientation_responses = [[10.0, 9.0, 2.0, 8.0, 4.0, 1.0],
-#                           [1.0, 5.0, 2.0, 8.0, 4.0, 1.0]]  # Replace with the actual responses to different orientations
 
-# orientations            = [0,45,90,180,210,270]
+def compute_tuning_SNR(ses):
+    """
+    #From stringer et al. 2019
+    To compute the tuning-related SNR (Fig. 1f), we first estimated the signal variance of each neuron 
+    as the covariance of its response to all stimuli across two repeats
+    # The noise variance was defined as the difference between the within-repeat variance (reflecting both signal and noise)
+    # and this signal variance estimate, and the SNR was defined as their ratio. The SNR estimate is positive when a neuron 
+    # has responses to stimuli above its noise baseline; note that as is an unbiased estimate, it can take negative values 
+    # when the true signal variance is zero.
+    """
+    nNeurons = np.shape(ses.respmat)[0]
 
-# OSI = compute_OSI(orientation_responses)
-# print("Orientation Selectivity Index (OSI):", OSI)
+    if 'repetition' not in ses.trialdata:
+        ses.trialdata['repetition'] = np.empty(np.shape(ses.trialdata)[0])
+        for iT in range(len(ses.trialdata)):
+            ses.trialdata.loc[iT,'repetition'] = np.sum(ses.trialdata['ImageNumber'][:iT] == ses.trialdata['ImageNumber'][iT])
+    
+    # Compute the covariance between the first and the second presentation of each image
+    cov_signal = np.zeros(nNeurons)
+    for iN in range(nNeurons):
+        resp1 = ses.respmat[iN,ses.trialdata['ImageNumber'][ses.trialdata['repetition']==0].index[np.argsort(ses.trialdata['ImageNumber'][ses.trialdata['repetition']==0])]]
+        resp2 = ses.respmat[iN,ses.trialdata['ImageNumber'][ses.trialdata['repetition']==1].index[np.argsort(ses.trialdata['ImageNumber'][ses.trialdata['repetition']==1])]]
+        cov_signal[iN] = np.cov(resp1,resp2)[0,1]
+        
+        # cov_signal[iN] = np.cov(ses.respmat[iN,ses.trialdata['ImageNumber'][ses.trialdata['repetition']==0].index],
+        #                   ses.respmat[iN,ses.trialdata['ImageNumber'][ses.trialdata['repetition']==1].index])[0,1]
+    cov_noise = np.var(ses.respmat,axis=1) - cov_signal
+    SNR = cov_signal / cov_noise
 
-# gOSI = compute_gOSI(orientation_responses)
-# print("Global Orientation Selectivity Index (gOSI):", gOSI)
+    return SNR
 
-# compute_tuning(orientation_responses,orientations,tuning_metric='OSI')
+
+def compute_splithalf_reliability(ses):
+    """
+    #From Tong et al. 2023
+    Spearman-Brown corrected correlation coefficient across half-splits of repeated presentation
+
+    """
+    nNeurons = np.shape(ses.respmat)[0]
+
+    if 'repetition' not in ses.trialdata:
+        ses.trialdata['repetition'] = np.empty(np.shape(ses.trialdata)[0])
+        for iT in range(len(ses.trialdata)):
+            ses.trialdata.loc[iT,'repetition'] = np.sum(ses.trialdata['ImageNumber'][:iT] == ses.trialdata['ImageNumber'][iT])
+    
+    # Compute the covariance between the first and the second presentation of each image
+    corr = np.zeros(nNeurons)
+    for iN in range(nNeurons):
+        resp1 = ses.respmat[iN,ses.trialdata['ImageNumber'][ses.trialdata['repetition']==0].index[np.argsort(ses.trialdata['ImageNumber'][ses.trialdata['repetition']==0])]]
+        resp2 = ses.respmat[iN,ses.trialdata['ImageNumber'][ses.trialdata['repetition']==1].index[np.argsort(ses.trialdata['ImageNumber'][ses.trialdata['repetition']==1])]]
+     
+        corr[iN] = np.corrcoef(resp1,resp2)[0,1]
+    
+    rel = (2 * corr) / (1 + corr)
+
+    return corr,rel
+
+
+def compute_sparseness(responses):
+    """Computes the sparseness of average neuronal responses to natural images. 
+    Input is a 2D numpy array where axis=0 are the different neurons 
+    and axis=1 are the responses across the different natural images.
+    Returns a 1D numpy array with the sparseness for each neuron."""
+    mean_response = np.mean(responses,axis=1)
+    mean_square_response = np.mean(np.square(responses),axis=1)
+    sparseness = (mean_response ** 2) / mean_square_response
+    return sparseness
+
+def compute_selectivity_index(responses):
+    """Computes the selectivity index of average neuronal responses to natural images. 
+    Input is a 2D numpy array where axis=0 are the different neurons 
+    and axis=1 are the responses across the different natural images.
+    Returns a 1D numpy array with the selectivity index for each neuron."""
+    max_responses = np.max(responses,axis=1)
+    mean_responses = np.mean(responses,axis=1)
+    selectivity_index = (max_responses - mean_responses) / (max_responses + mean_responses)
+    return selectivity_index
+
+def compute_fano_factor(responses):
+    """Computes the Fano Factor of average neuronal responses to natural images. 
+    Input is a 2D numpy array where axis=0 are the different neurons 
+    and axis=1 are the responses across the different natural images.
+    Returns a 1D numpy array with the Fano Factor for each neuron."""
+    mean_response = np.mean(responses,axis=1)
+    variance = np.var(responses,axis=1)
+    fano_factor = variance / mean_response
+    return fano_factor
+
+def compute_gini_coefficient(responses):
+    """Computes the Gini coefficient of average neuronal responses to natural images. 
+    Input is a 2D numpy array where axis=0 are the different neurons 
+    and axis=1 are the responses across the different natural images.
+    Returns a 1D numpy array with the Gini coefficient for each neuron."""
+    nNeurons = responses.shape[0]
+    gini_coefficient = np.zeros(nNeurons)
+    for iN in range(nNeurons):
+        sorted_responses = np.sort(responses[iN,:])
+        N = len(sorted_responses)
+        cumulative_responses = np.cumsum(sorted_responses)
+        gini_numerator = np.sum((2 * np.arange(1, N + 1) - N - 1) * sorted_responses)
+        gini_denominator = N * np.sum(sorted_responses)
+        gini_coefficient[iN] = gini_numerator / gini_denominator
+    return gini_coefficient
+
+

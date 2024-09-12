@@ -26,7 +26,6 @@ from utils.psth import compute_tensor, compute_respmat, construct_behav_matrix_t
 from loaddata.get_data_folder import get_local_drive
 from utils.corr_lib import mean_resp_image, compute_pairwise_metrics
 
-
 # Updated by Anastasia Simonoff for her local computer, etc.
 savedir = os.path.join(get_local_drive(
 ), 'Users\\asimo\\Documents\\BCCN\\Lab Rotations\\Petreanu Lab\\Figures\\Images' if os.environ['USERDOMAIN'] == 'ULTINTELLIGENCE' else 'OneDrive\\PostDoc\\Figures\\Images\\')
