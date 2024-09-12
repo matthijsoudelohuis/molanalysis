@@ -12,13 +12,14 @@ from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_sessio
 from loaddata.get_data_folder import get_rawdata_drive
 from preprocessing.locate_rf import locate_rf_session
 
-rawdatadir          = 'J:\\RawData\\'
-animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
+rawdatadir          = 'H:\\RawData\\'
+# animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
 # animal_ids          = [] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE09665','LPE09830','LPE11495'] #If empty than all animals in folder will be processed
-date_filter         = ['2024_01_05']
-# date_filter         = []
+# date_filter         = ['2024_01_05']
+date_filter         = ['2023_04_12']
+
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -38,6 +39,7 @@ for animal_id in animal_ids: #for each animal
         print('')
         ###################  Run one of these functions for all selected sessions:  ################
         # gen_red_images(rawdatadir,animal_id,sessiondate)
-        proc_labeling_session(rawdatadir,animal_id,sessiondate,saveoverlay=True,showcells=False,overlap_threshold=0.5,gcamp_proj='max_proj')
+        # proc_labeling_session(rawdatadir,animal_id,sessiondate,saveoverlay=True,showcells=False,overlap_threshold=0.5,gcamp_proj='max_proj')
 
         # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'])
+        locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['Favg'])

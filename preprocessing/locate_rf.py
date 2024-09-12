@@ -176,14 +176,14 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
         
         t_resp_stop         = np.diff(RF_timestamps).mean() + 0.1
         
-        for iplane,plane_folder in enumerate(plane_folders):
-            # for iplane,plane_folder in enumerate(plane_folders[1:]):
+        # for iplane,plane_folder in enumerate(plane_folders):
+        for iplane,plane_folder in enumerate(plane_folders[:1]):
             print('\n Processing plane %s / %s \n' % (iplane+1,ops['nplanes']))
             for signal in signals:
 
                 iscell             = np.load(os.path.join(plane_folder, 'iscell.npy'))
                 ops                = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
-
+                
                 [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
                 ts_plane = np.squeeze(ts_plane) #make 1-dimensional
 
@@ -194,12 +194,25 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                     sig     = np.load(os.path.join(plane_folder, 'spks.npy'), allow_pickle=True)
                 elif signal=='F':
                     sig     = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
+                elif signal=='Favg':
+
+                    #Get locations of cells:
+                    stat               = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
+                    xloc = yloc = np.zeros(len(stat))
+                    for k in range(len(stat)):
+                        xloc[k],yloc[k] = stat[k]['med']
+                    distmatxy = np.sqrt((xloc[:,None] - xloc[None,:])**2 + (yloc[:,None] - yloc[None,:])**2)
+                    #Average the activity of neurons in the same location (within 50 um):
+                    Fneu    = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
+                    sig = Fneu.copy()
+                    for iN in range(sig.shape[0]):
+                        sig[iN,:] = Fneu[distmatxy[iN,:]<50,:].mean(0)
 
                 sig    = sig[:,protocol_frame_idx_plane==1].transpose()
 
                 # For debugging sample only first 20 neurons: 
-                # iscell = iscell[:20,:]
-                # sig = sig[:,:20]
+                iscell = iscell[:100,:]
+                sig = sig[:,:100]
                 
                 N               = sig.shape[1]
 
@@ -278,7 +291,8 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                 np.save(os.path.join(plane_folder,'RF_%s.npy' % signal),df)
 
                 if showFig: 
-                    example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
+                    # example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
+                    example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_p<0.001))[0][:20] #get first twenty good cells
 
                     Tot         = len(example_cells)
                     if Tot: 

@@ -39,24 +39,18 @@ sessions,nSessions = load_sessions(protocol = 'SP',session_list=session_list)
 # sessions,nSessions = filter_sessions(protocols = ['GR'],only_animal_id=['LPE09665','LPE09830'],session_rf=True)
 # # sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
-sessions,nSessions = filter_sessions(protocols = ['SP','GR','IM','GN'],session_rf=True,filter_areas=['V1','PM'])
+sessions,nSessions = filter_sessions(protocols = ['SP','GR','GN'],session_rf=True,filter_areas=['V1','PM'])
 
-sig_thr = 0.05 #cumulative significance of receptive fields clusters
 sig_thr = 0.001 #cumulative significance of receptive fields clusters
+
+#%% Interpolation of receptive fields:
+sessions = compute_pairwise_anatomical_distance(sessions)
+
+sessions = smooth_rf(sessions,sig_thr=0.001,radius=50)
 
 #%% Show fraction of receptive fields per session before any corrections:
 [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='F',sig_thr=sig_thr)
 fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_IMincluded' + '.png'), format = 'png')
-
-#%% 
-sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-
-
-for ses in sessions:
-    print(len(ses.celldata['rf_p_F'].unique())-1)
-    # print(len(ses.celldata['rf_sz_F'].unique())-1)
-    # if len(ses.celldata['rf_sz_F'].unique())>100:
-        #    print(ses.sessiondata['protocol'])
 
 #%% ##################### Retinotopic mapping within V1 and PM #####################
 rf_type = 'F'
@@ -64,15 +58,35 @@ for ises in range(nSessions):
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
-#%% Interpolation of receptive fields:
-sessions = compute_pairwise_anatomical_distance(sessions)
-
+#%% 
 sessions = exclude_outlier_rf(sessions,radius=50,rf_thr=50) 
 
 #Show fraction of receptive fields per session after filtering out scattered neurons: 
 [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='F',sig_thr=sig_thr)
 fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_filter' + '.png'), format = 'png')
 
+
+# #%% Interpolate receptive field based on Fneu estimate:
+# sig_thr = 0.001
+# rf_type = 'Fneu'
+# R2 = interp_rf(sessions,rf_type=rf_type,sig_thr=sig_thr,r2_thr=0.02,reg_alpha=1)
+
+#%% 
+ises = 22
+sig_thr = 0.01
+fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type='F') 
+
+fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type='Fneu') 
+
+# fig = plot_rf_plane(sessions[ises].celldata,sig_thr=1,rf_type='Fneu_interp') 
+
+fig = plot_rf_plane(sessions[ises].celldata,sig_thr=1,rf_type='Fsmooth') 
+
+#%%
+sessions = exclude_outlier_rf(sessions) 
+fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type='F') 
+
+#%%
 sessions = smooth_rf(sessions,sig_thr=0.001,radius=50)
 
 #%% Show fraction of receptive fields per session after smoothed interpolation and filtering:
@@ -82,13 +96,13 @@ fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_Fsmooth' + '.p
 #%% ##################### Retinotopic mapping within V1 and PM #####################
 rf_type = 'F'
 # rf_type = 'Fneu'
-# rf_type = 'Fsmooth'
+rf_type = 'Fsmooth'
 for ises in range(nSessions):
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
 #%% ########### Plot locations of receptive fields as on the screen ##############################
-rf_type = 'F'
+rf_type = 'Fsmooth'
 for ises in range(nSessions):
     fig = plot_rf_screen(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_rf_screen_' + rf_type + '_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
@@ -111,24 +125,25 @@ areas   = ['V1','PM']
 spat_dims = ['az','el','rf']
 clrs_areas = get_clr_areas(areas)
 fig,axes   = plt.subplots(2,3,figsize=(10,7))
-
+thrs = [25,50]
 for iarea,area in enumerate(areas):
+    
     for ispat_dim,spat_dim in enumerate(spat_dims):
         idx = celldata['roi_name'] == area
 
         if spat_dim == 'az':
             axes[iarea,ispat_dim].scatter(logpdata[idx],dev_az[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
-            axes[iarea,ispat_dim].set_ylim([0,250])
+            axes[iarea,ispat_dim].set_ylim([0,100])
 
         elif spat_dim == 'el':
             axes[iarea,ispat_dim].scatter(logpdata[idx],dev_el[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
-            axes[iarea,ispat_dim].set_ylim([0,60])
+            axes[iarea,ispat_dim].set_ylim([0,100])
         
         elif spat_dim == 'rf':
             axes[iarea,ispat_dim].scatter(logpdata[idx],dev_rf[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
-            axes[iarea,ispat_dim].set_ylim([0,250])
-            axes[iarea,ispat_dim].axhline(y=50,xmin=0,xmax=1,color='black',linewidth=1,linestyle='--')
-            axes[iarea,ispat_dim].text(y=55,x=7,s='50 deg thr',fontsize=9)
+            axes[iarea,ispat_dim].set_ylim([0,100])
+            axes[iarea,ispat_dim].axhline(y=thrs[iarea],xmin=0,xmax=1,color='black',linewidth=1,linestyle='--')
+            axes[iarea,ispat_dim].text(y=thrs[iarea]+5,x=7,s='Scatter thr',fontsize=9)
 
         axes[iarea,ispat_dim].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
         axes[iarea,ispat_dim].set_title(area + ' ' + spat_dim)
