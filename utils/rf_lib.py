@@ -182,11 +182,11 @@ def interp_rf(sessions,rf_type='Fneu',sig_thr=0.001,r2_thr=0.3,reg_alpha=1):
     return r2
 
 
-def smooth_rf(sessions,sig_thr=0.001,radius=50,mincellsFneu=10):
+def smooth_rf(sessions,sig_thr=0.001,radius=50,mincellsFneu=10,rf_type='Fneu'):
 
     # for ses in sessions:
     for ses in tqdm(sessions,total=len(sessions),desc= 'Smoothed interpolation of missing RF: '):
-        if 'rf_az_Fneu' in ses.celldata:
+        if 'rf_az_' + rf_type in ses.celldata:
             ses.celldata['rf_az_Fsmooth']          = np.nan
             ses.celldata['rf_el_Fsmooth']          = np.nan
             ses.celldata['rf_p_Fsmooth']           = np.nan
@@ -194,8 +194,8 @@ def smooth_rf(sessions,sig_thr=0.001,radius=50,mincellsFneu=10):
             for iN in range(len(ses.celldata)):
                 
                 idx_near_Fneu = np.all((ses.distmat_xy[iN,:] < radius,
-                                   ses.celldata['rf_p_Fneu']<sig_thr,
-                                   ~np.isnan(ses.celldata['rf_az_Fneu'])),axis=0)
+                                   ses.celldata['rf_p_' + rf_type]<sig_thr,
+                                   ~np.isnan(ses.celldata['rf_az_' + rf_type])),axis=0)
                 if np.sum(idx_near_Fneu)>mincellsFneu:
                     # idx_near = np.logical_and(ses.distmat_xy[iN,:] < radius,idx_RF)
                     # ses.celldata.loc[iN,'rf_az_Fsmooth']    = np.average(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'],
@@ -204,8 +204,8 @@ def smooth_rf(sessions,sig_thr=0.001,radius=50,mincellsFneu=10):
                     # ses.celldata.loc[iN,'rf_el_Fsmooth']    = np.average(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'],
                                                                     # weights=np.abs(-np.log10(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_p_Fneu'])))
 
-                    ses.celldata.loc[iN,'rf_az_Fsmooth']    = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
-                    ses.celldata.loc[iN,'rf_el_Fsmooth']    = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
+                    ses.celldata.loc[iN,'rf_az_Fsmooth']    = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_' + rf_type])
+                    ses.celldata.loc[iN,'rf_el_Fsmooth']    = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_' + rf_type])
                     ses.celldata.loc[iN,'rf_p_Fsmooth']           = 0
                     # ses.celldata.loc[iN,'rf_az_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
                     # ses.celldata.loc[iN,'rf_el_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
@@ -218,18 +218,18 @@ def exclude_outlier_rf(sessions,rf_thr_V1=25,rf_thr_PM=50):
     #rf_thr specifies cutoff of deviation from local rf center to be excluded
 
     for ses in tqdm(sessions,total=len(sessions),desc= 'Setting outlier RFs to NaN: '):
-        
-        idx_V1 = ses.celldata['roi_name']=='V1'
-        idx_PM = ses.celldata['roi_name']=='PM'
-        
-        rf_dist_F_Fsmooth = np.sqrt( (ses.celldata['rf_az_F'] - ses.celldata['rf_az_Fsmooth'])**2 + 
-                                        (ses.celldata['rf_el_F'] - ses.celldata['rf_el_Fsmooth'])**2 )
-        
-        idx = (idx_V1 & (rf_dist_F_Fsmooth > rf_thr_V1)) | np.isnan(rf_dist_F_Fsmooth)
-        ses.celldata.loc[idx,['rf_az_F','rf_el_F','rf_p_F']] = np.NaN
-        
-        idx = (idx_PM & (rf_dist_F_Fsmooth > rf_thr_PM)) | np.isnan(rf_dist_F_Fsmooth)
-        ses.celldata.loc[idx,['rf_az_F','rf_el_F','rf_p_F']] = np.NaN
+        if 'rf_az_F' in ses.celldata and 'rf_az_Fsmooth' in ses.celldata:
+            idx_V1 = ses.celldata['roi_name']=='V1'
+            idx_PM = ses.celldata['roi_name']=='PM'
+            
+            rf_dist_F_Fsmooth = np.sqrt( (ses.celldata['rf_az_F'] - ses.celldata['rf_az_Fsmooth'])**2 + 
+                                            (ses.celldata['rf_el_F'] - ses.celldata['rf_el_Fsmooth'])**2 )
+            
+            idx = (idx_V1 & (rf_dist_F_Fsmooth > rf_thr_V1)) | np.isnan(rf_dist_F_Fsmooth)
+            ses.celldata.loc[idx,['rf_az_F','rf_el_F','rf_p_F']] = np.NaN
+            
+            idx = (idx_PM & (rf_dist_F_Fsmooth > rf_thr_PM)) | np.isnan(rf_dist_F_Fsmooth)
+            ses.celldata.loc[idx,['rf_az_F','rf_el_F','rf_p_F']] = np.NaN
 
     return sessions
 

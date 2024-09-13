@@ -17,6 +17,14 @@ from utils.tuning import mean_resp_gn,mean_resp_gr,mean_resp_image
 from utils.rf_lib import filter_nearlabeled
 from utils.pair_lib import *
 
+ #####  ####### ######  ######  ####### #          #    ####### ### ####### #     #  #####  
+#     # #     # #     # #     # #       #         # #      #     #  #     # ##    # #     # 
+#       #     # #     # #     # #       #        #   #     #     #  #     # # #   # #       
+#       #     # ######  ######  #####   #       #     #    #     #  #     # #  #  #  #####  
+#       #     # #   #   #   #   #       #       #######    #     #  #     # #   # #       # 
+#     # #     # #    #  #    #  #       #       #     #    #     #  #     # #    ## #     # 
+ #####  ####### #     # #     # ####### ####### #     #    #    ### ####### #     #  #####  
+
 def compute_trace_correlation(sessions,uppertriangular=True,binwidth=1):
     nSessions = len(sessions)
     for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing trace correlations: '):
@@ -126,6 +134,469 @@ def plot_delta_rf_across_sessions(sessions,areapairs):
             # axes[ipair].hist(ses.distmat_rf[cellfilter],bins=binedges,color=clrs_areapairs[ipair],alpha=0.5)
     return fig
 
+   #    #     #    #    #######    ######  ###  #####  #######    #    #     #  #####  ####### 
+  # #   ##    #   # #      #       #     #  #  #     #    #      # #   ##    # #     # #       
+ #   #  # #   #  #   #     #       #     #  #  #          #     #   #  # #   # #       #       
+#     # #  #  # #     #    #       #     #  #   #####     #    #     # #  #  # #       #####   
+####### #   # # #######    #       #     #  #        #    #    ####### #   # # #       #       
+#     # #    ## #     #    #       #     #  #  #     #    #    #     # #    ## #     # #       
+#     # #     # #     #    #       ######  ###  #####     #    #     # #     #  #####  ####### 
+
+def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False):
+    binedges = np.arange(0,1000,20) 
+    nbins= len(binedges)-1
+    binmean = np.full((len(sessions),len(areapairs),nbins),np.nan)
+    for ises in tqdm(range(len(sessions)),desc= 'Computing trace correlations per pairwise distance: '):
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+            # corrdata[corrdata>0] = np.nan
+            for iap,areapair in enumerate(areapairs):
+                areafilter      = filter_2d_areapair(sessions[ises],areapair)
+                nanfilter       = ~np.isnan(corrdata)
+                cellfilter      = np.all((areafilter,nanfilter),axis=0)
+                binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xyz[cellfilter].flatten(),
+                                                    values=corrdata[cellfilter].flatten(),
+                                                    statistic='mean', bins=binedges)[0]
+            
+    if normalize: # subtract mean NC from every session:
+        binmean = binmean - np.nanmean(binmean[:,:,binedges[:-1]<600],axis=2,keepdims=True)
+
+    return binmean,binedges
+
+def plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type):
+    sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+    protocols = np.unique(sessiondata['protocol'])
+    clrs_areapairs = get_clr_area_pairs(areapairs)
+    fig,axes = plt.subplots(1,len(protocols),figsize=(4*len(protocols),4))
+    handles = []
+    for iprot,protocol in enumerate(protocols):
+        sesidx = np.where(sessiondata['protocol']== protocol)[0]
+        if len(protocols)>1:
+            ax = axes[iprot]
+        else:
+            ax = axes
+
+        for iap,areapair in enumerate(areapairs):
+            for ises in sesidx:
+                ax.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
+            handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[sesidx,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
+            # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+        ax.legend(handles,areapairs,loc='upper right',frameon=False)	
+        ax.set_xlabel('Anatomical distance ($\mu$m)')
+        ax.set_ylabel('Correlation')
+        ax.set_xlim([10,600])
+        ax.set_title('%s (%s)' % (corr_type,protocol))
+        # ax.set_ylim([-0.01,0.04])
+        ax.set_ylim([0,0.09])
+        ax.set_aspect('auto')
+        ax.tick_params(axis='both', which='major', labelsize=8)
+
+    plt.tight_layout()
+    return fig
+
+
+def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False):
+    binedges = np.arange(0,1000,10) 
+    nbins= len(binedges)-1
+    binmean = np.full((len(sessions),len(areapairs),nbins),np.nan)
+    for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by pairwise anatomical distance: '):
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+            # corrdata[corrdata>0] = np.nan
+            for iap,areapair in enumerate(areapairs):
+                areafilter      = filter_2d_areapair(sessions[ises],areapair)
+                nanfilter       = ~np.isnan(corrdata)
+                cellfilter      = np.all((areafilter,nanfilter),axis=0)
+                binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xyz[cellfilter].flatten(),
+                                                    values=corrdata[cellfilter].flatten(),
+                                                    statistic='mean', bins=binedges)[0]
+            
+    if normalize: # subtract mean NC from every session:
+        binmean = binmean - np.nanmean(binmean[:,:,binedges[:-1]<600],axis=2,keepdims=True)
+
+    return binmean,binedges
+
+   #   ######     ######  #######  #####     ####### ### ####### #       ######  
+  ##   #     #    #     # #       #     #    #        #  #       #       #     # 
+ # #   #     #    #     # #       #          #        #  #       #       #     # 
+   #   #     #    ######  #####   #          #####    #  #####   #       #     # 
+   #   #     #    #   #   #       #          #        #  #       #       #     # 
+   #   #     #    #    #  #       #     #    #        #  #       #       #     # 
+ ##### ######     #     # #######  #####     #       ### ####### ####### ######  
+
+def bin_corr_deltarf_areapairs(sessions,areapairs,corr_type='trace_corr',normalize=False,rf_type = 'F',sig_thr = 0.001):
+    binedges    = np.arange(0,120,2.5) 
+    nbins       = len(binedges)-1
+    binmean     = np.full((len(sessions),len(areapairs),nbins),np.nan)
+    bincount     = np.full((len(sessions),len(areapairs),nbins),np.nan)
+    
+    for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by delta receptive field: '):
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+            if 'rf_p_' + rf_type in sessions[ises].celldata:
+                for iap,areapair in enumerate(areapairs):
+                    signalfilter    = np.meshgrid(sessions[ises].celldata['rf_p_' + rf_type]<sig_thr,sessions[ises].celldata['rf_p_'  + rf_type]<sig_thr)
+                    # signalfilter    = np.meshgrid(sessions[ises].celldata['rf_p_F']<sig_thr,sessions[ises].celldata['rf_p_F']<sig_thr)
+                    signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+                    
+                    areafilter      = filter_2d_areapair(sessions[ises],areapair)
+
+                    nanfilter       = ~np.isnan(corrdata)
+                    
+                    proxfilter      = ~(sessions[ises].distmat_xy<20)
+                    
+                    cellfilter      = np.all((signalfilter,areafilter,proxfilter,nanfilter),axis=0)
+                    binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
+                                                        values=corrdata[cellfilter].flatten(),
+                                                        statistic='mean', bins=binedges)[0]
+                    bincount[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
+                                                        values=corrdata[cellfilter].flatten(),
+                                                        statistic='count', bins=binedges)[0]
+                    
+    binmean[bincount<25] = np.nan
+    if normalize: # subtract mean correlation from every session:
+        binmean = binmean - np.nanmean(binmean[:,:,binedges[:-1]<60],axis=2,keepdims=True)
+
+    return binmean,binedges
+
+def plot_bin_corr_deltarf_protocols(sessions,binmean,binedges,areapairs,corr_type,normalize=False):
+    sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+    protocols = np.unique(sessiondata['protocol'])
+    clrs_areapairs = get_clr_area_pairs(areapairs)
+
+    fig,axes = plt.subplots(1,len(protocols),figsize=(4*len(protocols),4))
+    handles = []
+    for iprot,protocol in enumerate(protocols):
+        sesidx = np.where(sessiondata['protocol']== protocol)[0]
+        if len(protocols)>1:
+            ax = axes[iprot]
+        else:
+            ax = axes
+
+        for iap,areapair in enumerate(areapairs):
+            for ises in sesidx:
+                ax.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
+            handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[sesidx,iap,:].squeeze(),center='mean',error='sem',color=clrs_areapairs[iap]))
+
+        ax.legend(handles,areapairs,loc='upper right',frameon=False)	
+        ax.set_xlabel('Delta RF')
+        ax.set_ylabel('Correlation')
+        ax.set_xlim([-2,100])
+        ax.set_title('%s (%s)' % (corr_type,protocol))
+        if normalize:
+            ax.set_ylim([-0.015,0.05])
+        else: 
+            ax.set_ylim([0,0.12])
+        ax.set_aspect('auto')
+        ax.tick_params(axis='both', which='major', labelsize=8)
+
+    plt.tight_layout()
+    return fig
+
+
+def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='trace_corr',
+                     normalize=False,rf_type = 'F',sig_thr = 0.001,binres=2.5,mincount=25,absolute=True):
+    """
+    Compute pairwise correlations as a function of pairwise delta receptive field.
+    - Sessions are binned by areapairs, layerpairs, and projpairs.
+    - Returns binmean,bincount,binedges
+
+    Parameters
+    ----------
+    sessions : list
+        list of sessions
+    areapairs : list (if ' ' then all areapairs are used)
+        list of areapairs
+    layerpairs : list  (if ' ' then all layerpairs are used)
+        list of layerpairs
+    projpairs : list  (if ' ' then all projpairs are used)
+        list of projpairs
+    corr_type : str, optional
+        type of correlation to use, by default 'trace_corr'
+    normalize : bool, optional
+        whether to normalize correlations to the mean correlation at distances < 60 um, by default False
+    rf_type : str, optional
+        type of receptive field to use, by default 'F'
+    sig_thr : float, optional
+        significance threshold for including cells in the analysis, by default 0.001
+    """
+
+    if binres == 'centersurround':
+        binedges    = np.array([0,15,50])
+    else: 
+        assert isinstance(binres,int), 'binres type error'
+        binedges    = np.arange(0,120,binres)
+
+    binpos      = [np.mean(binedges[i:i+2]) for i in range(0, len(binedges)-1)]# find the mean of consecutive bins 
+    nbins       = len(binpos)
+    binmean     = np.full((nbins,len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
+    bincount    = np.full((nbins,len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
+    
+    for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by delta receptive field: '):
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+
+            if absolute == True:
+                corrdata = np.abs(corrdata)
+
+            if 'rf_p_' + rf_type in sessions[ises].celldata:
+                for iap,areapair in enumerate(areapairs):
+                    for ilp,layerpair in enumerate(layerpairs):
+                        for ipp,projpair in enumerate(projpairs):
+                            rffilter    = np.meshgrid(sessions[ises].celldata['rf_p_' + rf_type]<sig_thr,sessions[ises].celldata['rf_p_'  + rf_type]<sig_thr)
+                            rffilter    = np.logical_and(rffilter[0],rffilter[1])
+                            
+                            # signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<0.2,sessions[ises].celldata['noise_level']<0.2)
+                            # signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+
+                            areafilter      = filter_2d_areapair(sessions[ises],areapair)
+
+                            layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
+
+                            projfilter      = filter_2d_projpair(sessions[ises],projpair)
+
+                            nanfilter       = ~np.isnan(corrdata)
+                            proxfilter      = ~(sessions[ises].distmat_xy<15)
+                            
+                            cellfilter      = np.all((rffilter,signalfilter,areafilter,layerfilter,projfilter,proxfilter,nanfilter),axis=0)
+                            if np.any(cellfilter):
+                                binmean[:,ises,iap,ilp,ipp] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
+                                                                                values=corrdata[cellfilter].flatten(),
+                                                                                statistic='mean', bins=binedges)[0]
+                                bincount[:,ises,iap,ilp,ipp] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
+                                                                                values=corrdata[cellfilter].flatten(),
+                                                                                statistic='count', bins=binedges)[0]
+                        
+    binmean[bincount<mincount] = np.nan
+    if normalize: # subtract mean correlation from every session:
+        binmean = binmean - np.nanmean(binmean[binedges[:-1]<60,:,:,:,:],axis=0,keepdims=True)
+
+    # binmean = binmean.squeeze()
+    return binmean,binpos
+
+def plot_bin_corr_deltarf_flex(sessions,binmean,binpos,areapairs=' ',layerpairs=' ',projpairs=' ',
+                               corr_type='trace_corr',normalize=False):
+    # sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+    # protocols = np.unique(sessiondata['protocol'])
+
+    # clrs_areapairs = get_clr_area_pairs(areapairs)
+    # clrs_projpairs = get_clr_labelpairs(projpairs)
+
+    if projpairs==' ':
+        clrs_projpairs = 'k'
+    else:
+        clrs_projpairs = get_clr_labelpairs(projpairs)
+
+    fig,axes = plt.subplots(len(areapairs),len(layerpairs),figsize=(3*len(layerpairs),3*len(areapairs)))
+    axes = axes.reshape(len(areapairs),len(layerpairs))
+    for iap,areapair in enumerate(areapairs):
+        for ilp,layerpair in enumerate(layerpairs):
+            ax = axes[iap,ilp]
+            handles = []
+
+            for ipp,projpair in enumerate(projpairs):
+                for ises in range(len(sessions)):
+                    ax.plot(binpos,binmean[:,ises,iap,ilp,ipp].squeeze(),linewidth=0.15,color=clrs_projpairs[ipp])
+                handles.append(shaded_error(ax=ax,x=binpos,y=binmean[:,:,iap,ilp,ipp].squeeze().T,center='mean',error='sem',color=clrs_projpairs[ipp]))
+
+            ax.legend(handles,projpairs,loc='upper right',frameon=False)	
+            ax.set_xlabel('Delta RF')
+            ax.set_ylabel('Correlation')
+            ax.set_xlim([-2,60])
+            ax.set_title('%s\n%s' % (areapair, layerpair))
+            if normalize:
+                ax.set_ylim([-0.015,0.05])
+            else: 
+                ax.set_ylim([0,0.15])
+            ax.set_aspect('auto')
+            ax.tick_params(axis='both', which='major', labelsize=8)
+
+    plt.tight_layout()
+    return fig
+
+def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
+                             filternear=True,filtersign=None,minNcells=10):
+    areas               = ['V1','PM']
+    redcells            = [0,1]
+    redcelllabels       = ['unl','lab']
+    legendlabels        = np.empty((4,4),dtype='object')
+
+    noisemat            = np.full((4,4,len(sessions)),np.nan)
+
+    for ises in tqdm(range(len(sessions)),desc='Averaging %s across sessions' % corr_type):
+        idx_nearfilter = filter_nearlabeled(sessions[ises],radius=50)
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+            
+            if filtersign == 'neg':
+                corrdata[corrdata>0] = np.nan
+            
+            if filtersign =='pos':
+                corrdata[corrdata<0] = np.nan
+
+            if absolute:
+                corrdata = np.abs(corrdata)
+
+            for ixArea,xArea in enumerate(areas):
+                for iyArea,yArea in enumerate(areas):
+                    for ixRed,xRed in enumerate(redcells):
+                        for iyRed,yRed in enumerate(redcells):
+
+                                idx_source = sessions[ises].celldata['roi_name']==xArea
+                                idx_target = sessions[ises].celldata['roi_name']==yArea
+
+                                idx_source = np.logical_and(idx_source,sessions[ises].celldata['redcell']==xRed)
+                                idx_target = np.logical_and(idx_target,sessions[ises].celldata['redcell']==yRed)
+
+                                idx_source = np.logical_and(idx_source,sessions[ises].celldata['noise_level']<0.1)
+                                idx_target = np.logical_and(idx_target,sessions[ises].celldata['noise_level']<0.1)
+
+                                if filternear:
+                                    idx_source = np.logical_and(idx_source,idx_nearfilter)
+                                    idx_target = np.logical_and(idx_target,idx_nearfilter)
+
+                                if np.sum(idx_source)>minNcells and np.sum(idx_target)>minNcells:	
+                                    noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(corrdata[np.ix_(idx_source, idx_target)])
+                                
+                                legendlabels[ixArea*2 + ixRed,iyArea*2 + iyRed]  = areas[ixArea] + redcelllabels[ixRed] + '-' + areas[iyArea] + redcelllabels[iyRed]
+
+    # assuming legendlabels is a 4x4 array
+    legendlabels_upper_tri      = legendlabels[np.triu_indices(4, k=0)]
+
+    # assuming noisemat is a 4x4xnSessions array
+    upper_tri_indices           = np.triu_indices(4, k=0)
+    noisemat_upper_tri          = noisemat[upper_tri_indices[0], upper_tri_indices[1], :]
+
+    df                          = pd.DataFrame(data=noisemat_upper_tri.T,columns=legendlabels_upper_tri)
+
+    colorder                    = [0,1,4,7,8,9,2,3,5,6]
+    legendlabels_upper_tri      = legendlabels_upper_tri[colorder]
+    df                          = df[legendlabels_upper_tri]
+
+    return df
+
+
+ #####  ######     #     #    #    ######   #####  
+#     # #     #    ##   ##   # #   #     # #     # 
+      # #     #    # # # #  #   #  #     # #       
+ #####  #     #    #  #  # #     # ######   #####  
+#       #     #    #     # ####### #             # 
+#       #     #    #     # #     # #       #     # 
+####### ######     #     # #     # #        #####  
+
+def bin_2d_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='F',
+                            rotate_prefori=False,deltaori=None,sig_thr = 0.001,noise_thr=1,
+                            binresolution=5,tuned_thr=0,absolute=False,normalize=False):
+    """
+    Average pairwise correlations as a function of pairwise delta azimuth and elevation.
+    - Sessions are binned by areapairs, layerpairs, and projpairs.
+    - Returns binmean,bincount,binedges
+
+    Parameters
+    ----------
+    sessions : list
+        list of sessions
+    areapairs : list (if ' ' then all areapairs are used)
+        list of areapairs
+    layerpairs : list  (if ' ' then all layerpairs are used)
+        list of layerpairs
+    projpairs : list  (if ' ' then all projpairs are used)
+        list of projpairs
+    corr_type : str, optional
+        type of correlation to use, by default 'trace_corr'
+    normalize : bool, optional
+        whether to normalize correlations to the mean correlation at distances < 60 um, by default False
+    rf_type : str, optional
+        type of receptive field to use, by default 'F'
+    sig_thr : float, optional
+        significance threshold for including cells in the analysis, by default 0.001
+    """
+
+    if rotate_prefori:
+        binrange        = np.array([[-75, 75],[-75, 75]])
+        nBins           = np.array([(binrange[0,1] - binrange[0,0]) / binresolution,(binrange[1,1] - binrange[1,0]) / binresolution]).astype(int)
+    else: 
+        binrange        = np.array([[-50, 50],[-135, 135]])
+        nBins           = np.array([(binrange[0,1] - binrange[0,0]) / binresolution,(binrange[1,1] - binrange[1,0]) / binresolution]).astype(int)
+    
+    # binmean     = np.full((*nBins,len(areapairs),len(layerpairs),len(projpairs)),np.nan)
+    # bincount    = np.full((*nBins,len(areapairs),len(layerpairs),len(projpairs)),np.nan)
+
+    binmean     = np.zeros((*nBins,len(areapairs),len(layerpairs),len(projpairs)))
+    bincount    = np.zeros((*nBins,len(areapairs),len(layerpairs),len(projpairs)))
+
+    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+
+            oris    = np.sort(sessions[ises].trialdata['Orientation'].unique())
+
+            if absolute == True:
+                corrdata = np.abs(corrdata)
+
+            if 'rf_p_' + rf_type in sessions[ises].celldata:
+                for iap,areapair in enumerate(areapairs):
+                    for ilp,layerpair in enumerate(layerpairs):
+                        for ipp,projpair in enumerate(projpairs):
+                            rffilter        = np.meshgrid(sessions[ises].celldata['rf_p_' + rf_type]<sig_thr,sessions[ises].celldata['rf_p_'  + rf_type]<sig_thr)
+                            rffilter        = np.logical_and(rffilter[0],rffilter[1])
+                            
+                            signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<noise_thr,sessions[ises].celldata['noise_level']<noise_thr)
+                            signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+
+                            tuningfilter    = np.meshgrid(sessions[ises].celldata['tuning_var']>tuned_thr,sessions[ises].celldata['tuning_var']>tuned_thr)
+                            tuningfilter    = np.logical_and(tuningfilter[0],tuningfilter[1])
+
+                            areafilter      = filter_2d_areapair(sessions[ises],areapair)
+
+                            layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
+
+                            projfilter      = filter_2d_projpair(sessions[ises],projpair)
+
+                            nanfilter       = ~np.isnan(corrdata)
+
+                            proxfilter      = ~(sessions[ises].distmat_xy<15)
+                            
+                            cellfilter      = np.all((rffilter,signalfilter,tuningfilter,areafilter,layerfilter,projfilter,proxfilter,nanfilter),axis=0)
+
+                            if np.any(cellfilter):
+                                idx_source      = np.any(cellfilter,axis=0)
+                                idx_target      = np.any(cellfilter,axis=1)
+
+                                if deltaori is not None:
+                                    assert np.shape(deltaori) == (2,),'deltaori must be a 2x1 array'
+                                    for iOri,Ori in enumerate(oris):
+
+                                        idx_source_ori = np.all((idx_source,sessions[ises].celldata['pref_ori']==Ori),axis=0) 
+                                        idx_target_ori = np.all((idx_target,
+                                                                np.mod(sessions[ises].celldata['pref_ori']+deltaori[0],180)>=np.mod(Ori,180),
+                                                                np.mod(sessions[ises].celldata['pref_ori']+deltaori[1],180)<=np.mod(Ori,180)),axis=0) 
+
+                                        [binmean_temp,bincount_temp] = compute_NC_map(sourcecells = sessions[ises].celldata[idx_source_ori].reset_index(drop=True),
+                                                                            targetcells = sessions[ises].celldata[idx_target_ori].reset_index(drop=True),
+                                                                            NC_data = corrdata[np.ix_(idx_source_ori, idx_target_ori)],
+                                                                            nBins=nBins,binrange=binrange,rf_type=rf_type,
+                                                                            rotate_prefori=rotate_prefori)
+                                        
+                                        binmean[:,:,iap,ilp,ipp]   += binmean_temp
+                                        bincount[:,:,iap,ilp,ipp]  += bincount_temp
+                                else:
+                                    [binmean_temp,bincount_temp] = compute_NC_map(sourcecells = sessions[ises].celldata[idx_source].reset_index(drop=True),
+                                                                        targetcells = sessions[ises].celldata[idx_target].reset_index(drop=True),
+                                                                        NC_data = corrdata[np.ix_(idx_source, idx_target)],
+                                                                        nBins=nBins,binrange=binrange,rf_type=rf_type,
+                                                                        rotate_prefori=rotate_prefori)
+                                    
+                                    binmean[:,:,iap,ilp,ipp]   += binmean_temp
+                                    bincount[:,:,iap,ilp,ipp]  += bincount_temp
+        
+    # divide the total summed correlations by the number of counts in that bin to get the mean:
+    binmean = binmean / bincount
+
+    return binmean,bincount,binrange
+
+
 def noisecorr_rfmap(sessions,corr_type='noise_corr',binresolution=5,rotate_prefori=False,rotate_deltaprefori=False,
                     thr_tuned=0,thr_rf_p=1,rf_type='F'):
     # Computes the average noise correlation depending on the difference in receptive field between the two neurons
@@ -218,8 +689,6 @@ def noisecorr_rfmap_perori(sessions,corr_type='noise_corr',binresolution=5,rotat
 
                 idx_source = np.logical_and(~np.isnan(sessions[ises].celldata['rf_az_' + rf_type]),
                                             sessions[ises].celldata['pref_ori']==Ori)#get all neurons with RF
-                # idx_target = ~np.isnan(sessions[ises].celldata['rf_az_Fneu'],
-                #                              sessions[ises].celldata['pref_ori']==Ori) #get all neurons with RF
                 idx_target = ~np.isnan(sessions[ises].celldata['rf_az_' + rf_type],
                                             sessions[ises].celldata['pref_ori'].between(Ori-30, Ori+30)) #get all neurons with RF
 
@@ -361,7 +830,7 @@ def noisecorr_rfmap_areas_projections(sessions,corr_type='noise_corr',binresolut
     return noiseRFmat_mean,countsRFmat,binrange,legendlabels
 
 def compute_NC_map(sourcecells,targetcells,NC_data,nBins,binrange,
-                   rotate_deltaprefori=False,rotate_prefori=False,rf_type='F'):
+                   rotate_prefori=False,rf_type='F'):
 
     noiseRFmat          = np.zeros(nBins)
     countsRFmat         = np.zeros(nBins)
@@ -371,9 +840,9 @@ def compute_NC_map(sourcecells,targetcells,NC_data,nBins,binrange,
         delta_az    = targetcells['rf_az_' + rf_type] - sourcecells['rf_az_' + rf_type][iN]
         angle_vec   = np.vstack((delta_el, delta_az))
 
-        if rotate_deltaprefori:
-            ori_rots    = targetcells['pref_ori'] - sourcecells['pref_ori'][iN]
-            angle_vec   = apply_ori_rot(angle_vec,ori_rots)
+        # if rotate_deltaprefori:
+        #     ori_rots    = targetcells['pref_ori'] - sourcecells['pref_ori'][iN]
+        #     angle_vec   = apply_ori_rot(angle_vec,ori_rots)
         
         if rotate_prefori:
             ori_rots   = np.tile(sourcecells['pref_ori'][iN],len(targetcells))
@@ -476,330 +945,3 @@ def compute_noisecorr_rfmap_v2(sessions,binresolution=5,rotate_prefori=False,spl
     noiseRFmat_mean = noiseRFmat / countsRFmat 
     
     return noiseRFmat_mean,countsRFmat,binrange
-
-def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False):
-    binedges = np.arange(0,1000,20) 
-    nbins= len(binedges)-1
-    binmean = np.full((len(sessions),len(areapairs),nbins),np.nan)
-    for ises in tqdm(range(len(sessions)),desc= 'Computing trace correlations per pairwise distance: '):
-        if hasattr(sessions[ises],corr_type):
-            corrdata = getattr(sessions[ises],corr_type).copy()
-            # corrdata[corrdata>0] = np.nan
-            for iap,areapair in enumerate(areapairs):
-                areafilter      = filter_2d_areapair(sessions[ises],areapair)
-                nanfilter       = ~np.isnan(corrdata)
-                cellfilter      = np.all((areafilter,nanfilter),axis=0)
-                binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xyz[cellfilter].flatten(),
-                                                    values=corrdata[cellfilter].flatten(),
-                                                    statistic='mean', bins=binedges)[0]
-            
-    if normalize: # subtract mean NC from every session:
-        binmean = binmean - np.nanmean(binmean[:,:,binedges[:-1]<600],axis=2,keepdims=True)
-
-    return binmean,binedges
-
-def plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type):
-    sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-    protocols = np.unique(sessiondata['protocol'])
-    clrs_areapairs = get_clr_area_pairs(areapairs)
-    fig,axes = plt.subplots(1,len(protocols),figsize=(4*len(protocols),4))
-    handles = []
-    for iprot,protocol in enumerate(protocols):
-        sesidx = np.where(sessiondata['protocol']== protocol)[0]
-        if len(protocols)>1:
-            ax = axes[iprot]
-        else:
-            ax = axes
-
-        for iap,areapair in enumerate(areapairs):
-            for ises in sesidx:
-                ax.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
-            handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[sesidx,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
-            # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-        ax.legend(handles,areapairs,loc='upper right',frameon=False)	
-        ax.set_xlabel('Anatomical distance ($\mu$m)')
-        ax.set_ylabel('Correlation')
-        ax.set_xlim([10,600])
-        ax.set_title('%s (%s)' % (corr_type,protocol))
-        # ax.set_ylim([-0.01,0.04])
-        ax.set_ylim([0,0.09])
-        ax.set_aspect('auto')
-        ax.tick_params(axis='both', which='major', labelsize=8)
-
-    plt.tight_layout()
-    return fig
-
-
-def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False):
-    binedges = np.arange(0,1000,10) 
-    nbins= len(binedges)-1
-    binmean = np.full((len(sessions),len(areapairs),nbins),np.nan)
-    for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by pairwise anatomical distance: '):
-        if hasattr(sessions[ises],corr_type):
-            corrdata = getattr(sessions[ises],corr_type).copy()
-            # corrdata[corrdata>0] = np.nan
-            for iap,areapair in enumerate(areapairs):
-                areafilter      = filter_2d_areapair(sessions[ises],areapair)
-                nanfilter       = ~np.isnan(corrdata)
-                cellfilter      = np.all((areafilter,nanfilter),axis=0)
-                binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xyz[cellfilter].flatten(),
-                                                    values=corrdata[cellfilter].flatten(),
-                                                    statistic='mean', bins=binedges)[0]
-            
-    if normalize: # subtract mean NC from every session:
-        binmean = binmean - np.nanmean(binmean[:,:,binedges[:-1]<600],axis=2,keepdims=True)
-
-    return binmean,binedges
-
-def bin_corr_deltarf_areapairs(sessions,areapairs,corr_type='trace_corr',normalize=False,rf_type = 'F',sig_thr = 0.001):
-    binedges    = np.arange(0,120,2.5) 
-    nbins       = len(binedges)-1
-    binmean     = np.full((len(sessions),len(areapairs),nbins),np.nan)
-    bincount     = np.full((len(sessions),len(areapairs),nbins),np.nan)
-    
-    for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by delta receptive field: '):
-        if hasattr(sessions[ises],corr_type):
-            corrdata = getattr(sessions[ises],corr_type).copy()
-            if 'rf_p_' + rf_type in sessions[ises].celldata:
-                for iap,areapair in enumerate(areapairs):
-                    signalfilter    = np.meshgrid(sessions[ises].celldata['rf_p_' + rf_type]<sig_thr,sessions[ises].celldata['rf_p_'  + rf_type]<sig_thr)
-                    # signalfilter    = np.meshgrid(sessions[ises].celldata['rf_p_F']<sig_thr,sessions[ises].celldata['rf_p_F']<sig_thr)
-                    signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
-                    
-                    areafilter      = filter_2d_areapair(sessions[ises],areapair)
-
-                    nanfilter       = ~np.isnan(corrdata)
-                    
-                    proxfilter      = ~(sessions[ises].distmat_xy<20)
-                    
-                    cellfilter      = np.all((signalfilter,areafilter,proxfilter,nanfilter),axis=0)
-                    binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
-                                                        values=corrdata[cellfilter].flatten(),
-                                                        statistic='mean', bins=binedges)[0]
-                    bincount[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
-                                                        values=corrdata[cellfilter].flatten(),
-                                                        statistic='count', bins=binedges)[0]
-                    
-    binmean[bincount<25] = np.nan
-    if normalize: # subtract mean correlation from every session:
-        binmean = binmean - np.nanmean(binmean[:,:,binedges[:-1]<60],axis=2,keepdims=True)
-
-    return binmean,binedges
-
-def plot_bin_corr_deltarf_protocols(sessions,binmean,binedges,areapairs,corr_type,normalize=False):
-    sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-    protocols = np.unique(sessiondata['protocol'])
-    clrs_areapairs = get_clr_area_pairs(areapairs)
-
-    fig,axes = plt.subplots(1,len(protocols),figsize=(4*len(protocols),4))
-    handles = []
-    for iprot,protocol in enumerate(protocols):
-        sesidx = np.where(sessiondata['protocol']== protocol)[0]
-        if len(protocols)>1:
-            ax = axes[iprot]
-        else:
-            ax = axes
-
-        for iap,areapair in enumerate(areapairs):
-            for ises in sesidx:
-                ax.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
-            handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[sesidx,iap,:].squeeze(),center='mean',error='sem',color=clrs_areapairs[iap]))
-
-        ax.legend(handles,areapairs,loc='upper right',frameon=False)	
-        ax.set_xlabel('Delta RF')
-        ax.set_ylabel('Correlation')
-        ax.set_xlim([-2,100])
-        ax.set_title('%s (%s)' % (corr_type,protocol))
-        if normalize:
-            ax.set_ylim([-0.015,0.05])
-        else: 
-            ax.set_ylim([0,0.12])
-        ax.set_aspect('auto')
-        ax.tick_params(axis='both', which='major', labelsize=8)
-
-    plt.tight_layout()
-    return fig
-
-
-def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='trace_corr',
-                     normalize=False,rf_type = 'F',sig_thr = 0.001,binres=2.5,mincount=25,absolute=True):
-    """
-    Compute pairwise correlations as a function of pairwise delta receptive field.
-    - Sessions are binned by areapairs, layerpairs, and projpairs.
-    - Returns binmean,bincount,binedges
-
-    Parameters
-    ----------
-    sessions : list
-        list of sessions
-    areapairs : list (if ' ' then all areapairs are used)
-        list of areapairs
-    layerpairs : list  (if ' ' then all layerpairs are used)
-        list of layerpairs
-    projpairs : list  (if ' ' then all projpairs are used)
-        list of projpairs
-    corr_type : str, optional
-        type of correlation to use, by default 'trace_corr'
-    normalize : bool, optional
-        whether to normalize correlations to the mean correlation at distances < 60 um, by default False
-    rf_type : str, optional
-        type of receptive field to use, by default 'F'
-    sig_thr : float, optional
-        significance threshold for including cells in the analysis, by default 0.001
-    """
-
-    if binres == 'centersurround':
-        binedges    = np.array([0,15,50])
-    else: 
-        assert isinstance(binres,int), 'binres type error'
-        binedges    = np.arange(0,120,binres)
-
-    binpos      = [np.mean(binedges[i:i+2]) for i in range(0, len(binedges)-1)]# find the mean of consecutive bins 
-    nbins       = len(binpos)
-    binmean     = np.full((nbins,len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
-    bincount    = np.full((nbins,len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
-    
-    for ises in tqdm(range(len(sessions)),desc= 'Binning correlations by delta receptive field: '):
-        if hasattr(sessions[ises],corr_type):
-            corrdata = getattr(sessions[ises],corr_type).copy()
-
-            if absolute == True:
-                corrdata = np.abs(corrdata)
-
-            if 'rf_p_' + rf_type in sessions[ises].celldata:
-                for iap,areapair in enumerate(areapairs):
-                    for ilp,layerpair in enumerate(layerpairs):
-                        for ipp,projpair in enumerate(projpairs):
-                            rffilter    = np.meshgrid(sessions[ises].celldata['rf_p_' + rf_type]<sig_thr,sessions[ises].celldata['rf_p_'  + rf_type]<sig_thr)
-                            rffilter    = np.logical_and(rffilter[0],rffilter[1])
-                            
-                            signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<0.2,sessions[ises].celldata['noise_level']<0.2)
-                            signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
-
-                            areafilter      = filter_2d_areapair(sessions[ises],areapair)
-
-                            layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
-
-                            projfilter      = filter_2d_projpair(sessions[ises],projpair)
-
-                            nanfilter       = ~np.isnan(corrdata)
-                            proxfilter      = ~(sessions[ises].distmat_xy<15)
-                            
-                            cellfilter      = np.all((rffilter,signalfilter,areafilter,layerfilter,projfilter,proxfilter,nanfilter),axis=0)
-                            if np.any(cellfilter):
-                                binmean[:,ises,iap,ilp,ipp] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
-                                                                                values=corrdata[cellfilter].flatten(),
-                                                                                statistic='mean', bins=binedges)[0]
-                                bincount[:,ises,iap,ilp,ipp] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
-                                                                                values=corrdata[cellfilter].flatten(),
-                                                                                statistic='count', bins=binedges)[0]
-                        
-    binmean[bincount<mincount] = np.nan
-    if normalize: # subtract mean correlation from every session:
-        binmean = binmean - np.nanmean(binmean[binedges[:-1]<60,:,:,:,:],axis=0,keepdims=True)
-
-    # binmean = binmean.squeeze()
-    return binmean,binpos
-
-
-def plot_bin_corr_deltarf_flex(sessions,binmean,binpos,areapairs=' ',layerpairs=' ',projpairs=' ',
-                               corr_type='trace_corr',normalize=False):
-    # sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-    # protocols = np.unique(sessiondata['protocol'])
-
-    # clrs_areapairs = get_clr_area_pairs(areapairs)
-    # clrs_projpairs = get_clr_labelpairs(projpairs)
-
-    if projpairs==' ':
-        clrs_projpairs = 'k'
-    else:
-        clrs_projpairs = get_clr_labelpairs(projpairs)
-
-    fig,axes = plt.subplots(len(areapairs),len(layerpairs),figsize=(3*len(layerpairs),3*len(areapairs)))
-    axes = axes.reshape(len(areapairs),len(layerpairs))
-    for iap,areapair in enumerate(areapairs):
-        for ilp,layerpair in enumerate(layerpairs):
-            ax = axes[iap,ilp]
-            handles = []
-
-            for ipp,projpair in enumerate(projpairs):
-                for ises in range(len(sessions)):
-                    ax.plot(binpos,binmean[:,ises,iap,ilp,ipp].squeeze(),linewidth=0.15,color=clrs_projpairs[ipp])
-                handles.append(shaded_error(ax=ax,x=binpos,y=binmean[:,:,iap,ilp,ipp].squeeze().T,center='mean',error='sem',color=clrs_projpairs[ipp]))
-
-            ax.legend(handles,projpairs,loc='upper right',frameon=False)	
-            ax.set_xlabel('Delta RF')
-            ax.set_ylabel('Correlation')
-            ax.set_xlim([-2,60])
-            ax.set_title('%s\n%s' % (areapair, layerpair))
-            if normalize:
-                ax.set_ylim([-0.015,0.05])
-            else: 
-                ax.set_ylim([0,0.15])
-            ax.set_aspect('auto')
-            ax.tick_params(axis='both', which='major', labelsize=8)
-
-    plt.tight_layout()
-    return fig
-
-def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
-                             filternear=True,filtersign=None,minNcells=10):
-    areas               = ['V1','PM']
-    redcells            = [0,1]
-    redcelllabels       = ['unl','lab']
-    legendlabels        = np.empty((4,4),dtype='object')
-
-    noisemat            = np.full((4,4,len(sessions)),np.nan)
-
-    for ises in tqdm(range(len(sessions)),desc='Averaging %s across sessions' % corr_type):
-        idx_nearfilter = filter_nearlabeled(sessions[ises],radius=50)
-        if hasattr(sessions[ises],corr_type):
-            corrdata = getattr(sessions[ises],corr_type).copy()
-            
-            if filtersign == 'neg':
-                corrdata[corrdata>0] = np.nan
-            
-            if filtersign =='pos':
-                corrdata[corrdata<0] = np.nan
-
-            if absolute:
-                corrdata = np.abs(corrdata)
-
-            for ixArea,xArea in enumerate(areas):
-                for iyArea,yArea in enumerate(areas):
-                    for ixRed,xRed in enumerate(redcells):
-                        for iyRed,yRed in enumerate(redcells):
-
-                                idx_source = sessions[ises].celldata['roi_name']==xArea
-                                idx_target = sessions[ises].celldata['roi_name']==yArea
-
-                                idx_source = np.logical_and(idx_source,sessions[ises].celldata['redcell']==xRed)
-                                idx_target = np.logical_and(idx_target,sessions[ises].celldata['redcell']==yRed)
-
-                                idx_source = np.logical_and(idx_source,sessions[ises].celldata['noise_level']<0.1)
-                                idx_target = np.logical_and(idx_target,sessions[ises].celldata['noise_level']<0.1)
-
-                                if filternear:
-                                    idx_source = np.logical_and(idx_source,idx_nearfilter)
-                                    idx_target = np.logical_and(idx_target,idx_nearfilter)
-
-                                if np.sum(idx_source)>minNcells and np.sum(idx_target)>minNcells:	
-                                    noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(corrdata[np.ix_(idx_source, idx_target)])
-                                
-                                legendlabels[ixArea*2 + ixRed,iyArea*2 + iyRed]  = areas[ixArea] + redcelllabels[ixRed] + '-' + areas[iyArea] + redcelllabels[iyRed]
-
-    # assuming legendlabels is a 4x4 array
-    legendlabels_upper_tri      = legendlabels[np.triu_indices(4, k=0)]
-
-    # assuming noisemat is a 4x4xnSessions array
-    upper_tri_indices           = np.triu_indices(4, k=0)
-    noisemat_upper_tri          = noisemat[upper_tri_indices[0], upper_tri_indices[1], :]
-
-    df                          = pd.DataFrame(data=noisemat_upper_tri.T,columns=legendlabels_upper_tri)
-
-    colorder                    = [0,1,4,7,8,9,2,3,5,6]
-    legendlabels_upper_tri      = legendlabels_upper_tri[colorder]
-    df                          = df[legendlabels_upper_tri]
-
-    return df

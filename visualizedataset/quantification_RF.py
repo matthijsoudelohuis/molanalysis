@@ -48,7 +48,7 @@ sig_thr = 0.001 #cumulative significance of receptive fields clusters
 #%% Interpolation of receptive fields:
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-sessions = smooth_rf(sessions,sig_thr=0.001,radius=50)
+sessions = smooth_rf(sessions,sig_thr=0.001,radius=75,rf_type='Favg')
 
 #%% Show fraction of receptive fields per session before any corrections:
 [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='F',sig_thr=sig_thr)
@@ -57,17 +57,20 @@ fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_IMincluded' 
 #%% ##################### Retinotopic mapping within V1 and PM #####################
 rf_type = 'Fneu'
 rf_type = 'Favg'
-sig_thr=0.0001
+rf_type = 'Fsmooth'
+sig_thr=0.001
 for ises in range(nSessions):
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
 #%% 
-sessions = exclude_outlier_rf(sessions,radius=50,rf_thr=50) 
+sessions = exclude_outlier_rf(sessions) 
 
+rf_type = 'F'
 #Show fraction of receptive fields per session after filtering out scattered neurons: 
-[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='F',sig_thr=sig_thr)
-fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_filter' + '.png'), format = 'png')
+[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type=rf_type,sig_thr=sig_thr)
+# fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_filter' + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_out%s_%s' % (rf_type,sessions[ises].sessiondata['session_id'][0]) + '.png'), format = 'png')
 
 
 # #%% Interpolate receptive field based on Fneu estimate:
