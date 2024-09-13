@@ -19,7 +19,7 @@ from utils.imagelib import im_norm,im_norm8,im_log,im_sqrt
 # from suite2p.extraction import extract, masks
 # from suite2p.detection.chan2detect import detect,correct_bleedthrough
 
-def proc_labeling_plane(iplane,plane_folder,saveoverlay=True,showcells=True,overlap_threshold=0.5,gcamp_proj='meanImg'):
+def proc_labeling_plane(iplane,plane_folder,saveoverlay=False,showcells=True,overlap_threshold=0.5,gcamp_proj='meanImg'):
     stats       = np.load(os.path.join(plane_folder,'stat.npy'), allow_pickle=True)
     ops         = np.load(os.path.join(plane_folder,'ops.npy'), allow_pickle=True).item()
     iscell      = np.load(os.path.join(plane_folder,'iscell.npy'), allow_pickle=True)

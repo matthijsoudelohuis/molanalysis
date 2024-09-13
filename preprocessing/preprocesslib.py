@@ -752,6 +752,13 @@ def proc_imaging(sesfolder, sessiondata):
             celldata_plane['rf_sz_Fneu']   = RF_Fneu[:,2]
             celldata_plane['rf_p_Fneu']    = RF_Fneu[:,3]
 
+        if os.path.exists(os.path.join(plane_folder, 'RF_Favg.npy')):
+            RF_Favg = np.load(os.path.join(plane_folder, 'RF_Favg.npy'))
+            celldata_plane['rf_az_Favg']   = RF_Favg[:,0]
+            celldata_plane['rf_el_Favg']   = RF_Favg[:,1]
+            celldata_plane['rf_sz_Favg']   = RF_Favg[:,2]
+            celldata_plane['rf_p_Favg']    = RF_Favg[:,3]
+
         ##################### load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
         F_chan2             = np.load(os.path.join(plane_folder, 'F_chan2.npy'), allow_pickle=True)

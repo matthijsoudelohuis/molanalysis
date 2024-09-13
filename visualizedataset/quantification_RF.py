@@ -24,6 +24,7 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - R
 
 session_list        = np.array([['LPE11086','2023_12_15']])
 session_list        = np.array([['LPE12013','2024_05_02']])
+session_list        = np.array([['LPE09830','2023_04_12']])
 
 #Sessions with good receptive field mapping in both V1 and PM:
 session_list        = np.array([['LPE09665','2023_03_21'], #GR
@@ -34,12 +35,13 @@ session_list        = np.array([['LPE09665','2023_03_21'], #GR
                                 # ['LPE11086','2023_12_15'], #GR
                                 ['LPE10919','2023_11_06']]) #GR
 
+sessions,nSessions = load_sessions(protocol = 'GR',session_list=session_list)
 sessions,nSessions = load_sessions(protocol = 'SP',session_list=session_list)
 
 # sessions,nSessions = filter_sessions(protocols = ['GR'],only_animal_id=['LPE09665','LPE09830'],session_rf=True)
 # # sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
-sessions,nSessions = filter_sessions(protocols = ['SP','GR','GN'],session_rf=True,filter_areas=['V1','PM'])
+sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,filter_areas=['V1','PM'],only_animal_id= ['LPE09665', 'LPE09830', 'LPE11495', 'LPE11998', 'LPE12013'])
 
 sig_thr = 0.001 #cumulative significance of receptive fields clusters
 
@@ -53,7 +55,9 @@ sessions = smooth_rf(sessions,sig_thr=0.001,radius=50)
 fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_IMincluded' + '.png'), format = 'png')
 
 #%% ##################### Retinotopic mapping within V1 and PM #####################
-rf_type = 'F'
+rf_type = 'Fneu'
+rf_type = 'Favg'
+sig_thr=0.0001
 for ises in range(nSessions):
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
@@ -87,7 +91,12 @@ sessions = exclude_outlier_rf(sessions)
 fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type='F') 
 
 #%%
-sessions = smooth_rf(sessions,sig_thr=0.001,radius=50)
+
+sessions[ises].celldata['rf_az_Fneu']    = sessions[ises].celldata['rf_az_Favg']
+sessions[ises].celldata['rf_el_Fneu']    = sessions[ises].celldata['rf_el_Favg']
+sessions[ises].celldata['rf_p_Fneu']    = sessions[ises].celldata['rf_p_Favg']
+
+sessions = smooth_rf(sessions,sig_thr=0.001,radius=75)
 
 #%% Show fraction of receptive fields per session after smoothed interpolation and filtering:
 [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='Fsmooth',sig_thr=sig_thr)
@@ -103,6 +112,7 @@ for ises in range(nSessions):
 
 #%% ########### Plot locations of receptive fields as on the screen ##############################
 rf_type = 'Fsmooth'
+rf_type = 'Favg'
 for ises in range(nSessions):
     fig = plot_rf_screen(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_rf_screen_' + rf_type + '_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')

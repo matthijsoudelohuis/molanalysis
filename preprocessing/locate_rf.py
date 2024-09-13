@@ -28,10 +28,10 @@ t_resp_stop         = 0.6      #post s #this one is updated based on protocol of
 t_base_start        = -2       #pre s
 t_base_stop         = 0        #post s
 
-def find_largest_cluster(array_p,minblocks=2): #filters clusters of adjacent significant blocks
+def find_largest_cluster(array_p,minblocks=2,pthr=0.05): #filters clusters of adjacent significant blocks
     # minblocks   = minimum number of adjacent blocks with significant response
 
-    array_p_thr = array_p<0.05
+    array_p_thr = array_p<pthr
     labeling, label_count = ndimage.label(array_p_thr) #find clusters of significance
     
     for k in range(label_count): #remove all singleton clusters:
@@ -48,13 +48,13 @@ def find_largest_cluster(array_p,minblocks=2): #filters clusters of adjacent sig
 
     return cluster,cluster_p
 
-def filter_clusters(array,clusterthr=10,minblocks=2): #filters clusters of adjacent significant blocks
+def filter_clusters(array,clusterthr=10,minblocks=2,pthr=0.05): #filters clusters of adjacent significant blocks
     # minblocks   = minimum number of adjacent blocks with significant response
     # clusterthr  =  is sum of negative log p values of clustered RF responses
     # e.g. array = [0.001,0.0001,0.05,0.05,0.02] #pvalues of cluster of RF on or off responses
     # np.sum(-np.log10(array))
 
-    array_p = array<0.05
+    array_p = array<pthr
     labeling, label_count = ndimage.label(array_p == True) #find clusters of significance
     
     for k in range(label_count): #remove all singleton clusters:
@@ -70,12 +70,12 @@ def filter_clusters(array,clusterthr=10,minblocks=2): #filters clusters of adjac
     
     return cluster,cluster_p
 
-def com_clusters(clusters): #computes center of mass and size of sig RF clusters
+def com_clusters(clusters,blockdeg): #computes center of mass and size of sig RF clusters
     x = y = size = np.nan
     if np.any(clusters):
         ones = np.ones_like(clusters, dtype=int)
         y,x = ndimage.center_of_mass(ones, labels=clusters, index=True)
-        size = np.sum(clusters) * 5.16**2
+        size = np.sum(clusters) * (blockdeg**2)
     return x,y,size
 
 def proc_RF(rawdatadir,sessiondata):
@@ -113,7 +113,7 @@ def proc_RF(rawdatadir,sessiondata):
 
     grid_array                      = np.reshape(grid_array, [nGrids,xGrid,yGrid])
     grid_array                      = np.transpose(grid_array, [1,2,0])
-    grid_array = np.rot90(grid_array, k=1, axes=(0,1))
+    grid_array                      = np.rot90(grid_array, k=1, axes=(0,1))
     
     grid_array[grid_array==-1]       = 1
     grid_array[grid_array==0]       = -1
@@ -149,9 +149,9 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
     sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
 
     sessiondata = pd.DataFrame({'protocol': ['RF']})
-    sessiondata['animal_id'] = animal_id
-    sessiondata['sessiondate'] = sessiondate
-    sessiondata['fs'] = 5.317
+    sessiondata['animal_id']    = animal_id
+    sessiondata['sessiondate']  = sessiondate
+    sessiondata['fs']           = 5.317
 
     suite2p_folder  = os.path.join(sesfolder,"suite2p")
     rf_folder       = os.path.join(sesfolder,'RF','Behavior')
@@ -177,7 +177,7 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
         t_resp_stop         = np.diff(RF_timestamps).mean() + 0.1
         
         # for iplane,plane_folder in enumerate(plane_folders):
-        for iplane,plane_folder in enumerate(plane_folders[:1]):
+        for iplane,plane_folder in enumerate(plane_folders):
             print('\n Processing plane %s / %s \n' % (iplane+1,ops['nplanes']))
             for signal in signals:
 
@@ -198,21 +198,27 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
 
                     #Get locations of cells:
                     stat               = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
-                    xloc = yloc = np.zeros(len(stat))
+                    xloc  = np.zeros(len(stat))
+                    yloc  = np.zeros(len(stat))
                     for k in range(len(stat)):
-                        xloc[k],yloc[k] = stat[k]['med']
+                        xloc[k] = stat[k]['med'][0]
+                        yloc[k] = stat[k]['med'][1]
                     distmatxy = np.sqrt((xloc[:,None] - xloc[None,:])**2 + (yloc[:,None] - yloc[None,:])**2)
                     #Average the activity of neurons in the same location (within 50 um):
-                    Fneu    = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
-                    sig = Fneu.copy()
+                    # Fneu    = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
+                    # sig     = Fneu.copy()
+                    # for iN in range(sig.shape[0]):
+                        # sig[iN,:] = Fneu[distmatxy[iN,:]<50,:].mean(0)
+                    F       = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
+                    sig     = F.copy()
                     for iN in range(sig.shape[0]):
-                        sig[iN,:] = Fneu[distmatxy[iN,:]<50,:].mean(0)
+                        sig[iN,:] = F[distmatxy[iN,:]<50,:].mean(0)
 
                 sig    = sig[:,protocol_frame_idx_plane==1].transpose()
 
                 # For debugging sample only first 20 neurons: 
-                iscell = iscell[:100,:]
-                sig = sig[:,:100]
+                # iscell = iscell[:100,:]
+                # sig = sig[:,:100]
                 
                 N               = sig.shape[1]
 
@@ -240,11 +246,11 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                             rfmaps_on[i,j,n] = np.mean(resps[grid_array[i,j,:]==1])
                             rfmaps_off[i,j,n] = np.mean(resps[grid_array[i,j,:]==-1])
                             
-                            rfmaps_on_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
-                            rfmaps_off_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+                            # rfmaps_on_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
+                            # rfmaps_off_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
 
-                            # rfmaps_on_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
-                            # rfmaps_off_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+                            rfmaps_on_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
+                            rfmaps_off_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
 
                 RF_x            = np.empty(N)
                 RF_y            = np.empty(N)
@@ -262,23 +268,31 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                     # clusters_on,clusters_on_p     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
                     # clusters_off,clusters_off_p    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
                     
-                    clusters_on,clusters_on_p     = find_largest_cluster(rfmaps_on_p[:,:,n],minblocks=2)
-                    clusters_off,clusters_off_p    = find_largest_cluster(rfmaps_off_p[:,:,n],minblocks=2)
+                    clusters_on,clusters_on_p     = find_largest_cluster(rfmaps_on_p[:,:,n],minblocks=2,pthr=0.2)
+                    clusters_off,clusters_off_p    = find_largest_cluster(rfmaps_off_p[:,:,n],minblocks=2,pthr=0.2)
                     
                     #temporary calc of center of mass for each separately:
                     #if far apart then ignore this RF fit:
-                    RF_x_on,RF_y_on     = com_clusters(clusters_on)[:2]
-                    RF_x_off,RF_y_off   = com_clusters(clusters_off)[:2]
+                    if np.shape(grid_array)[0] == 13:
+                        blockdeg        = 5.16
+                    elif np.shape(grid_array)[0] == 7:
+                        blockdeg        = 10.38
+
+                    RF_x_on,RF_y_on     = com_clusters(clusters_on,blockdeg=blockdeg)[:2]
+                    RF_x_off,RF_y_off   = com_clusters(clusters_off,blockdeg=blockdeg)[:2]
+                    
                     deltaRF = math.sqrt(sum((px - qx) ** 2.0 for px, qx in zip((RF_x_on,RF_y_on), (RF_x_off,RF_y_off))))
-                    if deltaRF > 10:
+                    deltaRF *= blockdeg
+                    if deltaRF > 50:
                         clusters_on = clusters_off = np.tile(False,(xGrid,yGrid))
+                        clusters_on_p = clusters_off_p = 1
 
                     rfmaps_on_p_filt[~clusters_on,n]    = 1 #set to 1 for all noncluster p values
                     rfmaps_off_p_filt[~clusters_off,n]  = 1
                     
                     clusters        = np.logical_or(clusters_on,clusters_off)
                     
-                    RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters)
+                    RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters,blockdeg)
                     # RF_p[n] = np.nansum((clusters_on_p,clusters_off_p))
                     RF_p[n] = combine_pvalues((clusters_on_p,clusters_off_p))[1] #get combined p-value, Fisher's test
 

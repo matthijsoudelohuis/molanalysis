@@ -18,8 +18,8 @@ animal_ids          = ['LPE09830'] #If empty than all animals in folder will be 
 # animal_ids          = [] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE09665','LPE09830','LPE11495'] #If empty than all animals in folder will be processed
 # date_filter         = ['2024_01_05']
+# date_filter         = []
 date_filter         = ['2023_04_12']
-
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
