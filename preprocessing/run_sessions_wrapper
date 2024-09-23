@@ -42,4 +42,5 @@ for animal_id in animal_ids: #for each animal
         # proc_labeling_session(rawdatadir,animal_id,sessiondate,saveoverlay=True,showcells=False,overlap_threshold=0.5,gcamp_proj='max_proj')
 
         # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'])
-        locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['Favg'])
+        # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['Favg'])
+        locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['Fblock'])

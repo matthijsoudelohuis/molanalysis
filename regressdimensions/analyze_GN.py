@@ -12,6 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import seaborn as sns
+os.chdir('e:\\Python\\molanalysis')
 
 #### linear approaches: regression and dimensionality reduction 
 from numpy import linalg
@@ -27,7 +28,6 @@ from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 #Personal libs:
-os.chdir('e:\\Python\\molanalysis')
 from utils.RRRlib import LM,Rss,EV
 from loaddata.get_data_folder import get_local_drive
 from loaddata.session_info import filter_sessions,load_sessions
@@ -118,8 +118,8 @@ for ax, proj in zip(axes, projections):
     for iO, ori in enumerate(oris):                                #plot orientation separately with diff colors
         for iS, speed in enumerate(speeds):                       #plot speed separately with diff colors
             idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
-            x = Xp[proj[0],idx]                          #get all data points for this ori along first PC or projection pairs
-            y = Xp[proj[1],idx]                          #get all data points for this ori along first PC or projection pairs
+            x = Xp[proj[0],idx]                          #get all data points for this ori + speed along first PC of projection pairs
+            y = Xp[proj[1],idx]                          #and the second
 
             # x = Xp[proj[0],ori_ind[io]]                          #get all data points for this ori along first PC or projection pairs
             # y = Xp[proj[1],ori_ind[io]]                          #and the second
@@ -131,14 +131,14 @@ for ax, proj in zip(axes, projections):
 axes[2].legend(labels.flatten(),fontsize=8,bbox_to_anchor=(1,1))
 sns.despine(fig=fig, top=True, right=True)
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'PCA_allStim_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'GN_Stimuli','PCA_allStim_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% LDA of all trials
 
 colors,labels = get_clr_gratingnoise_stimuli(oris,speeds)
 
 areas = ['V1', 'PM']
-plotdim = 0
+plotdim = 1
 
 fig, axes = plt.subplots(1, len(areas), figsize=[12, 4])
 for iax, area in enumerate(areas):
@@ -173,7 +173,7 @@ sns.despine(fig=fig, top=True, right=True)
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'LDA_ori_speed_allStim_dim' + str(plotdim) + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-#%% 
+#%% Define variables for external regression dimensions:
 
 slabels     = ['Ori','Speed','RunSpeed','videoME']
 scolors     = get_clr_GN_svars(slabels)
@@ -187,8 +187,10 @@ S   = np.vstack((sessions[ises].trialdata['deltaOrientation'],
 NS          = np.shape(S)[0]
 
 cmap = plt.get_cmap('hot')
-proj = (0, 1) # proj = (1, 2)
-    # proj = (3, 4)
+proj = (0, 1) 
+# proj = (1, 2)
+proj = (2, 3)
+# proj = (3, 4)
 
 for iSvar in range(NS):
     fig, axes = plt.subplots(3, 3, figsize=[9, 9])
@@ -197,6 +199,7 @@ for iSvar in range(NS):
             idx         = np.intersect1d(ori_ind[iO],speed_ind[iS])
             
             Xp          = pca.fit_transform(sessions[ises].respmat[:,idx].T).T #fit pca to response matrix (n_samples by n_features)
+            # Xp          = pca.fit_transform(zscore(sessions[ises].respmat[:,idx],axis=1).T).T #fit pca to response matrix (n_samples by n_features)
             #dimensionality is now reduced from N by K to ncomp by K
 
             x = Xp[proj[0],:]                          #get all data points for this ori along first PC or projection pairs
@@ -211,7 +214,7 @@ for iSvar in range(NS):
     plt.suptitle(slabels[iSvar],fontsize=15)
     sns.despine(fig=fig, top=True, right=True)
     plt.tight_layout()
-    # plt.savefig(os.path.join(savedir,'PCA' + str(proj) + '_perStim_color' + slabels[iSvar] + '.png'), format = 'png')
+    plt.savefig(os.path.join(savedir,'GN_PCA','PCA' + str(proj) + '_color' + slabels[iSvar] + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% ################## Regression of behavioral variables onto neural data #############
 ###### First identify single neurons that are correlated with behavioral variables ####
@@ -334,13 +337,36 @@ plt.savefig(os.path.join(savedir,'Examplecells_correlated_with_Svars_%s' % sessi
 ### Regression of neural variables onto behavioral data ####
 
 areas       = ['V1', 'PM']
-areas       = ['V1', 'PM', 'RSP', 'AL']
+# areas       = ['V1', 'PM', 'RSP', 'AL']
 nareas      = len(areas)
 kfold       = 5
 N,K         = np.shape(sessions[ises].respmat)
 
 R2_Y_mat    = np.empty((NS,nareas,noris,nspeeds))
 weights     = np.full((NS,N,noris,nspeeds,kfold),np.nan) 
+lambda_reg   = 10
+
+from sklearn.linear_model import RidgeCV
+
+# lambda_values = 10**np.linspace(10,-2,100)*0.5
+
+lambda_values = 10**np.linspace(10,-2,50)*0.5
+
+lambda_reg = []
+
+for iarea, area in enumerate(areas):
+    idx_area     = sessions[ises].celldata['roi_name'] == area
+    for iO, ori in enumerate(oris): 
+        for iS, speed in enumerate(speeds):     
+            idx_trials = np.intersect1d(ori_ind[iO],speed_ind[iS])
+            X = sessions[ises].respmat[np.ix_(idx_area,idx_trials)].T #z-score activity for each neuron across these trials
+            Y = zscore(S[:,idx_trials],axis=1).T #z-score to be able to interpret weights in uniform scale
+
+            ridgecv = RidgeCV(alphas = lambda_values, scoring = "neg_mean_squared_error", cv = 10)
+            ridgecv.fit(X, Y)
+            lambda_reg.append(ridgecv.alpha_)
+
+lambda_reg = np.mean(lambda_reg)
 
 for iarea, area in enumerate(areas):
     idx_area     = sessions[ises].celldata['roi_name'] == area
@@ -348,14 +374,15 @@ for iarea, area in enumerate(areas):
         for iS, speed in enumerate(speeds):     
             idx_trials = np.intersect1d(ori_ind[iO],speed_ind[iS])
             # X = sessions[ises].respmat[np.ix_(idx_area,idx_trials)].T
-            X = zscore(sessions[ises].respmat[np.ix_(idx_area,idx_trials)],axis=1).T #z-score activity for each neuron across these trials
+            X = sessions[ises].respmat[np.ix_(idx_area,idx_trials)].T #z-score activity for each neuron across these trials
+            # X = zscore(sessions[ises].respmat[np.ix_(idx_area,idx_trials)],axis=1).T #z-score activity for each neuron across these trials
             Y = zscore(S[:,idx_trials],axis=1).T #z-score to be able to interpret weights in uniform scale
 
             #Implementing cross validation
-            kf  = KFold(n_splits=kfold, random_state=randomseed,shuffle=True)
-            model = linear_model.Ridge(alpha=1000)  
+            kf      = KFold(n_splits=kfold, random_state=randomseed,shuffle=True)
+            model   = linear_model.Ridge(alpha=lambda_reg)  
 
-            Yhat = np.empty(np.shape(Y))
+            Yhat    = np.empty(np.shape(Y))
             for (train_index, test_index),iF in zip(kf.split(X),range(kfold)):
                 X_train , X_test = X[train_index,:],X[test_index,:]
                 Y_train , Y_test = Y[train_index,:],Y[test_index,:]
@@ -371,12 +398,12 @@ for iarea, area in enumerate(areas):
                 R2_Y_mat[:,iarea,iO,iS] = r2_score(Y, Yhat, multioutput='raw_values')
 
 #%% ########### # ############# ############# ############# ############# 
-fig, axes   = plt.subplots(nareas, NS, figsize=[1.5*nareas, 1.5*NS])
+fig, axes   = plt.subplots(nareas, NS, figsize=[1.5*NS, 1.5*nareas],sharex=True,sharey=True)
 for iY,slabel in enumerate(slabels):
     for iarea,area in enumerate(areas):
         ax = axes[iarea,iY]
         oris_m, speeds_m = np.meshgrid(range(oris.shape[0]), range(speeds.shape[0]), indexing='ij')
-        ax.pcolor(oris_m, speeds_m, R2_Y_mat[iY,iarea,:,:].squeeze(),vmin=0,vmax=1,cmap='hot',linewidth=0.25,edgecolor='k')
+        im = ax.pcolor(oris_m, speeds_m, R2_Y_mat[iY,iarea,:,:].squeeze(),vmin=0,vmax=1,cmap='hot',linewidth=0.25,edgecolor='k')
         ax.set_xticks(range(len(oris)),labels=oris)
         ax.set_yticks(range(len(speeds)),labels=speeds)
         ax.set_xlabel('Orientation (deg)')
@@ -385,13 +412,21 @@ for iY,slabel in enumerate(slabels):
         ax.set_xticklabels(oris)
         ax.set_yticklabels(speeds)
 
-plt.tight_layout()
+fig.tight_layout()
+fig.subplots_adjust(right=0.8)
+cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+fig.colorbar(im, cax=cbar_ax, orientation='vertical',label='R2')
 plt.savefig(os.path.join(savedir,'Regress_Neural_onto_Behav_R2_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+#%% 
+weights_avg = np.nanmean(weights,axis=4) #take average across kfold
+
+fig,ax = plt.subplots(1,1,figsize=[3,3])
+ax.hist(weights_avg.flatten(),bins=100,color='k')
+ax.set_ylabel('Count')
+fig.savefig(os.path.join(savedir,'Hist_Weights_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% Are the weights correlated to the single-neuron correlation between the variables
 # Should be, positive control: 
-
-weights_avg = np.nanmean(weights,axis=4) #take average across kfold
 fig,axes = plt.subplots(1,NS,figsize=[8,2])
 for iSvar in range(NS):
     ax = axes[iSvar]
@@ -404,7 +439,8 @@ for iSvar in range(NS):
     ax.set_ylabel('Correlation')
     ax.set_title(slabels[iSvar])
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'WeightVsCorrelation_Svars_%s' % sessions[ises].sessiondata['session_id'][0] + '.pdf'), format = 'pdf')
+# fig.savefig(os.path.join(savedir,'WeightVsCorrelation_Svars_%s' % sessions[ises].sessiondata['session_id'][0] + '.pdf'), format = 'pdf')
+fig.savefig(os.path.join(savedir,'WeightVsCorrelation_Svars_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% Correlation matrix of the weights between each of the Slabel variables for each of the stimulus conditions
 weights_avg = np.nanmean(weights,axis=4) #take average across kfold
@@ -432,25 +468,32 @@ plt.savefig(os.path.join(savedir,'Correlation_singleneuroncorrelations_%s' % ses
 # Averaged across stimulus conditions, but show the wegith
  
 #%% Compare weights across areas and redcells
-clrs_areas = get_clr_areas(areas)
+# Plot unlabeled and labeled neurons for each area are next to each other,
+# Perform an independent samples t-test between the two populations (labeled and unlabeled)
+# If significant, statannotations to display an asterisk between the two groups.
+
+clrs_labeled = get_clr_labeled()
 
 fig,axes = plt.subplots(1,NS,figsize=(NS*2,2),sharex=True,sharey=True)
 for iSvar in range(NS):
     ax = axes[iSvar]
     df = pd.DataFrame(sessions[ises].celldata[['roi_name','redcell']])
-    df['weight'] = np.nanmean(np.abs(weights_avg[iSvar,:,:]),axis=(1,2)).flatten() 
+    df['weight'] = np.nanmean(np.abs(weights_avg[iSvar,:,:,:]),axis=(1,2))
+    # df['weight'] = np.nanmax(np.abs(weights_avg[iSvar,:,:,:]),axis=(1,2))
 
-    df['weight'] = np.nanmean(np.abs(corrmat[:,iSvar,:,:]),axis=(1,2)).flatten() 
-
-    # df['weight'] = np.max(np.abs(weights_avg[iSvar,:,:]),axis=(1,2)).flatten() 
-    sns.barplot(data = df,x='redcell',y='weight',hue='roi_name',errorbar='se',palette=clrs_areas,ax=ax)
-    # sns.barplot(data = df,x='roi_name',y='weight',hue='redcell',errorbar='se',palette=clrs_areas,ax=ax)
-    bars = ax.patches
-    for bar in bars[1::2]:
-        bar.set_hatch('/')
+    sns.barplot(data = df,x='roi_name',y='weight',hue='redcell',errorbar='se',palette=clrs_labeled,ax=ax)
+    for area in areas:
+        df_area = df[df['roi_name']==area]
+        ttest_ind(df_area[df_area['redcell']==0]['weight'],df_area[df_area['redcell']==1]['weight'])
+        if ttest_ind(df_area[df_area['redcell']==0]['weight'],df_area[df_area['redcell']==1]['weight'])[1] < 0.05:
+            add_stat_annotation(ax, data=df_area, x='roi_name', y='weight', hue='redcell',
+                box_pairs=[(area, area)], test='t-test_ind', text_format='star',
+                pvalue_thresholds=[[0.05,'*']],
+                perform_stat_test=False,
+                verbose=0)
     ax.set_title(slabels[iSvar])
-    ax.set_xticks([])
-    ax.set_xlabel('Unlabeled           Labeled')
+    ax.set_xticks([0,1],labels=areas)
+    ax.set_xlabel('Area')
     ax.set_ylabel('Absolute weight')
     if iSvar==0: 
         ax.legend(frameon=False,loc='upper right',fontsize=7)
@@ -458,7 +501,7 @@ for iSvar in range(NS):
 plt.tight_layout()
 fig.savefig(os.path.join(savedir,'Weights_Area_Redcell_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-sessions[ises].trialdata['deltaSpeed']
+# sessions[ises].trialdata['deltaSpeed']
 
 #%% ## Regression of behavioral activity onto neural data: 
 

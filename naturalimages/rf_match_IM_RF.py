@@ -28,7 +28,7 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - R
 
 # %% Load IM session with receptive field mapping ################################################
 session_list = np.array([['LPE10885', '2023_10_20']])
-session_list = np.array([['LPE09665', '2023_03_15']])
+# session_list = np.array([['LPE09665', '2023_03_15']])
 
 # Load sessions lazy: (no calciumdata, behaviordata etc.,)
 sessions, nSessions = load_sessions(protocol='IM', session_list=session_list)

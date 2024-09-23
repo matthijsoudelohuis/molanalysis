@@ -22,7 +22,7 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - R
 
 #%% ################### Loading the data ##############################
 
-session_list        = np.array([['LPE11086','2023_12_15']])
+session_list        = np.array([['LPE11086','2024_01_10']])
 session_list        = np.array([['LPE12013','2024_05_02']])
 session_list        = np.array([['LPE09830','2023_04_12']])
 
@@ -41,14 +41,18 @@ sessions,nSessions = load_sessions(protocol = 'SP',session_list=session_list)
 # sessions,nSessions = filter_sessions(protocols = ['GR'],only_animal_id=['LPE09665','LPE09830'],session_rf=True)
 # # sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
-sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,filter_areas=['V1','PM'],only_animal_id= ['LPE09665', 'LPE09830', 'LPE11495', 'LPE11998', 'LPE12013'])
+sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,filter_areas=['V1','PM'])
 
 sig_thr = 0.001 #cumulative significance of receptive fields clusters
 
 #%% Interpolation of receptive fields:
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-sessions = smooth_rf(sessions,sig_thr=0.001,radius=75,rf_type='Favg')
+sessions = smooth_rf(sessions,sig_thr=0.0001,radius=75,rf_type='Fneu')
+
+sessions = exclude_outlier_rf(sessions) 
+
+sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
 
 #%% Show fraction of receptive fields per session before any corrections:
 [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='F',sig_thr=sig_thr)
@@ -56,14 +60,23 @@ fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_IMincluded' 
 
 #%% ##################### Retinotopic mapping within V1 and PM #####################
 rf_type = 'Fneu'
-rf_type = 'Favg'
+# rf_type = 'Favg'
 rf_type = 'Fsmooth'
+# rf_type = 'F'
+# rf_type = 'Fsmooth'
 sig_thr=0.001
 for ises in range(nSessions):
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
-    fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
+    # fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
-#%% 
+# #%% 
+# fig,ax = plt.subplots()
+# plt.scatter(sessions[ises].celldata['rf_az_Fneu'],sessions[ises].celldata['rf_az_Fsmooth'],alpha=1,s=6)
+# ax.set_xlim([0,120])
+# ax.set_ylim([0,120])
+# ax.plot([0, 1], [0, 1], transform=ax.transAxes)
+
+#%%
 sessions = exclude_outlier_rf(sessions) 
 
 rf_type = 'F'

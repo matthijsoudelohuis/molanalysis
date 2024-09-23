@@ -16,8 +16,11 @@ from loaddata.session_info import filter_sessions,load_sessions
 from natsort import natsorted 
 from scipy import ndimage 
 from scipy.stats import combine_pvalues #Fisher's method to combine significance of multiple p-values
+from skimage.measure import block_reduce
+from tqdm import tqdm
 
 from preprocessing.preprocesslib import align_timestamps
+from run_suite2p.oldbinary import OldBinaryFile
 
 ## Mapping of RF on/off blocks to elevation and azimuth:
 vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
@@ -205,20 +208,39 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                         yloc[k] = stat[k]['med'][1]
                     distmatxy = np.sqrt((xloc[:,None] - xloc[None,:])**2 + (yloc[:,None] - yloc[None,:])**2)
                     #Average the activity of neurons in the same location (within 50 um):
-                    # Fneu    = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
-                    # sig     = Fneu.copy()
-                    # for iN in range(sig.shape[0]):
-                        # sig[iN,:] = Fneu[distmatxy[iN,:]<50,:].mean(0)
-                    F       = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
-                    sig     = F.copy()
+                    Fneu    = np.load(os.path.join(plane_folder, 'Fneu.npy'), allow_pickle=True)
+                    sig     = Fneu.copy()
                     for iN in range(sig.shape[0]):
-                        sig[iN,:] = F[distmatxy[iN,:]<50,:].mean(0)
+                        sig[iN,:] = Fneu[distmatxy[iN,:]<50,:].mean(0)
+
+                elif signal=='Fblock':
+                    file_chan1      = os.path.join(plane_folder,'data.bin')
+
+                    resolution      = 32     # dimensions of squares (in number of pixel) that fluorescence is averaged
+                    # Fdata           = np.empty((len(ts_plane),int(512/resolution),int(512/resolution)))
+                    Fdata           = np.empty((len(ts_plane),int(512/resolution),int(512/resolution)))
+
+                    with OldBinaryFile(read_filename=file_chan1,Ly=512, Lx=512) as f1:
+                        # for i,iF in tqdm(enumerate(np.where(protocol_frame_idx_plane)[0])):
+                        sig           = np.empty((int(512/resolution),int(512/resolution),f1.n_frames))
+
+                        # for iF in np.arange(f1.n_frames):
+                        for iF in tqdm(np.arange(f1.n_frames),total=f1.n_frames):
+                            [ind,datagreen]      = f1.read(batch_size=1)
+
+                            sig[:,:,iF]    = block_reduce(np.squeeze(datagreen), block_size=(resolution,resolution), func=np.mean, cval=np.mean(datagreen))
+                    
+                    sig             = np.reshape(sig,(int(512/resolution)*int(512/resolution),-1))
+                    iscell          = np.ones((len(sig),2))
+                    bincenters      = np.arange(0,512,resolution) + resolution/2
+                    xlocs           = np.tile(bincenters,len(bincenters))
+                    ylocs           = np.repeat(bincenters,len(bincenters))
 
                 sig    = sig[:,protocol_frame_idx_plane==1].transpose()
 
-                # For debugging sample only first 20 neurons: 
-                # iscell = iscell[:100,:]
-                # sig = sig[:,:100]
+                # For debugging sample only first x neurons: 
+                # iscell = iscell[:20,:]
+                # sig = sig[:,:20]
                 
                 N               = sig.shape[1]
 
@@ -300,9 +322,12 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                 RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
                 RF_elev = RF_y/xGrid * np.diff(vec_elevation) + vec_elevation[0]
 
-                # np.save(os.path.join(plane_folder,'RF.npy'),np.vstack((RF_azim,RF_elev,RF_size,RF_p)))
-                df = pd.DataFrame(data=np.column_stack((RF_azim,RF_elev,RF_size,RF_p)),columns=['RF_azim','RF_elev','RF_size','RF_p'])
-                np.save(os.path.join(plane_folder,'RF_%s.npy' % signal),df)
+                if signal != 'Fblock':
+                    df = pd.DataFrame(data=np.column_stack((RF_azim,RF_elev,RF_size,RF_p)),columns=['RF_azim','RF_elev','RF_size','RF_p'])
+                    np.save(os.path.join(plane_folder,'RF_%s.npy' % signal),df)
+                else: 
+                    df = pd.DataFrame(data=np.column_stack((RF_azim,RF_elev,RF_size,RF_p,xlocs,ylocs)),columns=['RF_azim','RF_elev','RF_size','RF_p','xloc','yloc'])
+                    np.save(os.path.join(plane_folder,'RF_%s.npy' % signal),df)
 
                 if showFig: 
                     # example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
@@ -343,12 +368,6 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
     return 
 
 
-
-
-
-# example_cells = np.where(iscell==1)[0][50:75]
-# # example_cells = 74
-
 # Tot         = len(example_cells)*2
 # Rows        = int(np.floor(np.sqrt(Tot)))
 # Cols        = Tot // Rows # Compute Rows required
@@ -377,8 +396,6 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
 #     ax.set_title("%d,OFF" % n)
   
 # plt.tight_layout(rect=[0, 0, 1, 1])
-
-
 
 # ### get parameters
 # [xGrid , yGrid , nGrids] = np.shape(grid_array)

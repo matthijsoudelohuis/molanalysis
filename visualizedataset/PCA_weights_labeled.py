@@ -44,6 +44,8 @@ from utils.plotting_style import * #get all the fixed color schemes
 from utils.explorefigs import plot_PCA_gratings,plot_PCA_images
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PCA - Images and gratings\\')
+plt.rcParams['axes.spines.right']   = False
+plt.rcParams['axes.spines.top']     = False
 
 #%% #############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
@@ -96,14 +98,13 @@ areas       = np.array(['V1','PM'])
 labeled     = np.array(['unl','lab'])
 ses.celldata['labeled'] = labeled[ses.celldata['redcell'].astype(int)]
 
-respmat = ses.respmat
+respmat     = ses.respmat
 
-respmat = zscore(respmat,axis=1) # zscore for each neuron across trial responses
+respmat     = zscore(respmat,axis=1) # zscore for each neuron across trial responses
 
 pca         = PCA(n_components=25) #construct PCA object with specified number of components
 Xp          = pca.fit_transform(respmat.T).T #fit pca to response matrix (n_samples by n_features)
 Xc          = pca.components_ #
-#dimensionality is now reduced from N by K to ncomp by K
 
 #%% 
 nPCstoplot  = 5
@@ -115,8 +116,6 @@ for iPC in range(nPCstoplot):
     for iarea,area in enumerate(areas):
         for ilabel,label in enumerate(labeled):
             idx = np.logical_and(ses.celldata['labeled']==label,ses.celldata['roi_name']==area)
-            # ax.scatter(Xc[iPC,idx],Xc[iPC,idx],color=get_clr_area_labeled([area + label]),s=25,alpha=0.8)
-            # ax.hist(Xc[iPC,idx],Xc[iPC,idx],color=get_clr_area_labeled([area + label]),s=25,alpha=0.8)
             sns.histplot(Xc[iPC,idx],color=get_clr_area_labeled([area + label]),linewidth=1,label=area+label,alpha=0.8,
                          element="step",stat="count",fill=False,ax=ax)
             ax.legend(loc='upper right',frameon=False,fontsize=7)
@@ -141,8 +140,8 @@ pca         = PCA(n_components=nPCs) #construct PCA object with specified number
 
 
 #%% Load sessions lazy: 
-sessions,nSessions   = load_sessions(protocol = 'IM',session_list=session_list)
-sessions,nSessions   = filter_sessions(protocols = ['GR','IM','GN'],filter_areas=['V1','PM'])
+# sessions,nSessions   = load_sessions(protocol = 'IM',session_list=session_list)
+sessions,nSessions   = filter_sessions(protocols = ['GR','GN'],filter_areas=['V1','PM'])
 sessions,nSessions   = filter_sessions(protocols = ['IM'],filter_areas=['V1','PM'])
 
 #%% Load proper data and compute PCA weights:                      
@@ -151,6 +150,36 @@ for ises,ses in tqdm(enumerate(sessions),desc='loading sessions and computing PC
     ses.celldata['labeled'] = labeled[ses.celldata['redcell'].astype(int)]
     fit          = pca.fit(zscore(ses.calciumdata,axis=0)) #fit pca to response matrix (n_samples by n_features)
     ses.components = fit.components_ # zscore for each neuron across trial responses
+
+#%% 
+
+#%% 
+sesidx = 4
+ses = sessions[sesidx]
+nPCstoplot  = 4
+
+fig, axes = plt.subplots(1, nPCstoplot, figsize=[nPCstoplot*2, 2], sharey='row')
+
+for iPC in range(nPCstoplot):
+    ax = axes[iPC]
+    for iarea,area in enumerate(areas):
+        for ilabel,label in enumerate(labeled):
+            idx = np.logical_and(ses.celldata['labeled']==label,ses.celldata['roi_name']==area)
+            sns.histplot(ses.components[iPC,idx],color=get_clr_area_labeled([area + label]),linewidth=1,label=area+label,alpha=0.8,
+                         element="step",stat="count",fill=False,ax=ax)
+            ax.legend(loc='upper right',frameon=False,fontsize=6)
+        pval = kstest(ses.components[iPC,np.logical_and(ses.celldata['labeled']==labeled[0],ses.celldata['roi_name']==area)],
+                ses.components[iPC,np.logical_and(ses.celldata['labeled']==labeled[1],ses.celldata['roi_name']==area)])[1]
+        if pval<0.05:
+            ax.text(0.03,50+10*iarea,s='*%s' %(area),fontsize=6)
+    pval = kstest(ses.components[iPC,np.logical_and(ses.celldata['labeled']==labeled[0],ses.celldata['roi_name']==areas[0])],
+                ses.components[iPC,np.logical_and(ses.celldata['labeled']==labeled[0],ses.celldata['roi_name']==areas[1])])[1]
+    if pval<0.05:
+        ax.text(0.03,40,s='*V1-PM',fontsize=6)
+    
+    ax.set_title('PC %s' %(iPC+1))
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'Weight_Distribution_ExampleSession_%s.png' % ses.sessiondata['session_id'][0]),dpi=300)
 
 #%% Perform statistical test (ks test) on PCA weight distribution by area and label:   
 pval_label = np.full((nSessions,25,2),np.nan)
@@ -179,15 +208,17 @@ clrs_areas = get_clr_areas(areas)
 pthr = 0.05
 
 fig,ax = plt.subplots(1,1,figsize=(8,3))
-sns.barplot(data=pd.DataFrame({'PCs':np.tile(range(nPCs),2),'Area':np.repeat(areas, nPCs),'Sig. Freq.':np.mean(pval_label<pthr,axis=0).flatten()}),
+sns.barplot(data=pd.DataFrame({'PCs':np.tile(range(nPCs),2),'Area':np.repeat(areas, nPCs),'Sig. Freq.':np.mean(pval_label<pthr,axis=0).T.flatten()}),
             x='PCs',y='Sig. Freq.',hue='Area',palette=clrs_areas,ax=ax)
-ax.set_ylabel('Fraction session pval < 0.05')
-ax.set_xlabel('PCs')
+ax.set_ylabel('Fraction session pval < %1.2f' % pthr)
+ax.set_xlabel('PC dimensions')
 ax.set_ylim([0,1])
 ax.legend(loc='upper right',frameon=False)
 ax.set_title('KS test labeled vs unlabeled weights')
+ax.axhline(pthr,linestyle='--',color='black')
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'pval_label_%1.2f.png' % pthr),dpi=300)
+# fig.savefig(os.path.join(savedir,'PC Weight distribution','pval_label_%1.2f_GRGN.png' % pthr),dpi=300)
+fig.savefig(os.path.join(savedir,'PC Weight distribution','pval_label_%1.2f_IM.png' % pthr),dpi=300)
 
 #%% A histogram of the fraction of sessions that has a significant pvalue (<0.05) per area per PCs. 
 # On the x-axis is the PC and bars are split based on the area
@@ -195,15 +226,17 @@ pthr = 0.05
 clrs_labeled = get_clr_labeled()
 
 fig,ax = plt.subplots(1,1,figsize=(8,3))
-sns.barplot(data=pd.DataFrame({'PCs':np.tile(range(nPCs),2),'Area':np.repeat(areas, nPCs),'Sig. Freq.':np.mean(pval_area<pthr,axis=0).flatten()}),
-            x='PCs',y='Sig. Freq.',hue='Area',palette=clrs_areas,ax=ax)
-ax.set_ylabel('Fraction session pval < 0.05')
+sns.barplot(data=pd.DataFrame({'PCs':np.tile(range(nPCs),2),'Label':np.repeat(labeled, nPCs),'Sig. Freq.':np.mean(pval_area<pthr,axis=0).T.flatten()}),
+            x='PCs',y='Sig. Freq.',hue='Label',palette=clrs_labeled,ax=ax)
+ax.set_ylabel('Fraction session pval < %1.2f' % pthr)
 ax.set_xlabel('PCs')
 ax.set_ylim([0,1])
 ax.legend(loc='upper right',frameon=False)
-ax.set_title('KS test labeled vs unlabeled weights')
+ax.set_title('KS test V1 vs PM weights')
+ax.axhline(pthr,linestyle='--',color='black')
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'pval_area_%1.2f.png' % pthr),dpi=300)
+# fig.savefig(os.path.join(savedir,'PC Weight distribution','pval_area_%1.2f_GRGN.png' % pthr),dpi=300)
+fig.savefig(os.path.join(savedir,'PC Weight distribution','pval_area_%1.2f_IM.png' % pthr),dpi=300)
 
 #%% Ward Clustering per session:
 
@@ -211,6 +244,7 @@ n_clusters      = 6
 nPCs            = 25
 
 for ises,ses in tqdm(enumerate(sessions),desc='Hierarchical Clustering'):    # iterate over sessions
+# for ises,ses in tqdm(enumerate([sessions[0]]),desc='Hierarchical Clustering'):    # iterate over sessions
 
     ses.celldata['area_labeled']    = ses.celldata['roi_name'] + ses.celldata['labeled']
     area_labeled                    = np.array(['V1unl', 'V1lab', 'PMunl', 'PMlab'], dtype=object)
@@ -218,8 +252,9 @@ for ises,ses in tqdm(enumerate(sessions),desc='Hierarchical Clustering'):    # i
 
     # Assuming `neural_data` is a (neurons x features) array for a session
     # Step 1: Dimensionality Reduction
-    pca = PCA(n_components=nPCs)  # Reduce to 10 components
-    reduced_data = pca.fit_transform(zscore(ses.calciumdata,axis=0).T)
+    pca             = PCA(n_components=nPCs)  # Reduce to 10 components
+    reduced_data    = pca.fit_transform(zscore(ses.calciumdata,axis=0).T)
+    # reduced_data    = pca.fit_transform(ses.respmat.T)
 
     # Step 2: Compute distance matrix for clustering
     distance_matrix = linkage(reduced_data, method='ward')  # Ward's method for hierarchical clustering
@@ -241,17 +276,16 @@ for ises,ses in tqdm(enumerate(sessions),desc='Hierarchical Clustering'):    # i
     hue_orders      = [range(n_clusters),area_labeled]
     projs           = [(0, 1),(2, 3)]
 
+    # Visualize clustering
     fig,axes = plt.subplots(2,2,figsize=(8,8))
     for iproj,proj in enumerate(projs):
         for ipalette,palette in enumerate(palettes):
             ax = axes[iproj,ipalette]
-            sns.scatterplot(x=reduced_data[:, proj[0]], y=reduced_data[:, proj[1]], 
-                            hue=hues[ipalette], hue_order=hue_orders[ipalette], palette=palette,ax = ax)
-            ax.set_title('Ward clustering in PC space')
+            sns.scatterplot(x=reduced_data[:, proj[0]], y=reduced_data[:, proj[1]], size=4,
+                            hue=hues[ipalette], hue_order=hue_orders[ipalette], palette=palette,ax = ax, alpha=1)
             ax.set_xlabel('Principal Component %d' % proj[0])
             ax.set_ylabel('Principal Component %d' % proj[1])
-
-    # Visualize clustering
+    fig.suptitle('Ward clustering in PC space - %s' % ses.sessiondata['session_id'][0])
     plt.tight_layout()
     fig.savefig(os.path.join(savedir,'WardClusters_ScatterPC_Area_Labeled_%s.png' % ses.sessiondata['session_id'][0]),dpi=300)
 
@@ -273,14 +307,16 @@ for ises,ses in tqdm(enumerate(sessions),desc='Hierarchical Clustering'):    # i
     ax.set_xticks(range(n_clusters))
     ax.set_xlabel('Cluster')
     ax.set_ylabel('Fraction of neurons')
+    ax.set_title('Ward cluster overlap - %s' % ses.sessiondata['session_id'][0])
 
     plt.tight_layout()
-    fig.savefig(os.path.join(savedir,'WardCluster_Occupancey_Area_Labeled_%s.png' % ses.sessiondata['session_id'][0]),dpi=300)
-
+    fig.savefig(os.path.join(savedir,'WardClustering','WardCluster_Occupancey_Area_Labeled_%s.png' % ses.sessiondata['session_id'][0]),dpi=300)
 
 
 #%% Estimate the dimensionality by area and label:   
 
+#Results array: dim1: sessions, dim2: areas V1 and PM, dim3, labeled and unlabeled neurons, 
+# dim4: different metrics (0: nNComponents 90%',1: 'Fraction components 90%',2: 'Participation Ratio')
 outmat = np.full((nSessions,2,2,3),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Estimating dimensionality'):    # iterate over sessions
@@ -303,7 +339,7 @@ for ises,ses in tqdm(enumerate(sessions),desc='Estimating dimensionality'):    #
                 pca.fit(X)
                 cumvar = np.cumsum(pca.explained_variance_ratio_)
                 n_components_90 = np.argmax(cumvar>0.9)+1
-                # pval_label[ises,iarea,ilabel,0] = pca.explained_variance_ratio_[0]
+
                 outmat[ises,iarea,ilabel,0] = n_components_90
                 outmat[ises,iarea,ilabel,1] = n_components_90 / X.shape[1]
 
@@ -324,13 +360,15 @@ for im,metric in enumerate(metrics):
 
     fig,ax = plt.subplots(1,1,figsize=(4,3))
     plt.plot([0,1],datamat[:,:2].T)#,color=clrs_area_labeled)
-    ax.text(0.15, np.nanpercentile(datamat[:,:2],80), 'p = %.3f' % ttest_rel(datamat[:,0],datamat[:,1],nan_policy='omit')[1], fontsize=9)
+    t,p  = ttest_rel(datamat[:,0],datamat[:,1],nan_policy='omit')[:2]
+    ax.text(0.25, np.nanpercentile(datamat[:,:2],100), '%s > %s ,\np = %.3f' % (labeled[int(not t>0)],labeled[int(t>0)],p), fontsize=7)
+    t,p  = ttest_rel(datamat[:,2],datamat[:,3],nan_policy='omit')[:2]
     plt.plot([2,3],datamat[:,2:].T)#,color=clrs_area_labeled)
-    ax.text(2.15,  np.nanpercentile(datamat[:,:2],80), 'p = %.3f' % ttest_rel(datamat[:,2],datamat[:,3],nan_policy='omit')[1], fontsize=9)
+    ax.text(2.25,  np.nanpercentile(datamat[:,:2],100), '%s > %s ,\np = %.3f' % (labeled[int(not t>0)],labeled[int(t>0)],p), fontsize=7)
 
     ax.set_ylabel('%s' % metric)
     ax.set_xticks(range(4),labels=area_labeled)
     ax.set_title('%s per area and label' % metric)
     plt.tight_layout()
-    plt.savefig(os.path.join(savedir,'Dimensionality_%s.png' % metric), format = 'png')
-
+    # plt.savefig(os.path.join(savedir,'Dimensionality_IM_%s.png' % metric), format = 'png')
+    plt.savefig(os.path.join(savedir,'Dimensionality','Dimensionality_GRGN_%s.png' % metric), format = 'png')

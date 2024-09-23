@@ -233,6 +233,16 @@ def exclude_outlier_rf(sessions,rf_thr_V1=25,rf_thr_PM=50):
 
     return sessions
 
+def exclude_outlier_rf(sessions,sig_thr=0.001):
+    # Set Fsmooth indicees of good fit receptive field neurons to their F-based estimates
+
+    for ses in sessions:
+        if 'rf_az_F' in ses.celldata and 'rf_az_Fsmooth' in ses.celldata:
+            idx = ses.celldata['rf_p_F'] < sig_thr
+            ses.celldata.loc[idx,'rf_az_Fsmooth'] = ses.celldata.loc[idx,'rf_az_F']
+            ses.celldata.loc[idx,'rf_el_Fsmooth'] = ses.celldata.loc[idx,'rf_el_F']
+
+    return sessions
 # def exclude_outlier_rf(sessions,sig_thr=0.001,radius=100,rf_thr=25,mincellsFneu=10):
 #     # Filter out neurons with receptive fields that are too far from the local neuropil receptive field:
 #     #radius specifies cortical distance of neuropil to include for local rf center

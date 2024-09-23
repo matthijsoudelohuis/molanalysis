@@ -68,6 +68,18 @@ def get_clr_area_labelpairs(area_labelpairs):
     
     return itemgetter(*area_labelpairs)(palette)
 
+def get_clr_layerpairs(pairs):
+    palette       = {'L2/3-L2/3': sns.xkcd_rgb['teal'],
+        'L2/3-L4': sns.xkcd_rgb['neon blue'],
+        'L2/3-L5': sns.xkcd_rgb['lilac'],
+        'L4-L2/3': sns.xkcd_rgb['peach'],
+        'L4-L4': sns.xkcd_rgb['powder blue'],
+        'L4-L5': sns.xkcd_rgb['navy'],
+        'L5-L2/3': sns.xkcd_rgb['deep purple'],
+        'L5-L4': sns.xkcd_rgb['light grey'],
+        'L5-L5': sns.xkcd_rgb['slate grey']}
+    return itemgetter(*pairs)(palette)
+
 def get_clr_recombinase(enzymes):
     palette       = {'non': 'gray',
         'cre' : 'orangered',
