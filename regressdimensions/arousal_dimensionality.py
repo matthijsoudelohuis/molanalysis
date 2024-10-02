@@ -26,6 +26,16 @@ from scipy import linalg
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Arousal\\')
 
+
+
+# For multiplicative noise, the variability in the firing rate is still described by
+# equation 2.1, but the covariance matrix is scaled by the average Žring rates,
+# Qij.x/ D ¾2[±ij C c.1 ¡ ±ij/] fi.x/ fj.x/ : (2.3)
+# This produces variances that increase as a function of Žring rate and larger
+# correlations for neurons with overlapping tuning curves, as seen in the data
+# (Lee et al., 1998). From Umakantha et al. 2021. 
+# Is gain modulation or multiplicative *shared noise. 
+
 ##############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
 # session_list        = np.array([['LPE10885','2023_10_19']])

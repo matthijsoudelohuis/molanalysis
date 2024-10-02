@@ -28,46 +28,46 @@ def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
     vars            = ['rf_az_' + rf_type,'rf_el_' + rf_type]
 
     fig,axes        = plt.subplots(2,len(areas),figsize=(5*len(areas),10))
+    if 'rf_az_' + rf_type in celldata:
+        for i in range(len(vars)): #for azimuth and elevation
+            for j in range(len(areas)): #for areas
+                
+                idx_area    = celldata['roi_name']==areas[j]
+                idx_sig     = celldata['rf_p_' + rf_type] < sig_thr
+                idx         = np.logical_and(idx_area,idx_sig)
+                if np.any(celldata[idx][vars[i]]):
+                    if vars[i]=='rf_az_' + rf_type:
+                        sns.scatterplot(data = celldata[idx],x='yloc',y='xloc',hue_norm=(-135,135),
+                                    hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
+                    elif vars[i]=='rf_el_' + rf_type:
+                        sns.scatterplot(data = celldata[idx],x='yloc',y='xloc',hue_norm=(-16.7,50.2),
+                                    hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
 
-    for i in range(len(vars)): #for azimuth and elevation
-        for j in range(len(areas)): #for areas
-            
-            idx_area    = celldata['roi_name']==areas[j]
-            idx_sig     = celldata['rf_p_' + rf_type] < sig_thr
-            idx         = np.logical_and(idx_area,idx_sig)
-            if np.any(celldata[idx][vars[i]]):
+                box = axes[i,j].get_position()
+                axes[i,j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
+                axes[i,j].set_xlabel('')
+                axes[i,j].set_ylabel('')
+                axes[i,j].set_xticks([])
+                axes[i,j].set_yticks([])
+                axes[i,j].set_xlim([0,512])
+                axes[i,j].set_ylim([0,512])
+                axes[i,j].set_title(areas[j] + ' - ' + vars[i],fontsize=15)
+                axes[i,j].set_facecolor("black")
+                axes[i,j].invert_yaxis()
+
                 if vars[i]=='rf_az_' + rf_type:
-                    sns.scatterplot(data = celldata[idx],x='yloc',y='xloc',hue_norm=(-135,135),
-                                hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
+                    norm = plt.Normalize(-135,135)
                 elif vars[i]=='rf_el_' + rf_type:
-                    sns.scatterplot(data = celldata[idx],x='yloc',y='xloc',hue_norm=(-16.7,50.2),
-                                hue=vars[i],ax=axes[i,j],palette='gist_rainbow',size=9,edgecolor="none")
+                    norm = plt.Normalize(-16.7,50.2)
+                sm = plt.cm.ScalarMappable(cmap="gist_rainbow", norm=norm)
+                sm.set_array([])
 
-            box = axes[i,j].get_position()
-            axes[i,j].set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
-            axes[i,j].set_xlabel('')
-            axes[i,j].set_ylabel('')
-            axes[i,j].set_xticks([])
-            axes[i,j].set_yticks([])
-            axes[i,j].set_xlim([0,512])
-            axes[i,j].set_ylim([0,512])
-            axes[i,j].set_title(areas[j] + ' - ' + vars[i],fontsize=15)
-            axes[i,j].set_facecolor("black")
-            axes[i,j].invert_yaxis()
-
-            if vars[i]=='rf_az_' + rf_type:
-                norm = plt.Normalize(-135,135)
-            elif vars[i]=='rf_el_' + rf_type:
-                norm = plt.Normalize(-16.7,50.2)
-            sm = plt.cm.ScalarMappable(cmap="gist_rainbow", norm=norm)
-            sm.set_array([])
-
-            if np.any(celldata[idx][vars[i]]):
-                axes[i,j].get_legend().remove()
-                # Remove the legend and add a colorbar (optional)
-                axes[i,j].figure.colorbar(sm,ax=axes[i,j],pad=0.02,label=vars[i])
-    plt.suptitle(celldata['session_id'][0])
-    plt.tight_layout()
+                if np.any(celldata[idx][vars[i]]):
+                    axes[i,j].get_legend().remove()
+                    # Remove the legend and add a colorbar (optional)
+                    axes[i,j].figure.colorbar(sm,ax=axes[i,j],pad=0.02,label=vars[i])
+        plt.suptitle(celldata['session_id'][0])
+        plt.tight_layout()
 
     return fig
 
@@ -206,10 +206,8 @@ def smooth_rf(sessions,sig_thr=0.001,radius=50,mincellsFneu=10,rf_type='Fneu'):
 
                     ses.celldata.loc[iN,'rf_az_Fsmooth']    = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_' + rf_type])
                     ses.celldata.loc[iN,'rf_el_Fsmooth']    = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_' + rf_type])
-                    ses.celldata.loc[iN,'rf_p_Fsmooth']           = 0
-                    # ses.celldata.loc[iN,'rf_az_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
-                    # ses.celldata.loc[iN,'rf_el_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
-                    # ses.celldata.loc[iN,'rf_p_F']           = 0.0009
+                    ses.celldata.loc[iN,'rf_p_Fsmooth']     = 0
+
     return sessions
 
 def exclude_outlier_rf(sessions,rf_thr_V1=25,rf_thr_PM=50):
@@ -233,9 +231,9 @@ def exclude_outlier_rf(sessions,rf_thr_V1=25,rf_thr_PM=50):
 
     return sessions
 
-def exclude_outlier_rf(sessions,sig_thr=0.001):
-    # Set Fsmooth indicees of good fit receptive field neurons to their F-based estimates
-
+def replace_smooth_with_Fsig(sessions,sig_thr=0.001):
+    # Find indices of good fit receptive field neurons 
+    # replace Fsmooth receptive fields to their F-based estimates
     for ses in sessions:
         if 'rf_az_F' in ses.celldata and 'rf_az_Fsmooth' in ses.celldata:
             idx = ses.celldata['rf_p_F'] < sig_thr
@@ -243,6 +241,7 @@ def exclude_outlier_rf(sessions,sig_thr=0.001):
             ses.celldata.loc[idx,'rf_el_Fsmooth'] = ses.celldata.loc[idx,'rf_el_F']
 
     return sessions
+    
 # def exclude_outlier_rf(sessions,sig_thr=0.001,radius=100,rf_thr=25,mincellsFneu=10):
 #     # Filter out neurons with receptive fields that are too far from the local neuropil receptive field:
 #     #radius specifies cortical distance of neuropil to include for local rf center

@@ -145,7 +145,7 @@ def proc_RF(rawdatadir,sessiondata):
 
     return grid_array,RF_timestamps
 
-def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],showFig=True):
+def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],showFig=True,savemaps=False):
     if isinstance(signals, str):
         signals =  [signals]
 
@@ -365,6 +365,10 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                         
                         plt.tight_layout(rect=[0, 0, 1, 1])
                         fig.savefig(os.path.join(plane_folder,'RF_Plane%d_%s.jpg' % (iplane,signal)),dpi=600)
+
+                if savemaps:
+                    np.savez(os.path.join(plane_folder,'RF_%s_pmaps.npz' % signal),name1=rfmaps_on_p_filt,name2=rfmaps_off_p_filt)
+
     return 
 
 

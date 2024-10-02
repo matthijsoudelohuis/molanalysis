@@ -38,7 +38,8 @@ session_list        = np.array([['LPE09665','2023_03_21'], #GR
 sessions,nSessions = load_sessions(protocol = 'GR',session_list=session_list)
 sessions,nSessions = load_sessions(protocol = 'SP',session_list=session_list)
 
-# sessions,nSessions = filter_sessions(protocols = ['GR'],only_animal_id=['LPE09665','LPE09830'],session_rf=True)
+sessions,nSessions = filter_sessions(protocols = ['SP'],only_animal_id=['LPE09665', 'LPE09830',
+                                                        'LPE11495', 'LPE11998', 'LPE12013'],session_rf=True,filter_areas=['V1','PM'])
 # # sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
 sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,filter_areas=['V1','PM'])
@@ -48,7 +49,7 @@ sig_thr = 0.001 #cumulative significance of receptive fields clusters
 #%% Interpolation of receptive fields:
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-sessions = smooth_rf(sessions,sig_thr=0.0001,radius=75,rf_type='Fneu')
+sessions = smooth_rf(sessions,sig_thr=0.001,radius=75,rf_type='Fneu')
 
 sessions = exclude_outlier_rf(sessions) 
 
@@ -60,12 +61,14 @@ fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_IMincluded' 
 
 #%% ##################### Retinotopic mapping within V1 and PM #####################
 rf_type = 'Fneu'
-# rf_type = 'Favg'
-rf_type = 'Fsmooth'
+rf_type = 'Favg'
+# rf_type = 'Fsmooth'
 # rf_type = 'F'
 # rf_type = 'Fsmooth'
+# rf_type = 'Fblock'
 sig_thr=0.001
-for ises in range(nSessions):
+# for ises in range(nSessions):
+for ises in [5]:
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     # fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 

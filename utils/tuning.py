@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
+import copy
 
 from scipy.stats import ttest_ind,ttest_1samp
 from scipy.stats import wilcoxon
@@ -14,35 +15,52 @@ def mean_resp_image(ses):
         respmean[:,im] = np.mean(ses.respmat[:,ses.trialdata['ImageNumber']==imid],axis=1)
     return respmean,imageids
 
-def mean_resp_gr(ses):
+def mean_resp_gr(ses,filter_stationary=True):
+
+    data        = copy.deepcopy(ses.respmat)
+    trial_ori   = ses.trialdata['Orientation']
+
+    if filter_stationary:
+        data        = data[:,ses.respmat_runspeed<2]
+        trial_ori   = trial_ori[ses.respmat_runspeed<2]
 
     # get signal correlations:
-    [N,K]           = np.shape(ses.respmat) #get dimensions of response matrix
+    [N,K]           = np.shape(data) #get dimensions of response matrix
 
-    oris            = np.sort(ses.trialdata['Orientation'].unique())
+    oris            = np.sort(trial_ori.unique())
     ori_counts      = ses.trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
     assert(len(ori_counts) == 16 or len(ori_counts) == 8)
     resp_meanori    = np.empty([N,len(oris)])
 
     for i,ori in enumerate(oris):
-        resp_meanori[:,i] = np.nanmean(ses.respmat[:,ses.trialdata['Orientation']==ori],axis=1)
-
-    respmat_res                     = ses.respmat.copy()
+        resp_meanori[:,i] = np.nanmean(data[:,trial_ori==ori],axis=1)
+    
+    respmat_res                     = data.copy()
 
     ## Compute residuals:
     for ori in oris:
-        ori_idx     = np.where(ses.trialdata['Orientation']==ori)[0]
+        ori_idx     = np.where(trial_ori==ori)[0]
         temp        = np.mean(respmat_res[:,ori_idx],axis=1)
         respmat_res[:,ori_idx] = respmat_res[:,ori_idx] - np.repeat(temp[:, np.newaxis], len(ori_idx), axis=1)
 
     return resp_meanori,respmat_res
 
-def mean_resp_gn(ses):
-    # get signal correlations:
-    [N,K]           = np.shape(ses.respmat) #get dimensions of response matrix
+def mean_resp_gn(ses,filter_stationary=True):
 
-    oris            = np.sort(pd.Series.unique(ses.trialdata['centerOrientation'])).astype('int')
-    speeds          = np.sort(pd.Series.unique(ses.trialdata['centerSpeed'])).astype('int')
+    data        = copy.deepcopy(ses.respmat)
+    trial_ori   = ses.trialdata['centerOrientation']
+    trial_spd   = ses.trialdata['centerSpeed']
+
+    if filter_stationary:
+        data        = data[:,ses.respmat_runspeed<2]
+        trial_ori   = trial_ori[ses.respmat_runspeed<2]
+        trial_spd   = trial_spd[ses.respmat_runspeed<2]
+
+    # get signal correlations:
+    [N,K]           = np.shape(data) #get dimensions of response matrix
+
+    oris            = np.sort(pd.Series.unique(trial_ori)).astype('int')
+    speeds          = np.sort(pd.Series.unique(trial_spd)).astype('int')
     noris           = len(oris) 
     nspeeds         = len(speeds)
 
@@ -52,16 +70,16 @@ def mean_resp_gn(ses):
     for iO,ori in enumerate(oris):
         for iS,speed in enumerate(speeds):
             
-            idx_trial = np.logical_and(ses.trialdata['centerOrientation']==ori,ses.trialdata['centerSpeed']==speed)
-            resp_mean[:,iO,iS] = np.nanmean(ses.respmat[:,idx_trial],axis=1)
+            idx_trial = np.logical_and(trial_ori==ori,trial_spd==speed)
+            resp_mean[:,iO,iS] = np.nanmean(data[:,idx_trial],axis=1)
 
     ## Compute residual response:
-    respmat_res = ses.respmat.copy()
+    respmat_res = data.copy()
     for iO,ori in enumerate(oris):
         for iS,speed in enumerate(speeds):
             
-            idx_trial = np.logical_and(ses.trialdata['centerOrientation']==ori,ses.trialdata['centerSpeed']==speed)
-            tempmean = np.nanmean(ses.respmat[:,idx_trial],axis=1)
+            idx_trial = np.logical_and(trial_ori==ori,trial_spd==speed)
+            tempmean = np.nanmean(data[:,idx_trial],axis=1)
             respmat_res[:,idx_trial] -= tempmean[:,np.newaxis]
 
     return resp_mean,respmat_res

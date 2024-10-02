@@ -24,7 +24,8 @@ def get_clr_area_pairs(areapairs):
     palette       = {'V1-V1'  : sns.xkcd_rgb['seaweed'],
                     'PM-V1' : sns.xkcd_rgb['peacock blue'],
                     'V1-PM' : sns.xkcd_rgb['orangered'],
-                    'PM-PM' : sns.xkcd_rgb['barney']}
+                    'PM-PM' : sns.xkcd_rgb['barney'],
+                    ' ' : sns.xkcd_rgb['black']}
     return itemgetter(*areapairs)(palette)
 
 def get_clr_labeled():
@@ -35,7 +36,8 @@ def get_clr_labelpairs(pairs):
     palette       = {'unl-unl': sns.xkcd_rgb['grey'],
         'unl-lab' : sns.xkcd_rgb['rose'],
         'lab-unl' : sns.xkcd_rgb['orange'],
-        'lab-lab' : sns.xkcd_rgb['red']}
+        'lab-lab' : sns.xkcd_rgb['red'],
+        ' ' : sns.xkcd_rgb['black']}
     # palette       = {'0-0': sns.xkcd_rgb['grey'],
     #     '0-1' : sns.xkcd_rgb['rose'],
     #     '1-0' : sns.xkcd_rgb['rose'],
@@ -77,7 +79,8 @@ def get_clr_layerpairs(pairs):
         'L4-L5': sns.xkcd_rgb['navy'],
         'L5-L2/3': sns.xkcd_rgb['deep purple'],
         'L5-L4': sns.xkcd_rgb['light grey'],
-        'L5-L5': sns.xkcd_rgb['slate grey']}
+        'L5-L5': sns.xkcd_rgb['slate grey'],
+        ' ' : sns.xkcd_rgb['black']}
     return itemgetter(*pairs)(palette)
 
 def get_clr_recombinase(enzymes):

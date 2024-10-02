@@ -759,6 +759,26 @@ def proc_imaging(sesfolder, sessiondata):
             celldata_plane['rf_sz_Favg']   = RF_Favg[:,2]
             celldata_plane['rf_p_Favg']    = RF_Favg[:,3]
 
+        if os.path.exists(os.path.join(plane_folder, 'RF_Fblock.npy')):
+            RF_Fblock = np.load(os.path.join(plane_folder, 'RF_Fblock.npy'))
+            assert(np.shape(RF_Fblock)==(256,6)), 'problem with dimensions of Fblock'
+            # RF_Fblock[:,1] = RF_Fblock[:,1] 
+            # vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
+
+            distblock = np.sqrt((celldata_plane['xloc'].to_numpy()[:,None] - RF_Fblock[:,5][None,:])**2 + 
+                                (celldata_plane['yloc'].to_numpy()[:,None] - RF_Fblock[:,4][None,:])**2)
+            celldata_plane['rf_az_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),0]
+            celldata_plane['rf_el_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),1]
+            celldata_plane['rf_sz_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),2]
+            celldata_plane['rf_p_Fblock']    = RF_Fblock[np.argmin(distblock,axis=1),3]
+            
+            # import matplotlib.pyplot as plt
+            # fig,axes = plt.subplots(1,2,figsize=(8,4))
+            # axes[0].scatter(celldata_plane['rf_az_Fblock'] ,celldata_plane['rf_az_Fneu'],alpha=0.5)
+            # axes[0].plot([-135,135],[-135,135],linestyle=':',linewidth=1,c='k')
+            # axes[1].scatter(celldata_plane['rf_el_Fblock'] ,celldata_plane['rf_el_Fneu'],alpha=0.5)
+            # axes[1].plot([-16.7,50.2],[-16.7,50.2],linestyle=':',linewidth=1,c='k')
+         
         ##################### load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
         F_chan2             = np.load(os.path.join(plane_folder, 'F_chan2.npy'), allow_pickle=True)
