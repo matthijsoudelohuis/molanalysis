@@ -19,12 +19,15 @@ animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
 # animal_ids          = ['LPE11495','LPE09665','LPE09830'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_02_20','2024_02_21  ','2024_02_22','2024_02_23','2024_02_26','2024_02_27']
-# date_filter        = ['2023_04_10']
-animal_ids          = ['LPE09665', 'LPE11495', 'LPE11998', 'LPE12013'] #If empty than all animals in folder will be processed
-# animal_ids          = ['LPE09830'] #If empty than all animals in folder will be processed
+# date_filter        = ['2024_05_07']
+# animal_ids          = ['LPE09665', 'LPE11495', 'LPE11998', 'LPE12013'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE11998'] #If empty than all animals in folder will be processed
 
-protocols           = ['GR','SP','IM','GN','RF']
-protocols           = ['SP']
+# animal_ids          = ['LPE12013'] #If empty than all animals in folder will be processed
+date_filter         = ['2024_05_10']
+
+# protocols           = ['GR','SP','GN','RF']
+protocols           = ['GR']
 # protocols           = ['DP','DM','DN']
 
 processimagingflag  = True
@@ -96,7 +99,23 @@ for animal_id in animal_ids: #for each animal
                         print('\nSaving imaging data\n')
                         dFdata.to_csv(os.path.join(outdir,"dFdata.csv"), sep=',')
                         deconvdata.to_csv(os.path.join(outdir,"deconvdata.csv"), sep=',')
-                
+
+                    # suite2p_folder = os.path.join(sesfolder,"suite2p")
+                    # plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
+                    # RF_F_pmaps_on = np.empty((13,52,0))
+                    # RF_F_pmaps_off = np.empty((13,52,0))
+                    # for iplane,plane_folder in enumerate(plane_folders):
+                    #     print('processing plane %s / %s' % (iplane+1,8))
+                    #     iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
+                    #     temp                = np.load(os.path.join(plane_folder, 'RF_F_pmaps.npz'), mmap_mode='r')
+                    #     RF_F_pmaps_on = np.concatenate((RF_F_pmaps_on,temp['name1'][:,:,iscell[:,0]==1]), axis=2)
+                    #     RF_F_pmaps_off = np.concatenate((RF_F_pmaps_off,temp['name2'][:,:,iscell[:,0]==1]), axis=2)
+                    # assert(RF_F_pmaps_on.shape[2]==RF_F_pmaps_off.shape[2])
+                    # assert(RF_F_pmaps_on.shape[2]==len(celldata))
+                    # np.save(os.path.join(outdir,"RF_F_pmaps_on.npy"),RF_F_pmaps_on)
+                    # np.save(os.path.join(outdir,"RF_F_pmaps_off.npy"),RF_F_pmaps_off)
+
+
                 # Save data:
                 if savedataflag:
                     sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')

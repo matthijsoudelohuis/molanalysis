@@ -18,6 +18,9 @@ from scipy import ndimage
 from scipy.stats import combine_pvalues #Fisher's method to combine significance of multiple p-values
 from skimage.measure import block_reduce
 from tqdm import tqdm
+from scipy.ndimage import gaussian_filter
+from scipy.optimize import curve_fit
+from sklearn.metrics import r2_score
 
 from preprocessing.preprocesslib import align_timestamps
 from run_suite2p.oldbinary import OldBinaryFile
@@ -26,10 +29,57 @@ from run_suite2p.oldbinary import OldBinaryFile
 vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
 vec_azimuth         = [-135,135] #left and right of screen displays
 
-t_resp_start        = 0.1        #pre s
-t_resp_stop         = 0.6      #post s #this one is updated based on protocol of 5 or 10 degrees
-t_base_start        = -2       #pre s
+t_resp_start        = 0      #pre s
+t_resp_stop         = 1.1      #post s #this one is updated based on protocol of 5 or 10 degrees
+t_base_start        = -5       #pre s
 t_base_stop         = 0        #post s
+
+
+
+
+# Define the 2D Gaussian function
+def gaussian_2d(xy, x0, y0, sigma_x, sigma_y, amplitude, offset):
+    x, y = xy
+    exp_term = np.exp(-(((x - x0) ** 2) / (2 * sigma_x ** 2) + ((y - y0) ** 2) / (2 * sigma_y ** 2)))
+    return offset + amplitude * exp_term
+
+# Flatten the 2D data for curve fitting
+def flatten_data(x, y, z):
+    return (x.ravel(), y.ravel()), z.ravel()
+
+# Main function to run the fit and output results
+def fit_2d_gaussian(data):
+    x = np.arange(np.shape(data)[1])
+    y = np.arange(np.shape(data)[0])
+    x, y = np.meshgrid(x, y)
+
+    # Fit the Gaussian
+    (x_flat, y_flat), z_flat = flatten_data(x, y, data)
+    # popt, pcov = fit_gaussian_2d(x_flat, y_flat, z_flat)
+
+    idx = np.unravel_index(np.argmax(data), data.shape)
+    initial_guess = (idx[1], idx[0], 1, 1, 0.25, 1)  # Initial guess for the parameters
+    # popt, pcov = curve_fit(gaussian_2d, (x_flat, y_flat), z_flat, p0=initial_guess)
+    bounds = ([0, 0, 0, 0, 0, 0], [np.shape(data)[1], np.shape(data)[0], np.inf, np.inf, 1, np.inf])  # Set bounds for each parameter
+    popt, pcov = curve_fit(gaussian_2d, (x_flat, y_flat), z_flat, p0=initial_guess, bounds=bounds)
+    
+    # Extract fitting parameters
+    x0, y0, sigma_x, sigma_y, amplitude, offset = popt
+    center = (x0, y0)
+    covariance_matrix = np.array([[sigma_x**2, 0], [0, sigma_y**2]])
+    
+    # Compute quality of fit (R² score)
+    z_fit = gaussian_2d((x_flat, y_flat), *popt).reshape(x.shape)
+    
+    r2 = r2_score(data.flatten(), z_fit.flatten())
+    
+    # # Output the results
+    # print(f"Center (x, y): {center}")
+    # print(f"Covariance matrix:\n{covariance_matrix}")
+    # print(f"R² score (quality of fit): {r2}")
+    
+    return popt,pcov,r2,z_fit
+
 
 def find_largest_cluster(array_p,minblocks=2,pthr=0.05): #filters clusters of adjacent significant blocks
     # minblocks   = minimum number of adjacent blocks with significant response
@@ -145,7 +195,8 @@ def proc_RF(rawdatadir,sessiondata):
 
     return grid_array,RF_timestamps
 
-def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],showFig=True,savemaps=False):
+def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],
+                        showFig=True,savemaps=False,method='ttest'):
     if isinstance(signals, str):
         signals =  [signals]
 
@@ -177,9 +228,9 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
         ### get parameters
         [xGrid , yGrid , nGrids] = np.shape(grid_array)
         
-        t_resp_stop         = np.diff(RF_timestamps).mean() + 0.1
+        t_resp_stop         = np.diff(RF_timestamps).mean() + 0.3
         
-        # for iplane,plane_folder in enumerate(plane_folders):
+        # for iplane,plane_folder in enumerate([plane_folders[4]]):
         for iplane,plane_folder in enumerate(plane_folders):
             print('\n Processing plane %s / %s \n' % (iplane+1,ops['nplanes']))
             for signal in signals:
@@ -239,137 +290,589 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],show
                 sig    = sig[:,protocol_frame_idx_plane==1].transpose()
 
                 # For debugging sample only first x neurons: 
-                # iscell = iscell[:20,:]
-                # sig = sig[:,:20]
-                
+                # iscell      = iscell[:20,:]
+                # sig         = sig[:,:20]
+
                 N               = sig.shape[1]
+                respmat         = np.empty((N,nGrids))
 
-                rfmaps_on       = np.empty([xGrid,yGrid,N])
-                rfmaps_off       = np.empty([xGrid,yGrid,N])
+                for g in range(nGrids):
+                    temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
+                    resp = np.mean(sig[temp,:],axis=0)
+                    temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
+                    base = np.mean(sig[temp,:],axis=0)
+                
+                    respmat[:,g] = resp-base
 
-                rfmaps_on_p      = np.empty([xGrid,yGrid,N])
-                rfmaps_off_p     = np.empty([xGrid,yGrid,N])
+                respmat[respmat<0] = 0
 
-                for n in range(N):
-                    print(f"\rComputing RF on {signal} for neuron {n+1} / {N}",end='\r')
-                    resps = np.empty(nGrids)
-                    for g in range(nGrids):
+                if method=='ttest':
 
-                        temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
-                        resp = sig[temp,n].mean()
-                        temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
-                        base = sig[temp,n].mean()
-                    
-                        resps[g] = np.max([resp-base,0])
-                        # resps[g] = resp-base
+                    rfmaps_on_p      = np.empty([xGrid,yGrid,N])
+                    rfmaps_off_p     = np.empty([xGrid,yGrid,N])
 
-                    for i in range(xGrid):
-                        for j in range(yGrid):
-                            rfmaps_on[i,j,n] = np.mean(resps[grid_array[i,j,:]==1])
-                            rfmaps_off[i,j,n] = np.mean(resps[grid_array[i,j,:]==-1])
+                    for n in range(N):
+                        print(f"\rComputing RF on {signal} for neuron {n+1} / {N}",end='\r')
+                        # resps = np.empty(nGrids)
+                        # for g in range(nGrids):
+
+                        #     temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
+                        #     resp = sig[temp,n].mean()
+                        #     temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
+                        #     base = sig[temp,n].mean()
+                        
+                        #     resps[g] = np.max([resp-base,0])
+                        #     # resps[g] = resp-base
+
+                        resps = respmat[n,:]
+                        for i in range(xGrid):
+                            for j in range(yGrid):
+
+                                # rfmaps_on[i,j,n] = np.mean(resps[grid_array[i,j,:]==1])
+                                # rfmaps_off[i,j,n] = np.mean(resps[grid_array[i,j,:]==-1])
+                                
+                                rfmaps_on_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
+                                rfmaps_off_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+
+                    RF_x            = np.empty(N)
+                    RF_y            = np.empty(N)
+                    RF_size         = np.empty(N)
+                    RF_p            = np.ones(N)
+
+                    rfmaps_on_p_filt  = rfmaps_on_p.copy() #this is only for visualization purposes
+                    rfmaps_off_p_filt = rfmaps_off_p.copy()
+
+                    for n in range(N):
+
+                        clusters_on,clusters_on_p     = find_largest_cluster(rfmaps_on_p[:,:,n],minblocks=2,pthr=0.2)
+                        clusters_off,clusters_off_p    = find_largest_cluster(rfmaps_off_p[:,:,n],minblocks=2,pthr=0.2)
+                        
+                        #temporary calc of center of mass for each separately:
+                        #if far apart then ignore this RF fit:
+                        if np.shape(grid_array)[0] == 13:
+                            blockdeg        = 5.16
+                        elif np.shape(grid_array)[0] == 7:
+                            blockdeg        = 10.38
+
+                        RF_x_on,RF_y_on     = com_clusters(clusters_on,blockdeg=blockdeg)[:2]
+                        RF_x_off,RF_y_off   = com_clusters(clusters_off,blockdeg=blockdeg)[:2]
+                        
+                        deltaRF = math.sqrt(sum((px - qx) ** 2.0 for px, qx in zip((RF_x_on,RF_y_on), (RF_x_off,RF_y_off))))
+                        deltaRF *= blockdeg
+                        if deltaRF > 50:
+                            clusters_on = clusters_off = np.tile(False,(xGrid,yGrid))
+                            clusters_on_p = clusters_off_p = 1
+
+                        rfmaps_on_p_filt[~clusters_on,n]    = 1 #set to 1 for all noncluster p values
+                        rfmaps_off_p_filt[~clusters_off,n]  = 1
+                        
+                        clusters        = np.logical_or(clusters_on,clusters_off)
+                        
+                        RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters,blockdeg)
+                        # RF_p[n] = np.nansum((clusters_on_p,clusters_off_p))
+                        RF_p[n] = combine_pvalues((clusters_on_p,clusters_off_p))[1] #get combined p-value, Fisher's test
+
+                    #convert x and y values in grid space to azimuth and elevation:
+                    RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
+                    RF_elev = RF_y/xGrid * np.diff(vec_elevation) + vec_elevation[0]
+
+                    if signal != 'Fblock':
+                        df = pd.DataFrame(data=np.column_stack((RF_azim,RF_elev,RF_size,RF_p)),columns=['RF_azim','RF_elev','RF_size','RF_p'])
+                        np.save(os.path.join(plane_folder,'RF_%s.npy' % signal),df)
+                    else:
+                        df = pd.DataFrame(data=np.column_stack((RF_azim,RF_elev,RF_size,RF_p,xlocs,ylocs)),columns=['RF_azim','RF_elev','RF_size','RF_p','xloc','yloc'])
+                        np.save(os.path.join(plane_folder,'RF_%s.npy' % signal),df)
+
+                    if showFig: 
+                        # example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
+                        example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_p<0.001))[0][:20] #get first twenty good cells
+
+                        Tot         = len(example_cells)
+                        if Tot: 
+                            Rows        = int(np.floor(np.sqrt(Tot)))
+                            Cols        = Tot // Rows # Compute Rows required
+                            if Tot % Rows != 0: #If one additional row is necessary -> add one:
+                                Cols += 1
+                            Position = range(1,Tot + 1) # Create a Position index
+
+                            fig = plt.figure(figsize=[18, 9])
+                            for i,n in enumerate(example_cells):
+                                # add every single subplot to the figure with a for loop
+                                ax = fig.add_subplot(Rows,Cols,Position[i])
+
+                                data = np.ones((xGrid,yGrid,3))
+
+                                R = np.divide(-np.log10(rfmaps_on_p_filt[:,:,n]),-np.log10(0.000001)) #red intensity
+                                B = np.divide(-np.log10(rfmaps_off_p_filt[:,:,n]),-np.log10(0.000001)) #blue intenstiy
+                                data[:,:,0] = 1 - B #red intensity is one minus blue
+                                data[:,:,1] = 1 - B - R #green channel is one minus blue and red
+                                data[:,:,2] = 1 - R #blue channel is one minus red
+
+                                data[data<0] = 0 #lower trim to zero
+
+                                ax.imshow(data)
+                                ax.scatter(RF_x[n],RF_y[n],marker='+',c='k',s=35) #show RF center location
+                                ax.set_xticks([])
+                                ax.set_yticks([])
+                                ax.set_aspect('auto')
+                                ax.set_title("%d" % n)
                             
-                            # rfmaps_on_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
-                            # rfmaps_off_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+                            plt.tight_layout(rect=[0, 0, 1, 1])
+                            fig.savefig(os.path.join(plane_folder,'RF_Plane%d_%s.jpg' % (iplane,signal)),dpi=600)
 
-                            rfmaps_on_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
-                            rfmaps_off_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+                    if savemaps:
+                        np.savez(os.path.join(plane_folder,'RF_%s_pmaps.npz' % signal),name1=rfmaps_on_p_filt,name2=rfmaps_off_p_filt)
+                
+                elif method == '2dgauss':
+                    signal_name = signal + 'gauss'
 
-                RF_x            = np.empty(N)
-                RF_y            = np.empty(N)
-                RF_size         = np.empty(N)
-                RF_p            = np.ones(N)
+                    rfmaps          = np.empty([xGrid,yGrid,N])
 
-                rfmaps_on_p_filt  = rfmaps_on_p.copy() #this is only for visualization purposes
-                rfmaps_off_p_filt = rfmaps_off_p.copy()
+                    for n in range(N):
+                        print(f"\rComputing gaussian RF on {signal} for neuron {n+1} / {N}",end='\r')
+                        rfmaps[:,:,n] = np.average(np.abs(grid_array), axis=2, weights=(respmat[n,:] / respmat[n,:].sum()))
+                        
+                        gaussian_sigma = 1
 
-                for n in range(N):
+                    for n in range(N):
+                        rfmaps[:,:,n]  = gaussian_filter(rfmaps[:,:,n],sigma=[gaussian_sigma,gaussian_sigma])
 
-                    # clusters_on     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
-                    # clusters_off    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
-                    
-                    # clusters_on,clusters_on_p     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
-                    # clusters_off,clusters_off_p    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
-                    
-                    clusters_on,clusters_on_p     = find_largest_cluster(rfmaps_on_p[:,:,n],minblocks=2,pthr=0.2)
-                    clusters_off,clusters_off_p    = find_largest_cluster(rfmaps_off_p[:,:,n],minblocks=2,pthr=0.2)
-                    
-                    #temporary calc of center of mass for each separately:
-                    #if far apart then ignore this RF fit:
+                    RF_x            = np.full(N,np.nan)
+                    RF_y            = np.full(N,np.nan)
+                    RF_sigma_x      = np.full(N,np.nan)
+                    RF_sigma_y      = np.full(N,np.nan)
+                    RF_r2           = np.full(N,np.nan)
+
                     if np.shape(grid_array)[0] == 13:
                         blockdeg        = 5.16
                     elif np.shape(grid_array)[0] == 7:
                         blockdeg        = 10.38
 
-                    RF_x_on,RF_y_on     = com_clusters(clusters_on,blockdeg=blockdeg)[:2]
-                    RF_x_off,RF_y_off   = com_clusters(clusters_off,blockdeg=blockdeg)[:2]
-                    
-                    deltaRF = math.sqrt(sum((px - qx) ** 2.0 for px, qx in zip((RF_x_on,RF_y_on), (RF_x_off,RF_y_off))))
-                    deltaRF *= blockdeg
-                    if deltaRF > 50:
-                        clusters_on = clusters_off = np.tile(False,(xGrid,yGrid))
-                        clusters_on_p = clusters_off_p = 1
-
-                    rfmaps_on_p_filt[~clusters_on,n]    = 1 #set to 1 for all noncluster p values
-                    rfmaps_off_p_filt[~clusters_off,n]  = 1
-                    
-                    clusters        = np.logical_or(clusters_on,clusters_off)
-                    
-                    RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters,blockdeg)
-                    # RF_p[n] = np.nansum((clusters_on_p,clusters_off_p))
-                    RF_p[n] = combine_pvalues((clusters_on_p,clusters_off_p))[1] #get combined p-value, Fisher's test
-
-                #convert x and y values in grid space to azimuth and elevation:
-                RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
-                RF_elev = RF_y/xGrid * np.diff(vec_elevation) + vec_elevation[0]
-
-                if signal != 'Fblock':
-                    df = pd.DataFrame(data=np.column_stack((RF_azim,RF_elev,RF_size,RF_p)),columns=['RF_azim','RF_elev','RF_size','RF_p'])
-                    np.save(os.path.join(plane_folder,'RF_%s.npy' % signal),df)
-                else: 
-                    df = pd.DataFrame(data=np.column_stack((RF_azim,RF_elev,RF_size,RF_p,xlocs,ylocs)),columns=['RF_azim','RF_elev','RF_size','RF_p','xloc','yloc'])
-                    np.save(os.path.join(plane_folder,'RF_%s.npy' % signal),df)
-
-                if showFig: 
-                    # example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
-                    example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_p<0.001))[0][:20] #get first twenty good cells
-
-                    Tot         = len(example_cells)
-                    if Tot: 
-                        Rows        = int(np.floor(np.sqrt(Tot)))
-                        Cols        = Tot // Rows # Compute Rows required
-                        if Tot % Rows != 0: #If one additional row is necessary -> add one:
-                            Cols += 1
-                        Position = range(1,Tot + 1) # Create a Position index
-
-                        fig = plt.figure(figsize=[18, 9])
-                        for i,n in enumerate(example_cells):
-                            # add every single subplot to the figure with a for loop
-                            ax = fig.add_subplot(Rows,Cols,Position[i])
-
-                            data = np.ones((xGrid,yGrid,3))
-
-                            R = np.divide(-np.log10(rfmaps_on_p_filt[:,:,n]),-np.log10(0.000001)) #red intensity
-                            B = np.divide(-np.log10(rfmaps_off_p_filt[:,:,n]),-np.log10(0.000001)) #blue intenstiy
-                            data[:,:,0] = 1 - B #red intensity is one minus blue
-                            data[:,:,1] = 1 - B - R #green channel is one minus blue and red
-                            data[:,:,2] = 1 - R #blue channel is one minus red
-
-                            data[data<0] = 0 #lower trim to zero
-
-                            ax.imshow(data)
-                            ax.scatter(RF_x[n],RF_y[n],marker='+',c='k',s=35) #show RF center location
-                            ax.set_xticks([])
-                            ax.set_yticks([])
-                            ax.set_aspect('auto')
-                            ax.set_title("%d" % n)
+                    for n in range(N):
+                        try:
+                            popt,pcov,r2,z_fit = fit_2d_gaussian(rfmaps[:,:,n])
+                            RF_x[n]         = popt[0]
+                            RF_y[n]         = popt[1]
+                            RF_sigma_x[n]    = popt[2]
+                            RF_sigma_y[n]    = popt[3]
+                            RF_r2[n]         = r2
+                        except:
+                            pass
+                        # plt.imshow(rfmaps[:,:,n],vmin=np.percentile(rfmaps,1),vmax=np.percentile(rfmaps,99),cmap='Reds')
                         
-                        plt.tight_layout(rect=[0, 0, 1, 1])
-                        fig.savefig(os.path.join(plane_folder,'RF_Plane%d_%s.jpg' % (iplane,signal)),dpi=600)
+                    #convert x and y values in grid space to azimuth and elevation:
+                    RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
+                    RF_elev = RF_y/xGrid * np.diff(vec_elevation) + vec_elevation[0]
+                    RF_sigma_x = RF_sigma_x*blockdeg
+                    RF_sigma_y = RF_sigma_y*blockdeg
 
-                if savemaps:
-                    np.savez(os.path.join(plane_folder,'RF_%s_pmaps.npz' % signal),name1=rfmaps_on_p_filt,name2=rfmaps_off_p_filt)
+                    df = pd.DataFrame({'RF_azim': RF_azim, 'RF_elev': RF_elev, 'RF_sigma_x': RF_sigma_x, 'RF_sigma_y': RF_sigma_y, 'RF_r2': RF_r2})
+                    np.save(os.path.join(plane_folder,'RF_%s.npy' % signal_name),df)
+
+                    if showFig: 
+                        # example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_size>200))[0][:20] #get first twenty good cells
+                        example_cells = np.where(np.logical_and(iscell[:,0]==1,RF_r2>0.25))[0][:20] #get first twenty good cells
+
+                        Tot         = len(example_cells)
+                        if Tot: 
+                            Rows        = int(np.floor(np.sqrt(Tot)))
+                            Cols        = Tot // Rows # Compute Rows required
+                            if Tot % Rows != 0: #If one additional row is necessary -> add one:
+                                Cols += 1
+                            Position = range(1,Tot + 1) # Create a Position index
+
+                            fig = plt.figure(figsize=[18, 9])
+                            for i,n in enumerate(example_cells):
+                                # add every single subplot to the figure with a for loop
+                                ax = fig.add_subplot(Rows,Cols,Position[i])
+
+                                ax.imshow(rfmaps[:,:,n],vmin=np.percentile(rfmaps,1),vmax=np.percentile(rfmaps,99)*1.2,cmap='Reds')
+
+                                ax.scatter(RF_x[n],RF_y[n],marker='+',c='w',s=50) #show RF center location
+                                ax.set_xticks([])
+                                ax.set_yticks([])
+                                ax.set_aspect('auto')
+                                ax.set_title("%d" % n)
+                            
+                            plt.tight_layout(rect=[0, 0, 1, 1])
+                            fig.savefig(os.path.join(plane_folder,'RF_Plane%d_%s.jpg' % (iplane,signal_name)),dpi=600)
+
 
     return 
+
+# def locate_rf_session_2dgauss(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],showFig=True,savemaps=False):
+
+#     sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
+
+#     sessiondata = pd.DataFrame({'protocol': ['RF']})
+#     sessiondata['animal_id']    = animal_id
+#     sessiondata['sessiondate']  = sessiondate
+#     sessiondata['fs']           = 5.317
+
+#     suite2p_folder  = os.path.join(sesfolder,"suite2p")
+#     rf_folder       = os.path.join(sesfolder,'RF','Behavior')
+
+#     if os.path.exists(suite2p_folder) and os.path.exists(rf_folder): 
+#         plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
+#         # load ops of plane0:
+#         ops                = np.load(os.path.join(plane_folders[0], 'ops.npy'), allow_pickle=True).item()
+
+#         ## Get trigger data to align timestamps:
+#         filenames         = os.listdir(rf_folder)
+#         triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
+#         triggerdata       = pd.read_csv(os.path.join(rf_folder,triggerdata_file[0]),skiprows=1).to_numpy()
+
+#         [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
+
+#         # Get the receptive field stimuli shown and their timestamps
+#         grid_array,RF_timestamps = proc_RF(rawdatadir,sessiondata)
+
+#         ### get parameters
+#         [xGrid , yGrid , nGrids] = np.shape(grid_array)
+        
+#         # t_resp_stop         = np.diff(RF_timestamps).mean() + 0.1
+#         plane_folder = plane_folders[iplane]
+
+#         iscell             = np.load(os.path.join(plane_folder, 'iscell.npy'))
+#         ops                = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
+        
+#         [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
+#         ts_plane = np.squeeze(ts_plane) #make 1-dimensional
+
+#         ##################### load suite2p activity output:
+#         sig     = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
+
+#         sig    = sig[:,protocol_frame_idx_plane==1].transpose()
+
+#         # For debugging sample only first x neurons: 
+#         iscell          = iscell[:ncells,:]
+#         sig             = sig[:,:ncells]
+        
+#         N               = sig.shape[1]
+
+#         rfmaps          = np.empty([xGrid,yGrid,N])
+#         rfmaps_off       = np.empty([xGrid,yGrid,N])
+
+#         rfmaps_on_p      = np.empty([xGrid,yGrid,N])
+#         rfmaps_off_p     = np.empty([xGrid,yGrid,N])
+
+#         respmat = np.empty((N,nGrids))
+        
+#         for g in range(nGrids):
+#             temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
+#             resp = np.mean(sig[temp,:],axis=0)
+#             temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
+#             base = np.mean(sig[temp,:],axis=0)
+        
+#             respmat[:,g] = resp-base
+#         respmat[respmat<0] = 0
+
+#         for n in range(N):
+#             print(f"\rComputing RF on 'F' for neuron {n+1} / {N}",end='\r')
+#             rfmaps[:,:,n] = np.average(np.abs(grid_array), axis=2, weights=(respmat[n,:] / respmat[n,:].sum()))
+        
+#         gaussian_sigma = 1
+
+#         for n in range(N):
+#             rfmaps[:,:,n]  = gaussian_filter(rfmaps[:,:,n],sigma=[gaussian_sigma,gaussian_sigma])
+
+#         RF_x            = np.full(N,np.nan)
+#         RF_y            = np.full(N,np.nan)
+#         RF_sigma_x      = np.full(N,np.nan)
+#         RF_sigma_y      = np.full(N,np.nan)
+#         RF_r2           = np.full(N,np.nan)
+
+#         if np.shape(grid_array)[0] == 13:
+#             blockdeg        = 5.16
+#         elif np.shape(grid_array)[0] == 7:
+#             blockdeg        = 10.38
+
+#         for n in range(N):
+#             try:
+#                 popt,pcov,r2,z_fit = fit_2d_gaussian(rfmaps[:,:,n])
+#                 RF_x[n]         = popt[0]
+#                 RF_y[n]         = popt[1]
+#                 RF_sigma_x[n]    = popt[2]
+#                 RF_sigma_y[n]    = popt[3]
+#                 RF_r2[n]         = r2
+#             except:
+#                 pass
+#             # plt.imshow(rfmaps[:,:,n],vmin=np.percentile(rfmaps,1),vmax=np.percentile(rfmaps,99),cmap='Reds')
+            
+#         #convert x and y values in grid space to azimuth and elevation:
+#         RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
+#         RF_elev = RF_y/xGrid * np.diff(vec_elevation) + vec_elevation[0]
+#         RF_sigma_x = RF_sigma_x*blockdeg
+#         RF_sigma_y = RF_sigma_y*blockdeg
+
+#     df = pd.DataFrame({'RF_azim': RF_azim, 'RF_elev': RF_elev, 'RF_sigma_x': RF_sigma_x, 'RF_sigma_y': RF_sigma_y, 'RF_r2': RF_r2})
+
+#     return df
+
+
+
+def optim_resp_win(rawdatadir,animal_id,sessiondate,t_resp_start=0,t_resp_stop=0.5,iplane=0,ncells=20):
+
+    sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
+
+    sessiondata = pd.DataFrame({'protocol': ['RF']})
+    sessiondata['animal_id']    = animal_id
+    sessiondata['sessiondate']  = sessiondate
+    sessiondata['fs']           = 5.317
+
+    suite2p_folder  = os.path.join(sesfolder,"suite2p")
+    rf_folder       = os.path.join(sesfolder,'RF','Behavior')
+
+    if os.path.exists(suite2p_folder) and os.path.exists(rf_folder): 
+        plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
+        # load ops of plane0:
+        ops                = np.load(os.path.join(plane_folders[0], 'ops.npy'), allow_pickle=True).item()
+
+        ## Get trigger data to align timestamps:
+        filenames         = os.listdir(rf_folder)
+        triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
+        triggerdata       = pd.read_csv(os.path.join(rf_folder,triggerdata_file[0]),skiprows=1).to_numpy()
+
+        [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
+
+        # Get the receptive field stimuli shown and their timestamps
+        grid_array,RF_timestamps = proc_RF(rawdatadir,sessiondata)
+
+        ### get parameters
+        [xGrid , yGrid , nGrids] = np.shape(grid_array)
+        
+        # t_resp_stop         = np.diff(RF_timestamps).mean() + 0.1
+        plane_folder = plane_folders[iplane]
+
+        iscell             = np.load(os.path.join(plane_folder, 'iscell.npy'))
+        ops                = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
+        
+        [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
+        ts_plane = np.squeeze(ts_plane) #make 1-dimensional
+
+        ##################### load suite2p activity output:
+        sig     = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
+
+        sig    = sig[:,protocol_frame_idx_plane==1].transpose()
+
+        # For debugging sample only first x neurons: 
+        # iscell          = iscell[:ncells,:]
+        # sig             = sig[:,:ncells]
+        
+        N               = sig.shape[1]
+
+        rfmaps_on       = np.empty([xGrid,yGrid,N])
+        rfmaps_off       = np.empty([xGrid,yGrid,N])
+
+        rfmaps_on_p      = np.empty([xGrid,yGrid,N])
+        rfmaps_off_p     = np.empty([xGrid,yGrid,N])
+
+        for n in range(N):
+            print(f"\rComputing RF on 'F' for neuron {n+1} / {N}",end='\r')
+            resps = np.empty(nGrids)
+            for g in range(nGrids):
+
+                temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
+                resp = sig[temp,n].mean()
+                temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
+                base = sig[temp,n].mean()
+            
+                resps[g] = np.max([resp-base,0])
+                # resps[g] = resp
+
+            for i in range(xGrid):
+                for j in range(yGrid):
+                    rfmaps_on[i,j,n] = np.mean(resps[grid_array[i,j,:]==1])
+                    rfmaps_off[i,j,n] = np.mean(resps[grid_array[i,j,:]==-1])
+                    
+                    # rfmaps_on_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
+                    # rfmaps_off_p[i,j,n] = st.ranksums(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+
+                    rfmaps_on_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==1],resps[grid_array[i,j,:] == 0])[1]
+                    rfmaps_off_p[i,j,n] = st.ttest_ind(resps[grid_array[i,j,:]==-1],resps[grid_array[i,j,:] == 0])[1]
+
+        RF_x            = np.empty(N)
+        RF_y            = np.empty(N)
+        RF_size         = np.empty(N)
+        RF_p            = np.ones(N)
+
+        rfmaps_on_p_filt  = rfmaps_on_p.copy() #this is only for visualization purposes
+        rfmaps_off_p_filt = rfmaps_off_p.copy()
+
+        for n in range(N):
+
+            # clusters_on     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+            # clusters_off    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+            
+            # clusters_on,clusters_on_p     = filter_clusters(rfmaps_on_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+            # clusters_off,clusters_off_p    = filter_clusters(rfmaps_off_p[:,:,n],clusterthr=clusterthr,minblocks=minblocks)
+            
+            clusters_on,clusters_on_p     = find_largest_cluster(rfmaps_on_p[:,:,n],minblocks=2,pthr=0.2)
+            clusters_off,clusters_off_p    = find_largest_cluster(rfmaps_off_p[:,:,n],minblocks=2,pthr=0.2)
+            
+            #temporary calc of center of mass for each separately:
+            #if far apart then ignore this RF fit:
+            if np.shape(grid_array)[0] == 13:
+                blockdeg        = 5.16
+            elif np.shape(grid_array)[0] == 7:
+                blockdeg        = 10.38
+
+            RF_x_on,RF_y_on     = com_clusters(clusters_on,blockdeg=blockdeg)[:2]
+            RF_x_off,RF_y_off   = com_clusters(clusters_off,blockdeg=blockdeg)[:2]
+            
+            deltaRF = math.sqrt(sum((px - qx) ** 2.0 for px, qx in zip((RF_x_on,RF_y_on), (RF_x_off,RF_y_off))))
+            deltaRF *= blockdeg
+            if deltaRF > 50:
+                clusters_on = clusters_off = np.tile(False,(xGrid,yGrid))
+                clusters_on_p = clusters_off_p = 1
+
+            rfmaps_on_p_filt[~clusters_on,n]    = 1 #set to 1 for all noncluster p values
+            rfmaps_off_p_filt[~clusters_off,n]  = 1
+            
+            clusters        = np.logical_or(clusters_on,clusters_off)
+            
+            RF_x[n],RF_y[n],RF_size[n] = com_clusters(clusters,blockdeg)
+            # RF_p[n] = np.nansum((clusters_on_p,clusters_off_p))
+            RF_p[n] = combine_pvalues((clusters_on_p,clusters_off_p))[1] #get combined p-value, Fisher's test
+
+        #convert x and y values in grid space to azimuth and elevation:
+        RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
+        RF_elev = RF_y/xGrid * np.diff(vec_elevation) + vec_elevation[0]
+
+        df = pd.DataFrame(data=np.column_stack((RF_azim,RF_elev,RF_size,RF_p)),columns=['RF_azim','RF_elev','RF_size','RF_p'])
+        
+    return df
+
+
+def sparse_noise_STA(rawdatadir,animal_id,sessiondate,t_resp_start=0,t_resp_stop=0.75,iplane=0,ncells=20):
+
+    sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
+
+    sessiondata = pd.DataFrame({'protocol': ['RF']})
+    sessiondata['animal_id']    = animal_id
+    sessiondata['sessiondate']  = sessiondate
+    sessiondata['fs']           = 5.317
+
+    suite2p_folder  = os.path.join(sesfolder,"suite2p")
+    rf_folder       = os.path.join(sesfolder,'RF','Behavior')
+
+    if os.path.exists(suite2p_folder) and os.path.exists(rf_folder): 
+        plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
+        # load ops of plane0:
+        ops                = np.load(os.path.join(plane_folders[0], 'ops.npy'), allow_pickle=True).item()
+
+        ## Get trigger data to align timestamps:
+        filenames         = os.listdir(rf_folder)
+        triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
+        triggerdata       = pd.read_csv(os.path.join(rf_folder,triggerdata_file[0]),skiprows=1).to_numpy()
+
+        [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
+
+        # Get the receptive field stimuli shown and their timestamps
+        grid_array,RF_timestamps = proc_RF(rawdatadir,sessiondata)
+
+        ### get parameters
+        [xGrid , yGrid , nGrids] = np.shape(grid_array)
+        
+        # t_resp_stop         = np.diff(RF_timestamps).mean() + 0.1
+        plane_folder = plane_folders[iplane]
+
+        iscell             = np.load(os.path.join(plane_folder, 'iscell.npy'))
+        ops                = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
+        
+        [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
+        ts_plane = np.squeeze(ts_plane) #make 1-dimensional
+
+        ##################### load suite2p activity output:
+        sig     = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
+
+        sig    = sig[:,protocol_frame_idx_plane==1].transpose()
+
+        # For debugging sample only first x neurons: 
+        iscell          = iscell[:ncells,:]
+        sig             = sig[:,:ncells]
+        
+        N               = sig.shape[1]
+
+        rfmaps          = np.empty([xGrid,yGrid,N])
+        rfmaps_off       = np.empty([xGrid,yGrid,N])
+
+        rfmaps_on_p      = np.empty([xGrid,yGrid,N])
+        rfmaps_off_p     = np.empty([xGrid,yGrid,N])
+
+        respmat = np.empty((N,nGrids))
+        
+        for g in range(nGrids):
+            temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
+            resp = np.mean(sig[temp,:],axis=0)
+            temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
+            base = np.mean(sig[temp,:],axis=0)
+        
+            respmat[:,g] = resp-base
+        respmat[respmat<0] = 0
+
+        for n in range(N):
+            print(f"\rComputing RF on 'F' for neuron {n+1} / {N}",end='\r')
+            rfmaps[:,:,n] = np.average(np.abs(grid_array), axis=2, weights=(respmat[n,:] / respmat[n,:].sum()))
+        
+        gaussian_sigma = 1
+
+        for n in range(N):
+            rfmaps[:,:,n]  = gaussian_filter(rfmaps[:,:,n],sigma=[gaussian_sigma,gaussian_sigma])
+
+        RF_x            = np.full(N,np.nan)
+        RF_y            = np.full(N,np.nan)
+        RF_sigma_x      = np.full(N,np.nan)
+        RF_sigma_y      = np.full(N,np.nan)
+        RF_r2           = np.full(N,np.nan)
+
+        if np.shape(grid_array)[0] == 13:
+            blockdeg        = 5.16
+        elif np.shape(grid_array)[0] == 7:
+            blockdeg        = 10.38
+
+        for n in range(N):
+            try:
+                popt,pcov,r2,z_fit = fit_2d_gaussian(rfmaps[:,:,n])
+                RF_x[n]         = popt[0]
+                RF_y[n]         = popt[1]
+                RF_sigma_x[n]    = popt[2]
+                RF_sigma_y[n]    = popt[3]
+                RF_r2[n]         = r2
+            except:
+                pass
+            # plt.imshow(rfmaps[:,:,n],vmin=np.percentile(rfmaps,1),vmax=np.percentile(rfmaps,99),cmap='Reds')
+            
+        #convert x and y values in grid space to azimuth and elevation:
+        RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
+        RF_elev = RF_y/xGrid * np.diff(vec_elevation) + vec_elevation[0]
+        RF_sigma_x = RF_sigma_x*blockdeg
+        RF_sigma_y = RF_sigma_y*blockdeg
+
+    df = pd.DataFrame({'RF_azim': RF_azim, 'RF_elev': RF_elev, 'RF_sigma_x': RF_sigma_x, 'RF_sigma_y': RF_sigma_y, 'RF_r2': RF_r2})
+
+
+    for n in range(N):
+        if RF_r2[n]>0.25:
+            plt.figure()
+            plt.imshow(rfmaps[:,:,n],vmin=np.percentile(rfmaps,1),vmax=np.percentile(rfmaps,99),cmap='Reds')
+
+
+    return df
+
+
+
+    # # # Optional: Plot the data and the fit
+    # # # z_fit = gaussian_2d((x, y), *popt).reshape(x.shape)
+    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 3))
+    
+    # ax1.set_title('Data')
+    # ax1.imshow(data, extent=(-5, 5, -5, 5), origin='lower')
+    
+    # ax2.set_title('Fit')
+    # ax2.imshow(z_fit, extent=(-5, 5, -5, 5), origin='lower')
+    
+    # plt.tight_layout()
 
 
 # Tot         = len(example_cells)*2

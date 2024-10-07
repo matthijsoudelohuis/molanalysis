@@ -771,7 +771,24 @@ def proc_imaging(sesfolder, sessiondata):
             celldata_plane['rf_el_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),1]
             celldata_plane['rf_sz_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),2]
             celldata_plane['rf_p_Fblock']    = RF_Fblock[np.argmin(distblock,axis=1),3]
-            
+        
+        if os.path.exists(os.path.join(plane_folder, 'RF_Fgauss.npy')):
+            RF_Fgauss = np.load(os.path.join(plane_folder, 'RF_Fgauss.npy'))
+            celldata_plane['rf_az_Fgauss']   = RF_Fgauss[:,0]
+            celldata_plane['rf_el_Fgauss']   = RF_Fgauss[:,1]
+            celldata_plane['rf_sx_Fgauss']   = RF_Fgauss[:,2]
+            celldata_plane['rf_sy_Fgauss']   = RF_Fgauss[:,3]
+            celldata_plane['rf_r2_Fgauss']   = RF_Fgauss[:,4]
+
+        if os.path.exists(os.path.join(plane_folder, 'RF_Fneugauss.npy')):
+            RF_Fneugauss = np.load(os.path.join(plane_folder, 'RF_Fneugauss.npy'))
+            celldata_plane['rf_az_Fneugauss']   = RF_Fneugauss[:,0]
+            celldata_plane['rf_el_Fneugauss']   = RF_Fneugauss[:,1]
+            celldata_plane['rf_sx_Fneugauss']   = RF_Fneugauss[:,2]
+            celldata_plane['rf_sy_Fneugauss']   = RF_Fneugauss[:,3]
+            celldata_plane['rf_r2_Fneugauss']   = RF_Fneugauss[:,4]
+
+
             # import matplotlib.pyplot as plt
             # fig,axes = plt.subplots(1,2,figsize=(8,4))
             # axes[0].scatter(celldata_plane['rf_az_Fblock'] ,celldata_plane['rf_az_Fneu'],alpha=0.5)
@@ -843,6 +860,10 @@ def proc_imaging(sesfolder, sessiondata):
         cell_ids            = np.array([sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%04.0f' % k for k in range(0,ncells_plane)])
         #store cell_ids in celldata:
         celldata_plane['cell_id']         = cell_ids
+
+        #Filter out neurons with mean fluorescence below threshold:
+        meanF_thresh                                    = 25
+        iscell[celldata_plane['meanF']<meanF_thresh,0]  = 0
 
         #Filter only good cells
         celldata_plane  = celldata_plane[iscell[:,0]==1]
@@ -955,9 +976,8 @@ def align_timestamps(sessiondata, ops, triggerdata):
     nTiffFiles = len(protocol_tif_idx)
     if nTriggers-1 == nTiffFiles:
         triggerdata = triggerdata[1:,:]
-        if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") > datetime(2024, 1, 1):
-            print('First trigger missed, problematic with trigger at right VDAQ channel in 2024')
-
+        if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") > datetime(2024, 1, 15):
+            print('First trigger missed, problematic with trigger at right VDAQ channel after Feb 2024')
     elif nTriggers-2 == nTiffFiles:
         triggerdata = triggerdata[2:,:]
         print('First two triggers missed, too slow for scanimage acquisition system')
@@ -976,12 +996,7 @@ def align_timestamps(sessiondata, ops, triggerdata):
             start_ts    = triggerdata[i,1]
         tempts      = np.linspace(start_ts,start_ts+(protocol_tif_nframes[i]-1)*1/ops['fs'],num=protocol_tif_nframes[i])
         timestamps[startidx:endidx] = tempts
-   
-    # legacy code: 
-    # #set the timestamps by interpolating the timestamps from the trigger moment to the next:
-    # temp        = np.cumsum(np.concatenate(([-0.5],protocol_tif_nframes[:-1])))+0.5
-    # tempts      = np.interp(np.arange(protocol_nframes),temp,triggerdata[:,1])
-
+    
     # from sklearn.linear_model import LinearRegression
     # reg = LinearRegression().fit(np.reshape(temp,(-1,1)),np.reshape(triggerdata[:,1],(-1,1)))
     # tempts2      = reg.predict(np.reshape(np.arange(protocol_nframes),(-1,1)))
@@ -1042,35 +1057,54 @@ def plot_pupil_dist(videodata):
 def assign_layer(celldata):
     celldata['layer'] = ''
 
-    # V1:
-    idx = celldata[np.all((celldata['roi_name'] == 'V1',celldata['depth'] < 250),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L2/3'
-    idx = celldata[np.all((celldata['roi_name'] == 'V1',celldata['depth'] > 250,celldata['depth'] < 350),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L4'
-    idx = celldata[np.all((celldata['roi_name'] == 'V1',celldata['depth'] > 350),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L5'
+    layers = {
+        'V1': {
+            'L2/3': (0, 200),
+            'L4': (200, 275),
+            'L5': (275, np.inf)
+        },
+        'PM': {
+            'L2/3': (0, 200),
+            'L4': (200, 275),
+            'L5': (275, np.inf)
+        },
+        'AL': {
+            'L2/3': (0, 200),
+            'L4': (200, 275),
+            'L5': (275, np.inf)
+        },
+        'RSP': {
+            'L2/3': (0, 300),
+            'L5': (300, np.inf)
+        }
+    }
 
-    # PM:
-    idx = celldata[np.all((celldata['roi_name'] == 'PM',celldata['depth'] < 250),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L2/3'
-    idx = celldata[np.all((celldata['roi_name'] == 'PM',celldata['depth'] > 250,celldata['depth'] < 325),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L4'
-    idx = celldata[np.all((celldata['roi_name'] == 'PM',celldata['depth'] > 325),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L5'
+    # layers = {
+    #     'V1': {
+    #         'L2/3': (0, 250),
+    #         'L4': (250, 350),
+    #         'L5': (350, np.inf)
+    #     },
+    #     'PM': {
+    #         'L2/3': (0, 250),
+    #         'L4': (250, 325),
+    #         'L5': (325, np.inf)
+    #     },
+    #     'AL': {
+    #         'L2/3': (0, 250),
+    #         'L4': (250, 325),
+    #         'L5': (325, np.inf)
+    #     },
+    #     'RSP': {
+    #         'L2/3': (0, 300),
+    #         'L5': (300, np.inf)
+    #     }
+    # }
 
-    # AL:
-    idx = celldata[np.all((celldata['roi_name'] == 'AL',celldata['depth'] < 250),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L2/3'
-    idx = celldata[np.all((celldata['roi_name'] == 'AL',celldata['depth'] > 250,celldata['depth'] < 325),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L4'
-    idx = celldata[np.all((celldata['roi_name'] == 'AL',celldata['depth'] > 325),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L5'
-
-    # RSP:
-    idx = celldata[np.all((celldata['roi_name'] == 'RSP',celldata['depth'] < 300),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L2/3'
-    idx = celldata[np.all((celldata['roi_name'] == 'RSP',celldata['depth'] > 300),axis=0)].index
-    celldata.loc[idx,'layer'] = 'L5'
+    for roi, layerdict in layers.items():
+        for layer, (mindepth, maxdepth) in layerdict.items():
+            idx = celldata[(celldata['roi_name'] == roi) & (mindepth <= celldata['depth']) & (celldata['depth'] < maxdepth)].index
+            celldata.loc[idx, 'layer'] = layer
     
     assert(celldata['layer'].notnull().all()), 'problematice assignment of layer based on ROI and depth'
     

@@ -35,42 +35,65 @@ session_list        = np.array([['LPE09665','2023_03_21'], #GR
                                 # ['LPE11086','2023_12_15'], #GR
                                 ['LPE10919','2023_11_06']]) #GR
 
+session_list        = np.array([['LPE12223','2024_06_08'],
+                                ['LPE12223','2024_06_10']])
+
+
 sessions,nSessions = load_sessions(protocol = 'GR',session_list=session_list)
-sessions,nSessions = load_sessions(protocol = 'SP',session_list=session_list)
+sessions,nSessions = load_sessions(protocol = 'RF',session_list=session_list)
 
 sessions,nSessions = filter_sessions(protocols = ['SP'],only_animal_id=['LPE09665', 'LPE09830',
                                                         'LPE11495', 'LPE11998', 'LPE12013'],session_rf=True,filter_areas=['V1','PM'])
 # # sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
 sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,filter_areas=['V1','PM'])
+sessions,nSessions = filter_sessions(protocols = ['SP','IM'])
 
 sig_thr = 0.001 #cumulative significance of receptive fields clusters
+
+#%% 
+for ses in sessions:
+    ses.celldata['rf_p_Fgauss'] = ses.celldata['rf_r2_Fgauss']<0.2
+    ses.celldata['rf_p_Fneugauss'] = ses.celldata['rf_r2_Fneugauss']<0.2
+
+#%% 
+for ses in sessions:
+    ses.celldata['rf_az_F'] = ses.celldata['rf_az_Fgauss']
+    ses.celldata['rf_el_F'] = ses.celldata['rf_el_Fgauss']
+    ses.celldata['rf_p_F'] = ses.celldata['rf_p_Fgauss']
+
+
 
 #%% Interpolation of receptive fields:
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-sessions = smooth_rf(sessions,sig_thr=0.001,radius=75,rf_type='Fneu')
+sessions = smooth_rf(sessions,sig_thr=0.001,radius=50,mincellsFneu=5,rf_type='Fneugauss')
 
 sessions = exclude_outlier_rf(sessions) 
 
 sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
 
 #%% Show fraction of receptive fields per session before any corrections:
-[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='F',sig_thr=sig_thr)
-fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_IMincluded' + '.png'), format = 'png')
+rf_type = 'F'
+[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type=rf_type,sig_thr=sig_thr)
+# [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='Fsmooth',sig_thr=sig_thr)
+fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_%s' % rf_type  + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_IMincluded' + '.png'), format = 'png')
 
 #%% ##################### Retinotopic mapping within V1 and PM #####################
 rf_type = 'Fneu'
-rf_type = 'Favg'
+# rf_type = 'Favg'
 # rf_type = 'Fsmooth'
 # rf_type = 'F'
-# rf_type = 'Fsmooth'
+rf_type = 'Fsmooth'
 # rf_type = 'Fblock'
+rf_type = 'Fneugauss'
+# rf_type = 'Fgauss'
 sig_thr=0.001
 # for ises in range(nSessions):
-for ises in [5]:
+for ises in [9]:
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
-    # fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
+    fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
 # #%% 
 # fig,ax = plt.subplots()
@@ -136,10 +159,19 @@ for ises in range(nSessions):
     fig = plot_rf_screen(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_rf_screen_' + rf_type + '_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
-#%% ##################### Scatter between individual RF location and neuropil estimation #####################
-celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+# #%% ############ #####################
+# celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-# ## remove any double cells (for example recorded in both GR and RF)
+# plt.hist(celldata['meanF'],color='gray',bins=np.arange(-100,100,step=10))
+
+# celldata['session_id'][celldata['meanF']<25]
+
+#%% 
+
+fig,axes   = plt.subplots(1,1,figsize=(5,5))
+plt.hist(celldata['rf_r2_Fneugauss'],color='gray',bins=np.arange(0,1,step=0.025))
+
+#%% ## remove any double cells (for example recorded in both GR and RF)
 celldata    = celldata.drop_duplicates(subset='cell_id', keep="first")
 celldata    = celldata[~np.isnan(celldata['rf_az_Fneu'])]
 
@@ -303,3 +335,54 @@ plt.ylabel('Included data')
 plt.tight_layout()
 fig.savefig(os.path.join(savedir,'Filter_NearLabeled_%d_Sessions' % nSessions + '.png'))
 
+#%%
+
+#%% 
+for ses in sessions:
+    ses.celldata['rf_size'] = np.abs(ses.celldata['rf_sx_Fgaussrf_sx_Fgauss'] * ses.celldata['rf_sy_Fgauss'])
+celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+#%% Make a figure with boxplots with the 'rf_sx_Fgauss' and 'rf_sy_Fgauss' in celldata where only neurons with rf_r2_Fgauss is higher than a threshold, set at 0.2 and separate by area:
+areas = ['V1','PM']
+clrs_areas = get_clr_areas(areas)
+fig,ax   = plt.subplots(1,2,figsize=(6,3))
+sns.boxplot(data=celldata[celldata['rf_r2_Fgauss'] > 0.2],x="roi_name",y="rf_sx_Fgauss",palette=clrs_areas,
+            ax=ax[0],order=areas,showfliers=False)
+sns.boxplot(data=celldata[celldata['rf_r2_Fgauss'] > 0.2],x="roi_name",y="rf_sy_Fgauss",palette=clrs_areas,
+            ax=ax[1],order=areas,showfliers=False)
+
+ax[0].set_xlabel('area')
+ax[0].set_ylabel('RF size\n(azimuth)')
+ax[0].set_ylim([0,50])
+
+ax[1].set_xlabel('area')
+ax[1].set_ylabel('RF size\n(elevation)')
+ax[1].set_ylim([0,50])
+
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'V1_PM_rf_xysize_boxplot' + '.png'), format = 'png')
+
+#%% Print medians:
+for area in areas:
+    print('Median RF size for %s:' % area)
+    print('  Azimuth: %.2f degrees' % np.median(celldata[np.logical_and(celldata['roi_name'] == area,celldata['rf_r2_Fgauss'] > 0.2)]['rf_sx_Fgauss']))
+    print('  Elevation: %.2f degrees' % np.median(celldata[np.logical_and(celldata['roi_name'] == area,celldata['rf_r2_Fgauss'] > 0.2)]['rf_sy_Fgauss']))
+    print('')
+
+#%% Make a figure with boxplots with the 'rf_size' in celldata where only neurons with rf_r2_Fgauss is higher than a threshold, set at 0.2 and separate by area:
+areas = ['V1','PM']
+clrs_areas = get_clr_areas(areas)
+fig,ax   = plt.subplots(1,1,figsize=(3,3))
+sns.boxplot(data=celldata[celldata['rf_r2_Fgauss'] > 0.2],x="roi_name",y="rf_size",palette=clrs_areas,
+            ax=ax,order=areas,showfliers=False)
+ax.set_xlabel('area')
+ax.set_ylabel('RF size\n(squared degrees)')
+plt.tight_layout()
+ax.set_ylim([0,1000])
+fig.savefig(os.path.join(savedir,'V1_PM_rf_size_boxplot' + '.png'), format = 'png')
+
+#%% Print medians:
+for area in areas:
+    print('Median RF size for %s:' % area)
+    print('  %.2f squared degrees' % np.median(celldata[np.logical_and(celldata['roi_name'] == area,celldata['rf_r2_Fgauss'] > 0.2)]['rf_size']))
+    print('')
