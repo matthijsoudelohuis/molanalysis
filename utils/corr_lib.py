@@ -171,6 +171,74 @@ def filter_corr_p(r,n,p_thr=0.01):
     # plt.scatter(r.flatten(),p.flatten())
     return r
 
+
+def hist_corr_areas_labeling(sessions,corr_type='trace_corr',filternear=True,minNcells=10, 
+                        areapairs=' ',layerpairs=' ',projpairs=' ',noise_thr=1,
+                        zscore=False,binres=0.01):
+    # areas               = ['V1','PM']
+    # redcells            = [0,1]
+    # redcelllabels       = ['unl','lab']
+    # legendlabels        = np.empty((4,4),dtype='object')
+
+    binedges            = np.arange(-1,1,binres)
+    bincenters          = binedges[:-1] + binres/2
+    nbins               = len(bincenters)
+
+    if zscore:
+        binedges            = np.arange(-5,5,binres)
+        bincenters          = binedges[:-1] + binres/2
+        nbins               = len(bincenters)
+
+    histcorr           = np.full((nbins,len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
+    meancorr           = np.full((len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
+    varcorr            = np.full((len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
+
+    for ises in tqdm(range(len(sessions)),desc='Averaging %s across sessions' % corr_type):
+        idx_nearfilter = filter_nearlabeled(sessions[ises],radius=50)
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+            
+            if filternear:
+                nearfilter      = filter_nearlabeled(sessions[ises],radius=50)
+                nearfilter      = np.meshgrid(nearfilter,nearfilter)
+                nearfilter      = np.logical_and(nearfilter[0],nearfilter[1])
+            else: 
+                nearfilter      = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+
+            if zscore:
+                corrdata = corrdata/np.nanstd(corrdata,axis=None) - np.nanmean(corrdata,axis=None)
+
+            for iap,areapair in enumerate(areapairs):
+                for ilp,layerpair in enumerate(layerpairs):
+                    for ipp,projpair in enumerate(projpairs):
+                        signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<noise_thr,sessions[ises].celldata['noise_level']<noise_thr)
+                        signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+
+                        areafilter      = filter_2d_areapair(sessions[ises],areapair)
+
+                        layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
+
+                        projfilter      = filter_2d_projpair(sessions[ises],projpair)
+
+                        nanfilter       = ~np.isnan(corrdata)
+
+                        proxfilter      = ~(sessions[ises].distmat_xy<15)
+
+                        cellfilter      = np.all((signalfilter,areafilter,layerfilter,
+                                                projfilter,proxfilter,nanfilter,nearfilter),axis=0)
+                        
+                        if np.sum(np.any(cellfilter,axis=0))>minNcells and np.sum(np.any(cellfilter,axis=1))>minNcells:
+                            
+                            data      = corrdata[cellfilter].flatten()
+                            data      = data[~np.isnan(data)]
+
+                            histcorr[:,ises,iap,ilp,ipp]    = np.histogram(data,bins=binedges,density=True)[0]
+                            meancorr[ises,iap,ilp,ipp]      = np.nanmean(data)
+                            varcorr[ises,iap,ilp,ipp]       = np.nanstd(data)
+
+    return bincenters,histcorr,meancorr,varcorr
+
+
 def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
                              filternear=True,filtersign=None,minNcells=10):
     areas               = ['V1','PM']
@@ -410,13 +478,6 @@ def bin_corr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_ty
                                                     projfilter,proxfilter,nanfilter,nearfilter),axis=0)
                             
                             if np.any(cellfilter):
-                                    # binmean[:,ises,iap,ilp,ipp] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
-                                    #                                                 values=corrdata[cellfilter].flatten(),
-                                    #                                                 statistic='mean', bins=binedges)[0]
-                                    # bincount[:,ises,iap,ilp,ipp] = binned_statistic(x=sessions[ises].distmat_rf[cellfilter].flatten(),
-                                    #                                                 values=corrdata[cellfilter].flatten(),
-                                    #                                                 statistic='count', bins=binedges)[0]
-
                                 xdata           = delta_rf[cellfilter].flatten()
                                 # xdata           = sessions[ises].distmat_rf[cellfilter].flatten()
                                 

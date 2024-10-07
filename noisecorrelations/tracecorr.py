@@ -25,11 +25,9 @@ from utils.plotting_style import * #get all the fixed color schemes
 from utils.plot_lib import shaded_error,my_ceil,my_floor
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace_smooth_with_Fsig
+from utils.tuning import compute_tuning, compute_prefori
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
-plt.rcParams['axes.spines.right']   = False
-plt.rcParams['axes.spines.top']     = False
-
 
 # First plot the mean and the std. This could already indicate some things. For each dataset make a scatter of the mean 
 # and std with color the V1-PM and within area datasets as well.
@@ -46,14 +44,18 @@ plt.rcParams['axes.spines.top']     = False
 
 #%% #############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
-# sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
+
+session_list        = np.array([['LPE09665','2023_03_21'], #GR
+                                ['LPE10919','2023_11_06']]) #GR
+
+sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
 # sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
 
 #%% Load all sessions from certain protocols: 
 sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
 # sessions,nSessions   = filter_sessions(protocols = ['SP','GN','RF'],filter_areas=['V1','PM']) 
 # sessions,nSessions   = filter_sessions(protocols = ['IM'],filter_areas=['V1','PM']) 
-sessions,nSessions   = filter_sessions(protocols = ['RF'],filter_areas=['V1','PM'],session_rf=True)  
+# sessions,nSessions   = filter_sessions(protocols = ['RF'],filter_areas=['V1','PM'],session_rf=True)  
 
 #%%  Load data properly:                      
 for ises in range(nSessions):
@@ -63,7 +65,7 @@ for ises in range(nSessions):
                                 # calciumversion='dF',keepraw=True)
     
     # detrend(sessions[ises].calciumdata,type='linear',axis=0,overwrite_data=True)
-    sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False,filtersig=True)[0]
+    sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False,filtersig=False)[0]
     delattr(sessions[ises],'videodata')
     delattr(sessions[ises],'behaviordata')
     delattr(sessions[ises],'calciumdata')
@@ -76,7 +78,7 @@ sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
 
 #%% ########################## Compute signal and noise correlations: ###################################
-sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=True)
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False)
 
 #%% ##################### Compute pairwise neuronal distances: ##############################
 # sessions = compute_pairwise_metrics(sessions)
@@ -95,8 +97,6 @@ np.save(os.path.join('e:\\Procdata\\','GN_RF_SP_Protocols_corrdata_n%sSessions.n
 
 
 #%% ########################### Compute tuning metrics: ###################################
-from utils.tuning import compute_tuning, compute_prefori
-
 for ises in range(nSessions):
     if sessions[ises].sessiondata['protocol'].isin(['GR','GN'])[0]:
         sessions[ises].celldata['OSI'] = compute_tuning(sessions[ises].respmat,
@@ -152,11 +152,345 @@ pairs = [('V1unl-V1unl','V1lab-V1lab'),
          ('V1lab-PMunl','V1lab-PMlab'),
          ] #for statistics
 
+#%% #########################################################################################
+# Contrast: across areas, layers and projection pairs:
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+layerpairs          = ['L2/3-L2/3','L2/3-L5','L5-L2/3','L5-L5']
+projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
+#If you override any of these with input to the deltarf bin function as ' ', then these pairs will be ignored
+
+clrs_areapairs = get_clr_area_pairs(areapairs)
+clrs_layerpairs = get_clr_layerpairs(layerpairs)
+clrs_projpairs = get_clr_labelpairs(projpairs)
+
+# clrs_area_labelpairs = get_clr_area_labelpairs(areapairs+projpairs)
+
+#%% Give redcells a string label
+redcelllabels = np.array(['unl','lab'])
+for ses in sessions:
+    ses.celldata['labeled'] = ses.celldata['redcell']
+    ses.celldata['labeled'] = ses.celldata['labeled'].astype(int).apply(lambda x: redcelllabels[x])
+sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+
+#%% Plot distribution of pairwise correlations across sessions conditioned on area pairs:
+protocols           = ['GR','GN']
+# protocols           = ['GN']
+
+areapairs           = ['V1-V1']
+areapairs           = ['V1-PM']
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+
+plt.rcParams['axes.spines.right']   = True
+plt.rcParams['axes.spines.top']     = True
+
+zscoreflag = False
+# for corr_type in ['trace_corr','sig_corr','noise_corr']:
+# for corr_type in ['sig_corr']:
+for corr_type in ['noise_corr']:
+    for areapair in areapairs:
+        ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
+        
+        bincenters,histcorr,meancorr,varcorr = hist_corr_areas_labeling(ses,corr_type=corr_type,filternear=True,projpairs=projpairs,noise_thr=0.2,
+                                                            # areapairs=[areapair],layerpairs=['L2/3-L2/3'],minNcells=10,zscore=zscoreflag)
+                                                            # areapairs=[areapair],layerpairs=['L2/3-L5'],minNcells=10,zscore=zscoreflag)
+                                                            areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag)
+        
+        areaprojpairs = projpairs.copy()
+        for ipp,projpair in enumerate(projpairs):
+            areaprojpairs[ipp]       = areapair.split('-')[0] + projpair.split('-')[0] + '-' + areapair.split('-')[1] + projpair.split('-')[1] 
+    
+        fig         = plt.figure(figsize=(8, 4))
+        gspec       = fig.add_gridspec(nrows=2, ncols=3)
+        
+        histdata    = np.cumsum(histcorr,axis=0)/100 #get cumulative distribution
+        histmean    = np.nanmean(histdata,axis=1) #get mean across sessions
+        histerror   = np.nanstd(histdata,axis=1) / np.sqrt(len(ses)) #compute SEM
+        
+        ax0         = fig.add_subplot(gspec[:2, :2]) #bigger subplot for the cum dist
+        
+        axins1 = ax0.inset_axes([0.05, 0.25, 0.3, 0.4],xlim=([-0.1,-0.025]),ylim=[0,0.2],xticklabels=[], yticklabels=[])
+        ax0.indicate_inset_zoom(axins1, edgecolor="black")
+        axins1.tick_params(axis='both', which='both', length=0)
+        for axis in ['top','bottom','left','right']:
+            axins1.spines[axis].set_color('gray')
+            axins1.spines[axis].set_linewidth(1)
+            
+        axins2 = ax0.inset_axes([0.65, 0.25, 0.3, 0.4],xlim=([0.075,0.125]),ylim=[0.8,0.9],xticklabels=[], yticklabels=[])
+        ax0.indicate_inset_zoom(axins2, edgecolor="gray")
+        axins2.tick_params(axis='both', which='both', length=0)
+        for axis in ['top','bottom','left','right']:
+            axins2.spines[axis].set_color('gray')
+            axins2.spines[axis].set_linewidth(1)
+
+        handles = []
+        for ipp,projpair in enumerate(projpairs): #show for each projection identity pair:
+            handles.append(shaded_error(ax0,x=bincenters,y=np.squeeze(histmean[:,0,0,ipp]),
+                            yerror=np.squeeze(histerror[:,0,0,ipp]),color=clrs_projpairs[ipp]))
+            
+            axins1.plot(bincenters,np.squeeze(histmean[:,0,0,ipp]),color=clrs_projpairs[ipp])
+            axins2.plot(bincenters,np.squeeze(histmean[:,0,0,ipp]),color=clrs_projpairs[ipp])
+            # shaded_error(axins1,x=bincenters,y=np.squeeze(histmean[:,0,0,ipp]),
+            #                 yerror=np.squeeze(histerror[:,0,0,ipp]),color=clrs_projpairs[ipp])
+            # shaded_error(axins2,x=bincenters,y=np.squeeze(histmean[:,0,0,ipp]),
+            #                 yerror=np.squeeze(histerror[:,0,0,ipp]),color=clrs_projpairs[ipp])
+            #plot triangle for mean:
+            ax0.plot(np.nanmean(meancorr[:,0,0,ipp],axis=None),0.9+ipp/50,'v',color=clrs_projpairs[ipp],markersize=5)
+
+        ax0.set_xlabel('Correlation')
+        ax0.set_ylabel('Cumulative Fraction')
+        ax0.legend(handles=handles,labels=areaprojpairs,frameon=False,loc='upper left',fontsize=8)
+        ax0.set_xlim([-0.25,0.35])
+        if zscoreflag:
+            ax0.set_xlim([-2,2])
+        ax0.axvline(0,linewidth=0.5,linestyle=':',color='k') #add line at zero for ref
+        ax0.set_ylim([0,1])
+        ax0.set_title('%s %s' % (areapair,corr_type),fontsize=12)
+
+        #  Now show a heatmap of the meancorr data averaged over sessions (first dimension). 
+        #  Between each projpair a paired t-test is done of the mean across sesssions and if significant a line is 
+        #  drawn from the center of that entry of the heatmap and other one with an asterisk on top of the line. 
+        #  For subplot 3 the same is done but then with varcorr.
+        data        = np.squeeze(np.nanmean(meancorr[:,0,:,:],axis=0))
+        data        = np.reshape(data,(2,2))
+
+        xlabels     = [areapair.split('-')[1] + 'unl',areapair.split('-')[1] + 'lab'] 
+        ylabels     = [areapair.split('-')[0] + 'unl',areapair.split('-')[0] + 'lab'] 
+        xlocs        = np.array([0,1,0,1])
+        ylocs        = np.array([0,0,1,1])
+        if areapair=='V1-PM':
+            test_indices = np.array([[0,1],[0,2],[1,2],[2,3],[0,3],[1,3]])
+        else: 
+            test_indices = np.array([[0,1],[0,3],[1,3]])
+        
+        ax1 = fig.add_subplot(gspec[0, 2])
+        pcm = ax1.imshow(data,cmap='hot',vmin=my_floor(np.min(data)-0.002,2),vmax=my_ceil(np.max(data),2))
+        ax1.set_xticks([0,1],labels=xlabels)
+        ax1.xaxis.tick_top()
+        ax1.set_yticks([0,1],labels=ylabels)
+        ax1.set_title('Mean')
+        fig.colorbar(pcm, ax=ax1)
+        
+        for ix,iy in zip(test_indices[:,0],test_indices[:,1]):
+            data1 = meancorr[:,0,0,ix]
+            data2 = meancorr[:,0,0,iy]
+            # pval = stats.ttest_rel(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
+            pval = stats.wilcoxon(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
+            # pval = pval * 3 #bonferroni correction
+            if pval<0.05:
+                ax1.plot([xlocs[ix],xlocs[iy]],[ylocs[ix],ylocs[iy]],'k-',linewidth=1)
+                ax1.text(np.mean([xlocs[ix],xlocs[iy]])-0.15,np.mean([ylocs[ix],ylocs[iy]]),get_sig_asterisks(pval),
+                                    weight='bold',fontsize=10) #
+
+        # Now the same but for the std of the pairwise correlations:
+        data        = np.squeeze(np.nanmean(varcorr[:,0,:,:],axis=0))
+        data        = np.reshape(data,(2,2))
+
+        ax2 = fig.add_subplot(gspec[1, 2])
+        pcm = ax2.imshow(data,cmap='hot',vmin=my_floor(np.min(data)-0.002,2),vmax=my_ceil(np.max(data),2))
+        ax2.set_xticks([0,1],labels=xlabels)
+        ax2.xaxis.tick_top()
+        ax2.set_yticks([0,1],labels=ylabels)
+        ax2.set_title('Std')
+        fig.colorbar(pcm, ax=ax2)
+        
+        for ix,iy in zip(test_indices[:,0],test_indices[:,1]):
+            data1 = varcorr[:,0,0,ix]
+            data2 = varcorr[:,0,0,iy]
+            pval = stats.ttest_rel(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
+            # pval = stats.wilcoxon(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
+            # pval = pval * 6 #bonferroni correction
+            if pval<0.05:
+                ax2.plot([xlocs[ix],xlocs[iy]],[ylocs[ix],ylocs[iy]],'k-',linewidth=1)
+                ax2.text(np.mean([xlocs[ix],xlocs[iy]])-0.15,np.mean([ylocs[ix],ylocs[iy]]),get_sig_asterisks(pval),
+                                    weight='bold',fontsize=10) #
+        
+        # plt.suptitle('%s %s' % (areapair,corr_type),fontsize=12)
+        plt.tight_layout()
+        fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Proj_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
+        # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Proj_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.pdf'), format = 'pdf')
+
+#%% 
+for ses in sessions:
+    ses.celldata = assign_layer(ses.celldata)
+
+
+#%% Plot distribution of pairwise correlations across sessions conditioned on area pairs:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+
+protocols           = ['GR','GN']
+
+# areapairs           = ['V1-V1']
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+
+zscoreflag = False
+# for corr_type in ['trace_corr','sig_corr','noise_corr']:
+for corr_type in ['noise_corr']:
+    for areapair in areapairs:
+        ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
+        
+        bincenters,histcorr,meancorr,varcorr = hist_corr_areas_labeling(ses,corr_type=corr_type,filternear=False,projpairs=' ',
+                                                            areapairs=[areapair],layerpairs=layerpairs,minNcells=10,zscore=zscoreflag)
+        
+        arealayerpairs = layerpairs.copy()
+        for ilp,layerpair in enumerate(layerpairs):
+            arealayerpairs[ilp]       = areapair.split('-')[0] + layerpair.split('-')[0] + '-' + areapair.split('-')[1] + layerpair.split('-')[1] 
+
+        fig         = plt.figure(figsize=(8, 4))
+        gspec       = fig.add_gridspec(nrows=2, ncols=3)
+        
+        histdata    = np.cumsum(histcorr,axis=0)/100 #get cumulative distribution
+        histmean    = np.nanmean(histdata,axis=1) #get mean across sessions
+        histerror   = np.nanstd(histdata,axis=1) / np.sqrt(len(ses)) #compute SEM
+        
+        ax0         = fig.add_subplot(gspec[:2, :2]) #bigger subplot for the cum dist
+        
+        axins1 = ax0.inset_axes([0.05, 0.25, 0.3, 0.4],xlim=([-0.1,-0.025]),ylim=[0,0.2],xticklabels=[], yticklabels=[])
+        ax0.indicate_inset_zoom(axins1, edgecolor="black")
+        axins1.tick_params(axis='both', which='both', length=0)
+        for axis in ['top','bottom','left','right']:
+            axins1.spines[axis].set_color('gray')
+            axins1.spines[axis].set_linewidth(1)
+            
+        axins2 = ax0.inset_axes([0.65, 0.25, 0.3, 0.4],xlim=([0.075,0.125]),ylim=[0.8,0.9],xticklabels=[], yticklabels=[])
+        ax0.indicate_inset_zoom(axins2, edgecolor="gray")
+        axins2.tick_params(axis='both', which='both', length=0)
+        for axis in ['top','bottom','left','right']:
+            axins2.spines[axis].set_color('gray')
+            axins2.spines[axis].set_linewidth(1)
+
+        handles = []
+        for ilp,layerpair in enumerate(layerpairs): #show for each layer pair:
+            handles.append(shaded_error(ax0,x=bincenters,y=np.squeeze(histmean[:,0,ilp,0]),
+                            yerror=np.squeeze(histerror[:,0,ilp,0]),color=clrs_layerpairs[ilp]))
+            
+            axins1.plot(bincenters,np.squeeze(histmean[:,0,ilp,0]),color=clrs_layerpairs[ilp])
+            axins2.plot(bincenters,np.squeeze(histmean[:,0,ilp,0]),color=clrs_layerpairs[ilp])
+            #plot triangle for mean:
+            ax0.plot(np.nanmean(meancorr[:,0,ilp,0],axis=None),0.9+ilp/50,'v',color=clrs_layerpairs[ilp],markersize=5)
+
+        ax0.set_xlabel('Correlation')
+        ax0.set_ylabel('Cumulative Fraction')
+        ax0.legend(handles=handles,labels=arealayerpairs,frameon=False,loc='upper left',fontsize=8)
+        ax0.set_xlim([-0.25,0.35])
+        if zscoreflag:
+            ax0.set_xlim([-2,2])
+        ax0.axvline(0,linewidth=0.5,linestyle=':',color='k') #add line at zero for ref
+        ax0.set_ylim([0,1])
+        ax0.set_title('%s %s' % (areapair,corr_type),fontsize=12)
+
+        #  Now show a heatmap of the meancorr data averaged over sessions (first dimension). 
+        #  Between each layerpair a paired t-test is done of the mean across sesssions and if significant a line is 
+        #  drawn from the center of that entry of the heatmap and other one with an asterisk on top of the line. 
+        #  For subplot 3 the same is done but then with varcorr.
+        data        = np.squeeze(np.nanmean(meancorr[:,0,:,0],axis=0))
+        data        = np.reshape(data,(2,2))
+
+        xlabels     = [areapair.split('-')[1] + 'L2/3',areapair.split('-')[1] + 'L5']
+        ylabels     = [areapair.split('-')[0] + 'L2/3',areapair.split('-')[0] + 'L5']
+        xlocs        = np.array([0,1,0,1])
+        ylocs        = np.array([0,0,1,1])
+        
+        if areapair=='V1-PM':
+            test_indices = np.array([[0,1],[0,2],[1,2],[2,3],[0,3],[1,3]])
+        else: 
+            test_indices = np.array([[0,1],[0,3],[1,3]])
+        
+        ax1 = fig.add_subplot(gspec[0, 2])
+        pcm = ax1.imshow(data,cmap='plasma',vmin=my_floor(np.min(data),2),vmax=my_ceil(np.max(data),2))
+        ax1.set_xticks([0,1],labels=xlabels)
+        ax1.xaxis.tick_top()
+        ax1.set_yticks([0,1],labels=ylabels)
+        ax1.set_title('Mean')
+        fig.colorbar(pcm, ax=ax1)
+        
+        for ix,iy in zip(test_indices[:,0],test_indices[:,1]):
+            data1 = meancorr[:,0,ix,0]
+            data2 = meancorr[:,0,iy,0]
+            pval = stats.ttest_rel(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
+            # pval = pval * 3 #bonferroni correction
+            if pval<0.05:
+                ax1.plot([xlocs[ix],xlocs[iy]],[ylocs[ix],ylocs[iy]],'k-',linewidth=1)
+                ax1.text(np.mean([xlocs[ix],xlocs[iy]])-0.15,np.mean([ylocs[ix],ylocs[iy]]),get_sig_asterisks(pval),
+                                    weight='bold',fontsize=10) #
+
+        # Now the same but for the std of the pairwise correlations:
+        data        = np.squeeze(np.nanmean(varcorr[:,0,:,0],axis=0))
+        data        = np.reshape(data,(2,2))
+
+        ax2 = fig.add_subplot(gspec[1, 2])
+        pcm = ax2.imshow(data,cmap='plasma',vmin=my_floor(np.min(data),2),vmax=my_ceil(np.max(data),2))
+        ax2.set_xticks([0,1],labels=xlabels)
+        ax2.xaxis.tick_top()
+        ax2.set_yticks([0,1],labels=ylabels)
+        ax2.set_title('Std')
+        fig.colorbar(pcm, ax=ax2)
+        
+        for ix,iy in zip(test_indices[:,0],test_indices[:,1]):
+            data1 = varcorr[:,0,ix,0]
+            data2 = varcorr[:,0,iy,0]
+            pval = stats.ttest_rel(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
+            # pval = pval * 6 #bonferroni correction
+            if pval<0.05:
+                ax2.plot([xlocs[ix],xlocs[iy]],[ylocs[ix],ylocs[iy]],'k-',linewidth=1)
+                ax2.text(np.mean([xlocs[ix],xlocs[iy]])-0.15,np.mean([ylocs[ix],ylocs[iy]]),get_sig_asterisks(pval),
+                                    weight='bold',fontsize=10) #
+        
+        # plt.suptitle('%s %s' % (areapair,corr_type),fontsize=12)
+        plt.tight_layout()
+        fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Layer_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
+        # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Layer_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.pdf'), format = 'pdf')
+
+#%% Plot mean vs standard deviation for labeling across areapairs:
+# Umakantha et al. 2023: might signal different population activity fluctuations that are shared
+
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+zscoreflag      = True
+circres         = 0.25
+tickres         = 0.2
+lim             = 1.5
+
+# for corr_type in ['trace_corr','sig_corr','noise_corr']:
+for corr_type in ['noise_corr']:
+    fig,axes = plt.subplots(1,3,figsize=(9,3))
+    for iap,areapair in enumerate(areapairs):
+        ax                  = axes[iap]
+        ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
+        
+        bincenters,histcorr,meancorr,varcorr = hist_corr_areas_labeling(ses,corr_type=corr_type,filternear=True,projpairs=projpairs,
+                                                            areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag)
+
+        for ipp,projpair in enumerate(projpairs):
+            # ax.scatter(meancorr[:,0,0,ipp],varcorr[:,0,0,ipp],c=clrs_projpairs[ipp],s=4,alpha=0.7)
+            ax.errorbar(np.nanmean(meancorr[:,0,0,ipp]),np.nanmean(varcorr[:,0,0,ipp]),
+                        np.nanstd(meancorr[:,0,0,ipp]) / np.sqrt(len(ses)),np.nanstd(varcorr[:,0,0,ipp])/ np.sqrt(len(ses)),
+                        ecolor=clrs_projpairs[ipp],elinewidth=1,capsize=3)
+        ax.set_xlabel('Mean')
+        ax.set_ylabel('Std')
+
+        ax.set_xticks(np.arange(0,lim,tickres))
+        ax.set_yticks(np.arange(0,lim,tickres))
+        ax.set_xlim([0,lim])
+        ax.set_ylim([0,lim])
+        # ax.set_xlim([0,my_ceil(np.nanmax(varcorr),2)])
+        # ax.set_ylim([0,my_ceil(np.nanmax(varcorr),2)])
+        ax.set_title(areapair)
+
+        for radius in np.arange(0,lim*2,circres):
+            Drawing_uncolored_circle = plt.Circle( (0, 0), radius, linestyle=':',fill=False)
+            ax.add_artist(Drawing_uncolored_circle)
+        # ax0.legend(frameon=False,loc='upper left',fontsize=8)
+        # ax0.set_xlim([-0.5,0.5])
+        # ax0.set_ylim([0,1.1])
+    plt.tight_layout()
+    # fig.savefig(os.path.join(savedir,'MeanCorr','MeanStdScatter_Z_%s_%s' % (corr_type,'_'.join(protocols)) + '.png'), format = 'png')
+    fig.savefig(os.path.join(savedir,'MeanCorr','MeanStdMean_Z_%s_%s' % (corr_type,'_'.join(protocols)) + '.png'), format = 'png')
+    # fig.savefig(os.path.join(savedir,'MeanCorr','MeanStdScatter_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.pdf'), format = 'pdf')
+        
+
 #%% Plot mean absolute correlation across sessions conditioned on area pairs:
 sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
-protocols = ['GR','GN']
-# protocols = ['IM']
+protocols = ['GR','GN']# protocols = ['IM']
 
 for corr_type in ['trace_corr','sig_corr','noise_corr']:
     ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
@@ -164,6 +498,7 @@ for corr_type in ['trace_corr','sig_corr','noise_corr']:
     df                  = df_mean
     df                  = df.dropna(axis=0,thresh=1).reset_index(drop=True) #drop occasional missing data
     df                  = df.fillna(df.mean()) #interpolate occasional missing data
+    
     
     fig,axes = plt.subplots(1,1,figsize=(4,4))
     ax                  = axes
@@ -356,12 +691,6 @@ session_list        = np.array([['LPE09665','2023_03_21'], #GR
 sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 sessions_in_list = np.where(sessiondata['session_id'].isin([x[0] + '_' + x[1] for x in session_list]))[0]
 sessions_subset = [sessions[i] for i in sessions_in_list]
-
-#%% Give redcells a string label
-redcelllabels = np.array(['unl','lab'])
-for ses in sessions:
-    ses.celldata['labeled'] = ses.celldata['redcell']
-    ses.celldata['labeled'] = ses.celldata['labeled'].astype(int).apply(lambda x: redcelllabels[x])
 
 #%% 
 protocols = ['IM']

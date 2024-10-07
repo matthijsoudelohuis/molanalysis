@@ -79,7 +79,7 @@ def get_clr_layerpairs(pairs):
         'L4-L5': sns.xkcd_rgb['navy'],
         'L5-L2/3': sns.xkcd_rgb['deep purple'],
         'L5-L4': sns.xkcd_rgb['light grey'],
-        'L5-L5': sns.xkcd_rgb['slate grey'],
+        'L5-L5': sns.xkcd_rgb['royal blue'],
         ' ' : sns.xkcd_rgb['black']}
     return itemgetter(*pairs)(palette)
 
