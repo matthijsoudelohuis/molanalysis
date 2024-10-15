@@ -157,14 +157,14 @@ class Session():
                 t_resp_start = 0
                 t_resp_stop = 1
             elif calciumversion=='dF':
-                t_resp_start = 0.5
+                t_resp_start = 0.25
                 t_resp_stop = 1.5
         elif self.sessiondata['protocol'][0]=='GN':
             if calciumversion=='deconv':
                 t_resp_start = 0
                 t_resp_stop = 1
             elif calciumversion=='dF':
-                t_resp_start = 0.5
+                t_resp_start = 0.25
                 t_resp_stop = 1.5
         else:
             print('skipping mean response for unknown protocol')

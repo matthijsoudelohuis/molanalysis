@@ -828,7 +828,8 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['meanF_chan2']   = np.mean(F_chan2, axis=1)
 
         # Calculate the noise level of the cells ##### Rupprecht et al. 2021 Nat Neurosci.
-        celldata_plane['noise_level'] = np.median(np.abs(np.diff(dF,axis=1)),axis=1)/np.sqrt(ops['fs'])
+        celldata_plane['noise_level'] = np.nanmedian(np.abs(np.diff(dF, axis=-1)), axis=-1) / np.sqrt(ops['fs']) * 100
+        # celldata_plane['noise_level'] = np.median(np.abs(np.diff(dF,axis=1)),axis=1)/np.sqrt(ops['fs'])
 
         #Count the number of events by taking number of stretches with z-scored activity above 2:
         zF              = st.zscore(dF.copy(),axis=1)

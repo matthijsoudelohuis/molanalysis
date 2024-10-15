@@ -31,16 +31,17 @@ sessions,nsessions            = filter_sessions(protocols)
 
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Labeling\\'
 
-#%% ############ ############
+#%% #### reset threshold if necessary:
+threshold = 0.5
+for ses in sessions:
+    ses.reset_label_threshold(threshold)
+
+#%% ######## ############
 ## Combine cell data from all loaded sessions to one dataframe:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 ## remove any double cells (for example recorded in both GR and RF)
 celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
-
-threshold = 0.5
-for ses in sessions:
-    ses.reset_label_threshold(threshold)
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
@@ -273,7 +274,7 @@ plt.savefig(os.path.join(savedir,'Frac_cellpose_depth_area_%dplanes' % len(plane
 #%% Select only cells nearby labeled cells to ensure fair comparison of quality metrics:
 
 celldata = pd.concat([ses.celldata[filter_nearlabeled(ses,radius=50)] for ses in sessions]).reset_index(drop=True)
-celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+# celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 #%% ##################### Calcium trace skewness for labeled vs unlabeled cells:
 # order = [0,1] #for statistical testing purposes

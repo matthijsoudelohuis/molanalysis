@@ -16,7 +16,7 @@ import seaborn as sns
 from tqdm import tqdm
 from utils.plotting_style import * #get all the fixed color schemes
 from scipy import ndimage
-from scipy.stats import zscore
+from scipy.stats import zscore,ttest_rel
 from utils.imagelib import load_natural_images
 from utils.pair_lib import *
 from utils.tuning import mean_resp_image
@@ -242,6 +242,69 @@ def replace_smooth_with_Fsig(sessions,sig_thr=0.001):
 
     return sessions
     
+    
+def plot_delta_rf_across_sessions(sessions,areapairs):
+    clrs_areapairs = get_clr_area_pairs(areapairs)
+    binedges    = np.arange(-5,150,5) 
+    nbins       = len(binedges)-1
+    # binmean     = np.full((len(sessions),len(areapairs),nbins),np.nan)
+
+    fig,axes = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*3,3))
+    for iap,areapair in enumerate(areapairs):
+        for ses in sessions:
+                        
+            # Define function to filter neuronpairs based on area combination
+            areafilter = filter_2d_areapair(ses,areapair)
+            nanfilter  = ~np.isnan(ses.distmat_rf)
+            cellfilter = np.logical_and(areafilter,nanfilter)
+            sns.histplot(data=ses.distmat_rf[cellfilter].flatten(),bins=binedges,ax=axes[iap],color=clrs_areapairs[iap],
+                         alpha=0.5,fill=False,stat='percent',element='step')
+        axes[iap].set_title(areapair)
+            # axes[iap].hist(ses.distmat_rf[cellfilter],bins=binedges,color=clrs_areapairs[iap],alpha=0.5)
+    return fig
+
+def plot_delta_rf_projections(sessions,areapairs,projpairs,filter_near=False):
+    clrs_areapairs  = get_clr_area_pairs(areapairs)
+    clrs_projpairs  = get_clr_labelpairs(projpairs)
+    binedges        = np.arange(-5,150,5) 
+    nbins           = len(binedges)-1
+    data            = np.full((len(sessions),len(areapairs),len(projpairs)),np.nan)
+    fig,axes = plt.subplots(2,len(areapairs),figsize=(len(areapairs)*3,6))
+    # for ises,ses in enumerate([sessions[1]]):
+    for iap,areapair in enumerate(areapairs):
+        for ipp,projpair in enumerate(projpairs):
+            for ises,ses in enumerate(sessions):
+                areafilter = filter_2d_areapair(ses,areapair)
+                projfilter = filter_2d_projpair(ses,projpair)
+                nanfilter  = ~np.isnan(ses.distmat_rf)
+                if filter_near:
+                    nearfilter = filter_nearlabeled(ses,radius=50)
+                    nearfilter = np.outer(nearfilter,nearfilter)
+                else: 
+                    nearfilter = np.ones(np.shape(areafilter))
+                cellfilter = np.all((areafilter,nanfilter,projfilter,nearfilter),axis=0)
+                if np.any(cellfilter):
+                    sns.histplot(data=ses.distmat_rf[cellfilter].flatten(),bins=binedges,ax=axes[0,iap],color=clrs_projpairs[ipp],
+                                alpha=0.5,fill=False,stat='percent',element='step')
+                    data[ises,iap,ipp] = np.nanmean(ses.distmat_rf[cellfilter])
+            axes[0,iap].set_title(areapair,color=clrs_areapairs[iap])
+
+        # axes[iap].hist(ses.distmat_rf[cellfilter],bins=binedges,color=clrs_areapairs[iap],alpha=0.5)
+        sns.stripplot(data=pd.DataFrame(data[:,iap,:],columns=projpairs),ax=axes[1,iap],palette=clrs_projpairs)
+        for ipp1,projpair1 in enumerate(projpairs):
+            for ipp2,projpair2 in enumerate(projpairs):
+                if ipp1 < ipp2:
+                    pval = ttest_rel(data[:,iap,ipp1],data[:,iap,ipp2],nan_policy='omit')[1]
+                    axes[1,iap].text(ipp1+0.5,np.nanmean(data[:,iap,:])+5,'{:.3f}'.format(pval),ha='center')
+        axes[1,iap].plot(np.nanmean(data[:,iap,:],axis=0),color='k',linewidth=2)
+        axes[1,iap].set_ylim([0,60])
+        axes[1,iap].set_ylabel('RF distance (deg)')
+        # for ipp,projpair in enumerate(projpairs):
+            # axes[0,iap].plot([ipp-0.2,ipp+0.2],[np.nanmean(data[:,iap,ipp]),np.nanmean(data[:,iap,ipp])],color=clrs_projpairs[ipp],linewidth=2)
+    plt.tight_layout()
+    return fig
+
+
 # def exclude_outlier_rf(sessions,sig_thr=0.001,radius=100,rf_thr=25,mincellsFneu=10):
 #     # Filter out neurons with receptive fields that are too far from the local neuropil receptive field:
 #     #radius specifies cortical distance of neuropil to include for local rf center

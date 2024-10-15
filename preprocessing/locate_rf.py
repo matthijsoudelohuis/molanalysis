@@ -35,8 +35,6 @@ t_base_start        = -5       #pre s
 t_base_stop         = 0        #post s
 
 
-
-
 # Define the 2D Gaussian function
 def gaussian_2d(xy, x0, y0, sigma_x, sigma_y, amplitude, offset):
     x, y = xy
@@ -497,119 +495,7 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],
                             plt.tight_layout(rect=[0, 0, 1, 1])
                             fig.savefig(os.path.join(plane_folder,'RF_Plane%d_%s.jpg' % (iplane,signal_name)),dpi=600)
 
-
     return 
-
-# def locate_rf_session_2dgauss(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],showFig=True,savemaps=False):
-
-#     sesfolder       = os.path.join(rawdatadir,animal_id,sessiondate)
-
-#     sessiondata = pd.DataFrame({'protocol': ['RF']})
-#     sessiondata['animal_id']    = animal_id
-#     sessiondata['sessiondate']  = sessiondate
-#     sessiondata['fs']           = 5.317
-
-#     suite2p_folder  = os.path.join(sesfolder,"suite2p")
-#     rf_folder       = os.path.join(sesfolder,'RF','Behavior')
-
-#     if os.path.exists(suite2p_folder) and os.path.exists(rf_folder): 
-#         plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
-#         # load ops of plane0:
-#         ops                = np.load(os.path.join(plane_folders[0], 'ops.npy'), allow_pickle=True).item()
-
-#         ## Get trigger data to align timestamps:
-#         filenames         = os.listdir(rf_folder)
-#         triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
-#         triggerdata       = pd.read_csv(os.path.join(rf_folder,triggerdata_file[0]),skiprows=1).to_numpy()
-
-#         [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
-
-#         # Get the receptive field stimuli shown and their timestamps
-#         grid_array,RF_timestamps = proc_RF(rawdatadir,sessiondata)
-
-#         ### get parameters
-#         [xGrid , yGrid , nGrids] = np.shape(grid_array)
-        
-#         # t_resp_stop         = np.diff(RF_timestamps).mean() + 0.1
-#         plane_folder = plane_folders[iplane]
-
-#         iscell             = np.load(os.path.join(plane_folder, 'iscell.npy'))
-#         ops                = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
-        
-#         [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
-#         ts_plane = np.squeeze(ts_plane) #make 1-dimensional
-
-#         ##################### load suite2p activity output:
-#         sig     = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
-
-#         sig    = sig[:,protocol_frame_idx_plane==1].transpose()
-
-#         # For debugging sample only first x neurons: 
-#         iscell          = iscell[:ncells,:]
-#         sig             = sig[:,:ncells]
-        
-#         N               = sig.shape[1]
-
-#         rfmaps          = np.empty([xGrid,yGrid,N])
-#         rfmaps_off       = np.empty([xGrid,yGrid,N])
-
-#         rfmaps_on_p      = np.empty([xGrid,yGrid,N])
-#         rfmaps_off_p     = np.empty([xGrid,yGrid,N])
-
-#         respmat = np.empty((N,nGrids))
-        
-#         for g in range(nGrids):
-#             temp = np.logical_and(ts_plane > RF_timestamps[g]+t_resp_start,ts_plane < RF_timestamps[g]+t_resp_stop)
-#             resp = np.mean(sig[temp,:],axis=0)
-#             temp = np.logical_and(ts_plane > RF_timestamps[g]+t_base_start,ts_plane < RF_timestamps[g]+t_base_stop)
-#             base = np.mean(sig[temp,:],axis=0)
-        
-#             respmat[:,g] = resp-base
-#         respmat[respmat<0] = 0
-
-#         for n in range(N):
-#             print(f"\rComputing RF on 'F' for neuron {n+1} / {N}",end='\r')
-#             rfmaps[:,:,n] = np.average(np.abs(grid_array), axis=2, weights=(respmat[n,:] / respmat[n,:].sum()))
-        
-#         gaussian_sigma = 1
-
-#         for n in range(N):
-#             rfmaps[:,:,n]  = gaussian_filter(rfmaps[:,:,n],sigma=[gaussian_sigma,gaussian_sigma])
-
-#         RF_x            = np.full(N,np.nan)
-#         RF_y            = np.full(N,np.nan)
-#         RF_sigma_x      = np.full(N,np.nan)
-#         RF_sigma_y      = np.full(N,np.nan)
-#         RF_r2           = np.full(N,np.nan)
-
-#         if np.shape(grid_array)[0] == 13:
-#             blockdeg        = 5.16
-#         elif np.shape(grid_array)[0] == 7:
-#             blockdeg        = 10.38
-
-#         for n in range(N):
-#             try:
-#                 popt,pcov,r2,z_fit = fit_2d_gaussian(rfmaps[:,:,n])
-#                 RF_x[n]         = popt[0]
-#                 RF_y[n]         = popt[1]
-#                 RF_sigma_x[n]    = popt[2]
-#                 RF_sigma_y[n]    = popt[3]
-#                 RF_r2[n]         = r2
-#             except:
-#                 pass
-#             # plt.imshow(rfmaps[:,:,n],vmin=np.percentile(rfmaps,1),vmax=np.percentile(rfmaps,99),cmap='Reds')
-            
-#         #convert x and y values in grid space to azimuth and elevation:
-#         RF_azim = RF_x/yGrid * np.diff(vec_azimuth) + vec_azimuth[0]
-#         RF_elev = RF_y/xGrid * np.diff(vec_elevation) + vec_elevation[0]
-#         RF_sigma_x = RF_sigma_x*blockdeg
-#         RF_sigma_y = RF_sigma_y*blockdeg
-
-#     df = pd.DataFrame({'RF_azim': RF_azim, 'RF_elev': RF_elev, 'RF_sigma_x': RF_sigma_x, 'RF_sigma_y': RF_sigma_y, 'RF_r2': RF_r2})
-
-#     return df
-
-
 
 def optim_resp_win(rawdatadir,animal_id,sessiondate,t_resp_start=0,t_resp_stop=0.5,iplane=0,ncells=20):
 

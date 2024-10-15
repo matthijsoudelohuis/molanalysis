@@ -1,6 +1,6 @@
 
 
-
+#%% 
 import os, math
 
 from loaddata.get_data_folder import get_local_drive
@@ -14,15 +14,18 @@ from utils.explorefigs import plot_PCA_gratings
 from loaddata.session import Session
 import pandas as pd
 import seaborn as sns
-from utils.corr_lib import compute_noise_correlation, compute_pairwise_metrics
+from utils.corr_lib import *
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_respmat
 from utils.tuning import compute_tuning, compute_prefori
 from utils.plotting_style import * #get all the fixed color schemes
 
+from scipy.linalg import norm
+from scipy.stats import vonmises
 savedir = 'D:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\GainModel\\'
 
+#%%  
 nNeurons        = 1000
 nTrials         = 3200
 
@@ -72,14 +75,14 @@ model_ses.trialdata = pd.DataFrame()
 model_ses.trialdata['Orientation'] = ori_trials
 model_ses.respmat_runspeed = gain_trials
 model_ses.sessiondata = pd.DataFrame()
-model_ses.sessiondata['protocol'] = 'GR'
+model_ses.sessiondata['protocol'] = ['GR']
 
 fig = plot_PCA_gratings(model_ses)
+#
+# fig.savefig(os.path.join(savedir,'AffineModel_Gain%1.2f_O%1.2f_noise%1.2f_N%d_K%d' % (gain_level,offset_level,noise_level,nNeurons,nTrials) + '.png'), format = 'png')
 
-fig.savefig(os.path.join(savedir,'AffineModel_Gain%1.2f_O%1.2f_noise%1.2f_N%d_K%d' % (gain_level,offset_level,noise_level,nNeurons,nTrials) + '.png'), format = 'png')
-
-############################ Compute noise correlations: ###################################
-model_ses = compute_noise_correlation([model_ses])[0]
+#%% ########################### Compute noise correlations: ###################################
+model_ses = compute_signal_noise_correlation([model_ses])[0]
 
 ##########################################################################################
 # Plot noise correlations as a function of the difference in preferred orientation
@@ -117,12 +120,10 @@ fig.savefig(os.path.join(savedir,'NoiseCorr_RandWeight_AffineModel_Gain%1.2f_O%1
 
 
 #### 
-# Take two neurons with strong tuning and large delta pref ori:
-
 ### Fit Affine model to data:
 
 
-##############################################################################
+#%% #############################################################################
 # session_list        = np.array([['LPE10919','2023_11_06']])
 session_list        = np.array([['LPE10885','2023_10_23']])
 # load sessions lazy: 
@@ -131,21 +132,10 @@ sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,l
 
 #   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
-    sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
-    
-    ##############################################################################
-    ## Construct trial response matrix:  N neurons by K trials
-    sessions[ises].respmat         = compute_respmat(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'],
-                                  t_resp_start=0,t_resp_stop=1,method='mean',subtr_baseline=False)
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion='deconv',keepraw=False)
 
-    sessions[ises].respmat_runspeed = compute_respmat(sessions[ises].behaviordata['runspeed'],
-                                                      sessions[ises].behaviordata['ts'], sessions[ises].trialdata['tOnset'],
-                                                    t_resp_start=0,t_resp_stop=1,method='mean')
-
-    sessions[ises].respmat_videome = compute_respmat(sessions[ises].videodata['motionenergy'],
-                                                    sessions[ises].videodata['timestamps'],sessions[ises].trialdata['tOnset'],
-                                                    t_resp_start=0,t_resp_stop=1,method='mean')
-
+#%% 
 
 R = sessions[ises].respmat.T
 
@@ -158,10 +148,15 @@ istims = sessions[ises].trialdata['Orientation'].to_numpy()
 ustim,istims = np.unique(sessions[ises].trialdata['Orientation'],return_index=True)
 ustim,istimeses,istims = np.unique(sessions[ises].trialdata['Orientation'],return_index=True,return_inverse=True)
 
-istims = 
 
-import numpy as np
-from scipy.linalg import norm
+
+[varexp, gain, Rfit, sm] = fitAffine(R, stims, estimate_additive=False)
+
+
+
+
+
+
 
 def fitAffine(R, stims, estimate_additive=True):
     """
@@ -312,8 +307,8 @@ def fit_affine_model(data, orientations, estimate_additive=True):
     A = sm[[i, -1], :].T @ sm[[i, -1], :]
     B = sm[[i, -1], :].T @ data[:, orientations == ori].T
 
-    A = 
-    B = 
+    # A = 
+    # B = 
     np.linalg.lstsq(A,B,rcond=None)[0][0]
 
     for _ in range(10):
@@ -347,8 +342,6 @@ def fit_affine_model(data, orientations, estimate_additive=True):
 
     return varexp, gain, Rfit, sm
 
-import numpy as np
-from scipy.linalg import norm
 
 # def fitAffine(R, istims, estimate_additive):
 #     # Normalize R

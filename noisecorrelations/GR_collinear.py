@@ -107,7 +107,6 @@ pairs = [('V1unl-V1unl','V1lab-V1lab'),
 # DELTA RECEPTIVE FIELD:
 # ##########################################################################################################
 
-
 #%% Show distribution of delta receptive fields across areas: 
 
 sessions = compute_pairwise_delta_rf(sessions,rf_type='F')

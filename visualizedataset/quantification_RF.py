@@ -63,13 +63,12 @@ for ses in sessions:
     ses.celldata['rf_p_F'] = ses.celldata['rf_p_Fgauss']
 
 
-
 #%% Interpolation of receptive fields:
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-sessions = smooth_rf(sessions,sig_thr=0.001,radius=50,mincellsFneu=5,rf_type='Fneugauss')
-
+sessions = smooth_rf(sessions,radius=50,rf_type='Fneugauss',mincellsFneu=5)
 sessions = exclude_outlier_rf(sessions) 
+sessions = replace_smooth_with_Fsig(sessions) 
 
 sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
 
@@ -87,11 +86,11 @@ rf_type = 'Fneu'
 # rf_type = 'F'
 rf_type = 'Fsmooth'
 # rf_type = 'Fblock'
-rf_type = 'Fneugauss'
+# rf_type = 'Fneugauss'
 # rf_type = 'Fgauss'
 sig_thr=0.001
-# for ises in range(nSessions):
-for ises in [9]:
+for ises in range(nSessions):
+# for ises in [9]:
     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
@@ -165,6 +164,30 @@ for ises in range(nSessions):
 # plt.hist(celldata['meanF'],color='gray',bins=np.arange(-100,100,step=10))
 
 # celldata['session_id'][celldata['meanF']<25]
+
+#%% Give redcells a string label
+redcelllabels = np.array(['unl','lab'])
+for ses in sessions:
+    ses.celldata['labeled'] = ses.celldata['redcell']
+    ses.celldata['labeled'] = ses.celldata['labeled'].astype(int).apply(lambda x: redcelllabels[x])
+
+#%% Show distribution of delta receptive fields across areas: 
+sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
+
+#Make a figure with each session is one line for each of the areapairs a histogram of distmat_rf:
+areapairs = ['V1-V1','PM-PM','V1-PM']
+
+fig = plot_delta_rf_across_sessions(sessions,areapairs)
+fig.savefig(os.path.join(savedir,'DeltaRF_Areapairs_%dsessions_' % nSessions + '.png'), format = 'png')
+
+#%% Make a histogram of delta receptive fields across V1 and PM based on labeling
+areapairs = ['V1-V1','PM-PM','V1-PM']
+projpairs = ['unl-unl','lab-lab']
+
+fig = plot_delta_rf_projections(sessions,areapairs,projpairs,filter_near=False)
+fig.savefig(os.path.join(savedir,'DeltaRF_Projpairs_nearfilter_%dsessions_' % nSessions + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'DeltaRF_Projpairs_%dsessions_' % nSessions + '.png'), format = 'png')
+
 
 #%% 
 
@@ -334,8 +357,6 @@ plt.xlabel(u"Dist. from labeled neuron \u03bcm")
 plt.ylabel('Included data')
 plt.tight_layout()
 fig.savefig(os.path.join(savedir,'Filter_NearLabeled_%d_Sessions' % nSessions + '.png'))
-
-#%%
 
 #%% 
 for ses in sessions:
