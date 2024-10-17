@@ -68,7 +68,7 @@ def compute_trace_correlation(sessions,uppertriangular=True,binwidth=1,filtersig
             assert np.all(sessions[ises].trace_corr[~idx_triu] < 1)
     return sessions    
 
-def compute_signal_noise_correlation(sessions,uppertriangular=True,filtersig=False,remove_method=None,remove_rank=0):
+def compute_signal_noise_correlation(sessions,uppertriangular=True,remove_method=None,remove_rank=0):
     # computing the pairwise correlation of activity that is shared due to mean response (signal correlation)
     # or residual to any stimuli in GR and GN protocols (noise correlation).
 
@@ -81,6 +81,8 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filtersig=Fal
             if uppertriangular:
                 idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
                 sessions[ises].sig_corr[idx_triu] = np.nan
+            else: #set only autocorrelation to nan
+                np.fill_diagonal(sessions[ises].sig_corr,np.nan)
 
         elif sessions[ises].sessiondata['protocol'][0]=='GR':
             [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
@@ -130,7 +132,7 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filtersig=Fal
                 #     ax.set_ylabel('Neurons')
                 # plt.tight_layout()
 
-            #Compute noise correlations from residuals:
+            # Compute noise correlations from residuals:
             sessions[ises].noise_corr       = np.corrcoef(respmat_res)
 
             idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
@@ -191,13 +193,6 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filtersig=Fal
             assert np.all(sessions[ises].noise_corr[~idx_triu] < 1)
         # else, do nothing, skipping protocol other than GR, GN, and IM'
 
-        if filtersig: #set all nonsignificant to nan:
-            if hasattr(sessions[ises],'sig_corr'):
-                sessions[ises].sig_corr = filter_corr_p(sessions[ises].sig_corr,
-                                                        np.shape(sessions[ises].respmat)[1],p_thr=0.01)
-            if hasattr(sessions[ises],'noise_corr'):
-                sessions[ises].noise_corr = filter_corr_p(sessions[ises].noise_corr,
-                                                        np.shape(sessions[ises].respmat)[1],p_thr=0.01)
     return sessions
 
 def filter_corr_p(r,n,p_thr=0.01):

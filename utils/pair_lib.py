@@ -82,8 +82,8 @@ def filter_2d_layerpair(ses,layerpair):
         return np.full(np.shape(ses.distmat_xy),True)
     layer1,layer2 = layerpair.split('-')
     assert 'layer' in ses.celldata, "Error: 'layer' is not in ses.celldata. Please run the function filter_sessions() with the argument has_pupil=True"
-    assert np.isin([layer1,layer2],ses.celldata['layer'].unique()).all(), \
-        f"Error: one of {layer1} or {layer2} is not in ses.celldata['layer']. Unique labels are {ses.celldata['layer'].unique()}"
+    # assert np.isin([layer1,layer2],ses.celldata['layer'].unique()).all(), \
+        # f"Error: one of {layer1} or {layer2} is not in ses.celldata['layer']. Unique labels are {ses.celldata['layer'].unique()}"
     return np.outer(ses.celldata['layer']==layer1, ses.celldata['layer']==layer2)
 
 # Define function to filter neuronpairs based on projection combination

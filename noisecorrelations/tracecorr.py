@@ -27,6 +27,7 @@ from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace_smooth_with_Fsig
 from utils.tuning import compute_tuning, compute_prefori
 from preprocessing.preprocesslib import assign_layer
+from utils.explorefigs import plot_excerpt
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
 
@@ -60,7 +61,7 @@ sessions,nSessions   = filter_sessions(protocols = ['GR','GN'],filter_areas=['V1
 
 #%% Remove two sessions with too much drift in them:
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20']))[0]
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
 sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
 
@@ -68,8 +69,8 @@ nSessions           = len(sessions)
 for ises in range(nSessions):
     # sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,calciumversion='dF')
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion='deconv',keepraw=True)
-                                # calciumversion='dF',keepraw=True)
+                                # calciumversion='deconv',keepraw=True)
+                                calciumversion='dF',keepraw=True)
     
     # detrend(sessions[ises].calciumdata,type='linear',axis=0,overwrite_data=True)
     sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False,filtersig=False)[0]
@@ -124,9 +125,41 @@ for ises in range(nSessions):
 
 
 #%% ########################## Compute signal and noise correlations: ###################################
-sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False)
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False,remove_method='PCA',remove_rank=1)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False,remove_method='RRR',remove_rank=2)
+
+#%% 
+
+def my_shuffle(data,method='random',axis=0):
+    data = copy.deepcopy(data)
+    if method == 'random':
+        if axis == 0:
+            for icol in range(data.shape[1]):
+                data[:,icol] = np.random.permutation(data[:,icol])
+        elif axis == 1:
+            for irow in range(data.shape[0]):
+                data[irow,:] = np.random.permutation(data[irow,:])
+    elif method == 'circular':
+        if axis == 0:
+            for icol in range(data.shape[1]):
+                data[:,icol] = np.roll(data[:,icol],shift=np.random.randint(0,data.shape[0]))
+        elif axis == 1:
+            for irow in range(data.shape[0]):
+                data[irow,:] = np.roll(data[irow,:],shift=np.random.randint(0,data.shape[1])) 
+    else:
+        raise ValueError('method should be "random" or "circular"')
+    return data
+
+def corr_shuffle(sessions,method='random'):
+    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing shuffled noise correlations: '):
+        data                                = my_shuffle(sessions[ises].respmat,axis=1,method=method)
+        sessions[ises].corr_shuffle         = np.corrcoef(data)
+        [N,K]                               = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+        np.fill_diagonal(sessions[ises].corr_shuffle,np.nan)
+    return sessions
+
+sessions = corr_shuffle(sessions,method='random')
 
 #%% ##########################################################################################################
 # DELTA ANATOMICAL DISTANCE :
@@ -193,7 +226,7 @@ sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(dr
 # #%% Detrend the data:
 # for ises in np.arange(len(sessions)):
 #     sessions[ises].respmat = detrend(sessions[ises].respmat,axis=1)
-# sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False)
+# sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 
 #%% Compute the variance across trials for each cell:
 for ses in sessions:
@@ -201,7 +234,7 @@ for ses in sessions:
         resp_meanori,respmat_res        = mean_resp_gr(ses)
     elif ses.sessiondata['protocol'][0]=='GN':
         resp_meanori,respmat_res        = mean_resp_gn(ses)
-    ses.celldata['noise_variance'] = np.var(respmat_res,axis=1)
+    ses.celldata['noise_variance']  = np.var(respmat_res,axis=1)
 
 #%% Plot distribution of pairwise correlations across sessions conditioned on area pairs:
 protocols           = ['GR','GN']
@@ -221,11 +254,14 @@ for corr_type in ['noise_corr']:
     for areapair in areapairs:
         ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
         
-        bincenters,histcorr,meancorr,varcorr = hist_corr_areas_labeling(ses,corr_type=corr_type,filternear=True,projpairs=projpairs,noise_thr=1,
-                                                            # areapairs=[areapair],layerpairs=['L2/3-L5'],minNcells=10,zscore=zscoreflag)
-                                                            # areapairs=[areapair],layerpairs=['L5-L2/3'],minNcells=10,zscore=zscoreflag)
+        bincenters,histcorr,meancorr,varcorr = hist_corr_areas_labeling(ses,corr_type=corr_type,filternear=True,projpairs=projpairs,noise_thr=0.2,
+                                                            areapairs=[areapair],layerpairs=['L2/3-L5'],minNcells=10,zscore=zscoreflag)
+                                                            # areapairs=[areapair],layerpairs=['L2/3-L2/3'],minNcells=10,zscore=zscoreflag)
                                                             # areapairs=[areapair],layerpairs=['L5-L5'],minNcells=10,zscore=zscoreflag)
-                                                            areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
+                                                            # areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
+        
+        # bincenters_sh,histcorr_sh,meancorr_sh,varcorr_sh = hist_corr_areas_labeling(ses,corr_type='corr_shuffle',filternear=True,projpairs=' ',noise_thr=0.2,
+        #                                                     areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
         
         areaprojpairs = projpairs.copy()
         for ipp,projpair in enumerate(projpairs):
@@ -235,9 +271,14 @@ for corr_type in ['noise_corr']:
         gspec       = fig.add_gridspec(nrows=2, ncols=3)
         
         histdata    = np.cumsum(histcorr,axis=0)/100 #get cumulative distribution
+        # histdata    = histcorr/100 #get cumulative distribution
         histmean    = np.nanmean(histdata,axis=1) #get mean across sessions
         histerror   = np.nanstd(histdata,axis=1) / np.sqrt(len(ses)) #compute SEM
-        
+       
+        histdata_sh  = np.cumsum(histcorr_sh,axis=0)/100 #get cumulative distribution
+        histmean_sh = np.nanmean(histdata_sh,axis=1) #get mean across sessions
+        histerror_sh = np.nanstd(histdata_sh,axis=1) / np.sqrt(len(ses)) #compute SEM
+
         ax0         = fig.add_subplot(gspec[:2, :2]) #bigger subplot for the cum dist
         
         xpos = bincenters[np.where(np.nanmean(histmean,axis=3).squeeze()<0.1)[0][-1]]
@@ -260,7 +301,8 @@ for corr_type in ['noise_corr']:
         for ipp,projpair in enumerate(projpairs): #show for each projection identity pair:
             handles.append(shaded_error(ax0,x=bincenters,y=np.squeeze(histmean[:,0,0,ipp]),
                             yerror=np.squeeze(histerror[:,0,0,ipp]),color=clrs_projpairs[ipp]))
-            
+            # for ises in range(len(sessions)):
+                # ax0.plot(bincenters,np.squeeze(histdata[:,ises,0,0,ipp]),color=clrs_projpairs[ipp],linewidth=0.3)
             axins1.plot(bincenters,np.squeeze(histmean[:,0,0,ipp]),color=clrs_projpairs[ipp])
             axins2.plot(bincenters,np.squeeze(histmean[:,0,0,ipp]),color=clrs_projpairs[ipp])
             # shaded_error(axins1,x=bincenters,y=np.squeeze(histmean[:,0,0,ipp]),
@@ -269,6 +311,11 @@ for corr_type in ['noise_corr']:
             #                 yerror=np.squeeze(histerror[:,0,0,ipp]),color=clrs_projpairs[ipp])
             # plot triangle for mean:
             ax0.plot(np.nanmean(meancorr[:,0,0,ipp],axis=None),0.9+ipp/50,'v',color=clrs_projpairs[ipp],markersize=5)
+        
+        handles.append(shaded_error(ax0,x=bincenters,y=np.squeeze(histmean_sh),
+                            yerror=np.squeeze(histerror_sh),color='k'))
+        axins1.plot(bincenters,np.squeeze(histmean_sh),color='k')
+        axins2.plot(bincenters,np.squeeze(histmean_sh),color='k')  
 
         ax0.set_xlabel('Correlation')
         ax0.set_ylabel('Cumulative Fraction')
@@ -278,6 +325,7 @@ for corr_type in ['noise_corr']:
             ax0.set_xlim([-2,2])
         ax0.axvline(0,linewidth=0.5,linestyle=':',color='k') #add line at zero for ref
         ax0.set_ylim([0,1])
+        # ax0.set_ylim([0,0.15])
         ax0.set_title('%s %s' % (areapair,corr_type),fontsize=12)
 
         #  Now show a heatmap of the meancorr data averaged over sessions (first dimension). 
@@ -341,13 +389,38 @@ for corr_type in ['noise_corr']:
         # plt.suptitle('%s %s' % (areapair,corr_type),fontsize=12)
         plt.tight_layout()
         # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Proj_PCA1_L5L23_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
-        # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Proj_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
+        # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Deconv_Proj_L23L23_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
         # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_MatchOSI_Proj_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
         # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Proj_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.pdf'), format = 'pdf')
 
 #%% 
 for ses in sessions:
     ses.celldata = assign_layer(ses.celldata)
+
+#%%
+pair_corr = np.empty((0,4),dtype=object)
+for ises,ses in enumerate(sessions):
+    corr_extreme = np.logical_or(ses.noise_corr<-0.1,ses.noise_corr>0.3)
+    V1_idx = np.all((ses.celldata['roi_name']=='V1',ses.celldata['noise_level']<0.1,ses.celldata['tuning_var']>0.025),axis=0)
+    PM_idx = np.all((ses.celldata['roi_name']=='PM',ses.celldata['noise_level']<0.1,ses.celldata['tuning_var']>0.025),axis=0)
+    row_idx,col_idx = np.where(np.all((np.outer(V1_idx,PM_idx),corr_extreme),axis=0))
+
+    pair_corr = np.vstack((pair_corr,np.array([ses.celldata['cell_id'][row_idx],
+                                                ses.celldata['cell_id'][col_idx],
+                                                ses.noise_corr[row_idx,col_idx],
+                                                np.repeat(ses.sessiondata['session_id'],len(row_idx))]).T))
+
+print(pair_corr.shape)
+
+#%%
+sessiondata['session_id'][np.nanargmax(meancorr[:,0,0,3]-meancorr[:,0,0,0])]
+sessiondata['session_id'][np.nanargmax(varcorr[:,0,0,3]-varcorr[:,0,0,0])]
+
+
+#%% #####################################
+#Show some traces and some stimuli to see responses:
+example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
+fig = plot_excerpt(sessions[0])
 
 
 #%% Plot distribution of pairwise correlations across sessions conditioned on area pairs:
