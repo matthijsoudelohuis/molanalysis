@@ -729,7 +729,7 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['frac_red_in_ROI']   = redcell[:,2]
         celldata_plane['chan2_prob']        = chan2_prob[:,1]
         celldata_plane['nredcells']         = Nredcells_plane
-
+        
         celldata_plane['plane_idx']     = iplane
         celldata_plane['roi_idx']       = plane_roi_idx[iplane]
         celldata_plane['plane_in_roi_idx']       = np.where(np.where(plane_roi_idx==plane_roi_idx[iplane])[0] == iplane)[0][0]
@@ -737,6 +737,10 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['depth']         = plane_zs[iplane] - sessiondata['ROI%d_dura' % (plane_roi_idx[iplane]+1)][0]
         #compute power at this plane: formula: P = P0 * exp^((z-z0)/Lz)
         celldata_plane['power_mw']      = sessiondata['SI_pz_power'][0]  * math.exp((plane_zs[iplane] - sessiondata['SI_pz_reference'][0])/sessiondata['SI_pz_constant'][0])
+
+        redcelllabels                   = np.array(['unl','lab']) #Give redcells a string label
+        celldata_plane['labeled']       = celldata_plane['redcell'].astype(int).apply(lambda x: redcelllabels[x])
+        celldata_plane['arealabel']     = celldata_plane['roi_name'] + celldata_plane['labeled']
 
         if os.path.exists(os.path.join(plane_folder, 'RF_F.npy')):
             RF_F = np.load(os.path.join(plane_folder, 'RF_F.npy'))

@@ -15,19 +15,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
-from scipy.stats import binned_statistic,binned_statistic_2d
 from scipy.signal import detrend
 from statannotations.Annotator import Annotator
 from scipy.optimize import curve_fit
 
 from loaddata.session_info import filter_sessions,load_sessions
+from preprocessing.preprocesslib import assign_layer
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.plot_lib import shaded_error,my_ceil,my_floor
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace_smooth_with_Fsig
 from utils.tuning import compute_tuning, compute_prefori
-from preprocessing.preprocesslib import assign_layer
 from utils.explorefigs import plot_excerpt
+from utils.shuffle_lib import my_shuffle, corr_shuffle
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
 
@@ -54,7 +54,7 @@ sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
 # sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
 
 #%% Load all sessions from certain protocols: 
-sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
+# sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
 sessions,nSessions   = filter_sessions(protocols = ['GR','GN'],filter_areas=['V1','PM']) 
 # sessions,nSessions   = filter_sessions(protocols = ['IM'],filter_areas=['V1','PM']) 
 # sessions,nSessions   = filter_sessions(protocols = ['RF'],filter_areas=['V1','PM'],session_rf=True)  
@@ -67,10 +67,10 @@ nSessions           = len(sessions)
 
 #%%  Load data properly:                      
 for ises in range(nSessions):
-    # sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,calciumversion='dF')
+    
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
                                 # calciumversion='deconv',keepraw=True)
-                                calciumversion='dF',keepraw=True)
+                                calciumversion='dF',keepraw=True,filter_hp=0.01)
     
     # detrend(sessions[ises].calciumdata,type='linear',axis=0,overwrite_data=True)
     sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False,filtersig=False)[0]
@@ -126,39 +126,10 @@ for ises in range(nSessions):
 
 #%% ########################## Compute signal and noise correlations: ###################################
 sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
-# sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False,remove_method='PCA',remove_rank=1)
+# sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='PCA',remove_rank=1)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False,remove_method='RRR',remove_rank=2)
 
 #%% 
-
-def my_shuffle(data,method='random',axis=0):
-    data = copy.deepcopy(data)
-    if method == 'random':
-        if axis == 0:
-            for icol in range(data.shape[1]):
-                data[:,icol] = np.random.permutation(data[:,icol])
-        elif axis == 1:
-            for irow in range(data.shape[0]):
-                data[irow,:] = np.random.permutation(data[irow,:])
-    elif method == 'circular':
-        if axis == 0:
-            for icol in range(data.shape[1]):
-                data[:,icol] = np.roll(data[:,icol],shift=np.random.randint(0,data.shape[0]))
-        elif axis == 1:
-            for irow in range(data.shape[0]):
-                data[irow,:] = np.roll(data[irow,:],shift=np.random.randint(0,data.shape[1])) 
-    else:
-        raise ValueError('method should be "random" or "circular"')
-    return data
-
-def corr_shuffle(sessions,method='random'):
-    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing shuffled noise correlations: '):
-        data                                = my_shuffle(sessions[ises].respmat,axis=1,method=method)
-        sessions[ises].corr_shuffle         = np.corrcoef(data)
-        [N,K]                               = np.shape(sessions[ises].respmat) #get dimensions of response matrix
-        np.fill_diagonal(sessions[ises].corr_shuffle,np.nan)
-    return sessions
-
 sessions = corr_shuffle(sessions,method='random')
 
 #%% ##########################################################################################################
@@ -243,9 +214,12 @@ protocols           = ['GR','GN']
 areapairs           = ['V1-V1']
 areapairs           = ['V1-PM']
 areapairs           = ['V1-V1','PM-PM','V1-PM']
+areapairs           = ['PM-PM']
 
 plt.rcParams['axes.spines.right']   = True
 plt.rcParams['axes.spines.top']     = True
+
+plt.plot(g[:,[0,3]].T)
 
 zscoreflag = False
 # for corr_type in ['trace_corr','sig_corr','noise_corr']:
@@ -253,15 +227,15 @@ zscoreflag = False
 for corr_type in ['noise_corr']:
     for areapair in areapairs:
         ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
-        
+
         bincenters,histcorr,meancorr,varcorr = hist_corr_areas_labeling(ses,corr_type=corr_type,filternear=True,projpairs=projpairs,noise_thr=0.2,
-                                                            areapairs=[areapair],layerpairs=['L2/3-L5'],minNcells=10,zscore=zscoreflag)
+                                                            # areapairs=[areapair],layerpairs=['L2/3-L5'],minNcells=10,zscore=zscoreflag)
                                                             # areapairs=[areapair],layerpairs=['L2/3-L2/3'],minNcells=10,zscore=zscoreflag)
                                                             # areapairs=[areapair],layerpairs=['L5-L5'],minNcells=10,zscore=zscoreflag)
-                                                            # areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
+                                                            areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
         
-        # bincenters_sh,histcorr_sh,meancorr_sh,varcorr_sh = hist_corr_areas_labeling(ses,corr_type='corr_shuffle',filternear=True,projpairs=' ',noise_thr=0.2,
-        #                                                     areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
+        bincenters_sh,histcorr_sh,meancorr_sh,varcorr_sh = hist_corr_areas_labeling(ses,corr_type='corr_shuffle',filternear=True,projpairs=' ',noise_thr=0.2,
+                                                            areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
         
         areaprojpairs = projpairs.copy()
         for ipp,projpair in enumerate(projpairs):
@@ -355,8 +329,8 @@ for corr_type in ['noise_corr']:
         for ix,iy in zip(test_indices[:,0],test_indices[:,1]):
             data1 = meancorr[:,0,0,ix]
             data2 = meancorr[:,0,0,iy]
-            # pval = stats.ttest_rel(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
-            pval = stats.wilcoxon(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
+            pval = stats.ttest_rel(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
+            # pval = stats.wilcoxon(data1[~np.isnan(data1) & ~np.isnan(data2)],data2[~np.isnan(data1) & ~np.isnan(data2)])[1]
             # pval = pval * 3 #bonferroni correction
             if pval<0.05:
                 ax1.plot([xlocs[ix],xlocs[iy]],[ylocs[ix],ylocs[iy]],'k-',linewidth=1)
@@ -389,39 +363,13 @@ for corr_type in ['noise_corr']:
         # plt.suptitle('%s %s' % (areapair,corr_type),fontsize=12)
         plt.tight_layout()
         # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Proj_PCA1_L5L23_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
-        # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Deconv_Proj_L23L23_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
+        # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Proj_L23L5_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
         # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_MatchOSI_Proj_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.png'), format = 'png')
         # fig.savefig(os.path.join(savedir,'HistCorr','Histcorr_Proj_%s_%s_%s' % (areapair,corr_type,'_'.join(protocols)) + '.pdf'), format = 'pdf')
 
 #%% 
 for ses in sessions:
     ses.celldata = assign_layer(ses.celldata)
-
-#%%
-pair_corr = np.empty((0,4),dtype=object)
-for ises,ses in enumerate(sessions):
-    corr_extreme = np.logical_or(ses.noise_corr<-0.1,ses.noise_corr>0.3)
-    V1_idx = np.all((ses.celldata['roi_name']=='V1',ses.celldata['noise_level']<0.1,ses.celldata['tuning_var']>0.025),axis=0)
-    PM_idx = np.all((ses.celldata['roi_name']=='PM',ses.celldata['noise_level']<0.1,ses.celldata['tuning_var']>0.025),axis=0)
-    row_idx,col_idx = np.where(np.all((np.outer(V1_idx,PM_idx),corr_extreme),axis=0))
-
-    pair_corr = np.vstack((pair_corr,np.array([ses.celldata['cell_id'][row_idx],
-                                                ses.celldata['cell_id'][col_idx],
-                                                ses.noise_corr[row_idx,col_idx],
-                                                np.repeat(ses.sessiondata['session_id'],len(row_idx))]).T))
-
-print(pair_corr.shape)
-
-#%%
-sessiondata['session_id'][np.nanargmax(meancorr[:,0,0,3]-meancorr[:,0,0,0])]
-sessiondata['session_id'][np.nanargmax(varcorr[:,0,0,3]-varcorr[:,0,0,0])]
-
-
-#%% #####################################
-#Show some traces and some stimuli to see responses:
-example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
-fig = plot_excerpt(sessions[0])
-
 
 #%% Plot distribution of pairwise correlations across sessions conditioned on area pairs:
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
@@ -796,10 +744,10 @@ protocols = ['SP']
 protocols           = ['GR']
 # protocols           = ['GN','GR','IM']	
 
-sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-sessions_in_list    = np.where(np.logical_and(sessiondata['protocol'].isin(protocols),
-                                ~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20'])))[0]
-sessions_subset     = [sessions[i] for i in sessions_in_list]
+# sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+# sessions_in_list    = np.where(np.logical_and(sessiondata['protocol'].isin(protocols),
+#                                 ~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20'])))[0]
+# sessions_subset     = [sessions[i] for i in sessions_in_list]
 
 #%% ################ Pairwise correlations as a function of pairwise delta RF: #####################
 areapairs           = ['V1-V1','PM-PM','V1-PM']
@@ -853,8 +801,8 @@ binres              = 5
 rf_type             = 'Fsmooth'
 filtersign          = None
 filternear          = False
-corr_type           = 'trace_corr'
-
+# corr_type           = 'trace_corr'
+corr_type           = 'noise_corr'
 
 # for ses in sessions:
 #     if 'rf_az_F' in ses.celldata and 'rf_az_Fsmooth' in ses.celldata:
@@ -863,9 +811,6 @@ corr_type           = 'trace_corr'
         
 # for prot in ['GN','GR','IM','SP','RF']:
 for prot in ['GN','GR']:
-# for prot in ['RF']:
-# for prot in ['IM']:
-# for prot in ['SP']:
     sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
     sessions_in_list    = np.where(sessiondata['protocol'].isin([prot]))[0]
     sessions_subset     = [sessions[i] for i in sessions_in_list]
@@ -927,7 +872,6 @@ for prot in ['GN','GR']:
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False)
 sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False,remove_method='PCA',remove_rank=1)
 
-
 #%% Make the 2D, 1D and center surround averages for each protocol and areapair and projpair (not layerpair)
 binres              = 5
 # rf_type             = 'Fneugauss'
@@ -949,51 +893,50 @@ for prot in [['GN','GR']]:
 
     [binmean,bincounts,bincenters] = bin_2d_corr_deltarf(sessions_subset,areapairs=areapairs,layerpairs=' ',projpairs=projpairs,
                                 corr_type=corr_type,binresolution=binres,rf_type=rf_type,normalize=False,
-                                sig_thr = 0.001,filternear=filternear,filtersign=filtersign)
+                                sig_thr = 0.001,filternear=filternear)
     
-    filestring = '%s_%s_%s_PCA1_proj' % (corr_type,rf_type,prot[0]+prot[1])
-    # filestring = '%s_%s_%s_proj' % (corr_type,rf_type,prot)
+    # filestring = '%s_%s_%s_PCA1_proj' % (corr_type,rf_type,prot[0]+prot[1])
+    filestring = '%s_%s_%s_proj' % (corr_type,rf_type,prot)
 
     if np.any(bincounts):
         fig = plot_2D_corr_map(binmean,bincounts,bincenters,min_counts = 1,gaussian_sigma=1,
                                 areapairs=areapairs,layerpairs=' ',projpairs=projpairs)
         fig.suptitle(filestring)
         plt.tight_layout()
-        fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_2D_%s' % filestring + '.png'), format = 'png')
+        # fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_2D_%s' % filestring + '.png'), format = 'png')
         # fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_2D_%s' % filestring + '.pdf'), format = 'pdf')
     
         fig = plot_1D_corr_areas_projs(binmean,bincounts,bincenters,min_counts = 1,
                                 areapairs=areapairs,layerpairs=' ',projpairs=projpairs)
         fig.suptitle(filestring)
         plt.tight_layout()
-        fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_1D_%s' % filestring + '.png'), format = 'png')
+        # fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_1D_%s' % filestring + '.png'), format = 'png')
         # fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_1D_%s' % filestring + '.pdf'), format = 'pdf')
 
         fig = plot_center_surround_corr_areas_projs(binmean,bincenters,centerthr=15,layerpairs=' ',areapairs=areapairs,projpairs=projpairs)
         fig.suptitle(filestring)
         plt.tight_layout()
-        fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_CS_%s' % filestring + '.png'), format = 'png')
+        # fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_CS_%s' % filestring + '.png'), format = 'png')
         # fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_CS_%s' % filestring + '.pdf'), format = 'pdf')
 
 #%% Make a 2D histogram with the distribution of correlation values for each delta RF bin
 binres_rf           = 2
-binres_corr         = 0.05
+binres_corr         = 0.1
 rf_type             = 'Fsmooth'
 filternear          = True
-corr_type           = 'noise_corr'
-# corr_type           = 'trace_corr'
+# corr_type           = 'noise_corr'
+corr_type           = 'trace_corr'
 
-# for prot in ['GN','GR','IM','SP','RF']:
 for prot in [['GN','GR']]:
     sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
     # sessions_in_list    = np.where(sessiondata['protocol'].isin([prot]))[0]
     sessions_in_list    = np.where(sessiondata['protocol'].isin(prot))[0]
     sessions_subset     = [sessions[i] for i in sessions_in_list]
 
-    [bincounts,bincenters_rf,bincenters_corr] = bin_2d_rangecorr_deltarf(sessions_subset,areapairs=areapairs,layerpairs=' ',projpairs=projpairs,
+    [bincounts,bincenters_rf,bincenters_corr] = bin_2d_rangecorr_deltarf(sessions_subset,areapairs=areapairs,layerpairs=['L2/3-L2/3'],projpairs=projpairs,
                                 corr_type=corr_type,binres_rf=binres_rf,binres_corr=binres_corr,rf_type=rf_type,
                                 sig_thr = 0.001,filternear=filternear,noise_thr=0.2)
-    
+
     # [binmean,bincounts,bincenters] = bin_2d_corr_deltarf(sessions_subset,areapairs=areapairs,layerpairs=' ',projpairs=projpairs,
     #                             corr_type=corr_type,binresolution=binres,rf_type=rf_type,normalize=False,
     #                             sig_thr = 0.001,filternear=filternear,filtersign=filtersign)
@@ -1002,19 +945,51 @@ for prot in [['GN','GR']]:
     filestring = '%s_%s_%s_proj' % (corr_type,rf_type,prot)
 
     if np.any(bincounts):
+        
+        # fig = plot_1D_fraccorr(bincounts,bincenters_rf,bincenters_corr,gaussian_sigma=2,
+                                # areapairs=areapairs,layerpairs=' ',projpairs=projpairs)
+        # fig.suptitle(filestring)
+        # plt.tight_layout()
+        
         fig = plot_2D_rangecorr_map(bincounts,bincenters_rf,bincenters_corr,gaussian_sigma=2,
                                 areapairs=areapairs,layerpairs=' ',projpairs=projpairs)
         fig.suptitle(filestring)
         plt.tight_layout()
-        fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_2D_rangecorr_norm034_%s' % filestring + '.png'), format = 'png')
+        # fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_2D_rangecorr_norm034_%s' % filestring + '.png'), format = 'png')
         # fig.savefig(os.path.join(savedir,'deltaRF','DeltaXY_2D_%s' % filestring + '.png'), format = 'png')
 
         fig = plot_perc_rangecorr_map(bincounts,bincenters_rf,bincenters_corr,
                                 areapairs=areapairs,layerpairs=' ',projpairs=projpairs)
         fig.suptitle(filestring)
         plt.tight_layout()
-        fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_Perc_%s' % filestring + '.png'), format = 'png')
+        # fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_Perc_%s' % filestring + '.png'), format = 'png')
         # fig.savefig(os.path.join(savedir,'deltaRF','DeltaRF_2D_%s' % filestring + '.pdf'), format = 'pdf')
+
+#%% 
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='PCA',remove_rank=1)
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
+
+#%% Make a 2D histogram with the distribution of correlation values for each delta RF bin
+binres_rf           = 5
+rf_type             = 'Fsmooth'
+filternear          = False
+corr_type           = 'noise_corr'
+# corr_type           = 'trace_corr'
+
+for prot in [['GN','GR']]:
+    sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+    # sessions_in_list    = np.where(sessiondata['protocol'].isin([prot]))[0]
+    sessions_in_list    = np.where(sessiondata['protocol'].isin(prot))[0]
+    sessions_subset     = [sessions[i] for i in sessions_in_list]
+    filestring          = '%s_%s_proj' % (corr_type,rf_type)
+
+    [bincounts,binpos,binneg,bincenters_rf] = bin_1d_fraccorr_deltarf(sessions_subset,areapairs=areapairs,layerpairs=' ',projpairs=projpairs,
+    # [bincounts,binpos,binneg,bincenters_rf] = bin_1d_fraccorr_deltarf(sessions_subset,areapairs=areapairs1,layerpairs=['L2/3-L2/3'],projpairs=projpairs,
+                                corr_type=corr_type,binres_rf=binres_rf,rf_type=rf_type,
+                                sig_thr = 0.001,filternear=filternear,noise_thr=0.2,corr_thr=0.05)
+
+    fig = plot_1D_fraccorr(bincounts,binpos,binneg,bincenters_rf,areapairs=areapairs,layerpairs=' ',projpairs=projpairs,mincounts=50)
+    # fig.savefig(os.path.join(savedir,'deltaRF','1DRF','Frac_PosNeg_DeltaRF_GNGR_%s' % filestring + '.png'), format = 'png')
 
 #%% Make a 2D histogram with the distribution of correlation values for each delta XY bin
 binres_rf           = 25
@@ -1059,38 +1034,6 @@ for prot in [['GN','GR']]:
 
 #%% 
 
-
-# #%% 
-# fig,ax = plt.subplots(1,1,figsize=(3,3.5))
-
-# binedges = np.arange(0,100,5)
-# for iap,areapair in enumerate(areapairs):
-#     for ilp,layerpair in enumerate(layerpairs):
-#         for ipp,projpair in enumerate(projpairs):
-#             rfdata      = deltarf.flatten()
-#             corrdata    = binmean[:,:,iap,ilp,ipp].flatten()
-#             nanfilter   = ~np.isnan(rfdata) & ~np.isnan(corrdata)
-#             corrdata    = corrdata[nanfilter]
-#             rfdata      = rfdata[nanfilter]
-#             bindata     = binned_statistic(x=rfdata,
-#                                         values= corrdata,
-#                                         statistic='median', bins=binedges)[0]
-#             ax.plot(binedges[:-1],bindata,c=clrs_areapairs[iap],label=areapair+projpair,linewidth=2)
-#             ax.set_title('%s\n%s' % (areapair, layerpair))
-#             ax.set_yticks(ticks=[0.025,0.035,0.045,0.055])
-#             ax.set_xlim([0,50])
-#             ax.set_ylim([np.round(np.nanpercentile(binmean[:,:,:,:,:].flatten(),3)*0.9,2),
-#                 np.round(np.nanpercentile(binmean[:,:,:,:,:].flatten(),90)*1.1,2)])
-#             yl = ax.get_ylim()
-#             ax.set_yticks(ticks=[yl[0],(yl[0]+yl[1])/2,yl[1]])
-#             # ax.set_ylim([0.03,0.065])
-#             ax.set_xlabel(u'Δ RF')
-#             ax.set_ylabel(u'Correlation')
-#             ax.legend(loc='upper right',frameon=False)
-# fig.tight_layout()
-# fig.savefig(os.path.join(savedir,'DeltaRF_1D_%s_%s_proj' % (corr_type,protocols[0]) + '.png'), format = 'png')
-# fig.savefig(os.path.join(savedir,'DeltaRF_1D_%s_%s_proj' % (corr_type,protocols[0]) + '.pdf'), format = 'pdf')
-
 #%% Control figure of counts per bin:
 
 # Make the figure of the counts per bin:
@@ -1118,47 +1061,3 @@ plt.tight_layout()
 # bincounts = np.nansum(bincounts_ses,axis=5)
 
 # binmean_ses[bincounts_ses<10]     = np.nan
-
-# #%% ##########################################################################################################
-# #   2D     DELTA RECEPTIVE FIELD                 2D
-# # ##########################################################################################################
-
-# sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-# sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM']))[0]
-# sessions_subset = [sessions[i] for i in sessions_in_list]
-
-# #%% #########################################################################################
-# # Contrast: across areas
-# areas   = ['V1','PM']
-
-# [noiseRFmat_mean,countsRFmat,binrange] = noisecorr_rfmap_areas(sessions_subset,corr_type='trace_corr',binresolution=7.5,
-#                                                                  rotate_prefori=False,thr_tuned=0.0,rf_type='F',
-#                                                                  thr_rf_p=0.001)
-
-# min_counts = 100
-# noiseRFmat_mean[countsRFmat<min_counts] = np.nan
-
-# fig,axes = plt.subplots(2,2,figsize=(10,7))
-# for i in range(2):
-#     for j in range(2):
-#         axes[i,j].imshow(noiseRFmat_mean[i,j,:,:],vmin=np.nanpercentile(noiseRFmat_mean[i,j,:,:],5),
-#                          vmax=np.nanpercentile(noiseRFmat_mean[i,j,:,:],99),cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
-#         axes[i,j].set_title(areas[i] + '-' + areas[j])
-# plt.tight_layout()
-# # plt.savefig(os.path.join(savedir,'2D_NC_smooth_Map_Interarea_AllProt_%dsessions' %nSessions  + '.png'), format = 'png')
-# plt.savefig(os.path.join(savedir,'2D_NC_smooth_Map_Interarea_RF_%dsessions' %nSessions  + '.png'), format = 'png')
-
-# fig,axes = plt.subplots(2,2,figsize=(10,7))
-# for i in range(2):
-#     for j in range(2):
-#         axes[i,j].imshow(np.log10(countsRFmat[i,j,:,:]),vmax=np.nanpercentile(np.log10(countsRFmat),99.9),
-#                          cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
-#         axes[i,j].set_title(areas[i] + '-' + areas[j])
-# plt.tight_layout()
-
-# # fig,axes = plt.subplots(4,4,figsize=(10,7))
-# # for i in range(4):
-# #     for j in range(4):
-# #         axes[i,j].imshow(np.log10(countsRFmat[i,j,:,:]),vmax=np.nanpercentile(np.log10(countsRFmat),99.9),cmap="hot",interpolation="none",extent=np.flipud(binrange).flatten())
-# #         axes[i,j].set_title(legendlabels[i,j])
-# # plt.tight_layout()

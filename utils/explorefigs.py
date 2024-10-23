@@ -59,6 +59,8 @@ def plot_excerpt(Session, trialsel=None, neuronsel=None, plot_neural=True, plot_
                   "10 Sec", loc=4, frameon=False))
     ax.axis('off')
 
+    fig.tight_layout()
+
     return fig
 
 
@@ -207,28 +209,26 @@ def plot_neural_traces(Session, ax, trialsel, neuronsel=None, counter=0, nexcell
     labeled         = np.unique(Session.celldata['redcell'])
     labeltext       = ['unlabeled', 'labeled',]
 
-    if neuronsel is not None:
-        example_cells   = np.empty((len(areas), len(labeled), nexcells)).astype('int64')
+    if neuronsel is None:
+        example_cells   = np.array([])
 
         for iarea, area in enumerate(areas):
             for ilabel, label in enumerate(labeled):
-
-                idx = np.where(np.logical_and(Session.celldata['roi_name'] == area, 
+                idx             = np.where(np.logical_and(Session.celldata['roi_name'] == area, 
                                             Session.celldata['redcell'] == label))[0]
-
-                excerpt_var                     = np.var(scaleddata, axis=0)
-                example_cells[iarea, ilabel, :] = idx[np.argpartition(excerpt_var[idx], -nexcells)[-nexcells:]]
-
-                # example_cells[iarea,ilabel,:] = idx[np.argpartition(Session.celldata['skew'][idx], -nexcells)[-nexcells:]]
-                # example_cells[iarea,ilabel,:] = idx[np.argpartition(Session.celldata['noise_level'][idx], nexcells)[:nexcells]]
-
+                temp_excells    = np.min((len(idx), nexcells))
+                excerpt_var     = np.var(scaleddata, axis=0)
+                example_cells    = np.append(example_cells, idx[np.argsort(-excerpt_var[idx])[:temp_excells]])
     else:
-        print('no neuron selection available yet')
+        example_cells = np.array(neuronsel)
 
     clrs = get_clr_labeled()
     for iarea, area in enumerate(areas):
         for ilabel, label in enumerate(labeled):
-            excerpt = scaleddata[:, example_cells[iarea, ilabel, :]]
+            example_cells_area_label = example_cells[np.logical_and(Session.celldata['roi_name'][example_cells] == area,
+                                                                    Session.celldata['redcell'][example_cells] == label)]
+
+            excerpt = scaleddata[:, example_cells_area_label.astype(int)]
 
             ncells = np.shape(excerpt)[1]
 

@@ -87,9 +87,9 @@ for ises in range(nSessions):
     # sessions[ises].celldata['noise_corr_avg'] = np.nanmean(sessions[ises].noise_corr,axis=1) 
     sessions[ises].celldata['noise_corr_avg'] = np.nanmean(np.abs(sessions[ises].trace_corr),axis=1) 
     if hasattr(sessions[ises],'respmat'): 
-        sessions[ises].celldata['meandF'] = np.nanmean(sessions[ises].respmat,axis=1) 
-        sessions[ises].celldata['mediandF'] = np.nanmedian(sessions[ises].respmat,axis=1)
-        sessions[ises].celldata['skewrespmat'] = skew(sessions[ises].respmat,axis=1)
+        sessions[ises].celldata['meandF']       = np.nanmean(sessions[ises].respmat,axis=1) 
+        sessions[ises].celldata['mediandF']     = np.nanmedian(sessions[ises].respmat,axis=1)
+        sessions[ises].celldata['skewrespmat']  = skew(sessions[ises].respmat,axis=1)
     # sessions[ises].celldata['noise_corr_avg'] = np.nanmean(np.abs(sessions[ises].noise_corr),axis=1) 
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
@@ -809,62 +809,6 @@ plt.savefig(os.path.join(savedir,'Area_Recombinase_TuningVar_%dsessions' %nSessi
 
 #%% ##################### Noise correlations within and across areas: #########################
 
-
-#%% ################## Noise correlations between labeled and unlabeled cells:  #########################
-areas               = ['V1','PM']
-redcells            = [0,1]
-redcelllabels       = ['unl','lab']
-legendlabels        = np.empty((4,4),dtype='object')
-
-minNcells           = 0
-
-noisemat            = np.full((4,4,nSessions),np.nan)
-
-for ises in tqdm(range(nSessions),desc='Averaging correlations across sessions'):
-    # idx_nearfilter = filter_nearlabeled(sessions[ises],radius=100)
-    for ixArea,xArea in enumerate(areas):
-        for iyArea,yArea in enumerate(areas):
-            for ixRed,xRed in enumerate(redcells):
-                for iyRed,yRed in enumerate(redcells):
-
-                        idx_source = sessions[ises].celldata['roi_name']==xArea
-                        idx_target = sessions[ises].celldata['roi_name']==yArea
-
-                        idx_source = np.logical_and(idx_source,sessions[ises].celldata['redcell']==xRed)
-                        idx_target = np.logical_and(idx_target,sessions[ises].celldata['redcell']==yRed)
-
-                        # idx_source = np.logical_and(idx_source,idx_nearfilter)
-                        # idx_target = np.logical_and(idx_target,idx_nearfilter)
-
-                        if np.sum(idx_source)>minNcells and np.sum(idx_target)>minNcells:	
-                            # noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(sessions[ises].noise_corr[np.ix_(idx_source, idx_target)])
-                            noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(sessions[ises].trace_corr[np.ix_(idx_source, idx_target)])
-                            # noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(np.abs(sessions[ises].trace_corr[np.ix_(idx_source, idx_target)]))
-                        # noisemat[ixArea*2 + ixRed,iyArea*2 + iyRed,ises]  = np.nanmean(sessions[ises].noise_cov[np.ix_(idx_source, idx_target)])
-                        
-                        legendlabels[ixArea*2 + ixRed,iyArea*2 + iyRed]  = areas[ixArea] + redcelllabels[ixRed] + '-' + areas[iyArea] + redcelllabels[iyRed]
-
-# assuming legendlabels is a 4x4 array
-legendlabels_upper_tri = legendlabels[np.triu_indices(4, k=0)]
-
-# assuming noisemat is a 4x4xnSessions array
-upper_tri_indices = np.triu_indices(4, k=0)
-noisemat_upper_tri = noisemat[upper_tri_indices[0], upper_tri_indices[1], :]
-
-df = pd.DataFrame(data=noisemat_upper_tri.T,columns=legendlabels_upper_tri)
-
-colorder = [0,1,4,7,8,9,2,3,5,6]
-legendlabels_upper_tri = legendlabels_upper_tri[colorder]
-df = df[legendlabels_upper_tri]
-
-#%% Filter certain protocols:
-sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM','SP']))[0]
-# sessions_subset = [sessions[i] for i in sessions_in_list]
-df = df.loc[sessions_in_list,:]
-
-print('%d areapairs interpolated due to missing data' % np.sum(df.isna().sum(axis=1)/4))
-df = df.fillna(df.mean())
 
 #%% Make a barplot with error bars of the mean NC across sessions conditioned on area pairs:
 

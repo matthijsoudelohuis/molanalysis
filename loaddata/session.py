@@ -15,7 +15,7 @@ from loaddata.get_data_folder import get_data_folder
 from utils.psth import compute_respmat
 import scipy
 import logging
-
+from utils.filter_lib import my_highpass_filter
 logger = logging.getLogger(__name__)
 
 
@@ -139,12 +139,16 @@ class Session():
         # set all nonlabeled cells to 'non'
         self.celldata.loc[self.celldata['redcell'] == 0, 'recombinase'] = 'non'
 
-    def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF',keepraw=False, cellfilter=None):
+    def load_respmat(self, load_behaviordata=True, load_calciumdata=True, load_videodata=True, calciumversion='dF',
+                    keepraw=False, cellfilter=None,filter_hp=None):
         #combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
 
         self.load_data(load_behaviordata=load_behaviordata, load_calciumdata=load_calciumdata,
                        load_videodata=load_videodata,calciumversion=calciumversion)
         
+        if filter_hp is not None and filter_hp > 0:
+            self.calciumdata = my_highpass_filter(data = self.calciumdata, cutoff = filter_hp, fs=self.sessiondata['fs'][0])
+
         if self.sessiondata['protocol'][0]=='IM':
             if calciumversion=='deconv':
                 t_resp_start = 0

@@ -198,6 +198,8 @@ def compute_tuning(response_matrix,conditions_vector,tuning_metric='OSI'):
 
     if tuning_metric=='OSI':
         tuning_values = compute_OSI(resp_mean)
+    elif tuning_metric=='DSI':
+        tuning_values = compute_DSI(resp_mean)
     elif tuning_metric=='gOSI':
         tuning_values = compute_gOSI(resp_mean)
     elif tuning_metric=='tuning_var':
@@ -243,7 +245,6 @@ def compute_gOSI(response_matrix):
 
     return gOSI_values
 
-
 def compute_OSI(response_matrix):
     """
     Compute Orientation Selectivity Index (OSI) for multiple neurons
@@ -285,6 +286,44 @@ def compute_OSI(response_matrix):
 
     return OSI_values
 
+def compute_DSI(response_matrix):
+    """
+    Compute Direction Selectivity Index (DSI) for multiple neurons
+
+    Parameters:
+    - response_matrix: 2D array or list where each row corresponds to responses of a single neuron to different orientations
+
+    Returns:
+    - DSI_values: List of Direction Selectivity Indices for each neuron
+    """
+
+    # Convert response_matrix to a numpy array
+    response_matrix = np.array(response_matrix)
+
+    # Initialize a list to store DSI values for each neuron
+    DSI_values = []
+
+    # Iterate over each neuron
+    for neuron_responses in response_matrix:
+        # Find the preferred direction (angle with maximum response)
+        pref_direction_index = np.argmax(neuron_responses)
+        pref_direction_response = neuron_responses[pref_direction_index]
+
+        # Find the opposite direction (angle 180 degrees away from preferred)
+        opposite_direction_index = (pref_direction_index + len(neuron_responses) // 2) % len(neuron_responses)
+        opposite_direction_response = neuron_responses[opposite_direction_index]
+
+        # Compute DSI for the current neuron
+        if pref_direction_response == 0:
+            # Handle the case where the response to the preferred direction is zero
+            DSI = 0.0
+        else:
+            DSI = (pref_direction_response - opposite_direction_response) / pref_direction_response
+
+        DSI_values.append(DSI)
+
+    return DSI_values
+
 def compute_tuning_var(resp_mat,resp_res):
     """
     Compute variance explained by conditions for multiple single trial responses
@@ -296,6 +335,7 @@ def compute_tuning_var(resp_mat,resp_res):
     Returns:
     - Tuning Variance: 0-1 (1: all variance across trials is explained by conditions)
     """
+    assert np.shape(resp_mat) == np.shape(resp_res), "shape mismatch"
     tuning_var = 1 - np.var(resp_res,axis=1) / np.var(resp_mat,axis=1)
 
     return tuning_var
