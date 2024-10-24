@@ -342,7 +342,14 @@ def plot_tuned_response(calciumdata, trialdata, t_axis, example_cells):
     return fig
 
 def plot_PCA_gratings(ses,size='runspeed',cellfilter=None,apply_zscore=True):
-
+    """
+    The plot_PCA_gratings function is used to visualize the first two principal components of a population of neurons' responses to grating stimuli. It takes in three inputs:
+    ses: a Session object containing the responses to be analyzed.
+    size (optional): a string specifying the size of the scatter plot markers. Default is 'runspeed'.
+    cellfilter (optional): a boolean array specifying which cells to include in the analysis. Default is None.
+    apply_zscore (optional): a boolean specifying whether to apply a zscore to each neuron's responses. Default is True.
+    returns: a figure with subplots for each orientation, with the first two principal components plotted as x and y.
+    """
     ########### PCA on trial-averaged responses ############
     ######### plot result as scatter by orientation ########
     respmat = ses.respmat

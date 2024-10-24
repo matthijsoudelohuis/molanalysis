@@ -1580,6 +1580,35 @@ def apply_ori_rot(angle_vec,ori_rots):
     return angle_vec
 
 
+def plot_noise_corr_deltaori(ses):
+    fig,ax = plt.subplots(1,1,figsize=(5,5))
+
+    tuning_perc_labels = np.linspace(0,100,11)
+    tuning_percentiles  = np.percentile(ses.celldata['tuning_var'],tuning_perc_labels)
+    clrs_percentiles    = sns.color_palette('inferno', len(tuning_percentiles))
+
+    for ip in range(len(tuning_percentiles)-1):
+
+        filter_tuning = np.logical_and(tuning_percentiles[ip] <= ses.celldata['tuning_var'],
+                                ses.celldata['tuning_var'] <= tuning_percentiles[ip+1])
+
+        df = pd.DataFrame({'NoiseCorrelation':  ses.noise_corr[filter_tuning,:].flatten(),
+                        'DeltaPrefOri':  ses.delta_pref[filter_tuning,:].flatten()}).dropna(how='all')
+
+        deltapreforis = np.sort(df['DeltaPrefOri'].unique())
+        histdata            = df.groupby(['DeltaPrefOri'], as_index=False)['NoiseCorrelation'].mean()
+
+        plt.plot(histdata['DeltaPrefOri'], 
+                histdata['NoiseCorrelation'],
+                color=clrs_percentiles[ip])
+        
+    plt.xlabel('Delta Pref. Ori')
+    plt.ylabel('NoiseCorrelation')
+            
+    plt.legend(tuning_perc_labels[1:],fontsize=9,loc='best')
+    plt.tight_layout()
+    return fig
+
 # def compute_NC_map(sourcecells,targetcells,NC_data,nBins,binrange,
 #                    rotate_prefori=False,rf_type='F'):
 

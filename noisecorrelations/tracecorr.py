@@ -28,6 +28,7 @@ from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace
 from utils.tuning import compute_tuning, compute_prefori
 from utils.explorefigs import plot_excerpt
 from utils.shuffle_lib import my_shuffle, corr_shuffle
+from utils.gain_lib import * 
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
 
