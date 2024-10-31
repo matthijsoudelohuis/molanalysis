@@ -755,155 +755,159 @@ def preprocess_smoothRF(rawdatadir,animal_id,sessiondate,rf_type='Fneu',filter_g
 
     suite2p_folder = os.path.join(sesfolder,"suite2p")
     
-    sessiondata = pd.DataFrame({'protocol': ['RF']})
-    sessiondata['animal_id']    = animal_id
-    sessiondata['sessiondate']  = sessiondate
-    sessiondata['fs']           = 5.317
+    rf_folder       = os.path.join(sesfolder,'RF','Behavior')
 
-    plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
+    if os.path.exists(suite2p_folder) and os.path.exists(rf_folder): 
+        sessiondata = pd.DataFrame({'protocol': ['RF']})
+        sessiondata['animal_id']    = animal_id
+        sessiondata['sessiondate']  = sessiondate
+        sessiondata['fs']           = 5.317
 
-    # load ops of plane0:
-    ops                = np.load(os.path.join(plane_folders[0], 'ops.npy'), allow_pickle=True).item()
+        plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
+
+        # load ops of plane0:
+        ops                = np.load(os.path.join(plane_folders[0], 'ops.npy'), allow_pickle=True).item()
+        
+        # read metadata from tiff (just take first tiff from the filelist
+        # metadata should be same for all if settings haven't changed during differernt protocols
+        localtif = os.path.join(sesfolder,sessiondata.protocol[0],'Imaging',
+                                os.listdir(os.path.join(sesfolder,sessiondata.protocol[0],'Imaging'))[0])
+        if os.path.exists(ops['filelist'][0]):
+            meta, meta_si   = get_meta(ops['filelist'][0])
+        elif os.path.exists(localtif):
+            meta, meta_si   = get_meta(localtif)
+        meta_dict       = dict() #convert to dictionary:
+        for line in meta_si:
+            meta_dict[line.split(' = ')[0]] = line.split(' = ')[1]
     
-    # read metadata from tiff (just take first tiff from the filelist
-    # metadata should be same for all if settings haven't changed during differernt protocols
-    localtif = os.path.join(sesfolder,sessiondata.protocol[0],'Imaging',
-                             os.listdir(os.path.join(sesfolder,sessiondata.protocol[0],'Imaging'))[0])
-    if os.path.exists(ops['filelist'][0]):
-        meta, meta_si   = get_meta(ops['filelist'][0])
-    elif os.path.exists(localtif):
-        meta, meta_si   = get_meta(localtif)
-    meta_dict       = dict() #convert to dictionary:
-    for line in meta_si:
-        meta_dict[line.split(' = ')[0]] = line.split(' = ')[1]
-   
-    #put some general information in the sessiondata  
-    sessiondata = sessiondata.assign(nplanes = ops['nplanes'])
+        #put some general information in the sessiondata  
+        sessiondata = sessiondata.assign(nplanes = ops['nplanes'])
 
-    ## Get trigger data to align timestamps:
-    filenames         = os.listdir(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior'))
-    triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
-    triggerdata       = pd.read_csv(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior',triggerdata_file[0]),skiprows=1).to_numpy()
-    #skip the first row because is init of the variable in BONSAI
-    [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
+        ## Get trigger data to align timestamps:
+        filenames         = os.listdir(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior'))
+        triggerdata_file  = list(filter(lambda a: 'triggerdata' in a, filenames)) #find the trialdata file
+        triggerdata       = pd.read_csv(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior',triggerdata_file[0]),skiprows=1).to_numpy()
+        #skip the first row because is init of the variable in BONSAI
+        [ts_master, protocol_frame_idx_master] = align_timestamps(sessiondata, ops, triggerdata)
 
-    # getting numer of ROIs
-    nROIs = len(meta['RoiGroups']['imagingRoiGroup']['rois'])
-    #Find the names of the rois:
-    roi_area    = [meta['RoiGroups']['imagingRoiGroup']['rois'][i]['name'] for i in range(nROIs)]
-    
-    #Find the depths of the planes for each roi:
-    roi_depths = np.array([],dtype=int)
-    roi_depths_idx = np.array([],dtype=int)
-
-    for i in range(nROIs):
-        zs = np.array([meta['RoiGroups']['imagingRoiGroup']['rois'][i]['zs']]).flatten()
-        roi_depths = np.append(roi_depths,zs)
-        roi_depths_idx = np.append(roi_depths_idx,np.repeat(i,len(zs)))
-    
-    #get all the depths of the planes in order of imaging:
-    plane_zs    = np.array(meta_dict['SI.hStackManager.zs'].replace('[','').replace(']','').split(' ')).astype('float64')
-
-    #Find the roi to which each plane belongs:
-    plane_roi_idx = np.array([roi_depths_idx[np.where(roi_depths == plane_zs[i])[0][0]] for i in range(ops['nplanes'])])
-
-    for iplane,plane_folder in enumerate(plane_folders):
-    # for iplane,plane_folder in enumerate(plane_folders[:1]):
-        print('processing plane %s / %s' % (iplane+1,ops['nplanes']))
-
-        ops                 = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
+        # getting numer of ROIs
+        nROIs = len(meta['RoiGroups']['imagingRoiGroup']['rois'])
+        #Find the names of the rois:
+        roi_area    = [meta['RoiGroups']['imagingRoiGroup']['rois'][i]['name'] for i in range(nROIs)]
         
-        [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
+        #Find the depths of the planes for each roi:
+        roi_depths = np.array([],dtype=int)
+        roi_depths_idx = np.array([],dtype=int)
 
-        chan2_prob          = np.load(os.path.join(plane_folder, 'redcell.npy'))
-        iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
-        stat                = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
-
-        ncells_plane              = len(iscell)
+        for i in range(nROIs):
+            zs = np.array([meta['RoiGroups']['imagingRoiGroup']['rois'][i]['zs']]).flatten()
+            roi_depths = np.append(roi_depths,zs)
+            roi_depths_idx = np.append(roi_depths_idx,np.repeat(i,len(zs)))
         
-        celldata_plane            = pd.DataFrame()
-        celldata_plane            = celldata_plane.assign(iscell        = iscell[:,0])
-        celldata_plane            = celldata_plane.assign(iscell_prob   = iscell[:,1])
-        celldata_plane            = celldata_plane.assign(xloc          = np.empty([ncells_plane,1]))
-        celldata_plane            = celldata_plane.assign(yloc          = np.empty([ncells_plane,1]))
+        #get all the depths of the planes in order of imaging:
+        plane_zs    = np.array(meta_dict['SI.hStackManager.zs'].replace('[','').replace(']','').split(' ')).astype('float64')
 
-        for k in range(0,ncells_plane):
-            celldata_plane['xloc'][k] = stat[k]['med'][0]
-            celldata_plane['yloc'][k] = stat[k]['med'][1]
+        #Find the roi to which each plane belongs:
+        plane_roi_idx = np.array([roi_depths_idx[np.where(roi_depths == plane_zs[i])[0][0]] for i in range(ops['nplanes'])])
+
+        for iplane,plane_folder in enumerate(plane_folders):
+        # for iplane,plane_folder in enumerate(plane_folders[:1]):
+            print('processing plane %s / %s' % (iplane+1,ops['nplanes']))
+
+            ops                 = np.load(os.path.join(plane_folder, 'ops.npy'), allow_pickle=True).item()
+            
+            [ts_plane, protocol_frame_idx_plane] = align_timestamps(sessiondata, ops, triggerdata)
+
+            chan2_prob          = np.load(os.path.join(plane_folder, 'redcell.npy'))
+            iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
+            stat                = np.load(os.path.join(plane_folder, 'stat.npy'), allow_pickle=True)
+
+            ncells_plane              = len(iscell)
+            
+            celldata_plane            = pd.DataFrame()
+            celldata_plane            = celldata_plane.assign(iscell        = iscell[:,0])
+            celldata_plane            = celldata_plane.assign(iscell_prob   = iscell[:,1])
+            celldata_plane            = celldata_plane.assign(xloc          = np.empty([ncells_plane,1]))
+            celldata_plane            = celldata_plane.assign(yloc          = np.empty([ncells_plane,1]))
+
+            for k in range(0,ncells_plane):
+                celldata_plane['xloc'][k] = stat[k]['med'][0]
+                celldata_plane['yloc'][k] = stat[k]['med'][1]
+            
+            celldata_plane['plane_idx']     = iplane
+            celldata_plane['roi_idx']       = plane_roi_idx[iplane]
+            celldata_plane['plane_in_roi_idx']       = np.where(np.where(plane_roi_idx==plane_roi_idx[iplane])[0] == iplane)[0][0]
+            celldata_plane['roi_name']      = roi_area[plane_roi_idx[iplane]]
+            celldata_plane['depth']      = 0
         
-        celldata_plane['plane_idx']     = iplane
-        celldata_plane['roi_idx']       = plane_roi_idx[iplane]
-        celldata_plane['plane_in_roi_idx']       = np.where(np.where(plane_roi_idx==plane_roi_idx[iplane])[0] == iplane)[0][0]
-        celldata_plane['roi_name']      = roi_area[plane_roi_idx[iplane]]
-       
-        if os.path.exists(os.path.join(plane_folder, 'RF_Fgauss.npy')):
-            RF_Fgauss = np.load(os.path.join(plane_folder, 'RF_Fgauss.npy'))
-            celldata_plane['rf_az_F']   = RF_Fgauss[:,0]
-            celldata_plane['rf_el_F']   = RF_Fgauss[:,1]
-            celldata_plane['rf_sx_F']   = RF_Fgauss[:,2]
-            celldata_plane['rf_sy_F']   = RF_Fgauss[:,3]
-            celldata_plane['rf_r2_F']   = RF_Fgauss[:,4]
+            if os.path.exists(os.path.join(plane_folder, 'RF_Fgauss.npy')):
+                RF_Fgauss = np.load(os.path.join(plane_folder, 'RF_Fgauss.npy'))
+                celldata_plane['rf_az_F']   = RF_Fgauss[:,0]
+                celldata_plane['rf_el_F']   = RF_Fgauss[:,1]
+                celldata_plane['rf_sx_F']   = RF_Fgauss[:,2]
+                celldata_plane['rf_sy_F']   = RF_Fgauss[:,3]
+                celldata_plane['rf_r2_F']   = RF_Fgauss[:,4]
 
-        if os.path.exists(os.path.join(plane_folder, 'RF_Fneugauss.npy')):
-            RF_Fneugauss = np.load(os.path.join(plane_folder, 'RF_Fneugauss.npy'))
-            celldata_plane['rf_az_Fneu']   = RF_Fneugauss[:,0]
-            celldata_plane['rf_el_Fneu']   = RF_Fneugauss[:,1]
-            celldata_plane['rf_sx_Fneu']   = RF_Fneugauss[:,2]
-            celldata_plane['rf_sy_Fneu']   = RF_Fneugauss[:,3]
-            celldata_plane['rf_r2_Fneu']   = RF_Fneugauss[:,4]
-         
-        #construct dataframe with activity by cells: give unique cell_id as label:
-        # cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%04.0f' % k for k in range(0,ncells_plane))
-        cell_ids            = np.array([sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%04.0f' % k for k in range(0,ncells_plane)])
-        #store cell_ids in celldata:
-        celldata_plane['cell_id']         = cell_ids
+            if os.path.exists(os.path.join(plane_folder, 'RF_Fneugauss.npy')):
+                RF_Fneugauss = np.load(os.path.join(plane_folder, 'RF_Fneugauss.npy'))
+                celldata_plane['rf_az_Fneu']   = RF_Fneugauss[:,0]
+                celldata_plane['rf_el_Fneu']   = RF_Fneugauss[:,1]
+                celldata_plane['rf_sx_Fneu']   = RF_Fneugauss[:,2]
+                celldata_plane['rf_sy_Fneu']   = RF_Fneugauss[:,3]
+                celldata_plane['rf_r2_Fneu']   = RF_Fneugauss[:,4]
+            
+            #construct dataframe with activity by cells: give unique cell_id as label:
+            # cell_ids            = list(sessiondata['session_id'][0] + '_' + '%s' % iplane + '_' + '%04.0f' % k for k in range(0,ncells_plane))
+            cell_ids            = np.array([sessiondata['sessiondate'][0] + '_' + '%s' % iplane + '_' + '%04.0f' % k for k in range(0,ncells_plane)])
+            #store cell_ids in celldata:
+            celldata_plane['cell_id']         = cell_ids
 
-        #Filter only good cells
-        if filter_good_cells:
-            celldata_plane  = celldata_plane[iscell[:,0]==1]
-            cell_ids        = cell_ids[np.where(iscell[:,0]==1)[0]]
-            F               = F[:,iscell[:,0]==1]
-            F_chan2         = F_chan2[:,iscell[:,0]==1]
-            Fneu            = Fneu[:,iscell[:,0]==1]
-            spks            = spks[:,iscell[:,0]==1]
-            dF              = dF[:,iscell[:,0]==1]
+            #Filter only good cells
+            if filter_good_cells:
+                celldata_plane  = celldata_plane[iscell[:,0]==1]
+                cell_ids        = cell_ids[np.where(iscell[:,0]==1)[0]]
+                F               = F[:,iscell[:,0]==1]
+                F_chan2         = F_chan2[:,iscell[:,0]==1]
+                Fneu            = Fneu[:,iscell[:,0]==1]
+                spks            = spks[:,iscell[:,0]==1]
+                dF              = dF[:,iscell[:,0]==1]
 
-        if iplane == 0: #if first plane then init dataframe, otherwise append
-            celldata = celldata_plane.copy()
-        else:
-            celldata = pd.concat([celldata,celldata_plane])
-        
-    celldata.reset_index(inplace=True,drop=True) #remove index based on within plane idx
-    celldata['session_id']      = sessiondata['session_id'][0] #add session id to celldata as identifier
+            if iplane == 0: #if first plane then init dataframe, otherwise append
+                celldata = celldata_plane.copy()
+            else:
+                celldata = pd.concat([celldata,celldata_plane])
+            
+        celldata.reset_index(inplace=True,drop=True) #remove index based on within plane idx
+        celldata['session_id']      = sessiondata['sessiondate'][0] #add session id to celldata as identifier
 
-    #If ROI is unnamed, replace if ROI_1/V1 combi, ROI_2/PM combi, otherwise error:
-    if celldata['roi_name'].str.contains('ROI').any():
-        if celldata['roi_name'].isin(['PM']).any():
-            celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_2','V1')
-            celldata['roi_name'] = celldata['roi_name'].str.replace('ROI 2','V1')
-            print('Unnamed ROI in scanimage inferred to be V1')
-        if celldata['roi_name'].isin(['V1']).any():
-            celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_1','PM')
-            celldata['roi_name'] = celldata['roi_name'].str.replace('ROI 1','PM')
-            print('Unnamed ROI in scanimage inferred to be PM')
-        assert not celldata['roi_name'].str.contains('ROI').any(),'unknown area'
+        #If ROI is unnamed, replace if ROI_1/V1 combi, ROI_2/PM combi, otherwise error:
+        if celldata['roi_name'].str.contains('ROI').any():
+            if celldata['roi_name'].isin(['PM']).any():
+                celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_2','V1')
+                celldata['roi_name'] = celldata['roi_name'].str.replace('ROI 2','V1')
+                print('Unnamed ROI in scanimage inferred to be V1')
+            if celldata['roi_name'].isin(['V1']).any():
+                celldata['roi_name'] = celldata['roi_name'].str.replace('ROI_1','PM')
+                celldata['roi_name'] = celldata['roi_name'].str.replace('ROI 1','PM')
+                print('Unnamed ROI in scanimage inferred to be PM')
+            assert not celldata['roi_name'].str.contains('ROI').any(),'unknown area'
 
-    ses = Session()
-    ses.sessiondata = sessiondata
-    ses.celldata =  celldata
-    sessions = [ses]
+        ses = Session()
+        ses.sessiondata = sessiondata
+        ses.celldata =  celldata
+        sessions = [ses]
 
-    sessions = compute_pairwise_anatomical_distance(sessions)
-    sessions = smooth_rf(sessions,r2_thr=0.2,radius=50,rf_type=rf_type,mincellsFneu=5)
-    sessions = exclude_outlier_rf(sessions)
-    sessions = replace_smooth_with_Fsig(sessions)
+        sessions = compute_pairwise_anatomical_distance(sessions)
+        sessions = smooth_rf(sessions,r2_thr=0.2,radius=50,rf_type=rf_type,mincellsFneu=5)
+        sessions = exclude_outlier_rf(sessions)
+        sessions = replace_smooth_with_Fsig(sessions)
 
-    celldata = sessions[0].celldata
+        celldata = sessions[0].celldata
 
-    for iplane,plane_folder in enumerate(plane_folders):
-        RF_Fsmooth = np.vstack((celldata['rf_az_Fsmooth'],celldata['rf_el_Fsmooth'],celldata['rf_sx_Fsmooth'],celldata['rf_sy_Fsmooth'],celldata['rf_r2_Fsmooth'])).T
-        RF_Fsmooth_plane = RF_Fsmooth[celldata['plane_idx']==iplane]
-        np.save(os.path.join(plane_folder, 'RF_Fsmooth.npy'),RF_Fsmooth_plane)
+        for iplane,plane_folder in enumerate(plane_folders):
+            RF_Fsmooth = np.vstack((celldata['rf_az_Fsmooth'],celldata['rf_el_Fsmooth'],celldata['rf_sx_Fsmooth'],celldata['rf_sy_Fsmooth'],celldata['rf_r2_Fsmooth'])).T
+            RF_Fsmooth_plane = RF_Fsmooth[celldata['plane_idx']==iplane]
+            np.save(os.path.join(plane_folder, 'RF_Fsmooth.npy'),RF_Fsmooth_plane)
         
     # fig = plot_rf_plane(celldata,r2_thr=0.15,rf_type='Fneu')
     # fig = plot_rf_plane(celldata,r2_thr=0.15,rf_type='Fsmooth')

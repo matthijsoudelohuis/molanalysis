@@ -269,6 +269,43 @@ def plot_delta_rf_across_sessions(sessions,areapairs):
             # axes[iap].hist(ses.distmat_rf[cellfilter],bins=binedges,color=clrs_areapairs[iap],alpha=0.5)
     return fig
 
+def scatter_dXY_dRF(ses,areapairs):
+    clrs_areapairs = get_clr_area_pairs(areapairs)
+    fig,axes = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*3,3))
+    for iap,areapair in enumerate(areapairs):
+        ax = axes[iap]
+
+        # Define function to filter neuronpairs based on area combination
+        areafilter = filter_2d_areapair(ses,areapair)
+        nanfilter  = ~np.isnan(ses.distmat_rf)
+        cellfilter = np.all((areafilter,~np.isnan(ses.distmat_rf),~np.isnan(ses.distmat_xy)),axis=0)
+        xdata = ses.distmat_xy[cellfilter].flatten()
+        ydata = ses.distmat_rf[cellfilter].flatten()
+
+        ax.scatter(xdata,ydata,s=3,alpha=0.01,c='k')	
+        sns.set_theme(style="ticks")
+        sns.histplot(x=xdata, y=ydata, bins=50, pthresh=.1, cmap="mako",ax=ax)
+
+        # Fit a linear regression model
+        slope, intercept = np.polyfit(xdata, ydata, 1)
+        regression_line = slope * xdata + intercept
+        # Plot the regression line
+        ax.plot(xdata, regression_line, color='blue', linewidth=2, label='Fit',linestyle='-')
+        # Add text with regression coefficients
+        ax.text(0.05, 0.95, f'Slope: {slope:.2f} (deg/um) \nIntercept: {intercept:.2f}',
+                transform=ax.transAxes, fontsize=8, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+        ax.set_title(areapair,color=clrs_areapairs[iap])
+        ax.set_xlabel(r'dXY ($\mu$m)')
+        ax.set_ylabel(u'dRF (\N{DEGREE SIGN})')
+        ax.set_xlim([0,650])
+        ax.set_ylim([0,140])
+        ax.set_aspect('auto')
+        ax.tick_params(axis='both', which='major', labelsize=8)
+    plt.tight_layout()
+    return fig
+
 def plot_delta_rf_projections(sessions,areapairs,projpairs,filter_near=False):
     clrs_areapairs  = get_clr_area_pairs(areapairs)
     clrs_projpairs  = get_clr_labelpairs(projpairs)

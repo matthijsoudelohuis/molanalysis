@@ -48,29 +48,26 @@ sessions,nSessions = filter_sessions(protocols = ['SP'],only_animal_id=['LPE0966
                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
 sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,filter_areas=['V1','PM'])
 sessions,nSessions = filter_sessions(protocols = ['SP','IM'])
+sessions,nSessions = filter_sessions(protocols = ['RF'])
 
 sig_thr = 0.001 #cumulative significance of receptive fields clusters
-
-#%% 
-for ses in sessions:
-    ses.celldata['rf_p_Fgauss'] = ses.celldata['rf_r2_Fgauss']<0.2
-    ses.celldata['rf_p_Fneugauss'] = ses.celldata['rf_r2_Fneugauss']<0.2
+r2_thr = 0.2 #R2 of the 2D gaussian fit
 
 #%% 
 for ses in sessions:
     ses.celldata['rf_az_F'] = ses.celldata['rf_az_Fgauss']
     ses.celldata['rf_el_F'] = ses.celldata['rf_el_Fgauss']
-    ses.celldata['rf_p_F'] = ses.celldata['rf_p_Fgauss']
-
+    ses.celldata['rf_r2_F'] = ses.celldata['rf_r2_Fgauss']
 
 #%% Interpolation of receptive fields:
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-sessions = smooth_rf(sessions,radius=50,rf_type='Fneugauss',mincellsFneu=5)
+sessions = smooth_rf(sessions,r2_thr=r2_thr,radius=50,rf_type='Fneugauss',mincellsFneu=5)
 sessions = exclude_outlier_rf(sessions) 
 sessions = replace_smooth_with_Fsig(sessions) 
 
 sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
+
 
 #%% Show fraction of receptive fields per session before any corrections:
 rf_type = 'F'
@@ -111,11 +108,6 @@ rf_type = 'F'
 fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_out%s_%s' % (rf_type,sessions[ises].sessiondata['session_id'][0]) + '.png'), format = 'png')
 
 
-# #%% Interpolate receptive field based on Fneu estimate:
-# sig_thr = 0.001
-# rf_type = 'Fneu'
-# R2 = interp_rf(sessions,rf_type=rf_type,sig_thr=sig_thr,r2_thr=0.02,reg_alpha=1)
-
 #%% 
 ises = 22
 sig_thr = 0.01
@@ -137,7 +129,7 @@ sessions[ises].celldata['rf_az_Fneu']    = sessions[ises].celldata['rf_az_Favg']
 sessions[ises].celldata['rf_el_Fneu']    = sessions[ises].celldata['rf_el_Favg']
 sessions[ises].celldata['rf_p_Fneu']    = sessions[ises].celldata['rf_p_Favg']
 
-sessions = smooth_rf(sessions,sig_thr=0.001,radius=75)
+# sessions = smooth_rf(sessions,sig_thr=0.001,radius=75)
 
 #%% Show fraction of receptive fields per session after smoothed interpolation and filtering:
 [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='Fsmooth',sig_thr=sig_thr)
@@ -164,12 +156,6 @@ for ises in range(nSessions):
 # plt.hist(celldata['meanF'],color='gray',bins=np.arange(-100,100,step=10))
 
 # celldata['session_id'][celldata['meanF']<25]
-
-#%% Give redcells a string label
-redcelllabels = np.array(['unl','lab'])
-for ses in sessions:
-    ses.celldata['labeled'] = ses.celldata['redcell']
-    ses.celldata['labeled'] = ses.celldata['labeled'].astype(int).apply(lambda x: redcelllabels[x])
 
 #%% Show distribution of delta receptive fields across areas: 
 sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')

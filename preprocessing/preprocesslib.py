@@ -767,6 +767,14 @@ def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
             celldata_plane['rf_sy_Fneu']   = RF_Fneugauss[:,3]
             celldata_plane['rf_r2_Fneu']   = RF_Fneugauss[:,4]
 
+        if os.path.exists(os.path.join(plane_folder, 'RF_Fsmooth.npy')):
+            RF_Fsmooth = np.load(os.path.join(plane_folder, 'RF_Fsmooth.npy'))
+            celldata_plane['rf_az_Fsmooth']   = RF_Fsmooth[:,0]
+            celldata_plane['rf_el_Fsmooth']   = RF_Fsmooth[:,1]
+            celldata_plane['rf_sx_Fsmooth']   = RF_Fsmooth[:,2]
+            celldata_plane['rf_sy_Fsmooth']   = RF_Fsmooth[:,3]
+            celldata_plane['rf_r2_Fsmooth']   = RF_Fsmooth[:,4]
+
         # OLD RF estimates loading:
         # if os.path.exists(os.path.join(plane_folder, 'RF_F.npy')):
         #     RF_F = np.load(os.path.join(plane_folder, 'RF_F.npy'))
