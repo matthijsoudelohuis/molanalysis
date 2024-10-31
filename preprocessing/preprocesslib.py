@@ -164,7 +164,10 @@ def proc_GR(rawdatadir,sessiondata):
     nOris = len(pd.unique(trialdata['Orientation']))
     assert(nOris==8 or nOris == 16) #8 or 16 distinct orientations
     ori_counts = trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
-    # assert(all(ori_counts > 50) and all(ori_counts < 400)) #between 50 and 400 repetitions
+    assert(all(ori_counts > 50) and all(ori_counts < 400)) #between 50 and 400 repetitions
+
+    junk,junk,oriconds  = np.unique(trialdata['Orientation'],return_index=True,return_inverse=True)
+    trialdata['stimCond']    = oriconds
 
     assert(np.allclose(trialdata['tOffset'] - trialdata['tOnset'],0.75,atol=0.1)) #stimulus duration all around 0.75s
     assert(np.allclose(np.diff(trialdata['tOnset']),2,atol=0.1)) #total trial duration all around 2s
@@ -205,6 +208,12 @@ def proc_GN(rawdatadir,sessiondata):
         trialdata.iloc[k,trialdata.columns.get_loc("centerSF")] = CenterSF[np.abs((CenterSF - trialdata.SF[k])).argmin()]
     
     trialdata['centerSpeed'] = trialdata['centerTF'] / trialdata['centerSF']
+    
+    junk,junk,oriconds  = np.unique(trialdata['centerOrientation'],return_index=True,return_inverse=True)
+    junk,junk,speedconds  = np.unique(trialdata['centerSpeed'],return_index=True,return_inverse=True)
+    trialdata['oriCond']     = oriconds
+    trialdata['speedCond']   = speedconds
+    trialdata['stimCond']    = oriconds + speedconds*3
 
     # define the noise relative to the center:  
     trialdata['deltaOrientation']   = trialdata['Orientation'] - trialdata['centerOrientation'] 
@@ -594,7 +603,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
  ### #     # #     #  #####  ### #     #  #####  
 """
 
-def proc_imaging(sesfolder, sessiondata):
+def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
     """ integrate preprocessed calcium imaging data """
     
     suite2p_folder = os.path.join(sesfolder,"suite2p")
@@ -742,63 +751,56 @@ def proc_imaging(sesfolder, sessiondata):
         celldata_plane['labeled']       = celldata_plane['redcell'].astype(int).apply(lambda x: redcelllabels[x])
         celldata_plane['arealabel']     = celldata_plane['roi_name'] + celldata_plane['labeled']
 
-        if os.path.exists(os.path.join(plane_folder, 'RF_F.npy')):
-            RF_F = np.load(os.path.join(plane_folder, 'RF_F.npy'))
-            celldata_plane['rf_az_F']   = RF_F[:,0]
-            celldata_plane['rf_el_F']   = RF_F[:,1]
-            celldata_plane['rf_sz_F']   = RF_F[:,2]
-            celldata_plane['rf_p_F']    = RF_F[:,3]
-            
-        if os.path.exists(os.path.join(plane_folder, 'RF_Fneu.npy')):
-            RF_Fneu = np.load(os.path.join(plane_folder, 'RF_Fneu.npy'))
-            celldata_plane['rf_az_Fneu']   = RF_Fneu[:,0]
-            celldata_plane['rf_el_Fneu']   = RF_Fneu[:,1]
-            celldata_plane['rf_sz_Fneu']   = RF_Fneu[:,2]
-            celldata_plane['rf_p_Fneu']    = RF_Fneu[:,3]
-
-        if os.path.exists(os.path.join(plane_folder, 'RF_Favg.npy')):
-            RF_Favg = np.load(os.path.join(plane_folder, 'RF_Favg.npy'))
-            celldata_plane['rf_az_Favg']   = RF_Favg[:,0]
-            celldata_plane['rf_el_Favg']   = RF_Favg[:,1]
-            celldata_plane['rf_sz_Favg']   = RF_Favg[:,2]
-            celldata_plane['rf_p_Favg']    = RF_Favg[:,3]
-
-        if os.path.exists(os.path.join(plane_folder, 'RF_Fblock.npy')):
-            RF_Fblock = np.load(os.path.join(plane_folder, 'RF_Fblock.npy'))
-            assert(np.shape(RF_Fblock)==(256,6)), 'problem with dimensions of Fblock'
-            # RF_Fblock[:,1] = RF_Fblock[:,1] 
-            # vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
-
-            distblock = np.sqrt((celldata_plane['xloc'].to_numpy()[:,None] - RF_Fblock[:,5][None,:])**2 + 
-                                (celldata_plane['yloc'].to_numpy()[:,None] - RF_Fblock[:,4][None,:])**2)
-            celldata_plane['rf_az_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),0]
-            celldata_plane['rf_el_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),1]
-            celldata_plane['rf_sz_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),2]
-            celldata_plane['rf_p_Fblock']    = RF_Fblock[np.argmin(distblock,axis=1),3]
-        
         if os.path.exists(os.path.join(plane_folder, 'RF_Fgauss.npy')):
             RF_Fgauss = np.load(os.path.join(plane_folder, 'RF_Fgauss.npy'))
-            celldata_plane['rf_az_Fgauss']   = RF_Fgauss[:,0]
-            celldata_plane['rf_el_Fgauss']   = RF_Fgauss[:,1]
-            celldata_plane['rf_sx_Fgauss']   = RF_Fgauss[:,2]
-            celldata_plane['rf_sy_Fgauss']   = RF_Fgauss[:,3]
-            celldata_plane['rf_r2_Fgauss']   = RF_Fgauss[:,4]
+            celldata_plane['rf_az_F']   = RF_Fgauss[:,0]
+            celldata_plane['rf_el_F']   = RF_Fgauss[:,1]
+            celldata_plane['rf_sx_F']   = RF_Fgauss[:,2]
+            celldata_plane['rf_sy_F']   = RF_Fgauss[:,3]
+            celldata_plane['rf_r2_F']   = RF_Fgauss[:,4]
 
         if os.path.exists(os.path.join(plane_folder, 'RF_Fneugauss.npy')):
             RF_Fneugauss = np.load(os.path.join(plane_folder, 'RF_Fneugauss.npy'))
-            celldata_plane['rf_az_Fneugauss']   = RF_Fneugauss[:,0]
-            celldata_plane['rf_el_Fneugauss']   = RF_Fneugauss[:,1]
-            celldata_plane['rf_sx_Fneugauss']   = RF_Fneugauss[:,2]
-            celldata_plane['rf_sy_Fneugauss']   = RF_Fneugauss[:,3]
-            celldata_plane['rf_r2_Fneugauss']   = RF_Fneugauss[:,4]
+            celldata_plane['rf_az_Fneu']   = RF_Fneugauss[:,0]
+            celldata_plane['rf_el_Fneu']   = RF_Fneugauss[:,1]
+            celldata_plane['rf_sx_Fneu']   = RF_Fneugauss[:,2]
+            celldata_plane['rf_sy_Fneu']   = RF_Fneugauss[:,3]
+            celldata_plane['rf_r2_Fneu']   = RF_Fneugauss[:,4]
 
+        # OLD RF estimates loading:
+        # if os.path.exists(os.path.join(plane_folder, 'RF_F.npy')):
+        #     RF_F = np.load(os.path.join(plane_folder, 'RF_F.npy'))
+        #     celldata_plane['rf_az_F']   = RF_F[:,0]
+        #     celldata_plane['rf_el_F']   = RF_F[:,1]
+        #     celldata_plane['rf_sz_F']   = RF_F[:,2]
+        #     celldata_plane['rf_p_F']    = RF_F[:,3]
+            
+        # if os.path.exists(os.path.join(plane_folder, 'RF_Fneu.npy')):
+        #     RF_Fneu = np.load(os.path.join(plane_folder, 'RF_Fneu.npy'))
+        #     celldata_plane['rf_az_Fneu']   = RF_Fneu[:,0]
+        #     celldata_plane['rf_el_Fneu']   = RF_Fneu[:,1]
+        #     celldata_plane['rf_sz_Fneu']   = RF_Fneu[:,2]
+        #     celldata_plane['rf_p_Fneu']    = RF_Fneu[:,3]
 
-            # import matplotlib.pyplot as plt
-            # fig,axes = plt.subplots(1,2,figsize=(8,4))
-            # axes[0].scatter(celldata_plane['rf_az_Fblock'] ,celldata_plane['rf_az_Fneu'],alpha=0.5)
-            # axes[0].plot([-135,135],[-135,135],linestyle=':',linewidth=1,c='k')
-            # axes[1].scatter(celldata_plane['rf_el_Fblock'] ,celldata_plane['rf_el_Fneu'],alpha=0.5)
-            # axes[1].plot([-16.7,50.2],[-16.7,50.2],linestyle=':',linewidth=1,c='k')
+        # if os.path.exists(os.path.join(plane_folder, 'RF_Favg.npy')):
+        #     RF_Favg = np.load(os.path.join(plane_folder, 'RF_Favg.npy'))
+        #     celldata_plane['rf_az_Favg']   = RF_Favg[:,0]
+        #     celldata_plane['rf_el_Favg']   = RF_Favg[:,1]
+        #     celldata_plane['rf_sz_Favg']   = RF_Favg[:,2]
+        #     celldata_plane['rf_p_Favg']    = RF_Favg[:,3]
+
+        # if os.path.exists(os.path.join(plane_folder, 'RF_Fblock.npy')):
+        #     RF_Fblock = np.load(os.path.join(plane_folder, 'RF_Fblock.npy'))
+        #     assert(np.shape(RF_Fblock)==(256,6)), 'problem with dimensions of Fblock'
+        #     # RF_Fblock[:,1] = RF_Fblock[:,1] 
+        #     # vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
+
+        #     distblock = np.sqrt((celldata_plane['xloc'].to_numpy()[:,None] - RF_Fblock[:,5][None,:])**2 + 
+        #                         (celldata_plane['yloc'].to_numpy()[:,None] - RF_Fblock[:,4][None,:])**2)
+        #     celldata_plane['rf_az_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),0]
+        #     celldata_plane['rf_el_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),1]
+        #     celldata_plane['rf_sz_Fblock']   = RF_Fblock[np.argmin(distblock,axis=1),2]
+        #     celldata_plane['rf_p_Fblock']    = RF_Fblock[np.argmin(distblock,axis=1),3]
          
         ##################### load suite2p activity outputs:
         F                   = np.load(os.path.join(plane_folder, 'F.npy'), allow_pickle=True)
@@ -871,13 +873,14 @@ def proc_imaging(sesfolder, sessiondata):
         iscell[celldata_plane['meanF']<meanF_thresh,0]  = 0
 
         #Filter only good cells
-        celldata_plane  = celldata_plane[iscell[:,0]==1]
-        cell_ids        = cell_ids[np.where(iscell[:,0]==1)[0]]
-        F               = F[:,iscell[:,0]==1]
-        F_chan2         = F_chan2[:,iscell[:,0]==1]
-        Fneu            = Fneu[:,iscell[:,0]==1]
-        spks            = spks[:,iscell[:,0]==1]
-        dF              = dF[:,iscell[:,0]==1]
+        if filter_good_cells:
+            celldata_plane  = celldata_plane[iscell[:,0]==1]
+            cell_ids        = cell_ids[np.where(iscell[:,0]==1)[0]]
+            F               = F[:,iscell[:,0]==1]
+            F_chan2         = F_chan2[:,iscell[:,0]==1]
+            Fneu            = Fneu[:,iscell[:,0]==1]
+            spks            = spks[:,iscell[:,0]==1]
+            dF              = dF[:,iscell[:,0]==1]
 
         if iplane == 0: #if first plane then init dataframe, otherwise append
             celldata = celldata_plane.copy()
@@ -929,20 +932,13 @@ def proc_imaging(sesfolder, sessiondata):
     ## identify moments of large tdTomato fluorescence change across the session:
     tdTom_absROI        = np.abs(st.zscore(Fchan2data,axis=0)) #get zscored tdtom fluo for rois and take absolute
     Fchan2data          = pd.DataFrame(st.zscore(np.mean(tdTom_absROI,axis=1)),columns=['Fchan2']) #average across ROIs and zscore again
-    # dFdata['F_chan2']           = tdTom_meanZ.to_numpy() #store in dFdata and deconvdata
-    # deconvdata['F_chan2']       = tdTom_meanZ.to_numpy()
 
     Ftsdata             = pd.DataFrame(dFdata['ts'], columns=['ts'])
-    dFdata              = dFdata.drop('ts',axis=1)
-    deconvdata          = deconvdata.drop('ts',axis=1)
-    
-    # self.F_chan2             = self.calciumdata['F_chan2']
-    # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
+    dFdata              = dFdata.drop('ts',axis=1) #ts was used for alignment, drop, saved separately (Ftsdata)
+    deconvdata          = deconvdata.drop('ts',axis=1) 
     assert(np.shape(dFdata)[1]==np.shape(celldata)[0]), '# of cells unequal in cell data and fluo data'
 
-    celldata['session_id']      = sessiondata['session_id'][0]
-    # dFdata['session_id']        = sessiondata['session_id'][0]
-    # deconvdata['session_id']    = sessiondata['session_id'][0]
+    celldata['session_id']      = sessiondata['session_id'][0] #add session id to celldata as identifier
 
     return sessiondata,celldata,dFdata,deconvdata,Ftsdata,Fchan2data
 

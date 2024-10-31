@@ -20,18 +20,19 @@ date_filter         = []
 # animal_ids          = ['LPE11495','LPE09665','LPE09830'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_02_20','2024_02_21  ','2024_02_22','2024_02_23','2024_02_26','2024_02_27']
 # date_filter        = ['2024_05_07']
+date_filter        = ['2023_10_12']
 # animal_ids          = ['LPE09665', 'LPE11495', 'LPE11998', 'LPE12013'] #If empty than all animals in folder will be processed
-animal_ids          = ['LPE12223'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
 
 # animal_ids          = ['LPE12013'] #If empty than all animals in folder will be processed
-date_filter         = ['2024_06_10']
+# date_filter         = ['2024_06_10']
 
 # protocols           = ['GR','SP','GN','RF']
-protocols           = ['GR']
+protocols           = ['GR','GN']
 # protocols           = ['DP','DM','DN']
 
 processimagingflag  = True
-savedataflag        = True
+savedataflag        = False
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -91,7 +92,7 @@ for animal_id in animal_ids: #for each animal
                 
                 if os.path.exists(os.path.join(sesfolder,"suite2p")) and processimagingflag:
                     print('Detected imaging data') #main processing function for imaging data:
-                    [sessiondata,celldata,dFdata,deconvdata,Ftsdata,Fchan2data] = proc_imaging(sesfolder,sessiondata) 
+                    [sessiondata,celldata,dFdata,deconvdata,Ftsdata,Fchan2data] = proc_imaging(sesfolder,sessiondata,filter_good_cells=True) 
                     celldata.to_csv(os.path.join(outdir,"celldata.csv"), sep=',')
                     Ftsdata.to_csv(os.path.join(outdir,"Ftsdata.csv"), sep=',')
                     Fchan2data.to_csv(os.path.join(outdir,"Fchan2data.csv"), sep=',')
@@ -115,7 +116,6 @@ for animal_id in animal_ids: #for each animal
                     # np.save(os.path.join(outdir,"RF_F_pmaps_on.npy"),RF_F_pmaps_on)
                     # np.save(os.path.join(outdir,"RF_F_pmaps_off.npy"),RF_F_pmaps_off)
 
-
                 # Save data:
                 if savedataflag:
                     sessiondata.to_csv(os.path.join(outdir,"sessiondata.csv"), sep=',')
@@ -125,3 +125,4 @@ for animal_id in animal_ids: #for each animal
                         trialdata.to_csv(os.path.join(outdir,"trialdata.csv"), sep=',')
 
 print(f'\n\nPreprocessing Completed')
+

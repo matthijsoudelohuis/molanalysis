@@ -10,7 +10,7 @@ from loaddata.get_data_folder import *
 
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 from loaddata.get_data_folder import get_rawdata_drive
-from preprocessing.locate_rf import locate_rf_session
+from preprocessing.locate_rf import locate_rf_session, preprocess_smoothRF
 
 animal_ids          = ['LPE12223'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE12013'] #If empty than all animals in folder will be processed
@@ -24,6 +24,9 @@ animal_ids          = ['LPE12223'] #If empty than all animals in folder will be 
 date_filter         = []
 # date_filter         = ['2023_04_12']
 # date_filter         = ['2024_05_07']
+date_filter        = ['2023_10_12']
+# animal_ids          = ['LPE09665', 'LPE11495', 'LPE11998', 'LPE12013'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
 
 protocols           = ['RF']
 
@@ -47,6 +50,5 @@ for animal_id in animal_ids: #for each animal
         # proc_labeling_session(rawdatadir,animal_id,sessiondate,saveoverlay=True,showcells=False,overlap_threshold=0.5,gcamp_proj='max_proj')
 
         # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],savemaps=False,method='2dgauss')
-        locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu','Favg','Fblock'],savemaps=False,method='ttest')
-        # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['Favg'])
-        # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['Fblock'])
+        # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu','Favg','Fblock'],savemaps=False,method='ttest')
+        preprocess_smoothRF(rawdatadir,animal_id,sessiondate,rf_type='Fneu')

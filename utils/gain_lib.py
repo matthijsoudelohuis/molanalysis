@@ -60,29 +60,33 @@ def plot_tuned_response(orientations, datasets, labels):
 
     return fig
 
-def tuned_resp_model(data, orientations):
+def tuned_resp_model(data, stimuli):
+    nstim = len(np.unique(stimuli))
+    assert nstim == 9 or nstim == 16, 'There should be 9 or 16 unique stimuli, not %d' %nstim
     
     data_hat = np.zeros_like(data)
 
-    for i,ori in enumerate(np.unique(orientations)):
-        data_hat[:,orientations==ori] = np.mean(data[:, orientations==ori], axis=1,keepdims=True)
+    for i,stim in enumerate(np.unique(stimuli)):
+        data_hat[:,stimuli==stim] = np.mean(data[:, stimuli==stim], axis=1,keepdims=True)
 
     return data_hat
 
-def pop_rate_gain_model(data, orientations):
+def pop_rate_gain_model(data, stimuli):
     poprate             = np.nanmean(data,axis=0)
     gain_weights        = np.array([np.corrcoef(poprate,data[n,:])[0,1] for n in range(data.shape[0])])
-    gain_weights        = gain_weights
     gain_trials         = poprate - np.nanmean(data,axis=None)
-    # gain_trials         = poprate #* 20 - 2
 
-    ustim,istimeses,stims  = np.unique(sessions[ises].trialdata['Orientation'],return_index=True,return_inverse=True)
+    ustim,istimeses,stims  = np.unique(stimuli,return_index=True,return_inverse=True)
     nstim = len(ustim)
-
+    assert nstim == 9 or nstim == 16, 'There should be 9 or 16 unique stimuli, not %d' %nstim
+    
     # Calculate mean response per stimulus
     sm = np.array([np.mean(data[:,stims == i,], axis=1) for i in range(nstim)])
 
-    mfs         = np.arange(10,30,2)
+    if np.mean(poprate) < 1: 
+        mfs         = np.arange(10,30,2)
+    else:
+        mfs         = np.arange(0,0.3,0.025)
     r2data      = []
     for imf,mf in enumerate(mfs):
         data_hat = np.empty_like(data)

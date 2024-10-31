@@ -20,8 +20,9 @@ from scipy.stats import zscore,ttest_rel
 from utils.imagelib import load_natural_images
 from utils.pair_lib import *
 from utils.tuning import mean_resp_image
+from loaddata.session import Session
 
-def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
+def plot_rf_plane(celldata,r2_thr=0,rf_type='Fneu'):
     
     areas           = np.sort(celldata['roi_name'].unique())[::-1]
     # vars            = ['rf_azimuth','rf_elevation']
@@ -33,7 +34,7 @@ def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
             for j in range(len(areas)): #for areas
                 
                 idx_area    = celldata['roi_name']==areas[j]
-                idx_sig     = celldata['rf_p_' + rf_type] < sig_thr
+                idx_sig     = celldata['rf_r2_' + rf_type] > r2_thr
                 idx         = np.logical_and(idx_area,idx_sig)
                 if np.any(celldata[idx][vars[i]]):
                     if vars[i]=='rf_az_' + rf_type:
@@ -71,7 +72,7 @@ def plot_rf_plane(celldata,sig_thr=1,rf_type='Fneu'):
 
     return fig
 
-def plot_rf_screen(celldata,sig_thr=1,rf_type='Fneu'):
+def plot_rf_screen(celldata,r2_thr=0,rf_type='Fneu'):
     
     areas           = np.sort(celldata['roi_name'].unique())[::-1]
     clr_areas       = get_clr_areas(areas)
@@ -81,7 +82,7 @@ def plot_rf_screen(celldata,sig_thr=1,rf_type='Fneu'):
 
     for j in range(len(areas)): #for areas
         idx_area    = celldata['roi_name']==areas[j]
-        idx_sig     = celldata['rf_p_' + rf_type] < sig_thr
+        idx_sig     = celldata['rf_r2_' + rf_type] > r2_thr
         idx         = np.logical_and(idx_area,idx_sig)
         sns.scatterplot(data = celldata[idx],
                         x='rf_az_' + rf_type,y='rf_el_' + rf_type,linewidth=0.5,alpha=0.5,
@@ -110,10 +111,10 @@ def plot_RF_frac(sessions,rf_type,sig_thr):
     for iarea in range(len(areas)):    # iterate over sessions
         for ises in range(len(sessions)):    # iterate over sessions
             idx = sessions[ises].celldata['roi_name'] == areas[iarea]
-            if 'rf_p_' + rf_type  in sessions[ises].celldata:
-                # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_Fneu'][idx]<sig_thr) / np.sum(idx)
-                # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_F'][idx]<sig_thr) / np.sum(idx)
-                rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_p_' + rf_type][idx]<sig_thr) / np.sum(idx)
+            if 'rf_r2_' + rf_type  in sessions[ises].celldata:
+                # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_r2_Fneu'][idx]>r2_thr) / np.sum(idx)
+                # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_r2_F'][idx]>r2_thr) / np.sum(idx)
+                rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_r2_' + rf_type][idx]>r2_thr) / np.sum(idx)
         print('%2.1f +- %2.1f %% neurons with RF in area %s\n'  % (np.mean(rf_frac[:,iarea])*100,np.std(rf_frac[:,iarea])*100,areas[iarea]))
     fig,ax = plt.subplots(figsize=(3,3))
     # sns.scatterplot(rf_frac.T,color='black',s=50)
@@ -130,10 +131,10 @@ def plot_RF_frac(sessions,rf_type,sig_thr):
 
     return fig,rf_frac
 
-def interp_rf(sessions,rf_type='Fneu',sig_thr=0.001,r2_thr=0.3,reg_alpha=1):
+def interp_rf(sessions,rf_type='Fneu',r2_thr=0.2,reg_alpha=1):
 
     for ises,ses in enumerate(sessions):
-        if 'rf_p_' + rf_type in ses.celldata:
+        if 'rf_r2_' + rf_type in ses.celldata:
             areas           = np.sort(ses.celldata['roi_name'].unique())[::-1]
             # vars            = ['rf_azimuth','rf_elevation']
             vis_dims        = ['rf_az_' + rf_type,'rf_el_' + rf_type]
@@ -145,13 +146,13 @@ def interp_rf(sessions,rf_type='Fneu',sig_thr=0.001,r2_thr=0.3,reg_alpha=1):
 
             ses.celldata[vis_dims[0] + '_interp'] = '' 
             ses.celldata[vis_dims[1] + '_interp'] = '' 
-            ses.celldata['rf_p_' + rf_type + '_interp'] = 0
+            ses.celldata['rf_r2_' + rf_type + '_interp'] = 0
 
             for idim,dim in enumerate(vis_dims): #for azimuth and elevation
                 for iarea,area in enumerate(areas): #for areas
                     
                     idx_area    = ses.celldata['roi_name']==area
-                    idx_sig     = ses.celldata['rf_p_' + rf_type] < sig_thr
+                    idx_sig     = ses.celldata['rf_r2_' + rf_type] > r2_thr
                     idx_nan     = ~np.isnan(ses.celldata['rf_az_' + rf_type])
                     idx         = np.all((idx_area,idx_sig,idx_nan),axis=0) 
 
@@ -165,7 +166,7 @@ def interp_rf(sessions,rf_type='Fneu',sig_thr=0.001,r2_thr=0.3,reg_alpha=1):
                     reg         = reg.fit(X.T, y)
                     
                     # plt.scatter(y,reg.predict(X.T))
-                    # weights     = np.abs(-np.log10(ses.celldata[idx]['rf_p_' + rf_type]))
+                    # weights     = np.abs(-np.log10(ses.celldata[idx]['rf_r2_' + rf_type]))
                     # # Fit weighted least squares regression model
                     # X = sm.add_constant(X)
                     # # reg = sm.WLS(y, X.T, weights=weights)
@@ -182,31 +183,33 @@ def interp_rf(sessions,rf_type='Fneu',sig_thr=0.001,r2_thr=0.3,reg_alpha=1):
     return r2
 
 
-def smooth_rf(sessions,sig_thr=0.001,radius=50,mincellsFneu=10,rf_type='Fneu'):
+def smooth_rf(sessions,r2_thr=0.2,radius=50,mincellsFneu=10,rf_type='Fneu'):
 
     # for ses in sessions:
     for ses in tqdm(sessions,total=len(sessions),desc= 'Smoothed interpolation of missing RF: '):
         if 'rf_az_' + rf_type in ses.celldata:
             ses.celldata['rf_az_Fsmooth']          = np.nan
             ses.celldata['rf_el_Fsmooth']          = np.nan
-            ses.celldata['rf_p_Fsmooth']           = np.nan
+            ses.celldata['rf_sx_Fsmooth']          = np.nan
+            ses.celldata['rf_sy_Fsmooth']          = np.nan
+            ses.celldata['rf_r2_Fsmooth']          = np.nan
             
             for iN in range(len(ses.celldata)):
                 
                 idx_near_Fneu = np.all((ses.distmat_xy[iN,:] < radius,
-                                   ses.celldata['rf_p_' + rf_type]<sig_thr,
+                                   ses.celldata['rf_r2_' + rf_type]>r2_thr,
                                    ~np.isnan(ses.celldata['rf_az_' + rf_type])),axis=0)
                 if np.sum(idx_near_Fneu)>mincellsFneu:
                     # idx_near = np.logical_and(ses.distmat_xy[iN,:] < radius,idx_RF)
                     # ses.celldata.loc[iN,'rf_az_Fsmooth']    = np.average(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'],
-                                                                    # weights=np.abs(-np.log10(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_p_Fneu'])))
+                                                                    # weights=np.abs(-np.log10(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_r2_Fneu'])))
 
                     # ses.celldata.loc[iN,'rf_el_Fsmooth']    = np.average(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'],
-                                                                    # weights=np.abs(-np.log10(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_p_Fneu'])))
+                                                                    # weights=np.abs(-np.log10(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_r2_Fneu'])))
 
                     ses.celldata.loc[iN,'rf_az_Fsmooth']    = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_' + rf_type])
                     ses.celldata.loc[iN,'rf_el_Fsmooth']    = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_' + rf_type])
-                    ses.celldata.loc[iN,'rf_p_Fsmooth']     = 0
+                    ses.celldata.loc[iN,'rf_r2_Fsmooth']    = 1
 
     return sessions
 
@@ -224,21 +227,24 @@ def exclude_outlier_rf(sessions,rf_thr_V1=25,rf_thr_PM=50):
                                             (ses.celldata['rf_el_F'] - ses.celldata['rf_el_Fsmooth'])**2 )
             
             idx = (idx_V1 & (rf_dist_F_Fsmooth > rf_thr_V1)) | np.isnan(rf_dist_F_Fsmooth)
-            ses.celldata.loc[idx,['rf_az_F','rf_el_F','rf_p_F']] = np.NaN
+            ses.celldata.loc[idx,['rf_az_F','rf_el_F','rf_sx_F','rf_sy_F','rf_r2_F']] = np.NaN
             
             idx = (idx_PM & (rf_dist_F_Fsmooth > rf_thr_PM)) | np.isnan(rf_dist_F_Fsmooth)
-            ses.celldata.loc[idx,['rf_az_F','rf_el_F','rf_p_F']] = np.NaN
+            ses.celldata.loc[idx,['rf_az_F','rf_el_F','rf_sx_F','rf_sy_F','rf_r2_F']] = np.NaN
 
     return sessions
 
-def replace_smooth_with_Fsig(sessions,sig_thr=0.001):
+def replace_smooth_with_Fsig(sessions,r2_thr=0.2):
     # Find indices of good fit receptive field neurons 
     # replace Fsmooth receptive fields to their F-based estimates
     for ses in sessions:
         if 'rf_az_F' in ses.celldata and 'rf_az_Fsmooth' in ses.celldata:
-            idx = ses.celldata['rf_p_F'] < sig_thr
+            idx     = ses.celldata['rf_r2_F'] > r2_thr
             ses.celldata.loc[idx,'rf_az_Fsmooth'] = ses.celldata.loc[idx,'rf_az_F']
             ses.celldata.loc[idx,'rf_el_Fsmooth'] = ses.celldata.loc[idx,'rf_el_F']
+            ses.celldata.loc[idx,'rf_sx_Fsmooth'] = ses.celldata.loc[idx,'rf_sx_F']
+            ses.celldata.loc[idx,'rf_sy_Fsmooth'] = ses.celldata.loc[idx,'rf_sy_F']
+            ses.celldata.loc[idx,'rf_r2_Fsmooth'] = ses.celldata.loc[idx,'rf_r2_F']
 
     return sessions
     
@@ -305,54 +311,6 @@ def plot_delta_rf_projections(sessions,areapairs,projpairs,filter_near=False):
     return fig
 
 
-# def exclude_outlier_rf(sessions,sig_thr=0.001,radius=100,rf_thr=25,mincellsFneu=10):
-#     # Filter out neurons with receptive fields that are too far from the local neuropil receptive field:
-#     #radius specifies cortical distance of neuropil to include for local rf center
-#     #rf_thr specifies cutoff of deviation from local rf center to be excluded
-#     # for ses in sessions:
-#     for ses in tqdm(sessions,total=len(sessions),desc= 'Setting outlier RFs to NaN: '):
-#         if 'rf_az_Fneu' in ses.celldata:
-#             rf_az_Fneu_avg = np.full(len(ses.celldata),np.NaN)
-#             rf_el_Fneu_avg = np.full(len(ses.celldata),np.NaN)
-#             for iN in range(len(ses.celldata)):
-
-#                 # idx_near = ses.distmat_xy[iN,:] < radius
-#                 idx_near_Fneu = np.all((ses.distmat_xy[iN,:] < radius,
-#                                    ses.celldata['rf_p_Fneu']<sig_thr,
-#                                    ~np.isnan(ses.celldata['rf_az_Fneu'])),axis=0)
-#                 if np.sum(idx_near_Fneu)>mincellsFneu:
-#                     rf_az_Fneu_avg[iN]         = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
-#                     rf_el_Fneu_avg[iN]         = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
-
-#             rf_dist_F_Fneu = np.sqrt( (ses.celldata['rf_az_F'] - rf_az_Fneu_avg)**2 + (ses.celldata['rf_el_F'] - rf_el_Fneu_avg)**2 )
-#             #now set all neurons outside the criterium rf_thr to NaN
-#             ses.celldata.loc[rf_dist_F_Fneu > rf_thr,['rf_az_F','rf_el_F','rf_p_F']] = np.NaN
-#     return sessions
-
-# def smooth_rf(sessions,sig_thr=0.001,radius=50,mincellsFneu=10):
-
-#     # for ses in sessions:
-#     for ses in tqdm(sessions,total=len(sessions),desc= 'Smoothed interpolation of missing RF: '):
-#         if 'rf_az_Fneu' in ses.celldata:
-#             ses.celldata['rf_az_Fsmooth']          = ses.celldata['rf_az_F'].copy()
-#             ses.celldata['rf_el_Fsmooth']          = ses.celldata['rf_el_F'].copy()
-#             ses.celldata['rf_p_Fsmooth']           = ses.celldata['rf_p_F'].copy()
-            
-#             for iN in np.where(~(ses.celldata['rf_p_Fsmooth'] < sig_thr))[0]:
-                
-#                 idx_near_Fneu = np.all((ses.distmat_xy[iN,:] < radius,
-#                                    ses.celldata['rf_p_Fneu']<sig_thr,
-#                                    ~np.isnan(ses.celldata['rf_az_Fneu'])),axis=0)
-#                 if np.sum(idx_near_Fneu)>mincellsFneu:
-#                     # idx_near = np.logical_and(ses.distmat_xy[iN,:] < radius,idx_RF)
-#                     ses.celldata.loc[iN,'rf_az_Fsmooth']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
-#                     ses.celldata.loc[iN,'rf_el_Fsmooth']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
-#                     ses.celldata.loc[iN,'rf_p_Fsmooth']           = 0
-#                     # ses.celldata.loc[iN,'rf_az_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
-#                     # ses.celldata.loc[iN,'rf_el_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
-#                     # ses.celldata.loc[iN,'rf_p_F']           = 0.0009
-#     return sessions
-
 def filter_nearlabeled(ses,radius=50):
 
     if not hasattr(ses,'distmat_xyz'):
@@ -381,7 +339,7 @@ def get_response_triggered_image(ses, natimgdata):
 
 
 def estimate_rf_IM(ses,show_fig=False): 
-    ses.celldata['rf_az_F'] = ses.celldata['rf_el_F'] = ses.celldata['rf_p_F'] = np.nan
+    ses.celldata['rf_az_F'] = ses.celldata['rf_el_F'] = ses.celldata['rf_r2_F'] = np.nan
     # natimgdata = load_natural_images(onlyright=True) #Load the natural images:
     natimgdata = load_natural_images(onlyright=False) #Load the natural images:
 
@@ -398,7 +356,7 @@ def estimate_rf_IM(ses,show_fig=False):
     ymap        = np.linspace(*el_lims,ypix)
     # N = 100
     zthr        = 3
-    rf_data     = pd.DataFrame(data=np.full((N,4),np.nan),columns=['rf_az_F','rf_el_F','rf_sz_F','rf_p_F'])
+    rf_data     = pd.DataFrame(data=np.full((N,4),np.nan),columns=['rf_az_F','rf_el_F','rf_sz_F','rf_r2_F'])
 
     for iN in range(N):
         dev = zscore(ses.RTA[:, :, iN].copy()-128,axis=None)
@@ -408,7 +366,8 @@ def estimate_rf_IM(ses,show_fig=False):
             rf_data.loc[iN,'rf_az_F'] = xmap[x]
             rf_data.loc[iN,'rf_el_F'] = ymap[y]
             rf_data.loc[iN,'rf_sz_F'] = np.sum(dev>zthr)
-            rf_data.loc[iN,'rf_p_F'] = 1.015**-(np.sum(np.abs(dev))) #get some significance metric from the total deviation
+            print('PROBLEMATIC STILL CONVERT TO R2 FOR IM')
+            rf_data.loc[iN,'rf_r2_F'] = 1.015**-(np.sum(np.abs(dev))) #get some significance metric from the total deviation
     
     if show_fig:
         RTA_var = np.var(ses.RTA, axis=(0, 1))
@@ -443,3 +402,56 @@ def estimate_rf_IM(ses,show_fig=False):
         plt.tight_layout(rect=[0, 0, 1, 1])
 
     return rf_data
+
+
+
+
+
+    
+# def exclude_outlier_rf(sessions,r2_thr=0.2,radius=100,rf_thr=25,mincellsFneu=10):
+#     # Filter out neurons with receptive fields that are too far from the local neuropil receptive field:
+#     #radius specifies cortical distance of neuropil to include for local rf center
+#     #rf_thr specifies cutoff of deviation from local rf center to be excluded
+#     # for ses in sessions:
+#     for ses in tqdm(sessions,total=len(sessions),desc= 'Setting outlier RFs to NaN: '):
+#         if 'rf_az_Fneu' in ses.celldata:
+#             rf_az_Fneu_avg = np.full(len(ses.celldata),np.NaN)
+#             rf_el_Fneu_avg = np.full(len(ses.celldata),np.NaN)
+#             for iN in range(len(ses.celldata)):
+
+#                 # idx_near = ses.distmat_xy[iN,:] < radius
+#                 idx_near_Fneu = np.all((ses.distmat_xy[iN,:] < radius,
+#                                    ses.celldata['rf_r2_Fneu']>r2_thr,
+#                                    ~np.isnan(ses.celldata['rf_az_Fneu'])),axis=0)
+#                 if np.sum(idx_near_Fneu)>mincellsFneu:
+#                     rf_az_Fneu_avg[iN]         = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
+#                     rf_el_Fneu_avg[iN]         = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
+
+#             rf_dist_F_Fneu = np.sqrt( (ses.celldata['rf_az_F'] - rf_az_Fneu_avg)**2 + (ses.celldata['rf_el_F'] - rf_el_Fneu_avg)**2 )
+#             #now set all neurons outside the criterium rf_thr to NaN
+#             ses.celldata.loc[rf_dist_F_Fneu > rf_thr,['rf_az_F','rf_el_F','rf_r2_F']] = np.NaN
+#     return sessions
+
+# def smooth_rf(sessions,r2_thr=0.2,radius=50,mincellsFneu=10):
+
+#     # for ses in sessions:
+#     for ses in tqdm(sessions,total=len(sessions),desc= 'Smoothed interpolation of missing RF: '):
+#         if 'rf_az_Fneu' in ses.celldata:
+#             ses.celldata['rf_az_Fsmooth']          = ses.celldata['rf_az_F'].copy()
+#             ses.celldata['rf_el_Fsmooth']          = ses.celldata['rf_el_F'].copy()
+#             ses.celldata['rf_r2_Fsmooth']           = ses.celldata['rf_r2_F'].copy()
+            
+#             for iN in np.where(~(ses.celldata['rf_r2_Fsmooth'] > r2_thr))[0]:
+                
+#                 idx_near_Fneu = np.all((ses.distmat_xy[iN,:] < radius,
+#                                    ses.celldata['rf_r2_Fneu']>r2_thr,
+#                                    ~np.isnan(ses.celldata['rf_az_Fneu'])),axis=0)
+#                 if np.sum(idx_near_Fneu)>mincellsFneu:
+#                     # idx_near = np.logical_and(ses.distmat_xy[iN,:] < radius,idx_RF)
+#                     ses.celldata.loc[iN,'rf_az_Fsmooth']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
+#                     ses.celldata.loc[iN,'rf_el_Fsmooth']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
+#                     ses.celldata.loc[iN,'rf_r2_Fsmooth']           = 0
+#                     # ses.celldata.loc[iN,'rf_az_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_az_Fneu'])
+#                     # ses.celldata.loc[iN,'rf_el_F']          = np.nanmedian(ses.celldata.loc[ses.celldata[idx_near_Fneu].index,'rf_el_Fneu'])
+#                     # ses.celldata.loc[iN,'rf_r2_F']           = 0.0009
+#     return sessions

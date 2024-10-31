@@ -135,20 +135,22 @@ plt.tight_layout()
 
 
 #===============================================================================
-#                     Fit Affine model to data
+#                     Fit Affine model to GR data
 #===============================================================================
 
 #%% #############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
 # session_list        = np.array([['LPE10885','2023_10_23']])
 # session_list        = np.array([['LPE12223','2024_06_10']])
+
 # load sessions lazy: 
 sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
 
 #   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion='dF',keepraw=True)
+                                calciumversion='deconv',keepraw=True)
+                                # calciumversion='dF',keepraw=True)
 
 
 #%% ########################### Compute tuning metrics: ###################################
@@ -201,16 +203,11 @@ plt.tight_layout()
 #%% 
 fig = plot_PCA_gratings(sessions[ises])
 
-
 #%% 
+orientations        = sessions[ises].trialdata['Orientation']
 data                = sessions[ises].respmat
-# data                = sessions[ises].respmat - np.mean(sessions[ises].respmat, axis=1, keepdims=True)
 data_hat_tuned      = tuned_resp_model(data, orientations)
 data_hat_poprate    = pop_rate_gain_model(data, orientations)
-
-# datasets            = (data,data_hat_tuned)
-# fig = plot_respmat(orientations, datasets, ['original','mean tuning'])
-# fig = plot_tuned_response(orientations, datasets, ['original','tuned response'])
 
 datasets            = (data,data_hat_tuned,data_hat_poprate)
 fig = plot_respmat(orientations, datasets, ['original','mean tuning','pop rate gain'])
@@ -246,11 +243,46 @@ ses.respmat = sessions[ises].respmat - data_hat_poprate
 ses = compute_signal_noise_correlation([ses],filter_stationary=False)[0]
 fig = plot_noise_corr_deltaori(ses)
 
-#%% ########################### Compute noise correlations: ###################################
-sessions = compute_signal_noise_correlation(sessions,filter_stationary=False)[0]
-# [sessions] = compute_signal_noise_correlation([sessions],filter_stationary=False)[0]
-sessions = [sessions]
+#%% 
 
+#===============================================================================
+#                     Fit Affine model to GN data
+#===============================================================================
+
+#%% #############################################################################
+session_list        = np.array([['LPE12385','2024_06_13']])
+
+# load sessions lazy: 
+sessions,nSessions   = load_sessions(protocol = 'GN',session_list=session_list)
+
+#   Load proper data and compute average trial responses:                      
+for ises in range(nSessions):    # iterate over sessions
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion='dF',keepraw=True)
+
+
+
+#%% 
+junk,junk,oriconds  = np.unique(sessions[ises].trialdata['centerOrientation'],return_index=True,return_inverse=True)
+junk,junk,speedconds  = np.unique(sessions[ises].trialdata['centerSpeed'],return_index=True,return_inverse=True)
+sessions[ises].trialdata['oriCond']     = oriconds
+sessions[ises].trialdata['speedCond']   = speedconds
+sessions[ises].trialdata['stimCond']    = oriconds + speedconds*3
+
+stimuli = np.array(sessions[ises].trialdata['stimCond'])
+
+data                = sessions[ises].respmat
+# data                = sessions[ises].respmat - np.mean(sessions[ises].respmat, axis=1, keepdims=True)
+data_hat_tuned      = tuned_resp_model(data, stimuli)
+data_hat_poprate    = pop_rate_gain_model(data, stimuli)
+
+# datasets            = (data,data_hat_tuned)
+# fig = plot_respmat(stimuli, datasets, ['original','mean tuning'])
+# fig = plot_tuned_response(stimuli, datasets, ['original','tuned response'])
+
+datasets            = (data,data_hat_tuned,data_hat_poprate)
+fig = plot_respmat(stimuli, datasets, ['original','mean tuning','pop rate gain'])
+fig = plot_tuned_response(stimuli, datasets, ['original','mean tuning','pop rate gain'])
 
 #%% #########################################################################################
 # Plot noise correlations as a function of the difference in preferred orientation
@@ -465,8 +497,7 @@ def fitAffine(R, stims, estimate_additive=True):
 
 #     # Calculate orientation-tuned response for each neuron
 #     sm = np.array([np.mean(data[:, orientations == i], axis=1) for i in u_orientations])
-#     sm = np.vstack((sm, np.ones(N)))  # Add intercept term
-
+#     sm = np.vstack((sm, np.ones(N)))
 #     # Initialize gain parameters:
 #     g_n = np.ones(N)
 #     g_k = np.ones(K)
