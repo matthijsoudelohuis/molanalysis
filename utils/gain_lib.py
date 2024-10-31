@@ -87,6 +87,7 @@ def pop_rate_gain_model(data, stimuli):
         mfs         = np.arange(10,30,2)
     else:
         mfs         = np.arange(0,0.3,0.025)
+
     r2data      = []
     for imf,mf in enumerate(mfs):
         data_hat = np.empty_like(data)

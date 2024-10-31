@@ -106,7 +106,7 @@ class Session():
             # self.F_chan2             = self.calciumdata['F_chan2']
             # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
 
-            assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0])
+            assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0]), 'Dimensions of calciumdata and celldata do not match, %s %s' % (np.shape(self.calciumdata)[1],np.shape(self.celldata)[0])
 
         if load_calciumdata and load_behaviordata:
             # Get interpolated values for behavioral variables at imaging frame rate:

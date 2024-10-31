@@ -63,6 +63,7 @@ sessions,nSessions   = filter_sessions(protocols = ['GR','GN'],filter_areas=['V1
 #%% Remove two sessions with too much drift in them:
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE09665_2023_03_21']))[0]
 sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
 
@@ -74,7 +75,7 @@ for ises in range(nSessions):
                                 # calciumversion='dF',keepraw=True,filter_hp=0.01)
     
     # detrend(sessions[ises].calciumdata,type='linear',axis=0,overwrite_data=True)
-    sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False,filtersig=False)[0]
+    sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False)[0]
     delattr(sessions[ises],'videodata')
     delattr(sessions[ises],'behaviordata')
     delattr(sessions[ises],'calciumdata')
@@ -83,23 +84,10 @@ for ises in range(nSessions):
 # sessions = compute_pairwise_metrics(sessions)
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-#%% 
-for ses in sessions:
-    if 'rf_r2_Fgauss' in ses.celldata:
-        ses.celldata['rf_p_Fgauss'] = ses.celldata['rf_r2_Fgauss']<0.2
-        ses.celldata['rf_p_Fneugauss'] = ses.celldata['rf_r2_Fneugauss']<0.2
-
-#%% Copy Fgauss to F
-for ses in sessions:
-    if 'rf_az_Fgauss' in ses.celldata:
-        ses.celldata['rf_az_F'] = ses.celldata['rf_az_Fgauss']
-        ses.celldata['rf_el_F'] = ses.celldata['rf_el_Fgauss']
-        ses.celldata['rf_p_F'] = ses.celldata['rf_p_Fgauss']
-
 #%% ##################### Compute pairwise receptive field distances: ##############################
-sessions = smooth_rf(sessions,radius=50,rf_type='Fneugauss',mincellsFneu=5)
-sessions = exclude_outlier_rf(sessions) 
-sessions = replace_smooth_with_Fsig(sessions) 
+# sessions = smooth_rf(sessions,radius=50,rf_type='Fneu',mincellsFneu=5)
+# sessions = exclude_outlier_rf(sessions) 
+# sessions = replace_smooth_with_Fsig(sessions) 
 # sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
 
 #%% print number of pairs:

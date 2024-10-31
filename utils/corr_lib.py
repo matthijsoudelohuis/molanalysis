@@ -123,9 +123,9 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_statio
                         #Remove low rank prediction from data:
                         respmat_res[:,trial_ori==ori] = data - data_hat
                 elif remove_method == 'GM':
-                        stimuli         = np.array(sessions[ises].trialdata['stimCond'])
-                        data_hat        = pop_rate_gain_model(sessions[ises].respmat, stimuli)
-                        respmat_res     = sessions[ises].respmat - data_hat
+                    stimuli         = np.array(sessions[ises].trialdata['stimCond'])
+                    data_hat        = pop_rate_gain_model(sessions[ises].respmat, stimuli)
+                    respmat_res     = sessions[ises].respmat - data_hat
 
             # Compute noise correlations from residuals:
             sessions[ises].noise_corr       = np.corrcoef(respmat_res)
@@ -172,14 +172,6 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_statio
                             #Remove low rank prediction from data:
                             respmat_res[:,idx_trial] = data - data_hat
                 elif remove_method == 'GM':
-                    junk,junk,oriconds  = np.unique(sessions[ises].trialdata['centerOrientation'],return_index=True,return_inverse=True)
-                    junk,junk,speedconds  = np.unique(sessions[ises].trialdata['centerSpeed'],return_index=True,return_inverse=True)
-                    sessions[ises].trialdata['oriCond']     = oriconds
-                    sessions[ises].trialdata['speedCond']   = speedconds
-                    sessions[ises].trialdata['stimCond']    = oriconds + speedconds*3
-
-                    stimuli = np.array(sessions[ises].trialdata['stimCond'])
-
                     stimuli         = np.array(sessions[ises].trialdata['stimCond'])
                     data_hat        = pop_rate_gain_model(sessions[ises].respmat, stimuli)
                     respmat_res     = sessions[ises].respmat - data_hat

@@ -24,15 +24,15 @@ date_filter         = []
 # animal_ids          = ['LPE09665', 'LPE11495', 'LPE11998', 'LPE12013'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
 
-# animal_ids          = ['LPE12013'] #If empty than all animals in folder will be processed
-# date_filter         = ['2024_06_10']
+# animal_ids          = ['LPE09665'] #If empty than all animals in folder will be processed
+# date_filter         = ['2023_03_21']
 
-# protocols           = ['GR','SP','GN','RF']
-protocols           = ['GR','GN']
+protocols           = ['GR','SP','GN','RF']
+# protocols           = ['GR','GN']
 # protocols           = ['DP','DM','DN']
 
 processimagingflag  = True
-savedataflag        = False
+savedataflag        = True
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -92,7 +92,7 @@ for animal_id in animal_ids: #for each animal
                 
                 if os.path.exists(os.path.join(sesfolder,"suite2p")) and processimagingflag:
                     print('Detected imaging data') #main processing function for imaging data:
-                    [sessiondata,celldata,dFdata,deconvdata,Ftsdata,Fchan2data] = proc_imaging(sesfolder,sessiondata,filter_good_cells=True) 
+                    [sessiondata,celldata,dFdata,deconvdata,Ftsdata,Fchan2data] = proc_imaging(sesfolder,sessiondata) 
                     celldata.to_csv(os.path.join(outdir,"celldata.csv"), sep=',')
                     Ftsdata.to_csv(os.path.join(outdir,"Ftsdata.csv"), sep=',')
                     Fchan2data.to_csv(os.path.join(outdir,"Fchan2data.csv"), sep=',')
@@ -100,21 +100,6 @@ for animal_id in animal_ids: #for each animal
                         print('\nSaving imaging data\n')
                         dFdata.to_csv(os.path.join(outdir,"dFdata.csv"), sep=',')
                         deconvdata.to_csv(os.path.join(outdir,"deconvdata.csv"), sep=',')
-
-                    # suite2p_folder = os.path.join(sesfolder,"suite2p")
-                    # plane_folders = natsorted([f.path for f in os.scandir(suite2p_folder) if f.is_dir() and f.name[:5]=='plane'])
-                    # RF_F_pmaps_on = np.empty((13,52,0))
-                    # RF_F_pmaps_off = np.empty((13,52,0))
-                    # for iplane,plane_folder in enumerate(plane_folders):
-                    #     print('processing plane %s / %s' % (iplane+1,8))
-                    #     iscell              = np.load(os.path.join(plane_folder, 'iscell.npy'))
-                    #     temp                = np.load(os.path.join(plane_folder, 'RF_F_pmaps.npz'), mmap_mode='r')
-                    #     RF_F_pmaps_on = np.concatenate((RF_F_pmaps_on,temp['name1'][:,:,iscell[:,0]==1]), axis=2)
-                    #     RF_F_pmaps_off = np.concatenate((RF_F_pmaps_off,temp['name2'][:,:,iscell[:,0]==1]), axis=2)
-                    # assert(RF_F_pmaps_on.shape[2]==RF_F_pmaps_off.shape[2])
-                    # assert(RF_F_pmaps_on.shape[2]==len(celldata))
-                    # np.save(os.path.join(outdir,"RF_F_pmaps_on.npy"),RF_F_pmaps_on)
-                    # np.save(os.path.join(outdir,"RF_F_pmaps_off.npy"),RF_F_pmaps_off)
 
                 # Save data:
                 if savedataflag:

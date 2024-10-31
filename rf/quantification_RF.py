@@ -42,19 +42,22 @@ session_list        = np.array([['LPE12223','2024_06_08'],
 sessions,nSessions = load_sessions(protocol = 'GR',session_list=session_list)
 sessions,nSessions = load_sessions(protocol = 'RF',session_list=session_list)
 
-sessions,nSessions = filter_sessions(protocols = ['SP'],only_animal_id=['LPE09665', 'LPE09830',
-                                                        'LPE11495', 'LPE11998', 'LPE12013'],session_rf=True,filter_areas=['V1','PM'])
-# # sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
-                                    # load_calciumdata=False, load_videodata=False, calciumversion='dF')
+#%% 
+# sessions,nSessions = filter_sessions(protocols = ['SP'],only_animal_id=['LPE09665', 'LPE09830',
+#                                                         'LPE11495', 'LPE11998', 'LPE12013'],session_rf=True,filter_areas=['V1','PM'])
+# # # sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
+#                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
 sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,filter_areas=['V1','PM'])
-sessions,nSessions = filter_sessions(protocols = ['SP','IM'])
+# sessions,nSessions = filter_sessions(protocols = ['SP','IM'])
 sessions,nSessions = filter_sessions(protocols = ['RF'])
 
-sig_thr = 0.001 #cumulative significance of receptive fields clusters
+#%% 
+# sig_thr = 0.001 #cumulative significance of receptive fields clusters
 r2_thr = 0.2 #R2 of the 2D gaussian fit
 
 #%% 
-for ses in sessions:
+for ises,ses in enumerate(sessions):
+    # print(ises)
     ses.celldata['rf_az_F'] = ses.celldata['rf_az_Fgauss']
     ses.celldata['rf_el_F'] = ses.celldata['rf_el_Fgauss']
     ses.celldata['rf_r2_F'] = ses.celldata['rf_r2_Fgauss']

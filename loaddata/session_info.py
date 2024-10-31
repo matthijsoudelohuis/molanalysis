@@ -14,7 +14,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
+def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumdata=False, load_videodata=False, 
+                calciumversion='dF',filter_areas=None):
     """
     This function loads and outputs the session objects that have to be loaded.
     session_list is a 2D np array with animal_id and session_id pairs (each row one session)
@@ -31,6 +32,12 @@ def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumd
     for i, ses in enumerate(session_list):
         ses = Session(
             protocol=protocol, animal_id=session_list[i, 0], session_id=session_list[i, 1])
+
+        if filter_areas is not None:
+            ses.load_data(load_behaviordata=False,
+                              load_calciumdata=False, load_videodata=False)
+            ses.cellfilter = np.isin(ses.celldata['roi_name'],filter_areas)
+
         ses.load_data(load_behaviordata, load_calciumdata,
                       load_videodata, calciumversion)
 

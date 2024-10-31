@@ -8,6 +8,7 @@ from scipy.linalg import norm
 from scipy.stats import vonmises
 from sklearn.preprocessing import minmax_scale
 from sklearn.metrics import r2_score
+from tqdm import tqdm
 
 os.chdir('e:\\Python\\molanalysis')
 
@@ -22,8 +23,9 @@ from utils.psth import compute_respmat
 from utils.tuning import compute_tuning, compute_prefori
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.gain_lib import * 
+from utils.plot_lib import shaded_error
 
-savedir = 'D:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\GainModel\\'
+savedir = 'E:\\OneDrive\\PostDoc\\Figures\\SharedGain\\GainModel\\'
 
 #%%  
 nNeurons        = 1000
@@ -152,21 +154,12 @@ for ises in range(nSessions):    # iterate over sessions
                                 calciumversion='deconv',keepraw=True)
                                 # calciumversion='dF',keepraw=True)
 
-
 #%% ########################### Compute tuning metrics: ###################################
 for ises in range(nSessions):
     if sessions[ises].sessiondata['protocol'].isin(['GR','GN'])[0]:
-        sessions[ises].celldata['OSI'] = compute_tuning(sessions[ises].respmat,
-                                                    sessions[ises].trialdata['Orientation'],
-                                                    tuning_metric='OSI')
-        sessions[ises].celldata['gOSI'] = compute_tuning(sessions[ises].respmat,
-                                                        sessions[ises].trialdata['Orientation'],
-                                                        tuning_metric='gOSI')
         sessions[ises].celldata['tuning_var'] = compute_tuning(sessions[ises].respmat,
                                                         sessions[ises].trialdata['Orientation'],
                                                         tuning_metric='tuning_var')
-        sessions[ises].celldata['pref_ori'] = compute_prefori(sessions[ises].respmat,
-                                                        sessions[ises].trialdata['Orientation'])
 
 #%% Filter only well tuned neurons in V1:
 idx                                 = np.all((sessions[ises].celldata['roi_name']=='V1',sessions[ises].celldata['tuning_var']>0.05),axis=0)
@@ -177,28 +170,38 @@ sessions[ises].calciumdata          = sessions[ises].calciumdata.iloc[:,idx]
 #%% Figure of raw data correlation of population activity, video ME, runspeed, and pupil area:
 lw = 0.25
 fig,ax = plt.subplots(1,1,figsize=(9,3))
-ax.plot(minmax_scale(np.nanmean(sessions[ises].respmat,axis=0), feature_range=(0, 1), axis=0, copy=True),color='k',linewidth=lw,label='pop. mean')
-ax.plot(minmax_scale(sessions[ises].respmat_videome, feature_range=(0, 1), axis=0, copy=True),color='g',linewidth=lw,label='video ME')
-ax.plot(minmax_scale(sessions[ises].respmat_runspeed, feature_range=(0, 1), axis=0, copy=True),color='r',linewidth=lw,label='runspeed')
-ax.plot(minmax_scale(sessions[ises].respmat_pupilarea, feature_range=(0, 1), axis=0, copy=True),color='b',linewidth=lw,label='pupil area')
+
+ax.plot(stats.zscore(np.nanmean(sessions[ises].respmat[sessions[ises].celldata['roi_name']=='V1',:],axis=0)),color='green',linewidth=lw,label='pop. mean V1')
+ax.plot(stats.zscore(np.nanmean(sessions[ises].respmat[sessions[ises].celldata['roi_name']=='PM',:],axis=0)),color='purple',linewidth=lw,label='pop. mean PM')
+ax.plot(stats.zscore(sessions[ises].respmat_videome),color='k',linewidth=lw,label='video ME')
+ax.plot(stats.zscore(sessions[ises].respmat_runspeed),color='r',linewidth=lw,label='runspeed')
+ax.plot(stats.zscore(sessions[ises].respmat_pupilarea),color='b',linewidth=lw,label='pupil area')
+# ax.set_xlim([500,650])
+ax.set_ylim([-1.5,5])
 ax.set_xlim([0,3200])
 ax.legend(frameon=False,loc='upper right')
 ax.set_xlabel('Trials')
-ax.set_ylabel('Normalized response')
+ax.set_ylabel('Z-score')
 plt.tight_layout()
 
 #%% CLOSE UP Figure of raw data correlation of population activity, video ME, runspeed, and pupil area:
 lw = 1
 fig,ax = plt.subplots(1,1,figsize=(9,3))
-ax.plot(minmax_scale(np.nanmean(sessions[ises].respmat,axis=0), feature_range=(0, 1), axis=0, copy=True),color='k',linewidth=lw*2,label='pop. mean')
-ax.plot(minmax_scale(sessions[ises].respmat_videome, feature_range=(0, 1), axis=0, copy=True),color='g',linewidth=lw,label='video ME')
-ax.plot(minmax_scale(sessions[ises].respmat_runspeed, feature_range=(0, 1), axis=0, copy=True),color='r',linewidth=lw,label='runspeed')
-ax.plot(minmax_scale(sessions[ises].respmat_pupilarea, feature_range=(0, 1), axis=0, copy=True),color='b',linewidth=lw,label='pupil area')
+ax.plot(stats.zscore(np.nanmean(sessions[ises].respmat[sessions[ises].celldata['roi_name']=='V1',:],axis=0)),color='green',linewidth=lw,label='pop. mean V1')
+ax.plot(stats.zscore(np.nanmean(sessions[ises].respmat[sessions[ises].celldata['roi_name']=='PM',:],axis=0)),color='purple',linewidth=lw,label='pop. mean PM')
+ax.plot(stats.zscore(sessions[ises].respmat_videome),color='k',linewidth=lw,label='video ME')
+ax.plot(stats.zscore(sessions[ises].respmat_runspeed),color='r',linewidth=lw,label='runspeed')
+ax.plot(stats.zscore(sessions[ises].respmat_pupilarea),color='b',linewidth=lw,label='pupil area')
 ax.set_xlim([500,650])
+ax.set_ylim([-1.5,4])
 ax.legend(frameon=False,loc='upper right')
 ax.set_xlabel('Trials')
 ax.set_ylabel('Normalized response')
 plt.tight_layout()
+
+#%% 
+
+
 
 #%% 
 fig = plot_PCA_gratings(sessions[ises])
@@ -244,6 +247,111 @@ ses = compute_signal_noise_correlation([ses],filter_stationary=False)[0]
 fig = plot_noise_corr_deltaori(ses)
 
 #%% 
+
+#%% Baseline PCA:
+fig = plot_PCA_gratings(sessions[0],apply_zscore=True)
+
+#%% How consistent is the gain model capturing variability in the principal dimensions?
+
+orientations        = sessions[0].trialdata['Orientation']
+# data                = zscore(sessions[0].respmat,axis=1)+1
+data                = sessions[0].respmat
+data_hat_poprate    = pop_rate_gain_model(data, orientations)
+
+# data                = data-1
+# data_hat_poprate    = data_hat_poprate-1
+
+datasets            = (data,data_hat_poprate)
+fig = plot_respmat(orientations, datasets, ['original','pop rate gain'])
+# fig = plot_tuned_response(orientations, datasets, ['original','mean tuning','pop rate gain'])
+
+r2_score(data.flatten(),data_hat_poprate.flatten())
+
+print('Variance explained: %1.4f' % (1 - np.var((data-data_hat_poprate).flatten()) / np.var(data.flatten())))
+
+
+
+
+
+
+
+
+#%% #############################################################################
+sessions,nSessions = filter_sessions(protocols = ['GR'],filter_areas=['V1'])
+#   Load proper data and compute average trial responses:                      
+for ises in range(nSessions):    # iterate over sessions
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion='deconv',keepraw=False)
+
+#%% ########################### Compute tuning metrics: ###################################
+for ises in range(nSessions):
+    sessions[ises].celldata['tuning_var'] = compute_tuning(sessions[ises].respmat,
+                                            sessions[ises].trialdata['Orientation'],tuning_metric='tuning_var')
+
+#%% Do PCA on the original data. Then project the population gain model and the residual data
+# onto the principal components. Compute how much variance is left along each of the PC axes
+ 
+ncomps          = 25
+EV_orig         = np.empty((nSessions,ncomps))
+EV_gain         = np.empty((nSessions,ncomps))
+EV_nogain       = np.empty((nSessions,ncomps))
+
+for ises,ses in tqdm(enumerate(sessions),desc='Fitting PCA and pop gain model on each session'):
+    data                = ses.respmat
+    pca                 = PCA(n_components=ncomps)
+    pca.fit(data.T)
+
+    orientations        = ses.trialdata['Orientation']
+    data_hat_poprate    = pop_rate_gain_model(data, orientations)
+
+    for icomp in range(ncomps):
+        # assume data is your zero-scored data matrix
+        # project data onto the principal axis, principal component (a 1D array)
+        projected_data = np.dot(data.T, pca.components_[icomp]) 
+        var_projected = np.var(projected_data) # compute variance of projected data
+        var_total = np.var(data.T, axis=0).sum() # compute total variance of original data
+        # compute proportion of variance explained by the first principal component
+        EV_orig[ises,icomp] = var_projected / var_total
+
+        projected_data = np.dot(data_hat_poprate.T, pca.components_[icomp]) 
+        var_projected = np.var(projected_data) # compute variance of projected data
+        var_total = np.var(data.T, axis=0).sum() # compute total variance of original data
+        # compute proportion of variance explained by the first principal component
+        EV_gain[ises,icomp] = var_projected / var_total
+
+        projected_data = np.dot((data-data_hat_poprate).T, pca.components_[icomp]) 
+        var_projected = np.var(projected_data) # compute variance of projected data
+        var_total = np.var(data.T, axis=0).sum() # compute total variance of original data
+        # compute proportion of variance explained by the first principal component
+        EV_nogain[ises,icomp] = var_projected / var_total
+
+#%% 
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+handles = []
+handles.append(shaded_error(ax=ax,x=np.arange(1,ncomps+1),y=EV_orig,color='k'))
+handles.append(shaded_error(ax=ax,x=np.arange(1,ncomps+1),y=EV_nogain,color='r'))
+plt.legend(labels=['original','gain-subtracted'],handles=handles,frameon=False)
+plt.xlabel('principal component')
+plt.ylabel('variance explained')
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'PCA_EV_Original_GainModel' + '.png'), format = 'png')
+
+#%% 
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+handles = []
+handles.append(shaded_error(ax=ax,x=np.arange(1,ncomps+1),y=EV_nogain / EV_orig,color='k'))
+# plt.legend(labels=['original','no gain model'],handles=handles,frameon=False)
+plt.xlabel('principal component')
+plt.ylabel('Fraction of variance \nexplained by gain model')
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'PCA_EV_Ratio_GainModel' + '.png'), format = 'png')
+
+
+
+
+
+
+
 
 #===============================================================================
 #                     Fit Affine model to GN data

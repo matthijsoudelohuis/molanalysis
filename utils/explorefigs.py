@@ -411,7 +411,7 @@ def plot_PCA_gratings(ses,size='runspeed',cellfilter=None,apply_zscore=True):
     return fig
 
 
-def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=None):
+def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=None,thr_tuning=0):
 
     ########### PCA on trial-averaged responses ############
     ######### plot result as scatter by orientation ########
@@ -434,12 +434,13 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
             (np.percentile(ses.respmat_videome, 95) -
              np.percentile(ses.respmat_videome, 5))
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=[len(areas)*4, 4])
+    # fig,axes = plt.figure(1, len(areas), figsize=[len(areas)*3, 3])
 
     for iarea, area in enumerate(areas):
-
+        # ax = axes[iarea]
         idx_area = ses.celldata['roi_name'] == area
-        idx_tuned = ses.celldata['tuning_var'] > 0.0
+        idx_tuned = ses.celldata['tuning_var'] > thr_tuning
         idx = np.logical_and(idx_area, idx_tuned)
         # zscore for each neuron across trial responses
         respmat_zsc = zscore(ses.respmat[idx, :], axis=1)
@@ -451,7 +452,7 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
         # dimensionality is now reduced from N by K to ncomp by K
 
         ax = fig.add_subplot(1, len(areas), iarea+1, projection='3d')
-
+        
         # plot orientation separately with diff colors
         for t, t_type in enumerate(oris):
             # get all data points for this ori along first PC or projection pairs
@@ -463,13 +464,30 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
             # each trial is one dot
             ax.scatter(x, y, z, color=pal[t], s=sizes[ori_ind[t]]*6, alpha=0.8)
             # ax.scatter(x, y, z,marker='o')     #each trial is one dot
-            ax.set_xlabel('PC 1')  # give labels to axes
-            ax.set_ylabel('PC 2')
-            ax.set_zlabel('PC 3')
-            ax.set_xticklabels([])
-            ax.set_yticklabels([])
-            ax.set_zticklabels([])
-            ax.set_title(area)
+        ax.set_xlabel('PC 1')  # give labels to axes
+        ax.set_ylabel('PC 2')
+        ax.set_zlabel('PC 3')
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_zticklabels([])
+        ax.set_title(area)
+        
+        ax.grid(False)
+        ax.set_facecolor('white')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_zticks([])
+
+        # Get rid of colored axes planes, remove fill
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+
+        # Now set color to white (or whatever is "invisible")
+        ax.xaxis.pane.set_edgecolor('w')
+        ax.yaxis.pane.set_edgecolor('w')
+        ax.zaxis.pane.set_edgecolor('w')
+
             # ax.view_init(elev=-30, azim=45, roll=-45)
         print('Variance Explained (%s) by first 3 components: %2.2f' %
               (area, pca.explained_variance_ratio_.cumsum()[2]))
