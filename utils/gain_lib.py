@@ -17,8 +17,6 @@ from utils.psth import compute_respmat
 from utils.plotting_style import * #get all the fixed color schemes
 
 
-
-
 def plot_respmat(orientations, datasets, labels):
     fig,axes = plt.subplots(1, len(datasets),figsize=(3*len(datasets),4))
     if len(datasets) == 1:

@@ -20,7 +20,7 @@ from loaddata.session import Session
 from utils.corr_lib import *
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_respmat
-from utils.tuning import compute_tuning, compute_prefori
+from utils.tuning import compute_tuning_wrapper
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.gain_lib import * 
 from utils.plot_lib import shaded_error
@@ -155,11 +155,7 @@ for ises in range(nSessions):    # iterate over sessions
                                 # calciumversion='dF',keepraw=True)
 
 #%% ########################### Compute tuning metrics: ###################################
-for ises in range(nSessions):
-    if sessions[ises].sessiondata['protocol'].isin(['GR','GN'])[0]:
-        sessions[ises].celldata['tuning_var'] = compute_tuning(sessions[ises].respmat,
-                                                        sessions[ises].trialdata['Orientation'],
-                                                        tuning_metric='tuning_var')
+sessions = compute_tuning_wrapper(sessions)
 
 #%% Filter only well tuned neurons in V1:
 idx                                 = np.all((sessions[ises].celldata['roi_name']=='V1',sessions[ises].celldata['tuning_var']>0.05),axis=0)
@@ -196,10 +192,27 @@ ax.set_xlim([500,650])
 ax.set_ylim([-1.5,4])
 ax.legend(frameon=False,loc='upper right')
 ax.set_xlabel('Trials')
-ax.set_ylabel('Normalized response')
+ax.set_ylabel('Z-scored response')
 plt.tight_layout()
+fig.savefig(os.path.join(savedir,'Rate_behavior_across_trials_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+#%% Correlations between variables:
+df = pd.DataFrame({'pop. rate V1':stats.zscore(np.nanmean(sessions[ises].respmat[sessions[ises].celldata['roi_name']=='V1',:],axis=0)),
+                    'pop. rate PM':stats.zscore(np.nanmean(sessions[ises].respmat[sessions[ises].celldata['roi_name']=='PM',:],axis=0)),
+                    'videome':stats.zscore(sessions[ises].respmat_videome),
+                    'runspeed':stats.zscore(sessions[ises].respmat_runspeed),
+                    'pupilarea':stats.zscore(sessions[ises].respmat_pupilarea)})
+
+fig,ax = plt.subplots(1,1,figsize=(3.5,3))
+sns.heatmap(df.corr(),ax=ax,cmap='RdBu_r',center=0,vmin=-1,vmax=1,
+            cbar_kws={'shrink': 0.5, 'ticks': [-1,0,1]})
+plt.xticks(rotation=45,fontsize=8)
+plt.yticks(rotation=0,fontsize=8)
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'Corrmat_rate_behavior_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% 
+
 
 
 
@@ -210,11 +223,40 @@ fig = plot_PCA_gratings(sessions[ises])
 orientations        = sessions[ises].trialdata['Orientation']
 data                = sessions[ises].respmat
 data_hat_tuned      = tuned_resp_model(data, orientations)
+data_hat_gainonly   = pop_rate_gain_model(data, np.random.permutation(orientations))
 data_hat_poprate    = pop_rate_gain_model(data, orientations)
 
 datasets            = (data,data_hat_tuned,data_hat_poprate)
-fig = plot_respmat(orientations, datasets, ['original','mean tuning','pop rate gain'])
-# fig = plot_tuned_response(orientations, datasets, ['original','mean tuning','pop rate gain'])
+dataset_labels      = ['original','tuning','pop rate gain']
+
+datasets            = (data,data_hat_tuned,data_hat_gainonly,data_hat_poprate)
+dataset_labels      = ['original','tuning only','gain only','tuned gain',]
+
+fig = plot_respmat(orientations, datasets, dataset_labels)
+fig.savefig(os.path.join(savedir,'Heatmap_respmat_modelversions_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+fig = plot_tuned_response(orientations, datasets, dataset_labels)
+fig.savefig(os.path.join(savedir,'Heatmap_respmean_modelversions_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+for i in range(len(datasets)-1):
+    print('%s: R2 = %1.2f' % (dataset_labels[i+1],r2_score(datasets[0].flatten(),datasets[i+1].flatten())))
+
+
+#%% Show histogram of gain model weights:
+data                = sessions[ises].respmat
+poprate             = np.nanmean(data,axis=0)
+gain_trials         = poprate - np.nanmean(data,axis=None)
+gain_weights        = np.array([np.corrcoef(poprate,data[n,:])[0,1] for n in range(data.shape[0])])
+
+fig,axes = plt.subplots(1,2,figsize=(6,3))
+axes[0].hist(gain_trials,bins=25,color='grey')
+axes[0].set_title('Trial gain')
+axes[0].set_xlabel('Pop. rate - mean pop. rate')
+axes[1].hist(gain_weights,bins=25,color='grey')
+axes[1].set_title('Neuron gain ')
+axes[1].set_xlabel('Correlation neuron rate to pop. rate')
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'Hist_poprate_gain_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% Baseline PCA:
 fig = plot_PCA_gratings(sessions[ises])
@@ -246,13 +288,47 @@ ses.respmat = sessions[ises].respmat - data_hat_poprate
 ses = compute_signal_noise_correlation([ses],filter_stationary=False)[0]
 fig = plot_noise_corr_deltaori(ses)
 
-#%% 
+#%% How much of the variance in pairwise noise correlations is explained by the population rate gain model?
+
+#%% PCA for session without population rate gain model:
+ses = copy.deepcopy(sessions[ises])
+ses_orig = compute_signal_noise_correlation([ses],filter_stationary=False,uppertriangular=False)[0]
+
+ses = copy.deepcopy(sessions[ises])
+ses.respmat = sessions[ises].respmat - data_hat_poprate
+ses_nogain = compute_signal_noise_correlation([ses],filter_stationary=False,uppertriangular=False)[0]
+
+#%% Show reduction in noise correlation matrix with gain subtraction:
+fig,axes = plt.subplots(1,2,figsize=(11,4))
+axes[0].imshow(ses_orig.noise_corr,vmin=-0.05,vmax=0.05,cmap='RdBu_r')
+axes[0].set_xlabel('neuron')
+axes[0].set_ylabel('neuron')
+axes[0].set_title('original')
+axes[0].set_xticks(np.arange(0,ses_orig.noise_corr.shape[0],1000))
+axes[0].set_yticks(np.arange(0,ses_orig.noise_corr.shape[1],1000))
+
+axes[1].imshow(ses_nogain.noise_corr,vmin=-0.05,vmax=0.05,cmap='RdBu_r')
+axes[1].set_xlabel('neuron')
+axes[1].set_ylabel('neuron')
+axes[1].set_title('gain subtracted')
+axes[1].set_xticks(np.arange(0,ses_nogain.noise_corr.shape[0],1000))
+axes[1].set_yticks(np.arange(0,ses_nogain.noise_corr.shape[1],1000))
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'NoiseCorrMat_subgain_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+ytrue = ses_orig.noise_corr.flatten()
+yhat = ses_orig.noise_corr.flatten()-ses_nogain.noise_corr.flatten()
+ytrue = ytrue[~np.isnan(ytrue)]
+yhat = yhat[~np.isnan(yhat)]
+
+print('Variance of noise correlation matrix explained by gain subtraction: R2 = %1.2f' % (r2_score(ytrue,yhat)))
+
+
 
 #%% Baseline PCA:
 fig = plot_PCA_gratings(sessions[0],apply_zscore=True)
 
 #%% How consistent is the gain model capturing variability in the principal dimensions?
-
 orientations        = sessions[0].trialdata['Orientation']
 # data                = zscore(sessions[0].respmat,axis=1)+1
 data                = sessions[0].respmat

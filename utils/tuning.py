@@ -7,6 +7,14 @@ from scipy.stats import ttest_ind,ttest_1samp
 from scipy.stats import wilcoxon
 
 
+#     # #######    #    #     #    ######  #######  #####  ######  
+##   ## #         # #   ##    #    #     # #       #     # #     # 
+# # # # #        #   #  # #   #    #     # #       #       #     # 
+#  #  # #####   #     # #  #  #    ######  #####    #####  ######  
+#     # #       ####### #   # #    #   #   #             # #       
+#     # #       #     # #    ##    #    #  #       #     # #       
+#     # ####### #     # #     #    #     # #######  #####  #       
+
 def mean_resp_image(ses):
     nNeurons = np.shape(ses.respmat)[0]
     imageids = np.unique(ses.trialdata['ImageNumber'])
@@ -15,7 +23,7 @@ def mean_resp_image(ses):
         respmean[:,im] = np.mean(ses.respmat[:,ses.trialdata['ImageNumber']==imid],axis=1)
     return respmean,imageids
 
-def mean_resp_gr(ses,filter_stationary=True):
+def mean_resp_gr(ses,filter_stationary=False):
 
     data        = copy.deepcopy(ses.respmat)
     trial_ori   = ses.trialdata['Orientation']
@@ -45,7 +53,7 @@ def mean_resp_gr(ses,filter_stationary=True):
 
     return resp_meanori,respmat_res
 
-def mean_resp_gn(ses,filter_stationary=True):
+def mean_resp_gn(ses,filter_stationary=False):
 
     data        = copy.deepcopy(ses.respmat)
     trial_ori   = ses.trialdata['centerOrientation']
@@ -83,6 +91,14 @@ def mean_resp_gn(ses,filter_stationary=True):
             respmat_res[:,idx_trial] -= tempmean[:,np.newaxis]
 
     return resp_mean,respmat_res
+
+ #####  ######     #    ####### ### #     #  #####     ####### #     # #     # ### #     #  #####  
+#     # #     #   # #      #     #  ##    # #     #       #    #     # ##    #  #  ##    # #     # 
+#       #     #  #   #     #     #  # #   # #             #    #     # # #   #  #  # #   # #       
+#  #### ######  #     #    #     #  #  #  # #  ####       #    #     # #  #  #  #  #  #  # #  #### 
+#     # #   #   #######    #     #  #   # # #     #       #    #     # #   # #  #  #   # # #     # 
+#     # #    #  #     #    #     #  #    ## #     #       #    #     # #    ##  #  #    ## #     # 
+ #####  #     # #     #    #    ### #     #  #####        #     #####  #     # ### #     #  #####  
 
 def get_pref_orispeed(resp_mean,oris,speeds,asindex=True):
     
@@ -126,7 +142,6 @@ def comp_grating_responsive(sessions,pthr = 0.001):
                             sessions[ises].celldata.loc[iN,'vis_resp'] = True
 
     return sessions
-
 
 def compute_prefori(response_matrix,conditions_vector):
     """
@@ -340,6 +355,47 @@ def compute_tuning_var(resp_mat,resp_res):
 
     return tuning_var
 
+def compute_tuning_wrapper(sessions):
+    """
+    Wrapper function to compute several tuning metrics for GR and GN protocols
+    Currently computes OSI, DSI, gOSI, and Tuning Variance, plus preferred orientation for GR
+    For GN tuning variance and preferred orientation and speed
+    """
+    for ises in tqdm(range(len(sessions)),desc= 'Computing tuning metrics: '):
+        if sessions[ises].sessiondata['protocol'].isin(['GR'])[0]:
+            sessions[ises].celldata['OSI'] = compute_tuning(sessions[ises].respmat,
+                                                        sessions[ises].trialdata['Orientation'],
+                                                        tuning_metric='OSI')
+            sessions[ises].celldata['gOSI'] = compute_tuning(sessions[ises].respmat,
+                                                            sessions[ises].trialdata['Orientation'],
+                                                            tuning_metric='gOSI')
+            sessions[ises].celldata['tuning_var'] = compute_tuning(sessions[ises].respmat,
+                                                            sessions[ises].trialdata['Orientation'],
+                                                            tuning_metric='tuning_var')
+            sessions[ises].celldata['pref_ori'] = compute_prefori(sessions[ises].respmat,
+                                                            sessions[ises].trialdata['Orientation'])
+            sessions[ises].celldata['DSI'] = compute_tuning(sessions[ises].respmat,
+                                                    sessions[ises].trialdata['Orientation'],
+                                                    tuning_metric='DSI')
+
+        elif sessions[ises].sessiondata['protocol'].isin(['GN'])[0]:
+
+            resp_mean,resp_res      = mean_resp_gn(sessions[ises])
+            sessions[ises].celldata['tuning_var'] = compute_tuning_var(resp_mat=sessions[ises].respmat,resp_res=resp_res)
+            oris, speeds    = [np.unique(sessions[ises].trialdata[col]).astype('int') for col in ('centerOrientation', 'centerSpeed')]
+            sessions[ises].celldata['pref_ori'],sessions[ises].celldata['pref_speed'] = get_pref_orispeed(resp_mean,oris,speeds)
+
+
+    return sessions
+
+
+#     #    #    ####### #     # ######     #    #          ### #     #    #     #####  #######  #####  
+##    #   # #      #    #     # #     #   # #   #           #  ##   ##   # #   #     # #       #     # 
+# #   #  #   #     #    #     # #     #  #   #  #           #  # # # #  #   #  #       #       #       
+#  #  # #     #    #    #     # ######  #     # #           #  #  #  # #     # #  #### #####    #####  
+#   # # #######    #    #     # #   #   ####### #           #  #     # ####### #     # #             # 
+#    ## #     #    #    #     # #    #  #     # #           #  #     # #     # #     # #       #     # 
+#     # #     #    #     #####  #     # #     # #######    ### #     # #     #  #####  #######  #####  
 
 def compute_tuning_SNR(ses):
     """
@@ -371,7 +427,6 @@ def compute_tuning_SNR(ses):
     SNR = cov_signal / cov_noise
 
     return SNR
-
 
 def compute_splithalf_reliability(ses):
     """

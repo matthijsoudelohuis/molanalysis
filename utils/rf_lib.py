@@ -72,39 +72,55 @@ def plot_rf_plane(celldata,r2_thr=0,rf_type='Fneu'):
 
     return fig
 
+from scipy.stats import multivariate_normal
+
 def plot_rf_screen(celldata,r2_thr=0,rf_type='Fneu'):
     
     areas           = np.sort(celldata['roi_name'].unique())[::-1]
     clr_areas       = get_clr_areas(areas)
-    rf_sizes        = [15,30]
-    # fig,axes        = plt.subplots(1,len(areas),figsize=(6*len(areas),3))
-    fig,ax        = plt.subplots(1,1,figsize=(6,2))
+    fig,ax          = plt.subplots(1,1,figsize=(6,2))
+    x, y            = np.mgrid[-135:135:.1, -16.7:50.2:.1]
+    data            = np.dstack((x, y))
+    nNeurons        = len(celldata)
 
-    for j in range(len(areas)): #for areas
-        idx_area    = celldata['roi_name']==areas[j]
-        idx_sig     = celldata['rf_r2_' + rf_type] > r2_thr
-        idx         = np.logical_and(idx_area,idx_sig)
-        sns.scatterplot(data = celldata[idx],
-                        x='rf_az_' + rf_type,y='rf_el_' + rf_type,linewidth=0.5,alpha=0.5,
-                        marker="o", ax=ax,s=np.pi * rf_sizes[j]**2,facecolor="none",edgecolor=clr_areas[j])
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
-        ax.set_xlabel('')
-        ax.set_ylabel('')
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.axvline(x=45,color = 'white', linestyle = '--')
-        ax.axvline(x=-45,color = 'white', linestyle = '--')
-        ax.set_xlim([-135,135])
-        ax.set_ylim([-16.7,50.2])
-        ax.set_facecolor("black")
+    # # Compute z for all neurons at once
+    # means = np.array([celldata['rf_az_' + rf_type], celldata['rf_el_' + rf_type]]).T
+    # covs = np.array([[celldata['rf_sx_' + rf_type]**2, np.zeros(nNeurons)], [np.zeros(nNeurons), celldata['rf_sy_' + rf_type]**2]]).T
+    # idx = np.logical_and(~np.isnan(celldata['rf_sx_' + rf_type]),
+    #                      celldata['rf_r2_' + rf_type]> r2_thr)
+
+    nNeurons = len(celldata)
+    for i in range(nNeurons):
+    # for i in range(50):
+        if not np.isnan(celldata['rf_sx_' + rf_type][i]) and celldata['rf_r2_' + rf_type][i] > r2_thr:
+            mean        = [celldata['rf_az_' + rf_type][i], celldata['rf_el_' + rf_type][i]]
+            cov         = [[celldata['rf_sx_' + rf_type][i]**2, 0], [0, celldata['rf_sy_' + rf_type][i]**2]]
+            rv          = multivariate_normal(mean, cov)
+            z           = rv.pdf(data)
+            peak_pdf    = rv.pdf(mean) # Compute peak PDF value
+            # Set level to 0.606 * peak value for one standard deviation
+            contour_level = 0.606 * peak_pdf
+
+            plt.contour(x, y, z, levels=[contour_level], colors=get_clr_areas([celldata['roi_name'][i]]), 
+                        linestyles='solid',linewidths=0.25,alpha=0.5)
+
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * 0.9, box.height * 0.9])  # Shrink current axis's height by 10% on the bottom
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.axvline(x=45,color = 'black', linestyle = '--')
+    ax.axvline(x=-45,color = 'black', linestyle = '--')
+    ax.set_xlim([-135,135])
+    ax.set_ylim([-16.7,50.2])
     ax.legend(labels=areas,loc='center left', bbox_to_anchor=(1, 0.5))        # Put a legend next to current axis
     ax.set_title(celldata['session_id'][0])
     plt.tight_layout()
 
     return fig
 
-def plot_RF_frac(sessions,rf_type,sig_thr):
+def plot_RF_frac(sessions,rf_type,r2_thr):
     areas   = ['V1','PM']
 
     rf_frac = np.empty((len(sessions),len(areas)))
@@ -112,8 +128,6 @@ def plot_RF_frac(sessions,rf_type,sig_thr):
         for ises in range(len(sessions)):    # iterate over sessions
             idx = sessions[ises].celldata['roi_name'] == areas[iarea]
             if 'rf_r2_' + rf_type  in sessions[ises].celldata:
-                # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_r2_Fneu'][idx]>r2_thr) / np.sum(idx)
-                # rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_r2_F'][idx]>r2_thr) / np.sum(idx)
                 rf_frac[ises,iarea] = np.sum(sessions[ises].celldata['rf_r2_' + rf_type][idx]>r2_thr) / np.sum(idx)
         print('%2.1f +- %2.1f %% neurons with RF in area %s\n'  % (np.mean(rf_frac[:,iarea])*100,np.std(rf_frac[:,iarea])*100,areas[iarea]))
     fig,ax = plt.subplots(figsize=(3,3))

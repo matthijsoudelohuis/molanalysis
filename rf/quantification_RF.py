@@ -38,127 +38,60 @@ session_list        = np.array([['LPE09665','2023_03_21'], #GR
 session_list        = np.array([['LPE12223','2024_06_08'],
                                 ['LPE12223','2024_06_10']])
 
-
 sessions,nSessions = load_sessions(protocol = 'GR',session_list=session_list)
 sessions,nSessions = load_sessions(protocol = 'RF',session_list=session_list)
 
 #%% 
-# sessions,nSessions = filter_sessions(protocols = ['SP'],only_animal_id=['LPE09665', 'LPE09830',
-#                                                         'LPE11495', 'LPE11998', 'LPE12013'],session_rf=True,filter_areas=['V1','PM'])
-# # # sessions,nSessions = load_sessions(protocol = 'IM',session_list=session_list,load_behaviordata=False, 
-#                                     # load_calciumdata=False, load_videodata=False, calciumversion='dF')
-sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,filter_areas=['V1','PM'])
+# sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,filter_areas=['V1','PM'])
 # sessions,nSessions = filter_sessions(protocols = ['SP','IM'])
-sessions,nSessions = filter_sessions(protocols = ['RF'])
+sessions,nSessions = filter_sessions(protocols = ['RF'],filter_areas=['V1','PM'])
 
 #%% 
-# sig_thr = 0.001 #cumulative significance of receptive fields clusters
 r2_thr = 0.2 #R2 of the 2D gaussian fit
-
-#%% 
-for ises,ses in enumerate(sessions):
-    # print(ises)
-    ses.celldata['rf_az_F'] = ses.celldata['rf_az_Fgauss']
-    ses.celldata['rf_el_F'] = ses.celldata['rf_el_Fgauss']
-    ses.celldata['rf_r2_F'] = ses.celldata['rf_r2_Fgauss']
 
 #%% Interpolation of receptive fields:
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-sessions = smooth_rf(sessions,r2_thr=r2_thr,radius=50,rf_type='Fneugauss',mincellsFneu=5)
-sessions = exclude_outlier_rf(sessions) 
-sessions = replace_smooth_with_Fsig(sessions) 
+# sessions = smooth_rf(sessions,r2_thr=r2_thr,radius=50,rf_type='Fneugauss',mincellsFneu=5)
+# sessions = exclude_outlier_rf(sessions) 
+# sessions = replace_smooth_with_Fsig(sessions) 
 
 sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
 
 
 #%% Show fraction of receptive fields per session before any corrections:
-rf_type = 'F'
-[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type=rf_type,sig_thr=sig_thr)
-# [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='Fsmooth',sig_thr=sig_thr)
-fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_%s' % rf_type  + '.png'), format = 'png')
+for rf_type in ['F','Fneu','Fsmooth']: 
+    [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type=rf_type,r2_thr=r2_thr)
+    fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_%s' % rf_type  + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_IMincluded' + '.png'), format = 'png')
 
 #%% ##################### Retinotopic mapping within V1 and PM #####################
 rf_type = 'Fneu'
-# rf_type = 'Favg'
-# rf_type = 'Fsmooth'
-# rf_type = 'F'
 rf_type = 'Fsmooth'
-# rf_type = 'Fblock'
-# rf_type = 'Fneugauss'
-# rf_type = 'Fgauss'
-sig_thr=0.001
 for ises in range(nSessions):
-# for ises in [9]:
-    fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
+# for ises in [1,5,12]:
+    fig = plot_rf_plane(sessions[ises].celldata,r2_thr=r2_thr,rf_type=rf_type) 
     fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
-# #%% 
-# fig,ax = plt.subplots()
-# plt.scatter(sessions[ises].celldata['rf_az_Fneu'],sessions[ises].celldata['rf_az_Fsmooth'],alpha=1,s=6)
-# ax.set_xlim([0,120])
-# ax.set_ylim([0,120])
-# ax.plot([0, 1], [0, 1], transform=ax.transAxes)
-
 #%%
-sessions = exclude_outlier_rf(sessions) 
-
+# sessions = exclude_outlier_rf(sessions) 
 rf_type = 'F'
 #Show fraction of receptive fields per session after filtering out scattered neurons: 
-[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type=rf_type,sig_thr=sig_thr)
+[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type=rf_type,r2_thr=r2_thr)
 # fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_filter' + '.png'), format = 'png')
 fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_out%s_%s' % (rf_type,sessions[ises].sessiondata['session_id'][0]) + '.png'), format = 'png')
 
-
 #%% 
 ises = 22
-sig_thr = 0.01
-fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type='F') 
-
-fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type='Fneu') 
-
-# fig = plot_rf_plane(sessions[ises].celldata,sig_thr=1,rf_type='Fneu_interp') 
-
-fig = plot_rf_plane(sessions[ises].celldata,sig_thr=1,rf_type='Fsmooth') 
-
-#%%
-sessions = exclude_outlier_rf(sessions) 
-fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type='F') 
-
-#%%
-
-sessions[ises].celldata['rf_az_Fneu']    = sessions[ises].celldata['rf_az_Favg']
-sessions[ises].celldata['rf_el_Fneu']    = sessions[ises].celldata['rf_el_Favg']
-sessions[ises].celldata['rf_p_Fneu']    = sessions[ises].celldata['rf_p_Favg']
-
-# sessions = smooth_rf(sessions,sig_thr=0.001,radius=75)
-
-#%% Show fraction of receptive fields per session after smoothed interpolation and filtering:
-[fig,rf_frac_F] = plot_RF_frac(sessions,rf_type='Fsmooth',sig_thr=sig_thr)
-fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_Fsmooth' + '.png'), format = 'png')
-
-#%% ##################### Retinotopic mapping within V1 and PM #####################
-rf_type = 'F'
-# rf_type = 'Fneu'
-rf_type = 'Fsmooth'
-for ises in range(nSessions):
-    fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
-    fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_plane_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
+fig = plot_rf_plane(sessions[ises].celldata,r2_thr=r2_thr,rf_type='F') 
+fig = plot_rf_plane(sessions[ises].celldata,r2_thr=r2_thr,rf_type='Fsmooth') 
 
 #%% ########### Plot locations of receptive fields as on the screen ##############################
 rf_type = 'Fsmooth'
-rf_type = 'Favg'
 for ises in range(nSessions):
-    fig = plot_rf_screen(sessions[ises].celldata,sig_thr=sig_thr,rf_type=rf_type) 
-    fig.savefig(os.path.join(savedir,'RF_planes','V1_PM_rf_screen_' + rf_type + '_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
-
-# #%% ############ #####################
-# celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
-
-# plt.hist(celldata['meanF'],color='gray',bins=np.arange(-100,100,step=10))
-
-# celldata['session_id'][celldata['meanF']<25]
+# for ises in [5]:
+    fig = plot_rf_screen(sessions[ises].celldata,r2_thr=r2_thr,rf_type=rf_type) 
+    fig.savefig(os.path.join(savedir,'RF_planes','RF_gauss_screen_' + rf_type + '_' + sessions[ises].sessiondata['session_id'][0] +  rf_type + '.png'), format = 'png')
 
 #%% Show distribution of delta receptive fields across areas: 
 sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
@@ -179,21 +112,23 @@ fig.savefig(os.path.join(savedir,'DeltaRF_Projpairs_%dsessions_' % nSessions + '
 
 
 #%% 
+celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 fig,axes   = plt.subplots(1,1,figsize=(5,5))
-plt.hist(celldata['rf_r2_Fneugauss'],color='gray',bins=np.arange(0,1,step=0.025))
+plt.hist(celldata['rf_r2_Fneu'],color='gray',bins=np.arange(0,1,step=0.025))
 
 #%% ## remove any double cells (for example recorded in both GR and RF)
 celldata    = celldata.drop_duplicates(subset='cell_id', keep="first")
 celldata    = celldata[~np.isnan(celldata['rf_az_Fneu'])]
 
-logpdata    = -np.log10(celldata['rf_p_F'])
+r2data      = celldata['rf_r2_F']
 dev_az      = np.abs(celldata['rf_az_F'] - celldata['rf_az_Fneu'])
 dev_el      = np.abs(celldata['rf_el_F'] - celldata['rf_el_Fneu'])
 dev_rf      = np.sqrt(dev_az**2 + dev_el**2)
 
-pticks = 1/np.power(10,np.arange(1,10))
-alphaval = 0.2
+xticks      = np.arange(0,1,step=0.1)
+
+alphaval    = 0.2
 areas   = ['V1','PM']
 spat_dims = ['az','el','rf']
 clrs_areas = get_clr_areas(areas)
@@ -205,20 +140,20 @@ for iarea,area in enumerate(areas):
         idx = celldata['roi_name'] == area
 
         if spat_dim == 'az':
-            axes[iarea,ispat_dim].scatter(logpdata[idx],dev_az[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
+            axes[iarea,ispat_dim].scatter(r2data[idx],dev_az[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
             axes[iarea,ispat_dim].set_ylim([0,100])
 
         elif spat_dim == 'el':
-            axes[iarea,ispat_dim].scatter(logpdata[idx],dev_el[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
+            axes[iarea,ispat_dim].scatter(r2data[idx],dev_el[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
             axes[iarea,ispat_dim].set_ylim([0,100])
         
         elif spat_dim == 'rf':
-            axes[iarea,ispat_dim].scatter(logpdata[idx],dev_rf[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
+            axes[iarea,ispat_dim].scatter(r2data[idx],dev_rf[idx],s=3,alpha=alphaval,c=clrs_areas[iarea])
             axes[iarea,ispat_dim].set_ylim([0,100])
             axes[iarea,ispat_dim].axhline(y=thrs[iarea],xmin=0,xmax=1,color='black',linewidth=1,linestyle='--')
             axes[iarea,ispat_dim].text(y=thrs[iarea]+5,x=7,s='Scatter thr',fontsize=9)
 
-        axes[iarea,ispat_dim].set_xticks(-np.log10(pticks),labels=pticks,fontsize=6)
+        axes[iarea,ispat_dim].set_xticks(-np.log10(xticks),labels=xticks,fontsize=6)
         axes[iarea,ispat_dim].set_title(area + ' ' + spat_dim)
         axes[iarea,ispat_dim].set_xlim([2,10])
         axes[iarea,ispat_dim].set_ylabel('RF Scatter')
@@ -294,7 +229,7 @@ sessions = compute_pairwise_metrics(sessions)
 
 # ###### Smooth RF with local good fits (spatial location of somata): ######
 # for ises in range(nSessions):
-#     fig = plot_rf_plane(sessions[ises].celldata,sig_thr=sig_thr) 
+#     fig = plot_rf_plane(sessions[ises].celldata,r2_thr=r2_thr) 
 #     fig.savefig(os.path.join(savedir,'V1_PM_azimuth_elevation_inplane_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 # smooth_rf(sessions,sig_thr=0.001,radius=100)

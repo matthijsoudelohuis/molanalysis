@@ -51,28 +51,15 @@ for ises in range(nSessions):
                                 calciumversion='dF',keepraw=False)
 
 #%% ########################## Compute signal and noise correlations: ###################################
-sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False)
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 
 #%% ##################### Compute pairwise neuronal distances: ##############################
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-#%% 
-for ses in sessions:
-    if 'rf_r2_Fgauss' in ses.celldata:
-        ses.celldata['rf_p_Fgauss'] = ses.celldata['rf_r2_Fgauss']<0.2
-        ses.celldata['rf_p_Fneugauss'] = ses.celldata['rf_r2_Fneugauss']<0.2
-
-#%% Copy Fgauss to F
-for ses in sessions:
-    if 'rf_az_Fgauss' in ses.celldata:
-        ses.celldata['rf_az_F'] = ses.celldata['rf_az_Fgauss']
-        ses.celldata['rf_el_F'] = ses.celldata['rf_el_Fgauss']
-        ses.celldata['rf_p_F'] = ses.celldata['rf_p_Fgauss']
-
-#%% ##################### Compute pairwise receptive field distances: ##############################
-sessions = smooth_rf(sessions,radius=50,rf_type='Fneugauss',mincellsFneu=5)
-sessions = exclude_outlier_rf(sessions) 
-sessions = replace_smooth_with_Fsig(sessions) 
+# #%% ##################### Compute pairwise receptive field distances: ##############################
+# sessions = smooth_rf(sessions,radius=50,rf_type='Fneugauss',mincellsFneu=5)
+# sessions = exclude_outlier_rf(sessions) 
+# sessions = replace_smooth_with_Fsig(sessions) 
 
 #%% ########################### Compute tuning metrics: ###################################
 for ises in range(nSessions):
@@ -91,11 +78,7 @@ for ises in range(nSessions):
     else:
         sessions[ises].celldata['OSI'] = sessions[ises].celldata['tuning_var'] = np.nan
 
-#%% Give redcells a string label
-redcelllabels = np.array(['unl','lab'])
-for ses in sessions:
-    ses.celldata['labeled'] = ses.celldata['redcell']
-    ses.celldata['labeled'] = ses.celldata['labeled'].astype(int).apply(lambda x: redcelllabels[x])
+
 sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
 #%% Combine cell data from all loaded sessions to one dataframe:
@@ -105,7 +88,7 @@ celldata = pd.concat([ses.celldata[filter_nearlabeled(ses,radius=50)] for ses in
 ## remove any double cells (for example recorded in both GR and RF)
 celldata = celldata.drop_duplicates(subset='cell_id', keep="first")
 
-celldata['area_label'] = celldata['roi_name'] + celldata['labeled']
+# celldata['area_label'] = celldata['roi_name'] + celldata['labeled']
 
 #%% Compute the variance across trials for each cell:
 for ses in sessions:
@@ -158,3 +141,51 @@ for i in range(nfields):
 # plt.tight_layout()
 # fig.savefig(os.path.join(savedir,'Quality_Metrics_GRGN_%dcells_%dsessions' % (len(celldata),nSessions) + '.png'), format = 'png')
 
+#%% Find the session with the biggest difference in pairwise correlations between labeled and unlabeled cells:
+
+sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+
+corrdiff = np.empty(nSessions)
+
+for ises,ses in enumerate(sessions):
+    projfilter      = filter_2d_projpair(ses,'unl-unl')
+    unlcorr         = np.nanmean(np.abs(ses.noise_corr[projfilter]),axis=None)
+    projfilter      = filter_2d_projpair(ses,'lab-lab')
+    labcorr         = np.nanmean(np.abs(ses.noise_corr[projfilter]),axis=None)
+
+    corrdiff[ises] = labcorr - unlcorr
+
+print(sessiondata['session_id'][np.argmax(corrdiff)])
+print(sessiondata['session_id'][np.flip(np.argsort(corrdiff)[-3:])])
+
+# LPE11622_2024_03_28
+# LPE11495_2024_02_28
+# LPE09665_2023_03_21
+
+
+#%% 
+
+sessions,nSessions = filter_sessions(protocols = ['GR','GN'],filter_areas=['V1'])
+
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+fig,axes = plt.subplots(2,2,figsize=(6,6))
+axes[0,0].hist(celldata['xloc'][celldata['redcell']==0],bins=25,histtype='step',color='k',density=True)
+axes[0,0].hist(celldata['xloc'][celldata['redcell']==1],bins=25,histtype='step',color='r',density=True)
+axes[0,0].set_title('V1 - X location')
+axes[0,1].hist(celldata['yloc'][celldata['redcell']==0],bins=25,histtype='step',color='k',density=True)
+axes[0,1].hist(celldata['yloc'][celldata['redcell']==1],bins=25,histtype='step',color='r',density=True)
+axes[0,1].set_title('V1 - Y location')
+
+sessions,nSessions = filter_sessions(protocols = ['GR','GN'],filter_areas=['PM'])
+
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+axes[1,0].hist(celldata['xloc'][celldata['redcell']==0],bins=25,histtype='step',color='k',density=True)
+axes[1,0].hist(celldata['xloc'][celldata['redcell']==1],bins=25,histtype='step',color='r',density=True)
+axes[1,0].set_title('PM - X location')
+axes[1,1].hist(celldata['yloc'][celldata['redcell']==0],bins=25,histtype='step',color='k',density=True)
+axes[1,1].hist(celldata['yloc'][celldata['redcell']==1],bins=25,histtype='step',color='r',density=True)
+axes[1,1].set_title('PM - Y location')
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'XYPosition_Unl_Lab_cells_%dsessions' % (nSessions) + '.png'), format = 'png')

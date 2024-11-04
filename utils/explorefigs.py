@@ -260,32 +260,33 @@ def plot_neural_raster(Session, ax, trialsel, neuronsel=None, counter=0):
                 Session.celldata['roi_name'] == area, Session.celldata['redcell'] == label))[0]
             ncells = len(idx)
 
-            shrinkfactor = np.sqrt(ncells)
+            if ncells>0:
+                shrinkfactor = np.sqrt(ncells)
 
-            excerpt = np.array(Session.calciumdata.loc[np.logical_and(
-                Session.ts_F > example_tstart, Session.ts_F < example_tstop)])
-            excerpt = excerpt[:, idx]
+                excerpt = np.array(Session.calciumdata.loc[np.logical_and(
+                    Session.ts_F > example_tstart, Session.ts_F < example_tstop)])
+                excerpt = excerpt[:, idx]
 
-            datamat = zscore(excerpt.T, axis=1)
+                datamat = zscore(excerpt.T, axis=1)
 
-            # fit rastermap
-            model = Rastermap(n_PCs=100, n_clusters=50,
-                              locality=0.25, time_lag_window=5).fit(datamat)
-            y = model.embedding  # neurons x 1
-            isort = model.isort
+                # fit rastermap
+                model = Rastermap(n_PCs=100, n_clusters=50,
+                                locality=0.25, time_lag_window=5).fit(datamat)
+                y = model.embedding  # neurons x 1
+                isort = model.isort
 
-            # bin over neurons
-            X_embedding = zscore(utils.bin1d(
-                datamat[isort, :], bin_size=5, axis=0), axis=1)
-            # ax.imshow(spks[isort, xmin:xmax], cmap="gray_r", vmin=0, vmax=1.2, aspect="auto")
-            rasterclrs = ["gray_r", "Reds"]
-            ax.imshow(X_embedding, vmin=0, vmax=1.5, cmap=rasterclrs[ilabel], aspect="auto",
-                      extent=[example_tstart, example_tstop, counter-ncells/shrinkfactor, counter])
+                # bin over neurons
+                X_embedding = zscore(utils.bin1d(
+                    datamat[isort, :], bin_size=5, axis=0), axis=1)
+                # ax.imshow(spks[isort, xmin:xmax], cmap="gray_r", vmin=0, vmax=1.2, aspect="auto")
+                rasterclrs = ["gray_r", "Reds"]
+                ax.imshow(X_embedding, vmin=0, vmax=1.5, cmap=rasterclrs[ilabel], aspect="auto",
+                        extent=[example_tstart, example_tstop, counter-ncells/shrinkfactor, counter])
 
-            counter -= np.ceil(ncells/shrinkfactor)
+                counter -= np.ceil(ncells/shrinkfactor)
 
-            ax.text(example_tstart, counter+ncells/shrinkfactor/2, area + ' - ' + labeltext[ilabel],
-                    fontsize=9, color='black', horizontalalignment='right')
+                ax.text(example_tstart, counter+ncells/shrinkfactor/2, area + ' - ' + labeltext[ilabel],
+                        fontsize=9, color='black', horizontalalignment='right')
 
     return counter
 

@@ -18,18 +18,30 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.plot_lib import shaded_error
 from utils.corr_lib import *
+from utils.tuning import *
+from utils.psth import compute_tensor
+from utils.explorefigs import plot_excerpt
 
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\DescriptiveStatisticsSessions\\')
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Labeling\\CalciumTracesComparison\\')
 
 #%% #############################################################################
 session_list        = np.array([['LPE09665','2023_03_21'], #GR
                                 ['LPE10919','2023_11_06']]) #GR
+
 sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
+
+# Sessions with the biggest difference in absolute pairwise corrleations (dF/F) 
+# between labeled and unlabeled cells:
+session_list        = np.array([['LPE11622','2024_03_28'], #GN
+                                ['LPE11495','2024_02_28']]) #GN
+                                # ['LPE09665','2023_03_21']]) #GR
+session_list        = np.array([['LPE11086','2023_12_15']]) #GR
+
+sessions,nSessions   = load_sessions(protocol = 'GN',session_list=session_list)
 
 #%% 
 session_list        = np.array([['LPE11998','2024_05_02']]) #GN
-sessions,nSessions   = load_sessions(protocol = 'GN',session_list=session_list)
-
+sessions,nSessions  = load_sessions(protocol = 'GN',session_list=session_list)
 
 #%%  Load data properly:                      
 ## Parameters for temporal binning
@@ -39,10 +51,10 @@ t_post      = 2     #post s
 for ises in range(nSessions):
     # Construct time tensor: 3D 'matrix' of K trials by N neurons by T time bins
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion='dF',keepraw=True)
+                                calciumversion='deconv',keepraw=True)
     [sessions[ises].tensor,t_axis] = compute_tensor(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'], 
-                                    t_pre, t_post, binsize,method='nearby')
-    sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False,filtersig=False)[0]
+                                    t_pre, t_post,method='nearby')
+    sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False)[0]
 
 #%%
 def compute_power_spectra(fs,data):
@@ -72,12 +84,38 @@ def compute_power_spectra(fs,data):
     avg_power_spectrum = np.mean(power_spectra, axis=0)
     freqs = np.fft.fftfreq(T, d=1/fs)
     freqs_out = freqs[freqs >= 0]
-    psd = avg_power_spectrum[freqs >= 0]
-    return freqs_out,psd
+    psd_mean    = avg_power_spectrum[freqs >= 0]
+    psd_ind     = power_spectra[:,freqs >= 0]
+    return freqs_out,psd_mean,psd_ind
 
 #%%% 
-freqs,psd = compute_power_spectra(ses.sessiondata['fs'][0],data=ses.calciumdata)
+ses = sessions[1]
+freqs,psd_mean,psd_ind = compute_power_spectra(ses.sessiondata['fs'][0],data=ses.calciumdata)
 
+#%% Plot the power spectrum focusing on low frequencies
+fig,ax = plt.subplots(1,1,figsize=(6,4))
+plt.plot(freqs, np.mean(psd_ind[ses.celldata['redcell']==0,:],axis=0), label='unl',c='k',alpha=0.5)
+plt.plot(freqs, np.mean(psd_ind[ses.celldata['redcell']==1,:],axis=0), label='lab',c='r',alpha=0.5)
+plt.xscale('log')
+plt.yscale('linear')
+# plt.yscale('log')
+plt.ylim([0,np.max(np.mean(psd_ind[ses.celldata['redcell']==1,:],axis=0)[1:])*1.1])
+plt.xlabel('Frequency')
+plt.ylabel('Power')
+plt.legend(frameon=False)
+plt.title('Power Spectrum dF/F %s' % ses.sessiondata['session_id'][0])
+fig.savefig(os.path.join(savedir,'PSD_lab_unl_%s.png' % ses.sessiondata['session_id'][0]), format = 'png')
+
+#%% 
+
+ses.celldata['LF_power'] = np.mean(psd_ind[:,freqs<0.001],axis=1)
+
+df = ses.celldata[['LF_power','depth','xloc','redcell','noise_level']]
+df = ses.celldata[['LF_power','redcell','noise_level']]
+
+fig = sns.pairplot(df,hue='redcell',diag_kind='hist',diag_kws={'histtype': 'stepfilled', 'alpha': 0.5})
+fig = sns.pairplot(df,hue='redcell',diag_kind='kde',diag_kws={'density': True, 'shade': True, 'alpha': 0.5})
+fig.savefig(os.path.join(savedir,'Corr_LF_noise_%s.png' % ses.sessiondata['session_id'][0]), format = 'png')
 
 #%% 
 from scipy.signal import butter, filtfilt
@@ -137,6 +175,21 @@ fig.savefig(os.path.join(savedir,'PSD_Filtering_loglog_%s.png' % ses.sessiondata
 for ises in range(nSessions):
     sessions[ises] = high_pass_filter(sessions[ises],cutoff=0.01)
 
+#%% 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #%% ##################### Compute pairwise neuronal distances: ##############################
 sessions = compute_pairwise_anatomical_distance(sessions)
 
@@ -157,38 +210,42 @@ for ises in range(nSessions):
 sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='PCA',remove_rank=1)
 
-
-#%% Give redcells a string label
-redcelllabels = np.array(['unl','lab'])
-for ses in sessions:
-    ses.celldata['labeled'] = ses.celldata['redcell'].astype(int).apply(lambda x: redcelllabels[x])
-    ses.celldata['area_label'] = ses.celldata['roi_name'] + ses.celldata['labeled']
 sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-
 
 #%%
 pair_corr = np.empty((0,4),dtype=object)
-for ises,ses in enumerate(sessions):
-    corr_extreme = np.logical_or(ses.noise_corr<-0.1,ses.noise_corr>0.3)
-    V1_idx = np.all((ses.celldata['roi_name']=='V1',ses.celldata['noise_level']<0.1,ses.celldata['tuning_var']>0.025),axis=0)
-    PM_idx = np.all((ses.celldata['roi_name']=='PM',ses.celldata['noise_level']<0.1,ses.celldata['tuning_var']>0.025),axis=0)
-    row_idx,col_idx = np.where(np.all((np.outer(V1_idx,PM_idx),corr_extreme),axis=0))
 
-    pair_corr = np.vstack((pair_corr,np.array([ses.celldata['cell_id'][row_idx],
-                                                ses.celldata['cell_id'][col_idx],
-                                                ses.noise_corr[row_idx,col_idx],
-                                                np.repeat(ses.sessiondata['session_id'],len(row_idx))]).T))
+ses = sessions[0]
 
-print(pair_corr.shape)
+# for ises,ses in enumerate(sessions):
+corr_extreme = np.logical_or(ses.noise_corr<-0.1,ses.noise_corr>0.3)
+V1_idx = np.all((ses.celldata['roi_name']=='V1',ses.celldata['noise_level']<10,ses.celldata['tuning_var']>0.025),axis=0)
+PM_idx = np.all((ses.celldata['roi_name']=='PM',ses.celldata['noise_level']<10,ses.celldata['tuning_var']>0.025),axis=0)
+row_idx,col_idx = np.where(np.all((np.outer(V1_idx,PM_idx),corr_extreme),axis=0))
+
+pair_corr = np.vstack((pair_corr,np.array([ses.celldata['cell_id'][row_idx],
+                                            ses.celldata['cell_id'][col_idx],
+                                            ses.noise_corr[row_idx,col_idx],
+                                            np.repeat(ses.sessiondata['session_id'],len(row_idx))]).T))
+
+# flatten the first two columns of pair_corr. 
+# Count the occurences of the unique elements. 
+# Take the 20 with the most occurences
+pair_corr_cells = pair_corr[:,0:2].flatten()
+cell_counts = pd.Series(pair_corr_cells).value_counts().head(20)
+example_cells   = np.where(np.isin(ses.celldata['cell_id'],np.array(cell_counts.index)))[0]
+
 
 #%% #####################################
 #Show some traces and some stimuli to see responses:
 example_cells   = [1250,1230,1257,1551,1559,1616,1645,2006,1925,1972,2178,2110] #PM
 example_cells   = [3,100,58,62,70]
-fig             = plot_excerpt(sessions[ises],plot_behavioral=False,trialsel=[1,len(sessions[ises].trialdata)],neuronsel=example_cells)
+fig             = plot_excerpt(ses,plot_behavioral=False,trialsel=[1,len(sessions[ises].trialdata)],neuronsel=example_cells)
+
+fig             = plot_excerpt(ses,neural_version='raster',trialsel=[1,len(sessions[ises].trialdata)])
+fig.savefig(os.path.join(savedir,'Rasterplot_deconv_%s.png' % ses.sessiondata['session_id'][0]), format = 'png')
 
 #%% Show average trace
-
 ises = 1
 
 #%% Figure of complete average response for dF/F and deconv: 

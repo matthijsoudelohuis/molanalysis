@@ -26,7 +26,7 @@ from utils.plotting_style import * #get all the fixed color schemes
 from utils.plot_lib import shaded_error
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace_smooth_with_Fsig
-from utils.tuning import compute_tuning, compute_prefori
+from utils.tuning import compute_tuning_wrapper
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
 
@@ -63,21 +63,7 @@ for ises in range(nSessions):
     delattr(sessions[ises],'calciumdata')
 
 #%% ########################### Compute tuning metrics: ###################################
-for ises in range(nSessions):
-    sessions[ises].celldata['OSI'] = compute_tuning(sessions[ises].respmat,
-                                                    sessions[ises].trialdata['Orientation'],
-                                                    tuning_metric='OSI')
-    sessions[ises].celldata['DSI'] = compute_tuning(sessions[ises].respmat,
-                                                    sessions[ises].trialdata['Orientation'],
-                                                    tuning_metric='DSI')
-    sessions[ises].celldata['gOSI'] = compute_tuning(sessions[ises].respmat,
-                                                    sessions[ises].trialdata['Orientation'],
-                                                    tuning_metric='gOSI')
-    sessions[ises].celldata['tuning_var'] = compute_tuning(sessions[ises].respmat,
-                                                    sessions[ises].trialdata['Orientation'],
-                                                    tuning_metric='tuning_var')
-    sessions[ises].celldata['pref_ori'] = compute_prefori(sessions[ises].respmat,
-                                                    sessions[ises].trialdata['Orientation'])
+sessions = compute_tuning_wrapper(sessions)
 
 #%% ########################## Compute signal and noise correlations: ###################################
 sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filter_stationary=False)
@@ -88,42 +74,14 @@ sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filte
 # sessions = compute_pairwise_metrics(sessions)
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-#%% 
-for ses in sessions:
-    if 'rf_r2_Fgauss' in ses.celldata:
-        ses.celldata['rf_p_Fgauss'] = ses.celldata['rf_r2_Fgauss']<0.2
-        ses.celldata['rf_p_Fneugauss'] = ses.celldata['rf_r2_Fneugauss']<0.2
-
-#%% Copy Fgauss to F
-for ses in sessions:
-    if 'rf_az_Fgauss' in ses.celldata:
-        ses.celldata['rf_az_F'] = ses.celldata['rf_az_Fgauss']
-        ses.celldata['rf_el_F'] = ses.celldata['rf_el_Fgauss']
-        ses.celldata['rf_p_F'] = ses.celldata['rf_p_Fgauss']
-
 #%% ##################### Compute pairwise receptive field distances: ##############################
 sessions = smooth_rf(sessions,radius=50,rf_type='Fneugauss',mincellsFneu=5)
 sessions = exclude_outlier_rf(sessions) 
 sessions = replace_smooth_with_Fsig(sessions) 
 
-#%% Give redcells a string label
-redcelllabels = np.array(['unl','lab'])
-for ses in sessions:
-    ses.celldata['labeled'] = ses.celldata['redcell']
-    ses.celldata['labeled'] = ses.celldata['labeled'].astype(int).apply(lambda x: redcelllabels[x])
-
 #%% ##########################################################################################################
 #   2D     DELTA RECEPTIVE FIELD                 2D
 # ##########################################################################################################
-
-# sessiondata    = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-# sessions_in_list = np.where(sessiondata['protocol'].isin(['GR','GN','IM']))[0]
-# sessions_subset = [sessions[i] for i in sessions_in_list]
-
-# # #%% Remove two sessions with too much drift in them:
-# sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-# sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
-# sessions_subset            = [sessions[i] for i in sessions_in_list]
 
 #%% #########################################################################################
 # Contrast: across areas
@@ -158,7 +116,7 @@ corr_type           = 'noise_corr'
 bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
 bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,method='mean',areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
                             corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,deltaori=deltaori,rf_type=rf_type,
-                            sig_thr = 0.001,noise_thr=0.2,tuned_thr=0.02,dsi_thr=0,normalize=False,filtersign=None,absolute=False)
+                            r2_thr=0.2,noise_thr=20,tuned_thr=0.02,dsi_thr=0,normalize=False,filtersign=None,absolute=False)
 
 #%% Make the figure:
 centerthr           = [15,15,15]

@@ -23,32 +23,6 @@ from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
 
 #%% #############################################################################
-# session_list        = np.array([['LPE10919','2023_11_06'],
-#                                 ['LPE10919','2023_11_06'],
-#                                 ['LPE10919','2023_11_06']]) #GR
-
-# session_list        = np.array([['LPE09830','2023_04_10'],
-#                                 ['LPE09830','2023_04_10'],
-                                # ['LPE09830','2023_04_10']]) #GR
-# session_list        = np.array([['LPE10919','2023_11_06']])
-
-# sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
-
-# #%%  Load data properly
-# ises = 0 # without filtering
-# sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-#                             calciumversion='dF',keepraw=False)
-# ises = 1 # with filtering
-# filter_hp = 0.01
-# sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-#                             calciumversion='dF',keepraw=True,filter_hp=filter_hp)
-
-# ises = 2 # with filtering
-# filter_hp = 0.001
-# sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-#                             calciumversion='dF',keepraw=True,filter_hp=filter_hp)
-
-#%% #############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
 session_list        = np.array([['LPE09665','2023_03_21'], #GR
                                 ['LPE10919','2023_11_06']]) #GR
@@ -62,26 +36,7 @@ for ises in range(nSessions):
                                 calciumversion='deconv',keepraw=False)
 
 #%% ##################### Compute pairwise neuronal distances: ##############################
-# sessions = compute_pairwise_metrics(sessions)
 sessions = compute_pairwise_anatomical_distance(sessions)
-
-#%% 
-for ses in sessions:
-    if 'rf_r2_Fgauss' in ses.celldata:
-        ses.celldata['rf_p_Fgauss'] = ses.celldata['rf_r2_Fgauss']<0.2
-        ses.celldata['rf_p_Fneugauss'] = ses.celldata['rf_r2_Fneugauss']<0.2
-
-#%% Copy Fgauss to F
-for ses in sessions:
-    if 'rf_az_Fgauss' in ses.celldata:
-        ses.celldata['rf_az_F'] = ses.celldata['rf_az_Fgauss']
-        ses.celldata['rf_el_F'] = ses.celldata['rf_el_Fgauss']
-        ses.celldata['rf_p_F'] = ses.celldata['rf_p_Fgauss']
-
-#%% ##################### Compute pairwise receptive field distances: ##############################
-sessions = smooth_rf(sessions,radius=50,rf_type='Fneugauss',mincellsFneu=5)
-sessions = exclude_outlier_rf(sessions) 
-sessions = replace_smooth_with_Fsig(sessions) 
 
 #%% 
 areapairs = ['V1-V1','PM-PM']

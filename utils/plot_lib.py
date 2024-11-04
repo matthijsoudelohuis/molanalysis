@@ -2,13 +2,15 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-def shaded_error(ax,x,y,yerror=None,center='mean',error='std',color='black',linestyle='-'):
+def shaded_error(x,y,yerror=None,ax=None,center='mean',error='std',color='black',linestyle='-',label=None):
     x = np.array(x)
     y = np.array(y)
 
     # if np.ndim(y)==1:
     #     y = y[np.newaxis,:]
-
+    if ax is None:
+        ax = plt.gca()
+        
     if yerror is None:
         if center=='mean':
             ycenter = np.nanmean(y,axis=0)
@@ -27,7 +29,7 @@ def shaded_error(ax,x,y,yerror=None,center='mean',error='std',color='black',line
         ycenter = y
         yerror = np.array(yerror)
 
-    h, = ax.plot(x,ycenter,color=color,linestyle=linestyle)
+    h, = ax.plot(x,ycenter,color=color,linestyle=linestyle,label=label)
     ax.fill_between(x, ycenter-yerror, ycenter+yerror,color=color,alpha=0.2)
 
     return h
