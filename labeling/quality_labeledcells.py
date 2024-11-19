@@ -19,6 +19,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from sklearn import preprocessing
 from utils.plotting_style import *
 from utils.rf_lib import filter_nearlabeled
+from utils.psth import compute_tensor,compute_respmat
 
 #%% Load the data from all passive protocols:
 protocols            = ['GR','GN','IM']
@@ -30,7 +31,6 @@ sessions,nsessions            = filter_sessions(protocols)
 # sessions,nsessions  = load_sessions(protocol = 'GR',session_list=session_list)
 
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Labeling\\'
-
 #%% #### reset threshold if necessary:
 threshold = 0.5
 for ses in sessions:
@@ -319,6 +319,115 @@ ax = sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap='bwr')
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Quality_Metrics_Heatmap_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 
+
+#%% 
+
+
+#%% Load all sessions from certain protocols: 
+# sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
+sessions,nSessions   = filter_sessions(protocols = ['GR'],filter_areas=['V1','PM']) 
+
+session_list        = np.array([['LPE10919','2023_11_06']])
+# session_list        = np.array([['LPE10885','2023_10_23']])
+sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
+
+#%% Remove two sessions with too much drift in them:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+# sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE09665_2023_03_21']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
+
+#%% #############################################################################
+## Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
+## Parameters for temporal binning
+t_pre       = -1    #pre s
+t_post      = 2     #post s
+binsize     = 0.2   #temporal binsize in s
+
+for ises in range(nSessions):
+    sessions[ises].load_data(load_calciumdata=True,calciumversion='deconv')
+    [sessions[ises].tensor,t_axis] = compute_tensor(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'], 
+                                 t_pre, t_post,method='nearby')
+    sessions[ises].respmat = np.mean(sessions[ises].tensor[:,:,np.logical_and(t_axis>-0, t_axis<=1)] ,axis=2)
+
+#%% 
+from utils.explorefigs import plot_excerpt,plot_PCA_gratings,plot_tuned_response
+
+#%% Show some tuned responses with calcium and deconvolved traces across orientations:
+example_cells = [3,100,58,62,70]
+fig = plot_tuned_response(sessions[0].tensor,sessions[0].trialdata,t_axis,example_cells)
+fig.suptitle('%s - Deconvolved' % sessions[0].sessiondata['session_id'][0],fontsize=12)
+# save the figure
+# fig.savefig(os.path.join(savedir,'TunedResponse_deconv_%s.png' % sessions[0].sessiondata['session_id']))
+
+#%% Figure of complete average response for dF/F and deconv:
+from utils.tuning import compute_tuning, compute_prefori
+from utils.plot_lib import shaded_error,my_ceil,my_floor,get_sig_asterisks
+from scipy.stats import ttest_ind
+
+#%% ########################### Compute tuning metrics: ###################################
+for ises in range(nSessions):
+    sessions[ises].celldata['pref_ori'] = compute_prefori(sessions[ises].respmat,
+                                                    sessions[ises].trialdata['Orientation'])
+    sessions[ises].celldata['tuning_var'] = compute_tuning(sessions[ises].respmat,
+                                                    sessions[ises].trialdata['Orientation'],
+                                                    tuning_metric='tuning_var')
+
+#%% 
+tensor_avgall = np.empty((0,len(t_axis)))
+respmat_avgall = np.empty((0))
+
+tensor_avgpref = np.empty((0,len(t_axis)))
+respmat_avgpref = np.empty((0))
+for ises in range(nSessions):
+    tensor_avgall = np.concatenate((tensor_avgall,np.mean(sessions[ises].tensor,axis=1)))
+    
+    temp = np.mean(sessions[ises].respmat,axis=1)
+    respmat_avgall  = np.concatenate((respmat_avgall,temp))
+
+    for iN in range(len(sessions[ises].celldata)):
+        trialidx = sessions[ises].trialdata['Orientation'] == sessions[ises].celldata['pref_ori'][iN]
+        temp = np.mean(sessions[ises].tensor[iN,trialidx,:],axis=0)
+        tensor_avgpref = np.concatenate((tensor_avgpref,temp[np.newaxis,:]))
+
+        temp = np.mean(sessions[ises].respmat[iN,trialidx],axis=0)
+        respmat_avgpref  = np.concatenate((respmat_avgpref,[temp]))
+
+#%% 
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+# tensor_avgpref = tensor_avgpref - np.nanmean(tensor_avgpref[:,t_axis<0],axis=1,keepdims=True)
+
+areas = ['V1','PM']
+clrs_areas = get_clr_areas(areas)
+projs = ['unl','lab']
+clrs_projs = get_clr_labeled()
+
+fig,axes = plt.subplots(1,2,figsize=(5.5,2.5),sharey=True)
+for iarea,area in enumerate(areas):
+    ax = axes[iarea]
+    handles = []
+    for iproj,proj in enumerate(projs):
+        # idx = np.logical_and(celldata['roi_name']==area,celldata['labeled']==proj)
+        # idx = np.all((celldata['roi_name']==area,celldata['labeled']==proj,celldata['tuning_var']>0.10),axis=0)
+        idx = np.all((celldata['roi_name']==area,celldata['labeled']==proj),axis=0)
+        handles.append(shaded_error(x=t_axis,y=tensor_avgpref[idx,:],error='sem',color=clrs_projs[iproj],ax=ax))
+    ax.set_title(area,color=clrs_areas[iarea])
+    ax.plot([0,1],[10,10],color='black',linewidth=3)
+    if iarea==0:
+        ax.set_ylabel('Deconvolved Activity')
+    ax.set_xlabel('Time (s)')
+    # ax.set_ylim([0,210])
+    xdata = respmat_avgpref[np.logical_and(celldata['roi_name']==area,celldata['labeled']==projs[0])]
+    ydata = respmat_avgpref[np.logical_and(celldata['roi_name']==area,celldata['labeled']==projs[1])]
+    t_stat,p_val = ttest_ind(xdata,ydata)
+    cohens_d = np.abs(np.mean(xdata)-np.mean(ydata))/np.sqrt((np.var(xdata)+np.var(ydata))/2)
+    ax.text(0.5,0.08,'%s p: %.3f' % (get_sig_asterisks(p_val),p_val),ha='center',transform=ax.transAxes,fontsize=8)
+    ax.legend(handles=handles,labels=projs,frameon=False,fontsize=8)
+plt.tight_layout()
+# plt.savefig(os.path.join(savedir,'CalciumTracesComparison','Resp_avgall_deconv' + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'CalciumTracesComparison','Resp_avgpref_deconv' + '.png'), format = 'png')
 
 # ###################### Noise level for labeled vs unlabeled cells:
 

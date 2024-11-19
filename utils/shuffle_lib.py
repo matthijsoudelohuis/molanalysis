@@ -27,8 +27,9 @@ def my_shuffle(data,method='random',axis=0):
 
 def corr_shuffle(sessions,method='random'):
     for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing shuffled noise correlations: '):
-        data                                = my_shuffle(sessions[ises].respmat,axis=1,method=method)
-        sessions[ises].corr_shuffle         = np.corrcoef(data)
-        [N,K]                               = np.shape(sessions[ises].respmat) #get dimensions of response matrix
-        np.fill_diagonal(sessions[ises].corr_shuffle,np.nan)
+        if hasattr(sessions[ises],'respmat'):
+            data                                = my_shuffle(sessions[ises].respmat,axis=1,method=method)
+            sessions[ises].corr_shuffle         = np.corrcoef(data)
+            [N,K]                               = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+            np.fill_diagonal(sessions[ises].corr_shuffle,np.nan)
     return sessions

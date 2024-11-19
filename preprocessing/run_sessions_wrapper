@@ -24,9 +24,9 @@ date_filter         = []
 # date_filter         = ['2024_05_07']
 # date_filter        = ['2023_10_12']
 # animal_ids          = ['LPE09665', 'LPE11495', 'LPE11998', 'LPE12013'] #If empty than all animals in folder will be processed
-# animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
 
-protocols           = ['RF']
+protocols           = ['DN']
 
 ## Loop over all selected animals and folders
 if len(animal_ids) == 0:
@@ -38,15 +38,18 @@ for animal_id in animal_ids: #for each animal
 
     sessiondates = os.listdir(os.path.join(rawdatadir,animal_id)) 
     
+    if 'DN' in protocols:
+        date_filter = [date for date in sessiondates if os.path.exists(os.path.join(rawdatadir,animal_id,date,'DN','Imaging'))]
+
     if any(date_filter): #If dates specified, then process only those:
         sessiondates = [x for x in sessiondates if x in date_filter]
 
     for sessiondate in sessiondates: #for each of the sessions for this animal
         print('')
         ###################  Run one of these functions for all selected sessions:  ################
-        # gen_red_images(rawdatadir,animal_id,sessiondate)
+        gen_red_images(rawdatadir,animal_id,sessiondate)
         # proc_labeling_session(rawdatadir,animal_id,sessiondate,saveoverlay=True,showcells=False,overlap_threshold=0.5,gcamp_proj='max_proj')
 
         # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],savemaps=False,method='2dgauss')
         # locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu','Favg','Fblock'],savemaps=False,method='ttest')
-        preprocess_smoothRF(rawdatadir,animal_id,sessiondate,rf_type='Fneu')
+        # preprocess_smoothRF(rawdatadir,animal_id,sessiondate,rf_type='Fneu')

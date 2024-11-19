@@ -132,7 +132,7 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
 
                 if sesflag and session_rf is not None:
                     sesflag = sesflag and hasattr(
-                        ses, 'celldata') and 'rf_p_F' in ses.celldata
+                        ses, 'celldata') and 'rf_r2_F' in ses.celldata
 
                 if sesflag and any_of_areas is not None:
                     sesflag = sesflag and hasattr(ses, 'celldata') and np.any(np.isin(any_of_areas,np.unique(ses.celldata['roi_name'])))

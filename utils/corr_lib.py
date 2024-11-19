@@ -56,7 +56,10 @@ def compute_trace_correlation(sessions,uppertriangular=True,binwidth=1):
     
         avg_nframes     = int(np.round(sessions[ises].sessiondata['fs'][0] * binwidth))
 
-        arr_reduced     = block_reduce(sessions[ises].calciumdata.T, block_size=(1,avg_nframes), func=np.mean, cval=np.mean(sessions[ises].calciumdata.T))
+        if avg_nframes > 1:
+            arr_reduced     = block_reduce(sessions[ises].calciumdata.T, block_size=(1,avg_nframes), func=np.mean, cval=np.mean(sessions[ises].calciumdata.T))
+        else:
+            arr_reduced     = sessions[ises].calciumdata.T.to_numpy()
 
         sessions[ises].trace_corr                   = np.corrcoef(arr_reduced)
 
@@ -73,7 +76,7 @@ def compute_trace_correlation(sessions,uppertriangular=True,binwidth=1):
         assert np.all(sessions[ises].trace_corr[~idx_triu] < 1)
     return sessions    
 
-def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_stationary=True,remove_method=None,remove_rank=0):
+def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_stationary=False,remove_method=None,remove_rank=0):
     # computing the pairwise correlation of activity that is shared due to mean response (signal correlation)
     # or residual to any stimuli in GR and GN protocols (noise correlation).
 
@@ -97,7 +100,6 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_statio
 
             sessions[ises].delta_pref       = np.abs(np.mod(np.subtract.outer(prefori, prefori),180))
             
-
             sessions[ises].sig_corr         = np.corrcoef(resp_meanori)
             if remove_method is not None:
                 if remove_method in ['PCA','FA','RRR']:
@@ -228,7 +230,7 @@ def filter_corr_p(r,n,p_thr=0.01):
 #     # ###  #####     #        #####  ####### #     # #     # 
 
 def hist_corr_areas_labeling(sessions,corr_type='trace_corr',filternear=True,minNcells=10, 
-                        areapairs=' ',layerpairs=' ',projpairs=' ',noise_thr=1,valuematching=None,
+                        areapairs=' ',layerpairs=' ',projpairs=' ',noise_thr=100,valuematching=None,
                         zscore=False,binres=0.01):
     # areas               = ['V1','PM']
     # redcells            = [0,1]
@@ -247,6 +249,7 @@ def hist_corr_areas_labeling(sessions,corr_type='trace_corr',filternear=True,min
     histcorr           = np.full((nbins,len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
     meancorr           = np.full((len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
     varcorr            = np.full((len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
+    fraccorr           = np.full((2,len(sessions),len(areapairs),len(layerpairs),len(projpairs)),np.nan)
 
     for ises in tqdm(range(len(sessions)),desc='Averaging %s across sessions' % corr_type):
         idx_nearfilter = filter_nearlabeled(sessions[ises],radius=50)
@@ -286,6 +289,21 @@ def hist_corr_areas_labeling(sessions,corr_type='trace_corr',filternear=True,min
 
             if zscore:
                 corrdata = corrdata/np.nanstd(corrdata,axis=None) - np.nanmean(corrdata,axis=None)
+            
+            rf_type = 'Fsmooth'
+            if 'rf_r2_' + rf_type in sessions[ises].celldata:
+                source_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
+                target_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
+                delta_el        = source_el[:,None] - target_el[None,:]
+
+                source_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+                target_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+                delta_az        = source_az[:,None] - target_az[None,:]
+
+                delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
+                rffilter        = delta_rf<50
+            else: 
+                rffilter      = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
 
             for iap,areapair in enumerate(areapairs):
                 for ilp,layerpair in enumerate(layerpairs):
@@ -301,21 +319,51 @@ def hist_corr_areas_labeling(sessions,corr_type='trace_corr',filternear=True,min
 
                         nanfilter       = ~np.isnan(corrdata)
 
-                        proxfilter      = ~(sessions[ises].distmat_xy<15)
+                        proxfilter      = ~(sessions[ises].distmat_xy<10)
 
                         cellfilter      = np.all((signalfilter,areafilter,layerfilter,matchfilter,
-                                                projfilter,proxfilter,nanfilter,nearfilter),axis=0)
-                        
+                                                projfilter,proxfilter,nanfilter,nearfilter,rffilter),axis=0)
+
                         if np.sum(np.any(cellfilter,axis=0))>minNcells and np.sum(np.any(cellfilter,axis=1))>minNcells:
-                            
+                            # if ipp==3:
+                                # print(np.sum(cellfilter))
                             data      = corrdata[cellfilter].flatten()
-                            data      = data[~np.isnan(data)]
 
                             histcorr[:,ises,iap,ilp,ipp]    = np.histogram(data,bins=binedges,density=True)[0]
                             meancorr[ises,iap,ilp,ipp]      = np.nanmean(data)
                             varcorr[ises,iap,ilp,ipp]       = np.nanstd(data)
 
-    return bincenters,histcorr,meancorr,varcorr
+                            if corr_type == 'trace_corr':
+                                n = len(sessions[ises].ts_F)
+                            elif corr_type in ['noise_corr','sig_corr']:
+                                n = np.shape(sessions[ises].respmat)[1]
+
+                            sigcorrdata = corrdata.copy()
+                            sigcorrdata = filter_corr_p(sigcorrdata,n,p_thr=0.01)
+                            fraccorr[0,ises,iap,ilp,ipp]       = np.sum(np.logical_and(cellfilter,sigcorrdata>0)) / np.sum(cellfilter)
+                            fraccorr[1,ises,iap,ilp,ipp]       = np.sum(np.logical_and(cellfilter,sigcorrdata<0)) / np.sum(cellfilter)
+
+    return bincenters,histcorr,meancorr,varcorr,fraccorr
+
+
+def filter_corr_p(r,n,p_thr=0.01):
+    """Filter out non-significant correlations in a correlation matrix.
+    Parameters
+    r : array
+        Correlation matrix.
+    n : int
+        Number of datapoints.
+    p_thr : float, optional
+        Threshold for significant correlations. Default is 0.01.
+    Returns
+    r : array
+        Correlation matrix with non-significant correlations set to nan.
+    """
+    t           = np.clip(r * np.sqrt((n-2)/(1-r*r)),a_min=-30,a_max=30)#convert correlation to t-statistic
+    p           = ss.t.pdf(t, n-2) #convert to p-value using pdf of t-distribution and deg of freedom
+    r[p>p_thr]  = np.nan #set all nonsignificant to nan
+    # plt.scatter(r.flatten(),p.flatten())
+    return r
 
 #     # #######    #    #     #     #####  ####### ######  ######  
 ##   ## #         # #   ##    #    #     # #     # #     # #     # 
@@ -360,8 +408,8 @@ def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
                                 idx_source = np.logical_and(idx_source,sessions[ises].celldata['redcell']==xRed)
                                 idx_target = np.logical_and(idx_target,sessions[ises].celldata['redcell']==yRed)
 
-                                idx_source = np.logical_and(idx_source,sessions[ises].celldata['noise_level']<0.2)
-                                idx_target = np.logical_and(idx_target,sessions[ises].celldata['noise_level']<0.2)
+                                idx_source = np.logical_and(idx_source,sessions[ises].celldata['noise_level']<20)
+                                idx_target = np.logical_and(idx_target,sessions[ises].celldata['noise_level']<20)
 
                                 # if 'rf_p_F' in sessions[ises].celldata:
                                 #     idx_source = np.logical_and(idx_source,sessions[ises].celldata['rf_p_F']<0.001)
@@ -383,7 +431,6 @@ def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
                                     )
 
                                 legendlabels[ixArea*2 + ixRed,iyArea*2 + iyRed]  = areas[ixArea] + redcelllabels[ixRed] + '-' + areas[iyArea] + redcelllabels[iyRed]
-
 
     # assuming meancorr and legeldlabels are 4x4xnSessions array
     upper_tri_indices           = np.triu_indices(4, k=0)
@@ -413,7 +460,7 @@ def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
 ######  ### #     #    #     # ####### #     # #     #    #####  #     #    #    
 
 def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='F',
-                    rotate_prefori=False,deltaori=None,noise_thr=1,
+                    rotate_prefori=False,deltaori=None,noise_thr=1,onlysameplane=False,
                     binresolution=5,tuned_thr=0,absolute=False,normalize=False,dsi_thr=0,
                     filtersign=None,corr_thr=0.05):
     """
@@ -514,6 +561,12 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
                     angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots + 90) #90 degrees is added to make collinear horizontal
                     delta_x[iN,:]      = angle_vec_rot[0,:]
                     delta_y[iN,:]      = angle_vec_rot[1,:]
+
+            if onlysameplane:
+                planefilter    = np.meshgrid(sessions[ises].celldata['plane_idx'],sessions[ises].celldata['plane_idx'])
+                planefilter    = planefilter[0] == planefilter[1]
+            else:
+                planefilter    = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
 
             for iap,areapair in enumerate(areapairs):
                 for ilp,layerpair in enumerate(layerpairs):
@@ -777,19 +830,21 @@ def bin_corr_deltarf(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
 
                 if method=='mean':
                     if filtersign == 'neg':
-                        corrsignfilter              = corrdata < 0
+                        # corrsignfilter              = corrdata < 0
+                        corrsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
                     elif filtersign =='pos':
-                        corrsignfilter              = corrdata > 0
+                        # corrsignfilter              = corrdata > 0
+                        corrsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
                     else:
                         corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
                 elif method=='frac':
                     corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
                     if filtersign == 'neg':
                         fracsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
-                        fracsignfilter              = corrdata < -0.15
+                        # fracsignfilter              = corrdata < -0.15
                     elif filtersign =='pos':
                         fracsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
-                        fracsignfilter              = corrdata > 0.3
+                        # fracsignfilter              = corrdata > 0.3
                     else:
                         raise ValueError('filtersign must be either pos or neg if metohd==frac is chosen')
                 else: 
@@ -938,14 +993,14 @@ def plot_mean_corr_areas(bincenters_dist,bin_dist_count,bin_dist_mean,
         xylim               = 250
         dim12label = 'XY (um)'
     else:
-        xylim               = 70
+        xylim               = 65
         dim12label = 'RF (\N{DEGREE SIGN})'
 
     clrs_areapairs      = get_clr_area_pairs(areapairs)
     if len(areapairs)==1:
         clrs_areapairs =[clrs_areapairs]
 
-    fig,ax    = plt.subplots(1,1,figsize=(3,3))
+    fig,ax    = plt.subplots(1,1,figsize=(3,3.5))
     ilp = 0
     ipp = 0
     handles = []
@@ -957,14 +1012,19 @@ def plot_mean_corr_areas(bincenters_dist,bin_dist_count,bin_dist_mean,
         xdata = bincenters_dist[(~np.isnan(bindata)) & (bincenters_dist<=60)]
         ydata = bindata[(~np.isnan(bindata)) & (bincenters_dist<=60)]
         try:
-            popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[0.02, 0, 0.02],bounds=(-10, 10))
-            ax.plot(xdata, popt[0] * np.exp(-popt[1] * xdata) + popt[2],linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} fit',linewidth=1)
+            from scipy.stats import linregress
+            slope, intercept, r_value, p_value, std_err = linregress(xdata,ydata)
+            ax.plot(xdata, intercept + slope*xdata,linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} linfit',linewidth=1)
+            
+            # popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[ydata[-1]-ydata[0], ydata[-1]-ydata[0], ydata[-1]],bounds=(-10, 10))
+            # ax.plot(xdata, popt[0] * np.exp(-popt[1] * xdata) + popt[2],linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} fit',linewidth=1)
         except:
             print('curve_fit failed for %s' % (areapair))
             continue
         
     ax.legend(handles=handles,labels=areapairs,frameon=False)
     ax.set_xlim([0,xylim])
+    ax.set_ylim([my_floor(np.min(bin_dist_mean)*0.65,3),my_ceil(np.max(bin_dist_mean)*1.1,3)])
     ax.set_xlabel(u'Δ %s' % dim12label)   
     # ax.set_title('%s\n Joint' % (areapair),c=clrs_areapairs[iap])
     ax.set_ylabel('Correlation')
@@ -1217,15 +1277,12 @@ def plot_mean_corr_layers(bincenters_dist,bin_dist_count,bin_dist_mean,
     return fig
 
 
-def plot_2D_mean_corr(bin_2d,bin_2d_count,bincenters_2d,areapairs=' ',layerpairs=' ',projpairs=' '):
+def plot_2D_mean_corr(bin_2d,bin_2d_count,bincenters_2d,areapairs=' ',layerpairs=' ',projpairs=' ',
+                      gaussian_sigma=0.8,centerthr=[15,15,15],min_counts=50):
     #Definitions of azimuth, elevation and delta RF 2D space:
     delta_az,delta_el   = np.meshgrid(bincenters_2d,bincenters_2d)
 
-    centerthr           = [15,15,15]
-    min_counts          = 50
-
     deglim              = 60
-    gaussian_sigma      = 0.8
     clrs_areapairs      = get_clr_area_pairs(areapairs)
     if len(areapairs)==1:
         clrs_areapairs =[clrs_areapairs]
@@ -1471,7 +1528,7 @@ def plot_corr_surr_tuning(sessions,bin_angle_cent_mean,bin_angle_cent_count,bin_
                 # ax.plot(polarbincenters,polardata[:,0,iap,ilp,ipp],color='k',label='center')
                 # ax.plot(polarbincenters,polardata[:,1,iap,ilp,ipp],color='g',label='surround')
                 # handles.append(shaded_error(ax,x=bincenters_angle,y=bin_angle_cent_mean[:,iap,ilp,ipp],yerror=bin_angle_cent_err[:,iap,ilp,ipp],color='b'))
-                handles.append(shaded_error(ax,x=bincenters_angle,y=bin_angle_surr_mean[:,iap,ilp,ipp],
+                handles.append(shaded_error(ax=ax,x=bincenters_angle,y=bin_angle_surr_mean[:,iap,ilp,ipp],
                     yerror=bin_angle_surr_err[:,iap,ilp,ipp],color=clrs_labelpairs[ipp]))
     
                 ax.set_title('%s\n%s' % (areapair, projpair),c=clrs_areapairs[iap])
@@ -1689,8 +1746,8 @@ def bin_2d_rangecorr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' '
         significance threshold for including cells in the analysis, by default 0.001
     """
     #Binning        parameters:
-    binlim          = 75
-    binedges_rf     = np.arange(0,binlim,binres_rf)+binres_rf/2 
+    binlim          = 100
+    binedges_rf     = np.arange(0,binlim+binres_rf,binres_rf)-binres_rf/2 
     bincenters_rf   = binedges_rf[:-1]+binres_rf/2 
     nBins_rf        = len(bincenters_rf)
 
@@ -1784,14 +1841,20 @@ def plot_2D_rangecorr_map(bincounts,bincenters_rf,bincenters_corr,areapairs=' ',
     data = copy.deepcopy(bincounts)
     normalize_rf = True
     if normalize_rf:
-        data   = data/np.nansum(data,axis=1,keepdims=True)
-
-        # data   = data/np.nanmean(data[:,:,:,:,0][...,np.newaxis],axis=(4),keepdims=True)[...,0,np.newaxis]
-        data   = data/np.nanmean(data,axis=(0),keepdims=True)
+        #normalizing across the rf dimension, 
+        # i.e. divide by sum across all correlation bins for each delta RF bin
+        # this accounts for unequal distribution of delta RFs across pairs
+        # data   = data/np.nansum(data,axis=(0,1),keepdims=True) 
+        data   = data/np.nansum(data,axis=1,keepdims=True) 
+        # This normalizes to the mean across all delta RFs, and layers and projections
+        # I.e. the result is that values >1 mean more correlations for this correlation value and delta RF
+        # than other delta RFs and other projection identities.
         # data   = data/np.nanmean(data,axis=(0,3,4),keepdims=True)
-        # data   = data/np.nanmean(data[:,:,:,:,0][...,np.newaxis],axis=(0),keepdims=True)
+        # This normalizes to the mean across all delta RFs, and layers and projections
+        data   = data/np.nanmean(data,axis=(0),keepdims=True)
+    data[np.isnan(data)] = 1
 
-    min_counts = 0
+    # min_counts = 0
     # Make the figure:
     fig,axes = plt.subplots(len(projpairs),len(areapairs),figsize=(len(areapairs)*3,len(projpairs)*3))
     if len(projpairs)==1 and len(areapairs)==1:
@@ -1807,20 +1870,24 @@ def plot_2D_rangecorr_map(bincounts,bincenters_rf,bincenters_corr,areapairs=' ',
                 if gaussian_sigma: 
                     data_cat[np.isnan(data_cat)]                = np.nanmean(data_cat)
                     data_cat                                    = gaussian_filter(data_cat,sigma=[gaussian_sigma,gaussian_sigma])
-                data_cat[bincounts[:,:,iap,ilp,ipp].T<=min_counts]     = np.nan
+                # data_cat[bincounts[:,:,iap,ilp,ipp].T<min_counts]     = np.nan
 
                 # ax.pcolor(X,Y,data_cat,vmin=np.nanpercentile(data_cat,2),vmax=np.nanpercentile(data_cat,99),cmap="seismic")
                 # ax.pcolor(X,Y,data_cat,cmap="hot")
-                ax.pcolor(X,Y,data_cat,vmin=-1,vmax=3,cmap="seismic")
+                axim = ax.pcolor(X,Y,data_cat,vmin=-1,vmax=3,cmap="seismic")
                 # ax.pcolor(X,Y,np.log10(1+data_cat),vmin=np.nanpercentile(np.log10(1+data_cat),5),vmax=np.nanpercentile(np.log10(1+data_cat),95),cmap="hot")
                 
                 ax.set_title('%s\n%s' % (areapair, projpair),c=clrs_areapairs[iap])
                 # ax.set_xlim([0,600])
-                ax.set_xlim([0,50])
+                ax.set_xlim([0,70])
                 ax.set_ylim([-0.75,1])
                 ax.set_xlabel(u'Δ RF')
                 ax.set_ylabel(u'Correlation')
     plt.tight_layout()
+    fig.subplots_adjust(right=0.92)
+    cbar_ax = fig.add_axes([0.95, 0.8, 0.025, 0.15])
+    fig.colorbar(axim, cax=cbar_ax, ticks=[-1,1,3])
+    cbar_ax.set_ylabel('Fold change')
     return fig
 
 
@@ -1852,8 +1919,9 @@ def bin_1d_fraccorr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',
     """
     #Binning        parameters:
     binlim          = 100
-    binedges_rf     = np.arange(0,binlim,binres_rf)+binres_rf/2 
-    bincenters_rf   = binedges_rf[:-1]+binres_rf/2 
+    binedges_rf     = np.arange(0,binlim,binres_rf)-binres_rf/2 
+    bincenters_rf   = binedges_rf[:-1]+binres_rf/2
+    binedges_rf[-1] = 1000
     nBins_rf        = len(bincenters_rf)
 
     binpos          = np.zeros((nBins_rf,len(areapairs),len(layerpairs),len(projpairs)))
@@ -1867,8 +1935,8 @@ def bin_1d_fraccorr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',
             pos_thr = np.nanpercentile(corrdata,(100-corr_thr*100))
             neg_thr = np.nanpercentile(corrdata,(corr_thr*100))
 
-            pos_thr = 0.3
-            neg_thr = -0.2
+            # pos_thr = 0.2
+            # neg_thr = -0.075
 
             if 'rf_r2_' + rf_type in sessions[ises].celldata:
 
@@ -1977,6 +2045,12 @@ def plot_1D_fraccorr(bincounts,binpos,binneg,bincenters_rf,normalize_rf=True,min
     data_pos[bincounts<mincounts] = np.nan # binfrac[bincounts]
     data_neg[bincounts<mincounts] = np.nan # binfrac[bincounts]
 
+    # data_pos[bincounts<mincounts] = 0 # binfrac[bincounts]
+    # data_neg[bincounts<mincounts] = 0 # binfrac[bincounts]
+
+    data_pos_error[bincounts<mincounts] = 0 # binfrac[bincounts]
+    data_neg_error[bincounts<mincounts] = 0 # binfrac[bincounts]
+
     if normalize_rf:
         data_pos_error                                  = data_pos_error / np.nanmean(data_pos,axis=0,keepdims=True)
         data_neg_error                                  = data_neg_error / np.nanmean(data_neg,axis=0,keepdims=True)
@@ -1996,26 +2070,32 @@ def plot_1D_fraccorr(bincounts,binpos,binneg,bincenters_rf,normalize_rf=True,min
                 ax                                              = axes[ipp,iap]
 
                 shaded_error(ax=ax,x=bincenters_rf,y=data_pos[:,iap,ilp,ipp],yerror=data_pos_error[:,iap,ilp,ipp],color='r')
-                shaded_error(ax=ax,x=bincenters_rf,y=-data_neg[:,iap,ilp,ipp],yerror=data_neg_error[:,iap,ilp,ipp],color='b')
+                shaded_error(ax=ax,x=bincenters_rf,y=data_neg[:,iap,ilp,ipp],yerror=data_neg_error[:,iap,ilp,ipp],color='b')
 
-                com_pos = np.average(bincenters_rf, weights=np.nan_to_num(binpos[:,iap,ilp,ipp]))
-                com_neg = np.average(bincenters_rf, weights=np.nan_to_num(binneg[:,iap,ilp,ipp]))
+                com_pos = np.average(bincenters_rf, weights=np.nan_to_num(data_pos[:,iap,ilp,ipp]))
+                com_neg = np.average(bincenters_rf, weights=np.nan_to_num(data_neg[:,iap,ilp,ipp]))
 
-                ax.plot(com_pos,1.5,'o',color='r')
-                ax.plot(com_neg,-1.5,'o',color='b')
+                # ax.plot(com_pos,1.5,'o',color='r')
+                # ax.plot(com_neg,1.5,'o',color='b')
                 # ax.plot(bincenters_rf,data_pos[:,iap,ilp,ipp],color='r')
                 # ax.plot(bincenters_rf,-data_neg[:,iap,ilp,ipp],color='b')
 
                 ax.axhline(1,color='k',lw=1,ls=':')
-                ax.axhline(-1,color='k',lw=1,ls=':')
+                # ax.axhline(-1,color='k',lw=1,ls=':')
                 ax.axhline(0,color='k',lw=1,ls='-')
                 # ax.set_title('%s\n%s' % (areapair, projpair),c=clrs_areapairs[iap])
                 ax.set_title('%s\n%s *%dK pairs' % (areapair, projpair,np.sum(bincounts[:,iap,ilp,ipp]/1000)),c=clrs_areapairs[iap])
                 
                 # ax.set_xlim([0,600])
-                ax.set_xlim([0,75])
+                ax.set_xlim([0,bincenters_rf[-1]])
                 # ax.set_ylim([-2.2,2.2])
-                ax.set_ylim([-1.65,1.65])
+                # if normalize_rf:
+                # ax.set_ylim([my_floor(np.min(-data_neg[:,iap,:,:])*1.2,1),my_ceil(np.max(data_pos[:,iap,:,:])*1.2,1)])
+                ax.set_ylim([0,my_ceil(np.nanmax([np.nanmax(data_pos[:,iap,:,:]),np.nanmax(data_neg[:,iap,:,:])])*1.2,1)])
+                # ax.set_ylim([0,my_ceil(np.max(np.concatenate((data_pos[:,iap,:,:],data_neg[:,iap,:,:])))*1.2,1)])
+                # else:
+                    # ax.set_ylim([-0.05,0.05])
+
                 ax.set_xlabel(u'Δ RF')
                 ax.set_ylabel(u'P corr / P all cells')
     plt.tight_layout()

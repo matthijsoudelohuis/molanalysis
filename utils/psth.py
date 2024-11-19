@@ -196,7 +196,7 @@ def compute_tensor_space(data, ts_F, z_T, zpos_F, trialnum_F, s_pre=-100, s_post
 """
 
 def compute_respmat(data, ts_F, ts_T, t_resp_start=0, t_resp_stop=1,
-                    t_base_start=-1, t_base_stop=0, subtr_baseline=False, method='mean', *args, **kwargs):
+                    t_base_start=-5, t_base_stop=0, subtr_baseline=False, method='mean', *args, **kwargs):
 
     """
     This function constructs a 2D matrix of N neurons by K trials

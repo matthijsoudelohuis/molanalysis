@@ -41,20 +41,20 @@ sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
 # sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
 sessions,nSessions   = filter_sessions(protocols = ['GR'],filter_areas=['V1','PM'],session_rf=True) 
 
-# #%% Remove two sessions with too much drift in them:
-# sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-# sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
-# sessions            = [sessions[i] for i in sessions_in_list]
-# nSessions           = len(sessions)
+#%% Remove two sessions with too much drift in them:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
 
-#%%  Load data properly:                      
+#%%  Load data properly:      
+calciumversion = 'deconv'
+                
 for ises in range(nSessions):
     # sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,calciumversion='dF')
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                # calciumversion='dF',keepraw=True)
-                                calciumversion='dF',keepraw=True,filter_hp=0.01)
-
-                                # calciumversion='deconv',keepraw=True)
+                                calciumversion=calciumversion,keepraw=True,filter_hp=0.01)
+                                # calciumversion=calciumversion,keepraw=True)
     
     # detrend(sessions[ises].calciumdata,type='linear',axis=0,overwrite_data=True)
     sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False)[0]
@@ -66,16 +66,15 @@ for ises in range(nSessions):
 sessions = compute_tuning_wrapper(sessions)
 
 #%% ########################## Compute signal and noise correlations: ###################################
-sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filter_stationary=False)
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filter_stationary=True,remove_method='PCA',remove_rank=1)
-sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filter_stationary=False,remove_method='GM')
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='GM')
 
 #%% ##################### Compute pairwise neuronal distances: ##############################
-# sessions = compute_pairwise_metrics(sessions)
 sessions = compute_pairwise_anatomical_distance(sessions)
 
 #%% ##################### Compute pairwise receptive field distances: ##############################
-sessions = smooth_rf(sessions,radius=50,rf_type='Fneugauss',mincellsFneu=5)
+sessions = smooth_rf(sessions,radius=50,rf_type='Fneu',mincellsFneu=5)
 sessions = exclude_outlier_rf(sessions) 
 sessions = replace_smooth_with_Fsig(sessions) 
 
@@ -92,18 +91,18 @@ projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
 # areapairs           = ['V1-V1']
 # layerpairs          = ['L2/3-L2/3']
 # layerpairs          = ['L2/3-L5']
-# projpairs           = ['unl-unl']
+projpairs           = ['unl-unl']
 
 #If you override any of these then these pairs will be ignored:
 layerpairs          = ' '
 # areapairs           = ' '
 # projpairs           = ' '
 
-deltaori            = None
+deltaori            = 0
 # deltaori            = [-35,360]
 # deltaori            = [80,100]
 # deltaori            = None
-rotate_prefori      = False
+rotate_prefori      = True
 rf_type             = 'Fsmooth'
 corr_type           = 'noise_corr'
 # corr_type           = 'trace_corr'
@@ -116,7 +115,7 @@ corr_type           = 'noise_corr'
 bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
 bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,method='mean',areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
                             corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,deltaori=deltaori,rf_type=rf_type,
-                            r2_thr=0.2,noise_thr=20,tuned_thr=0.02,dsi_thr=0,normalize=False,filtersign=None,absolute=False)
+                            r2_thr=0.2,noise_thr=20,tuned_thr=0.05,dsi_thr=0,filtersign=None,absolute=True)
 
 #%% Make the figure:
 centerthr           = [15,15,15]
@@ -124,7 +123,8 @@ min_counts          = 50
 
 #%% 
 
-fig = plot_2D_mean_corr(bin_2d_mean,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
+fig = plot_2D_mean_corr(bin_2d_mean,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=0.8)
 
 
 #%% 
@@ -138,7 +138,6 @@ fig = plot_1D_mean_corr(bin_dist_mean,bin_dist_count,bincenters_dist,areapairs=a
 # fig.savefig(os.path.join(savedir,'DeltaRF_2D_%s_GR_Collinear_labeled' % (corr_type) + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'DeltaRF_2D_%s_GR_Orthogonal' % (corr_type) + '.png'), format = 'png')
 
-
 #%% 
 plt.plot(bincenters_angle,bin_angle_surr_mean[:,0,0,0])
 
@@ -150,9 +149,7 @@ fig = plot_corr_surr_tuning(sessions,bin_angle_cent_mean,bin_angle_cent_count,bi
 # fig.savefig(os.path.join(savedir,'DeltaRF_1D_Polar_%s_GR_Collinear' % (corr_type) + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'DeltaRF_2D_%s_GR_Orthogonal' % (corr_type) + '.png'), format = 'png')
 
-
 #%% Compute collinear selectivity index:
-
 surr_CSI = np.empty((bin_angle_surr_count.shape[1:]))
 cent_CSI = np.empty((bin_angle_cent_count.shape[1:]))
 
@@ -193,9 +190,74 @@ for iap,areapair in enumerate(areapairs):
 #             center_OSI[x,y,z] = compute_tuning(bin_angle_cent_mean[:,x,y,z][np.newaxis,:],bincenters_angle,tuning_metric='OSI')[0]
 #             center_DSI[x,y,z] = compute_tuning(bin_angle_cent_mean[:,x,y,z][np.newaxis,:],bincenters_angle,tuning_metric='DSI')[0]
 
-#%% 
+#%% Loop over all delta preferred orientations and store mean correlations as well as distribution of pos and neg correlations:
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+layerpairs          = ' '
+projpairs           = ' '
 
+deltaoris           = np.unique(sessions[0].trialdata['Orientation'])
+ndeltaoris          = len(deltaoris)
+rotate_prefori      = True
+rf_type             = 'Fsmooth'
+corr_type           = 'noise_corr'
+# corr_type           = 'trace_corr'
 
+#Do for one session to get the dimensions: (data is discarded)
+[bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
+    bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
+    bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf([sessions[0]],method='mean',areapairs=areapairs,
+                                                              layerpairs=layerpairs,projpairs=projpairs,binresolution=5)
+
+#Init output arrays:
+bin_2d_mean_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
+bin_2d_posf_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
+bin_2d_negf_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
+bin_2d_count_oris       = np.empty((ndeltaoris,*np.shape(bin_2d_count)))
+
+bin_dist_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
+bin_dist_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
+bin_dist_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
+bin_dist_count_oris     = np.empty((ndeltaoris,*np.shape(bin_dist_count)))
+
+bin_angle_cent_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
+bin_angle_cent_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
+bin_angle_cent_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
+bin_angle_cent_count_oris     = np.empty((ndeltaoris,*np.shape(bin_angle_cent_count)))
+
+bin_angle_surr_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
+bin_angle_surr_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
+bin_angle_surr_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
+bin_angle_surr_count_oris     = np.empty((ndeltaoris,*np.shape(bin_angle_surr_count)))
+
+for idOri,deltaori in enumerate(deltaoris):
+    [_,bin_2d_mean_oris[idOri,:,:,:,:,:],bin_2d_count_oris[idOri,:,:,:,:,:],
+     bin_dist_mean_oris[idOri,:,:,:,:],bin_dist_count_oris[idOri,:,:,:],_,
+     bin_angle_cent_mean_oris[idOri,:,:,:,:],bin_angle_cent_count_oris[idOri,:,:,:,:],
+     bin_angle_surr_mean_oris[idOri,:,:,:,:],bin_angle_surr_count_oris[idOri,:,:,:,:],_] = bin_corr_deltarf(sessions,
+                                                    method='mean',filtersign=None,areapairs=areapairs,layerpairs=layerpairs,
+                                                    projpairs=projpairs,corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,
+                                                    deltaori=deltaori,rf_type=rf_type,noise_thr=20,tuned_thr=0.02)
+    
+    [_,bin_2d_posf_oris[idOri,:,:,:,:,:],_,
+     bin_dist_posf_oris[idOri,:,:,:,:],_,_,
+     bin_angle_cent_posf_oris[idOri,:,:,:,:],_,
+     bin_angle_surr_posf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='pos',
+                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                                                    corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,deltaori=deltaori,
+                                                    rf_type=rf_type,noise_thr=20,tuned_thr=0.02)
+
+    [_,bin_2d_posf_oris[idOri,:,:,:,:,:],_,
+     bin_dist_posf_oris[idOri,:,:,:,:],_,_,
+     bin_angle_cent_posf_oris[idOri,:,:,:,:],_,
+     bin_angle_surr_posf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='neg',
+                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                                                    corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,deltaori=deltaori,
+                                                    rf_type=rf_type,noise_thr=20,tuned_thr=0.02)
+#%% Compute CSI and PSI for each orientation:
+#make a plot of the mean, pos and neg for each delta ori and for each areapair
+# make a tuning plot of the surround for the mean, pos and neg for each delta ori and for each areapair
+# make a collinear tuning index tuning for each delta ori for pos, neg and mean
+# Now make the plot for labeled and unlabeled cells for V1-PM pair. 
 
 
 
