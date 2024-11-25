@@ -1393,6 +1393,41 @@ def plot_2D_mean_corr_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs
     plt.tight_layout()
     return fig
 
+def plot_2D_mean_corr_projs_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs=' ',layerpairs=' ',projpairs=' ',
+                      gaussian_sigma=0.8,centerthr=[15,15,15],min_counts=50,cmap='hot'):
+    #Definitions of azimuth, elevation and delta RF 2D space:
+    delta_el,delta_az   = np.meshgrid(bincenters_2d,bincenters_2d)
+
+    deglim              = 60
+    clrs_projpairs = get_clr_labelpairs(projpairs)
+
+    ndeltaoris          = len(deltaoris)
+    fig,axes    = plt.subplots(len(projpairs),ndeltaoris,figsize=(ndeltaoris*2,len(projpairs)*2))
+    ilp = 0
+    iap = 0 
+    for ipp,projpair in enumerate(projpairs):
+        for idOri,deltaori in enumerate(deltaoris):
+            ax                                              = axes[ipp,idOri]
+            data                                            = copy.deepcopy(bin_2d[idOri,:,:,iap,ilp,ipp])
+            data[np.isnan(data)]                            = np.nanmean(data)
+            data                                            = gaussian_filter(data,sigma=[gaussian_sigma,gaussian_sigma])
+            data[bin_2d_count[idOri,:,:,iap,ilp,ipp]<min_counts]     = np.nan
+
+            # ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,5),vmax=np.nanpercentile(data,95),cmap=cmap)
+            ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(bin_2d[idOri,:,:,:,:,:],15),vmax=np.nanpercentile(bin_2d[idOri,:,:,iap,ilp,:],85),cmap=cmap)
+            ax.set_facecolor('grey')
+            ax.set_title('%s-%s deg' % (projpair, deltaori),c=clrs_projpairs[ipp],fontsize=10)
+            ax.set_xlim([-deglim,deglim])
+            ax.set_ylim([-deglim,deglim])
+            ax.set_xlabel(u'Δ deg Orthogonal')
+            ax.set_ylabel(u'Δ deg Collinear')
+            circle=plt.Circle((0,0),centerthr[iap], color='g', fill=False,linestyle='--',linewidth=1)
+            ax.add_patch(circle)
+
+    plt.tight_layout()
+    return fig
+
+
 def plot_csi_deltaori_areas(csi_mean,csi_pos,csi_neg,deltaoris,areapairs):
     fig,axes = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*2.5,2),sharex=True,sharey=True)
     clrs_areapairs = get_clr_area_pairs(areapairs)
@@ -1404,9 +1439,6 @@ def plot_csi_deltaori_areas(csi_mean,csi_pos,csi_neg,deltaoris,areapairs):
         ax.plot(deltaoris,csi_mean[:,iap,ilp,ipp],label='mean',color='k')
         ax.plot(deltaoris,csi_pos[:,iap,ilp,ipp],label='pos',color='r',linestyle='-')
         ax.plot(deltaoris,csi_neg[:,iap,ilp,ipp],label='neg',color='b',linestyle='-')
-        # ax.plot(deltaoris,csi_mean[:,iap,ilp,ipp],label='mean',color=clrs_areapairs[iap])
-        # ax.plot(deltaoris,csi_pos[:,iap,ilp,ipp],label='pos',color=clrs_areapairs[iap],linestyle='--')
-        # ax.plot(deltaoris,csi_neg[:,iap,ilp,ipp],label='neg',color=clrs_areapairs[iap],linestyle=':')
         ax.set_xticks(deltaoris[::2])
         ax.set_xlabel('Delta Ori (deg)')
         if iap==0:
@@ -1421,6 +1453,35 @@ def plot_csi_deltaori_areas(csi_mean,csi_pos,csi_neg,deltaoris,areapairs):
         ax.set_title(areapair,fontsize=11,color=clrs_areapairs[iap])
         plt.tight_layout()
     return fig
+
+
+
+def plot_csi_deltaori_projs(csi_mean,csi_pos,csi_neg,deltaoris,projpairs):
+    fig,axes = plt.subplots(1,len(projpairs),figsize=(len(projpairs)*2.5,2),sharex=True,sharey=True)
+    iap = 0
+    ilp = 0
+    clrs_projpairs = get_clr_labelpairs(projpairs)
+
+    for ipp,projpair in enumerate(projpairs):
+        ax = axes[ipp]
+        ax.plot(deltaoris,csi_mean[:,iap,ilp,ipp],label='mean',color='k')
+        ax.plot(deltaoris,csi_pos[:,iap,ilp,ipp],label='pos',color='r',linestyle='-')
+        ax.plot(deltaoris,csi_neg[:,iap,ilp,ipp],label='neg',color='b',linestyle='-')
+        ax.set_xticks(deltaoris[::2])
+        ax.set_xlabel('Delta Ori (deg)')
+        if ipp==0:
+            ax.set_ylabel('Angular CSI')
+        # ax.set_ylim([-1,1])
+        ax.set_ylim([-0.5,0.5])
+        # ax.set_xticks(deltaoris[::2])
+        ax.axhline(0,linestyle='--',color='k',linewidth=1)
+        l = ax.legend(frameon=False,loc='upper right',fontsize=7,ncol=3,handlelength=0,handletextpad=0)
+        for i,text in enumerate(l.get_texts()):
+            text.set_color(ax.lines[i].get_color())
+        ax.set_title(projpair,fontsize=11,color=clrs_projpairs[ipp])
+        plt.tight_layout()
+    return fig
+
 
 # def plot_bin_corr_deltarf_flex(sessions,binmean,binpos,areapairs=' ',layerpairs=' ',projpairs=' ',
 #                                corr_type='trace_corr',normalize=False):
@@ -1683,6 +1744,44 @@ def plot_corr_angular_tuning_dori(bin_angle_oris,bin_angle_count_oris,
                 # ax.set_xlabel(u'Angle (deg)')
     plt.tight_layout()
     return fig
+
+
+def plot_corr_angular_tuning_projs_dori(bin_angle_oris,bin_angle_count_oris,
+            bincenters_angle,deltaoris,areapairs,layerpairs,projpairs):
+    bin_angle_err = np.full(bin_angle_count_oris.shape,0.08) / bin_angle_count_oris**0.35
+
+    # Make the figure:
+    deglim              = 2*np.pi
+    ndeltaoris          = len(deltaoris)
+    fig,axes    = plt.subplots(len(projpairs),len(deltaoris),figsize=(len(deltaoris)*1.5,len(projpairs)*1),
+                               sharex=True,sharey=True)
+    ilp = 0
+    iap = 0 
+
+    clrs_projpairs      = get_clr_labelpairs(projpairs)
+    clrs_deltaoris      = get_clr_deltaoris(deltaoris)
+
+    for ipp,projpair in enumerate(projpairs):
+        for idOri,deltaori in enumerate(deltaoris):
+            ax                                              = axes[ipp,idOri]
+            handles = []
+            handles.append(shaded_error(ax=ax,x=bincenters_angle,y=bin_angle_oris[idOri,:,iap,ilp,ipp],
+                    yerror=bin_angle_err[idOri,:,iap,ilp,ipp],color=clrs_deltaoris[idOri]))
+
+            if iap==0:
+                ax.set_title(u'Δ Pref = %d\N{DEGREE SIGN}' % (deltaori),c=clrs_deltaoris[idOri])
+            if idOri==0:
+                ax.set_ylabel('%s' % (projpair),c=clrs_projpairs[ipp])
+            else:     
+                ax.set_ylabel('')
+
+            ax.set_xlim([0,deglim])
+            ax.set_xticks(np.arange(0,2*np.pi,step = np.deg2rad(45)),labels=np.arange(0,360,step = 45),fontsize=7)
+            if idOri==np.floor(len(deltaoris)/2) and iap==len(areapairs):
+                ax.set_xlabel(u'Angular surround bin (\N{DEGREE SIGN})')
+    plt.tight_layout()
+    return fig
+
 
 def plot_center_surround_corr_areas(binmean,bincenters,centerthr=15,areapairs=' ',layerpairs=' ',projpairs=' '):
     clrs_areapairs = get_clr_area_pairs(areapairs)
