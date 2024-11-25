@@ -32,7 +32,8 @@ class Session():
         self.session_id = session_id
         self.cellfilter = None
 
-    def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, calciumversion='dF'):
+    def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, 
+                  calciumversion='dF', filter_hp=None):
 
         self.sessiondata_path   = os.path.join(self.data_folder, 'sessiondata.csv')
         self.trialdata_path     = os.path.join(self.data_folder, 'trialdata.csv')
@@ -100,11 +101,8 @@ class Session():
                 self.calciumdata = self.calciumdata.iloc[:,self.cellfilter]
                 # self.celldata = self.celldata.iloc[cellfilter,:]
 
-            # self.ts_F                = self.calciumdata['timestamps']
-            # self.calciumdata         = self.calciumdata.drop('timestamps',axis=1)
-
-            # self.F_chan2             = self.calciumdata['F_chan2']
-            # self.calciumdata         = self.calciumdata.drop('F_chan2',axis=1)
+            if filter_hp is not None and filter_hp > 0:
+                self.calciumdata = my_highpass_filter(data = self.calciumdata, cutoff = filter_hp, fs=self.sessiondata['fs'][0])
 
             assert(np.shape(self.calciumdata)[1]==np.shape(self.celldata)[0]), 'Dimensions of calciumdata and celldata do not match, %s %s' % (np.shape(self.calciumdata)[1],np.shape(self.celldata)[0])
 
@@ -144,10 +142,10 @@ class Session():
         #combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
 
         self.load_data(load_behaviordata=load_behaviordata, load_calciumdata=load_calciumdata,
-                       load_videodata=load_videodata,calciumversion=calciumversion)
+                       load_videodata=load_videodata,calciumversion=calciumversion,filter_hp=filter_hp)
         
-        if filter_hp is not None and filter_hp > 0:
-            self.calciumdata = my_highpass_filter(data = self.calciumdata, cutoff = filter_hp, fs=self.sessiondata['fs'][0])
+        # if filter_hp is not None and filter_hp > 0:
+        #     self.calciumdata = my_highpass_filter(data = self.calciumdata, cutoff = filter_hp, fs=self.sessiondata['fs'][0])
 
         if self.sessiondata['protocol'][0]=='IM':
             if calciumversion=='deconv':

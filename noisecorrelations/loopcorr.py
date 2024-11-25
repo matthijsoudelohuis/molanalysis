@@ -104,7 +104,7 @@ sessions = compute_tuning_wrapper(sessions)
 sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filter_stationary=True)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='GM')
-# sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='PCA',remove_rank=1)
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='PCA',remove_rank=1)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False,remove_method='RRR',remove_rank=2)
 
 # plt.imshow(sessions[27].noise_corr,vmin=-0.03,vmax=0.05)
@@ -144,6 +144,7 @@ for corr_type in ['noise_corr']:
 
 #%% #########################################################################################
 protocols           = ['GR','GN']
+# protocols           = ['IM']
 ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
 
 areapairs           = ['V1-V1','PM-PM']
@@ -180,9 +181,10 @@ for iap,areapair in enumerate(['V1','PM']):
     ax.set_xlabel(u'Δ %s' % dim12label)   
     ax.set_yticks(np.arange(0,0.051,0.01))
     ax.set_xlim([-10,500])
-    ax.set_ylim([0.0,0.035])
+    ax.set_ylim([0.0,0.023])
 plt.tight_layout()
 # fig.savefig(os.path.join(savedir,'MeanCorr','DistXY_MeanCorr_WithinArea_%s_%s' % (corr_type,'_'.join(protocols)) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'MeanCorr','DistXY_MeanCorr_WithinArea_%s_PCA1_%s' % (corr_type,'_'.join(protocols)) + '.png'), format = 'png')
 
 #%% ########################################################################################################
 # ##################### Noise correlations within and across areas: ########################################
@@ -218,7 +220,8 @@ bincenters,_,meancorrPM,varcorrPM,fraccorrPM = hist_corr_areas_labeling(ses,corr
 #combine V1 and PM, and filter out duplicate pair (unl-lab is same as lab-unl):
 # meancorr            = np.stack([meancorrV1[:,:,:,[0,1,3]],meancorrPM[:,:,:,[0,1,3]]],axis=0) 
 meancorr            = np.stack([meancorrV1,meancorrPM],axis=0)
-# varcorr             = np.stack([varcorrV1[:,:,:,[0,1,3]],varcorrPM[:,:,:,[0,1,3]]],axis=0)
+# meancorr             = np.stack([fraccorrV1[0,:,:,:,:],fraccorrPM[0,:,:,:,:]],axis=0)
+# meancorr             = np.stack([fraccorrV1[1,:,:,:,:],fraccorrPM[1,:,:,:,:]],axis=0)
 
 projpairs_areas = [['V1unl-V1unl','V1unl-V1lab','V1lab-V1lab'],
              ['PMunl-PMunl','PMunl-PMlab','PMlab-PMlab']]
@@ -300,7 +303,7 @@ if df.any(axis=None):
     annotator.apply_and_annotate()
     ax.set_ylabel('Correlation')
     ax.set_title('%s' % '_'.join(protocols),fontsize=12)
-    ax.set_ylim([my_floor(df.min(axis=None)*0.95,2),my_ceil(df.max(axis=None)*1.4,2)])
+    ax.set_ylim([my_floor(df.min(axis=None)*0.95,3),my_ceil(df.max(axis=None)*1.4,2)])
 plt.tight_layout()
 # fig.savefig(os.path.join(savedir,'MeanCorr','MeanCorr_InterArea_%s_%s' % (corr_type,'_'.join(protocols)) + '.png'), format = 'png')
 
@@ -340,9 +343,9 @@ plt.tight_layout()
 # fig.savefig(os.path.join(savedir,'MeanCorr','FracCorr_PosNeg_InterArea_%s_%s' % (corr_type,'_'.join(protocols)) + '.png'), format = 'png')
 
 #%%  Find session with largest effect:
-areapairs           = ['V1-PM']
-corr_type           = 'noise_corr'
-ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
+# areapairs           = ['V1-PM']
+# corr_type           = 'noise_corr'
+# ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
 # bincenters,histcorr,meancorr,varcorr = hist_corr_areas_labeling(ses,corr_type=corr_type,filternear=False,projpairs=projpairs,noise_thr=20,
                                                     # areapairs=['V1-PM'],layerpairs=' ',minNcells=10)
 
@@ -358,7 +361,7 @@ print('Session with largest difference in %s variance by labeling across areas i
 
 #%% Show correlation matrix for this session.
 # sort by area and labeling identity:
-sesidx = 8
+# sesidx = 8
 ses = sessions[sesidx]
 corr_type = 'trace_corr'
 data = getattr(ses,corr_type)
@@ -402,12 +405,13 @@ areapairs           = ['V1-PM']
 
 plt.rcParams['axes.spines.right']   = True
 plt.rcParams['axes.spines.top']     = True
-
+projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
+clrs_projpairs = get_clr_labelpairs(projpairs)
 zscoreflag = False
 # for corr_type in ['trace_corr','sig_corr','noise_corr']:
 # for corr_type in ['sig_corr']:
-# for corr_type in ['noise_corr']:
-for corr_type in ['trace_corr']:
+for corr_type in ['noise_corr']:
+# for corr_type in ['trace_corr']:
     for areapair in areapairs:
         ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
 
@@ -417,8 +421,8 @@ for corr_type in ['trace_corr']:
                                                             # areapairs=[areapair],layerpairs=['L5-L5'],minNcells=5,zscore=zscoreflag)
                                                             areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
         
-        # bincenters_sh,histcorr_sh,meancorr_sh,varcorr_sh = hist_corr_areas_labeling(ses,corr_type='corr_shuffle',filternear=True,projpairs=' ',noise_thr=20,
-                                                            # areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
+        bincenters_sh,histcorr_sh,meancorr_sh,varcorr_sh,_ = hist_corr_areas_labeling(ses,corr_type='corr_shuffle',filternear=False,projpairs=' ',noise_thr=20,
+                                                            areapairs=[areapair],layerpairs=' ',minNcells=10,zscore=zscoreflag,valuematching=None)
         print('%d/%d sessions with lab-lab populations for %s'
               % (np.sum(~np.any(np.isnan(histcorr[:,:,0,0,-1]),axis=0)),len(ses),areapair))
         

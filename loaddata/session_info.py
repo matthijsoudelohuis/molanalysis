@@ -25,8 +25,7 @@ def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumd
     """
     sessions = []
 
-    assert np.shape(session_list)[
-        1] == 2, 'session list does not seem to have two columns for animal and dates'
+    assert np.shape(session_list)[1] == 2, 'session list does not seem to have two columns for animal and dates'
 
     # iterate over sessions in requested array:
     for i, ses in enumerate(session_list):

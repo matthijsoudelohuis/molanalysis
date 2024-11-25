@@ -20,7 +20,7 @@ from statannotations.Annotator import Annotator
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_respmat
-from utils.tuning import compute_tuning, compute_prefori
+from utils.tuning import compute_tuning, compute_prefori,compute_tuning_wrapper
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D,plot_excerpt
 from utils.plot_lib import shaded_error
@@ -28,7 +28,7 @@ from utils.RRRlib import regress_out_behavior_modulation
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf, filter_nearlabeled
 
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - Gratings\\')
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
 
 #%% #############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
@@ -78,6 +78,9 @@ sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 #%% ##################### Compute pairwise neuronal distances: ##############################
 sessions = compute_pairwise_metrics(sessions)
 
+#%% 
+sessions = compute_tuning_wrapper(sessions)
+
 #%% How are noise correlations distributed
 
 from scipy.stats import skew
@@ -93,6 +96,11 @@ for ises in range(nSessions):
     # sessions[ises].celldata['noise_corr_avg'] = np.nanmean(np.abs(sessions[ises].noise_corr),axis=1) 
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+#%% 
+
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\CellProperties\\')
+
 
 #%%  Scatter plot of average noise correlations versus skew:
 def plot_corr_NC_var(sessions,vartoplot):
@@ -149,6 +157,73 @@ plot_corr_NC_var(sessions,vartoplot = 'mediandF')
 
 #%%  Scatter plot of average correlations versus mean response across trials:
 plot_corr_NC_var(sessions,vartoplot = 'skewrespmat')
+
+
+
+
+#%%  Scatter plot of average noise correlations versus skew:
+def plot_corr_NC_var_2d(sessions,vartoplot):
+    nbins       = 10
+    binedges    = np.linspace(np.nanpercentile(sessions[0].celldata[vartoplot],2),np.nanpercentile(sessions[0].celldata[vartoplot],98),nbins+1)
+    
+    cdata = np.empty((len(sessions),nbins,nbins))   
+    for ises,ses in enumerate(sessions):
+        if vartoplot in ses.celldata:
+            vdata = ses.trace_corr[~np.isnan(ses.trace_corr)].flatten()
+            xdata,ydata = np.meshgrid(ses.celldata[vartoplot],ses.celldata[vartoplot])[:]
+            xdata = xdata[~np.isnan(ses.trace_corr)].flatten()
+            ydata = ydata[~np.isnan(ses.trace_corr)].flatten()
+            cdata[ises,:,:]   = binned_statistic_2d(x=xdata, y=ydata, values=vdata,bins=binedges, statistic='mean')[0]
+
+    fig = plt.figure(figsize=(4,4))
+
+    plt.imshow(np.nanmean(cdata,axis=0).squeeze(),extent=[binedges[0],binedges[-1],binedges[0],binedges[-1]],
+               vmin=np.nanpercentile(np.nanmean(cdata,axis=0),2),vmax=np.nanpercentile(np.nanmean(cdata,axis=0),98),origin='lower')
+    plt.xticks(binedges[::2],fontsize=8)
+    plt.yticks(binedges[::2],fontsize=8)
+    # plt.xlabel(vartoplot)
+    # plt.ylabel(vartoplot)
+    plt.title(vartoplot)
+    cbar = plt.colorbar(shrink=0.4)
+    cbar.set_label('Mean trace corr')
+    plt.tight_layout()
+    plt.savefig(os.path.join(savedir,'2D_tracecorr_vs_%s' % vartoplot + '.png'), format = 'png')
+
+#%%  2D plot of trace correlations versus skew:
+plot_corr_NC_var_2d(sessions,vartoplot = 'skew')
+
+#%%  2D plot of trace correlations versus depth:
+plot_corr_NC_var_2d(sessions,vartoplot = 'depth')
+
+#%%  2D plot of trace correlations versus tuning variance:
+plot_corr_NC_var_2d(sessions,vartoplot = 'tuning_var')
+
+#%%  2D plot of trace correlations versus noise level:
+plot_corr_NC_var_2d(sessions,vartoplot = 'noise_level')
+
+#%%  2D plot of trace correlations versus event rate level:
+plot_corr_NC_var_2d(sessions,vartoplot = 'event_rate')
+
+#%%  2D plot of trace correlations versus fluorescence:
+plot_corr_NC_var_2d(sessions,vartoplot = 'meanF')
+
+#%%  2D plot of trace correlations versus fluorescence channel 2:
+plot_corr_NC_var_2d(sessions,vartoplot = 'meanF_chan2')
+
+#%% 
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+protocols           = ['GR','GN']
+ses                 = [sessions[ises] for ises in np.where(sessiondata['protocol'].isin(protocols))[0]]
+
+#%%  Scatter plot of average correlations versus receptive field fit:
+plot_corr_NC_var_2d(ses,vartoplot = 'rf_r2_F')
+
+#%%  Scatter plot of average correlations versus receptive field fit:
+plot_corr_NC_var_2d(ses,vartoplot = 'rf_sy_F')
+
+#%% 
+plot_corr_NC_var_2d(ses,vartoplot = 'noise_corr_avg')
+
 
 #%% 
 

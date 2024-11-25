@@ -23,14 +23,14 @@ def mean_resp_image(ses):
         respmean[:,im] = np.mean(ses.respmat[:,ses.trialdata['ImageNumber']==imid],axis=1)
     return respmean,imageids
 
-def mean_resp_gr(ses,filter_stationary=False):
+def mean_resp_gr(ses,trialfilter=None):
 
     data        = copy.deepcopy(ses.respmat)
     trial_ori   = ses.trialdata['Orientation']
 
-    if filter_stationary:
-        data        = data[:,ses.respmat_runspeed<2]
-        trial_ori   = trial_ori[ses.respmat_runspeed<2]
+    if trialfilter is not None:
+        data        = data[:,trialfilter]
+        trial_ori   = trial_ori[trialfilter]
 
     # get signal correlations:
     [N,K]           = np.shape(data) #get dimensions of response matrix
@@ -53,16 +53,16 @@ def mean_resp_gr(ses,filter_stationary=False):
 
     return resp_meanori,respmat_res
 
-def mean_resp_gn(ses,filter_stationary=False):
+def mean_resp_gn(ses,trialfilter=None):
 
     data        = copy.deepcopy(ses.respmat)
     trial_ori   = ses.trialdata['centerOrientation']
     trial_spd   = ses.trialdata['centerSpeed']
 
-    if filter_stationary:
-        data        = data[:,ses.respmat_runspeed<2]
-        trial_ori   = trial_ori[ses.respmat_runspeed<2]
-        trial_spd   = trial_spd[ses.respmat_runspeed<2]
+    if trialfilter is not None:
+        data        = data[:,trialfilter]
+        trial_ori   = trial_ori[trialfilter]
+        trial_spd   = trial_spd[trialfilter]
 
     # get signal correlations:
     [N,K]           = np.shape(data) #get dimensions of response matrix

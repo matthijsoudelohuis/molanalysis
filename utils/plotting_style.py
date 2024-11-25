@@ -3,6 +3,7 @@ import numpy as np
 import seaborn as sns
 from operator import itemgetter
 import matplotlib.pyplot as plt
+from  matplotlib.colors import LinearSegmentedColormap
 
 desired_width = 600
 pd.set_option('display.width', desired_width)
@@ -31,6 +32,25 @@ def get_clr_area_pairs(areapairs):
 def get_clr_labeled():
     # clrs            = ['black','red']
     return ['gray','indianred']
+
+   
+def get_clr_deltaoris(deltaoris):
+    # c = ["darkred","darkgreen"]
+    # v = [0,1.]
+    # l = list(zip(v,c))
+    # cmap=LinearSegmentedColormap.from_list('rg',l, N=256)
+    # colors = cmap((45-np.mod(deltaoris,90))/45)
+    # c = ["darkgreen","darkblue","darkred"]
+    c = ["darkred","darkblue","darkgreen"]
+    v = [0,.5,1.]
+    l = list(zip(v,c))
+    cmap=LinearSegmentedColormap.from_list('gbr',l, N=256)
+
+    # cmap = sns.color_palette('viridis', as_cmap=True)
+    # colors = cmap((90-np.mod(deltaoris,180))/90)
+    colors = cmap(np.abs(90-deltaoris)/90)
+
+    return colors
 
 def get_clr_labelpairs(pairs):
     palette       = {'unl-unl': sns.xkcd_rgb['grey'],
