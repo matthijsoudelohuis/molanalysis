@@ -222,6 +222,8 @@ bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,rf_type=rf_ty
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,method='frac',
                         filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr)
 
+CHANGE NAME of FUNC HERE TO plot_corr_radial_tuning
+
 fig = plot_mean_corr_areas(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
 # fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_%s_%s_%s_GMsub_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_%s_%s_%s_GMsub_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')

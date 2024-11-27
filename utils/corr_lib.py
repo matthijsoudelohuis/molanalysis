@@ -29,6 +29,7 @@ from utils.gain_lib import pop_rate_gain_model
 import itertools
 import scipy.stats as ss
 from scipy.optimize import curve_fit
+from scipy.stats import linregress
 
 
  #####  ####### #     # ######  #     # ####### #######     #####  ####### ######  ######  
@@ -220,25 +221,6 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_statio
         # else, do nothing, skipping protocol other than GR, GN, and IM'
 
     return sessions
-
-def filter_corr_p(r,n,p_thr=0.01):
-    """Filter out non-significant correlations in a correlation matrix.
-    Parameters
-    r : array
-        Correlation matrix.
-    n : int
-        Number of datapoints.
-    p_thr : float, optional
-        Threshold for significant correlations. Default is 0.01.
-    Returns
-    r : array
-        Correlation matrix with non-significant correlations set to nan.
-    """
-    t           = np.clip(r * np.sqrt((n-2)/(1-r*r)),a_min=-30,a_max=30)#convert correlation to t-statistic
-    p           = ss.t.pdf(t, n-2) #convert to p-value using pdf of t-distribution and deg of freedom
-    r[p>p_thr]  = np.nan #set all nonsignificant to nan
-    # plt.scatter(r.flatten(),p.flatten())
-    return r
 
 #     # ###  #####  #######     #####  ####### ######  ######  
 #     #  #  #     #    #       #     # #     # #     # #     # 
@@ -790,7 +772,7 @@ def bin_corr_deltarf(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
 
     #Binning parameters 1D distance
     binlim          = 75
-    binedges_dist   = np.arange(0,binlim,binresolution)+binresolution/2 
+    binedges_dist   = np.arange(-binresolution/2,binlim,binresolution)+binresolution/2 
     bincenters_dist = binedges_dist[:-1]+binresolution/2 
     nBins           = len(bincenters_dist)
 
@@ -843,23 +825,33 @@ def bin_corr_deltarf(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
                 if normalize:
                     corrdata = corrdata/np.nanstd(corrdata,axis=None) - np.nanmean(corrdata,axis=None)
 
+                if corr_type == 'trace_corr':
+                    n = len(sessions[ises].ts_F)
+                elif corr_type in ['noise_corr','sig_corr']:
+                    n = np.shape(sessions[ises].respmat)[1]
+                sigcorrdata = corrdata.copy()
+
                 if method=='mean':
                     if filtersign == 'neg':
-                        # corrsignfilter              = corrdata < 0
-                        corrsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
+                        # corrsignfilter              = corrdata < -0.1
+                        # corrsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
+                        corrsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) < 0
                     elif filtersign =='pos':
-                        # corrsignfilter              = corrdata > 0
-                        corrsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
+                        # corrsignfilter              = corrdata > 0.3
+                        # corrsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
+                        corrsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) > 0
                     else:
                         corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
                 elif method=='frac':
                     corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
                     if filtersign == 'neg':
-                        fracsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
+                        # fracsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
                         # fracsignfilter              = corrdata < -0.15
+                        fracsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) < 0
                     elif filtersign =='pos':
-                        fracsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
+                        # fracsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
                         # fracsignfilter              = corrdata > 0.3
+                        fracsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) > 0
                     else:
                         raise ValueError('filtersign must be either pos or neg if metohd==frac is chosen')
                 else: 
@@ -1024,7 +1016,7 @@ def bin_corr_deltarf(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
 #       ####### #######    #       ######  ####### #######    #    #     #    #     # #       
 
 
-def plot_mean_corr_areas(bincenters_dist,bin_dist_count,bin_dist_mean,	
+def plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_mean,	
                            areapairs=' ',layerpairs=' ',projpairs=' '):
     if np.max(bincenters_dist)>100:
         xylim               = 250
@@ -1037,7 +1029,7 @@ def plot_mean_corr_areas(bincenters_dist,bin_dist_count,bin_dist_mean,
     if len(areapairs)==1:
         clrs_areapairs =[clrs_areapairs]
 
-    fig,ax    = plt.subplots(1,1,figsize=(3,3.5))
+    fig,ax    = plt.subplots(1,1,figsize=(3,3))
     ilp = 0
     ipp = 0
     handles = []
@@ -1065,6 +1057,104 @@ def plot_mean_corr_areas(bincenters_dist,bin_dist_count,bin_dist_mean,
     ax.set_xlabel(u'Δ %s' % dim12label)   
     # ax.set_title('%s\n Joint' % (areapair),c=clrs_areapairs[iap])
     ax.set_ylabel('Correlation')
+
+    plt.tight_layout()
+    return fig
+
+def plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_mean,	
+                           areapairs=' ',layerpairs=' ',projpairs=' '):
+    if np.max(bincenters_dist)>100:
+        xylim               = 250
+        dim12label = 'XY (um)'
+    else:
+        xylim               = 70
+        dim12label = 'RF (\N{DEGREE SIGN})'
+
+    areapair = 'V1-PM'
+    areaprojpairs = projpairs.copy()
+    for ipp,projpair in enumerate(projpairs):
+        areaprojpairs[ipp]       = areapair.split('-')[0] + projpair.split('-')[0] + '-' + areapair.split('-')[1] + projpair.split('-')[1]
+
+    clrs_projpairs      = get_clr_labelpairs(projpairs)
+    if len(projpairs)==1:
+        clrs_projpairs =[clrs_projpairs]
+
+    fig,ax    = plt.subplots(1,1,figsize=(4,3))
+    ilp = 0
+    iap = 0
+    handles = []
+    for ipp,projpair in enumerate(projpairs):
+        bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.4
+        handles.append(shaded_error(x=bincenters_dist,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
+                        ax = ax,color=clrs_projpairs[ipp],label=projpair))
+        bindata = bin_dist_mean[:,iap,ilp,ipp]
+        xdata = bincenters_dist[(~np.isnan(bindata)) & (bincenters_dist<=60)]
+        ydata = bindata[(~np.isnan(bindata)) & (bincenters_dist<=60)]
+        # try:
+        #     popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[0.02, 0, 0.02],bounds=(-10, 10))
+        #     ax.plot(xdata, popt[0] * np.exp(-popt[1] * xdata) + popt[2],linestyle='--',color=clrs_projpairs[ipp],label=f'{areapair} fit',linewidth=1)
+        # except:
+        #     print('curve_fit failed for %s' % (projpair))
+        #     continue
+    ax.legend(handles=handles,labels=areaprojpairs,frameon=False,bbox_to_anchor=(1.05, 1), loc='upper left',fontsize=7)
+    ax.set_xlim([0,xylim])
+    ax.set_xlabel(u'Δ %s' % dim12label)   
+    # ax.set_title('%s\n Joint' % (areapair),c=clrs_projpairs[iap])
+    ax.set_ylabel('Correlation')
+
+    plt.tight_layout(rect=(0,0,1,1))
+    return fig
+
+
+
+def plot_corr_radial_tuning_dori(bincenters_dist,bin_dist_count,bin_dist_data,deltaoris,	
+                           areapairs=' ',layerpairs=' ',projpairs=' '):
+    bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.3
+    
+    if np.max(bincenters_dist)>100:
+        xylim               = 250
+        dim12label = 'XY (um)'
+    else:
+        xylim               = 65
+        dim12label = 'RF (\N{DEGREE SIGN})'
+
+    ndeltaoris = len(deltaoris)
+    clrs_deltaoris      = get_clr_deltaoris(deltaoris)
+
+    clrs_areapairs      = get_clr_area_pairs(areapairs)
+    if len(areapairs)==1:
+        clrs_areapairs =[clrs_areapairs]
+
+    # fig,axes    = plt.subplots(len(areapairs),ndeltaoris,figsize=(len(areapairs)*3,ndeltaoris*3))
+    fig,axes    = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*3,3))
+    ilp = 0
+    ipp = 0
+    for iap,areapair in enumerate(areapairs):
+        ax = axes[iap]
+        handles = []
+        for idOri,dOri in enumerate(deltaoris):
+            handles.append(shaded_error(x=bincenters_dist,y=bin_dist_data[idOri,:,iap,ilp,ipp],yerror=bin_dist_error[idOri,:,iap,ilp,ipp],
+                            ax = ax,color=clrs_deltaoris[idOri],label=areapair))
+                            # ax = ax,color=clrs_areapairs[iap],label=areapair))
+            bindata = bin_dist_data[idOri,:,iap,ilp,ipp]
+            xdata = bincenters_dist[(~np.isnan(bindata)) & (bincenters_dist<=60)]
+            ydata = bindata[(~np.isnan(bindata)) & (bincenters_dist<=60)]
+            # try:
+            #     slope, intercept, r_value, p_value, std_err = linregress(xdata,ydata)
+            #     # ax.plot(xdata, intercept + slope*xdata,linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} linfit',linewidth=1)
+                
+            #     # popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[ydata[-1]-ydata[0], ydata[-1]-ydata[0], ydata[-1]],bounds=(-10, 10))
+            #     # ax.plot(xdata, popt[0] * np.exp(-popt[1] * xdata) + popt[2],linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} fit',linewidth=1)
+            # except:
+            #     print('curve_fit failed for %s' % (areapair))
+            #     continue
+        
+        ax.legend(handles=handles,labels=[str(x) for x in deltaoris],frameon=False,ncol=3,fontsize=6)
+        ax.set_xlim([0,xylim])
+        ax.set_ylim([my_floor(np.min(bin_dist_data)*0.65,3),my_ceil(np.max(bin_dist_data)*1.1,3)])
+        ax.set_xlabel(u'Δ %s' % dim12label)   
+        ax.set_title('%s' % (areapair),c=clrs_areapairs[iap])
+        ax.set_ylabel('Correlation')
 
     plt.tight_layout()
     return fig
@@ -1131,9 +1221,6 @@ def plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf
                     ax = ax2,color='r',label='pos')
         shaded_error(x=bincenters_dist,y=bin_dist_negf[:,iap,ilp,ipp],yerror=data_neg_error[:,iap,ilp,ipp],
                     ax = ax2,color='b',label='neg')
-        # ax.plot(bincenters_dist,bin_dist_mean[:,iap,ilp,ipp],color='k',label='mean')
-        # ax.plot(bincenters_dist,bin_dist_posf[:,iap,ilp,ipp],color='r',label='pos')
-        # ax.plot(bincenters_dist,bin_dist_negf[:,iap,ilp,ipp],color='b',label='neg')
         ax.legend(frameon=False)
         ax.set_xlim([0,xylim])
         ax.set_xlabel(u'Δ %s' % dim12label)   
@@ -1142,52 +1229,6 @@ def plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf
 
     plt.tight_layout()
     return fig
-
-
-def plot_mean_corr_projs(bincenters_dist,bin_dist_count,bin_dist_mean,	
-                           areapairs=' ',layerpairs=' ',projpairs=' '):
-    if np.max(bincenters_dist)>100:
-        xylim               = 250
-        dim12label = 'XY (um)'
-    else:
-        xylim               = 70
-        dim12label = 'RF (\N{DEGREE SIGN})'
-
-    areapair = 'V1-PM'
-    areaprojpairs = projpairs.copy()
-    for ipp,projpair in enumerate(projpairs):
-        areaprojpairs[ipp]       = areapair.split('-')[0] + projpair.split('-')[0] + '-' + areapair.split('-')[1] + projpair.split('-')[1]
-
-    clrs_projpairs      = get_clr_labelpairs(projpairs)
-    if len(projpairs)==1:
-        clrs_projpairs =[clrs_projpairs]
-
-    fig,ax    = plt.subplots(1,1,figsize=(4,3))
-    ilp = 0
-    iap = 0
-    handles = []
-    for ipp,projpair in enumerate(projpairs):
-        bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.4
-        handles.append(shaded_error(x=bincenters_dist,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
-                        ax = ax,color=clrs_projpairs[ipp],label=projpair))
-        bindata = bin_dist_mean[:,iap,ilp,ipp]
-        xdata = bincenters_dist[(~np.isnan(bindata)) & (bincenters_dist<=60)]
-        ydata = bindata[(~np.isnan(bindata)) & (bincenters_dist<=60)]
-        # try:
-        #     popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[0.02, 0, 0.02],bounds=(-10, 10))
-        #     ax.plot(xdata, popt[0] * np.exp(-popt[1] * xdata) + popt[2],linestyle='--',color=clrs_projpairs[ipp],label=f'{areapair} fit',linewidth=1)
-        # except:
-        #     print('curve_fit failed for %s' % (projpair))
-        #     continue
-    ax.legend(handles=handles,labels=areaprojpairs,frameon=False,bbox_to_anchor=(1.05, 1), loc='upper left',fontsize=7)
-    ax.set_xlim([0,xylim])
-    ax.set_xlabel(u'Δ %s' % dim12label)   
-    # ax.set_title('%s\n Joint' % (areapair),c=clrs_projpairs[iap])
-    ax.set_ylabel('Correlation')
-
-    plt.tight_layout(rect=(0,0,1,1))
-    return fig
-
 
 def plot_mean_frac_corr_projs(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
                             bincenters_dist,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,	
@@ -1341,7 +1382,7 @@ def plot_2D_mean_corr(bin_2d,bin_2d_count,bincenters_2d,areapairs=' ',layerpairs
                 data[bin_2d_count[:,:,iap,ilp,ipp]<min_counts]     = np.nan
 
                 # ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,10),vmax=np.nanpercentile(data,95),cmap=cmap)
-                ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,10),vmax=np.nanpercentile(data,95),cmap=cmap)
+                ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(bin_2d[:,:,iap,:,:],25),vmax=np.nanpercentile(bin_2d[:,:,iap,:,:],80),cmap=cmap)
                 # ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,10),vmax=np.nanpercentile(data,95),cmap=cmap)
                 ax.set_facecolor('grey')
                 ax.set_title('%s\n%s' % (areapair, projpair),c=clrs_areapairs[iap])
