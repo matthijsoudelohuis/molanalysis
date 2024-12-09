@@ -42,12 +42,13 @@ sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
 
 #%% Load all sessions from certain protocols: 
 # sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
-sessions,nSessions   = filter_sessions(protocols = ['GR','GN'],filter_areas=['V1','PM']) 
+sessions,nSessions   = filter_sessions(protocols = ['GR','GN'],filter_areas=['V1','PM'],session_rf=True)  
 # sessions,nSessions   = filter_sessions(protocols = ['RF'],filter_areas=['V1','PM'],session_rf=True)  
 
 #%% Remove sessions with too much drift in them:
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+# sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE10885_2023_10_19','LPE09830_2023_04_12']))[0]
 sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
 
@@ -57,11 +58,12 @@ calciumversion = 'deconv'
 
 for ises in range(nSessions):
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                # calciumversion=calciumversion,keepraw=True)
-                                calciumversion=calciumversion,keepraw=True,filter_hp=0.01)
+                                calciumversion=calciumversion,keepraw=True)
+                                # calciumversion=calciumversion,keepraw=True,filter_hp=0.01)
     
     # detrend(sessions[ises].calciumdata,type='linear',axis=0,overwrite_data=True)
-    sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.2,uppertriangular=False)[0]
+    # sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.2,uppertriangular=False)[0]
+    sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False)[0]
     delattr(sessions[ises],'videodata')
     delattr(sessions[ises],'behaviordata')
     delattr(sessions[ises],'calciumdata')
@@ -71,16 +73,17 @@ sessions = compute_pairwise_anatomical_distance(sessions)
 
 #%% ##################### Smooth receptive field from Fneu gauss fit again #################
 # This is overriding any Fsmooth values from preprocessing
-sessions = smooth_rf(sessions,radius=50,rf_type='Fneu',mincellsFneu=5)
-sessions = exclude_outlier_rf(sessions) 
-sessions = replace_smooth_with_Fsig(sessions) 
+# sessions = smooth_rf(sessions,radius=50,rf_type='Fneu',mincellsFneu=5)
+# sessions = exclude_outlier_rf(sessions) 
+# sessions = replace_smooth_with_Fsig(sessions) 
 
 #%% ########################### Compute tuning metrics: ###################################
 sessions = compute_tuning_wrapper(sessions)
 
 #%% ########################## Compute signal and noise correlations: ############################
 sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
-sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='GM')
+# sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filter_stationary=True)
+# sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='GM')
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='PCA',remove_rank=1)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False,remove_method='RRR',remove_rank=2)
 
@@ -91,6 +94,12 @@ sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remov
 
 
 #%%
+colors = [(0, 0, 0), (1, 0, 0), (1, 1, 1)] # first color is black, last is red
+cm_red = LinearSegmentedColormap.from_list("Custom", colors, N=20)
+colors = [(0, 0, 0), (0, 0, 1), (1, 1, 1)] # first color is black, last is red
+cm_blue = LinearSegmentedColormap.from_list("Custom", colors, N=20)
+
+centerthr           = [15,15,15,15]
 
 # 2024_11_03:
 # df or deconv?
@@ -113,8 +122,8 @@ areapairs       = ['V1-V1','PM-PM']
 clrs_areapairs  = get_clr_area_pairs(areapairs)
 
 #%% Compute pairwise correlations as a function of pairwise anatomical distance ###################################################################
-# for corr_type in ['trace_corr','sig_corr','noise_corr']:
-for corr_type in ['noise_corr']:
+for corr_type in ['trace_corr','sig_corr','noise_corr']:
+# for corr_type in ['noise_corr']:
     [binmean,binedges] = bin_corr_distance(sessions,areapairs,corr_type=corr_type)
 
     #Make the figure per protocol:
@@ -129,6 +138,7 @@ layerpairs          = ' '
 projpairs           = ' '
 corr_type           = 'noise_corr'
 # corr_type           = 'trace_corr'
+corr_type           = 'sig_corr'
 corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
 
 [bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
@@ -148,7 +158,7 @@ bin_angle_surr_count,bincenters_angle] = bin_corr_deltaxy(sessions,
 fig = plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
                         bincenters_dist,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,areapairs,layerpairs,projpairs)
 fig.savefig(os.path.join(savedir,'deltaXYZ','Corr_deltaXY_%s_%s_GRGN' % (corr_type,calciumversion) + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'deltaXYZ','Corr_deltaXY_%s_GMremoved_%s_GRGN' % (corr_type,calciumversion) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'deltaXYZ','Corr_deltaXY_%s_GMremoved_%s_GRGN' % (corr_type,calciumversion) + '.png'), format = 'png')
 
 #%% Show preferred orientation across all cells in GR protocol:
 sessions_GR = [ses for ses in sessions if ses.protocol == 'GR']
@@ -201,7 +211,79 @@ areapairs           = ['V1-V1','PM-PM','V1-PM']
 layerpairs          = ' '
 projpairs           = ' '
 
-corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
+# corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
+corr_thr            = 0.01 #thr in percentile of total corr for significant pos or neg
+rf_type             = 'Fsmooth'
+corr_type           = 'noise_corr'
+# corr_type           = 'trace_corr'
+# corr_type           = 'sig_corr'
+min_counts          = 50
+gaussian_sigma      = 1
+
+[bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
+bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
+bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,rf_type=rf_type,
+                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                        method='mean',filtersign=None,corr_type=corr_type,noise_thr=20,normalize=True)
+
+[_,bin_2d_posf,_,bin_dist_posf,_,_,bin_angle_cent_posf,_,bin_angle_surr_posf,_,_] = bin_corr_deltarf(sessions,
+                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,method='frac',
+                        filtersign='pos',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr)
+
+[_,bin_2d_negf,_,bin_dist_negf,_,_,bin_angle_cent_negf,_,bin_angle_surr_negf,_,_] = bin_corr_deltarf(sessions,
+                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,method='frac',
+                        filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr)
+
+#%% Show spatial maps for the mean correlation
+fig = plot_2D_mean_corr(bin_2d_mean,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap='magma')
+# fig.savefig(os.path.join(savedir,'DeltaRF_2D_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
+
+#%% Show spatial maps for the fraction positive
+fig = plot_2D_mean_corr(bin_2d_posf,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_red)
+# fig.savefig(os.path.join(savedir,'DeltaRF_2D_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
+
+#%% Show spatial maps for the fraction negative
+fig = plot_2D_mean_corr(bin_2d_negf,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_blue)
+# fig.savefig(os.path.join(savedir,'DeltaRF_2D_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
+
+#%% Plot radial tuning:
+fig = plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
+fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_mean' % (corr_type) + '.pdf'), format = 'pdf')
+
+fig = plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_posf,areapairs,layerpairs,projpairs)
+fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_posf' % (corr_type) + '.pdf'), format = 'pdf')
+
+fig = plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_negf,areapairs,layerpairs,projpairs)
+fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_negf' % (corr_type) + '.pdf'), format = 'pdf')
+
+#%% 
+
+# CHANGE NAME of FUNC HERE TO plot_corr_radial_tuning
+
+# fig = plot_mean_corr_areas(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
+# fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_%s_%s_%s_GMsub_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_%s_%s_%s_GMsub_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
+# fig.savefig(os.path.join(savedir,'deltaRF','1DRF','Corr_deltaRF_%s_%s_%s_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'deltaRF','1DRF','Corr_deltaRF_%s_%s_%s_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
+
+# fig = plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
+#                         bincenters_dist,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,areapairs,layerpairs,projpairs)
+# fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_2D_%s_%s_%s_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_2D_%s_%s_%s_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
+
+#%% #########################################################################################
+# Contrast: across projections:
+areapairs           = ['V1-PM']
+projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
+layerpairs          = ' '
+
+corr_thr            = 0.001 #thr in percentile of total corr for significant pos or neg
 deltaori            = None
 rotate_prefori      = False
 rf_type             = 'Fsmooth'
@@ -212,64 +294,67 @@ corr_type           = 'noise_corr'
 [bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
 bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
 bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,rf_type=rf_type,
-                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,method='mean',filtersign=None,corr_type=corr_type,noise_thr=20)
-
-[_,bin_2d_posf,_,bin_dist_posf,_,_,bin_angle_cent_posf,_,bin_angle_surr_posf,_,_] = bin_corr_deltarf(sessions,
-                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,method='frac',
-                        filtersign='pos',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr)
-
-[_,bin_2d_negf,_,bin_dist_negf,_,_,bin_angle_cent_negf,_,bin_angle_surr_negf,_,_] = bin_corr_deltarf(sessions,
-                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,method='frac',
-                        filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr)
-
-CHANGE NAME of FUNC HERE TO plot_corr_radial_tuning
-
-fig = plot_mean_corr_areas(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
-# fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_%s_%s_%s_GMsub_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
-# fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_%s_%s_%s_GMsub_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
-fig.savefig(os.path.join(savedir,'deltaRF','1DRF','Corr_deltaRF_%s_%s_%s_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'deltaRF','1DRF','Corr_deltaRF_%s_%s_%s_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
-
-fig = plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
-                        bincenters_dist,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,areapairs,layerpairs,projpairs)
-fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_2D_%s_%s_%s_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
-# fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_2D_%s_%s_%s_areas_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
-
-#%% #########################################################################################
-# Contrast: across projections:
-areapairs           = ['V1-PM']
-projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
-layerpairs          = ' '
-
-corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
-deltaori            = None
-rotate_prefori      = False
-rf_type             = 'Fsmooth'
-corr_type           = 'noise_corr'
-# corr_type           = 'trace_corr'
-
-[bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
-bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
-bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,rf_type=rf_type,
-                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,method='mean',filtersign=None,corr_type=corr_type,noise_thr=20)
+                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                        method='mean',filtersign=None,corr_type=corr_type,noise_thr=20,
+                        binresolution=7.5,normalize=True)
 
 [_,bin_2d_posf,_,bin_dist_posf,_,_,bin_angle_cent_posf,_,bin_angle_surr_posf,_,_] = bin_corr_deltarf(sessions,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,
-                        method='frac',filtersign='pos',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr)
+                        method='frac',filtersign='pos',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr,
+                        binresolution=7.5)
 
 [_,bin_2d_negf,_,bin_dist_negf,_,_,bin_angle_cent_negf,_,bin_angle_surr_negf,_,_] = bin_corr_deltarf(sessions,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,
-                        method='frac',filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr)
+                        method='frac',filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr,
+                        binresolution=7.5)
 
-fig = plot_mean_corr_projs(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
-# fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_V1PM_%s_%s_%s_GMsub_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
-# fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_V1PM_%s_%s_%s_GMsub_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'deltaRF','1DRF','Corr_deltaRF_V1PM_%s_%s_%s_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
-fig.savefig(os.path.join(savedir,'deltaRF','1DRF','Corr_deltaRF_V1PM_%s_%s_%s_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
+#%% Show spatial maps for the mean correlation
+fig = plot_2D_mean_corr(bin_2d_mean,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap='magma')
+# fig.savefig(os.path.join(savedir,'DeltaRF_2D_projs_%s_mean' % (corr_type) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'DeltaRF_2D_projs_%s_mean' % (corr_type) + '.pdf'), format = 'pdf')
 
-fig = plot_mean_frac_corr_projs(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
-                        bincenters_dist,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,areapairs,layerpairs,projpairs)
-fig.savefig(os.path.join(savedir,'deltaRF','1DRF','CorrFrac_deltaRF_V1PM_%s_%s_%s_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
+#%% Show spatial maps for the fraction positive
+fig = plot_2D_mean_corr(bin_2d_posf,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_red)
+# fig.savefig(os.path.join(savedir,'DeltaRF_2D_projs_%s_posf' % (corr_type) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'DeltaRF_2D_projs_%s_posf' % (corr_type) + '.pdf'), format = 'pdf')
+
+#%% Show spatial maps for the fraction negative
+fig = plot_2D_mean_corr(bin_2d_negf,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_blue)
+# fig.savefig(os.path.join(savedir,'DeltaRF_2D_projs_%s_negf' % (corr_type) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'DeltaRF_2D_projs_%s_negf' % (corr_type) + '.pdf'), format = 'pdf')
+
+#%% Plot radial tuning:
+fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs,datatype='Correlation')
+# axes = fig.get_axes()
+# axes[0].set_ylim([-0.05,0.05])
+fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN' % (corr_type) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN' % (corr_type) + '.pdf'), format = 'pdf')
+# fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_dfFiltHP' % (corr_type) + '.png'), format = 'png')
+
+fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_posf,areapairs,layerpairs,projpairs,datatype='Fraction')
+fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_posf_GRGN' % (corr_type) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_posf_GRGN' % (corr_type) + '.pdf'), format = 'pdf')
+# fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_posf_GRGN_dfFiltHP' % (corr_type) + '.png'), format = 'png')
+
+fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_negf,areapairs,layerpairs,projpairs,datatype='Fraction')
+fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_negf_GRGN' % (corr_type) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_negf_GRGN' % (corr_type) + '.pdf'), format = 'pdf')
+# fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_negf_GRGN_dfFiltHP' % (corr_type) + '.png'), format = 'png')
+
+
+#%% 
+# fig = plot_mean_corr_projs(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
+# # fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_V1PM_%s_%s_%s_GMsub_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
+# # fig.savefig(os.path.join(savedir,'deltaRF','Corr_deltaRF_V1PM_%s_%s_%s_GMsub_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'deltaRF','1DRF','Corr_deltaRF_V1PM_%s_%s_%s_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.pdf'), format = 'pdf')
+# fig.savefig(os.path.join(savedir,'deltaRF','1DRF','Corr_deltaRF_V1PM_%s_%s_%s_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
+
+# fig = plot_mean_frac_corr_projs(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
+#                         bincenters_dist,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,areapairs,layerpairs,projpairs)
+# fig.savefig(os.path.join(savedir,'deltaRF','1DRF','CorrFrac_deltaRF_V1PM_%s_%s_%s_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
 
 
 #%% Reassign layers:

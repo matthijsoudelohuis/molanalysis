@@ -9,7 +9,6 @@ import os
 import numpy as np
 import pandas as pd
 from scipy.stats import binned_statistic,binned_statistic_2d
-from skimage.measure import block_reduce
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 

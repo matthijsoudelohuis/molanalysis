@@ -227,7 +227,7 @@ def smooth_rf(sessions,r2_thr=0.2,radius=50,mincellsFneu=10,rf_type='Fneu'):
 
     return sessions
 
-def exclude_outlier_rf(sessions,rf_thr_V1=25,rf_thr_PM=50):
+def exclude_outlier_rf(sessions,rf_thr_V1=20,rf_thr_PM=40):
     # Filter out neurons with receptive fields that are too far from the local neuropil receptive field:
     #radius specifies cortical distance of neuropil to include for local rf center
     #rf_thr specifies cutoff of deviation from local rf center to be excluded

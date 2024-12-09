@@ -16,7 +16,6 @@ from loaddata.session_info import filter_sessions,load_sessions
 from natsort import natsorted 
 from scipy import ndimage 
 from scipy.stats import combine_pvalues #Fisher's method to combine significance of multiple p-values
-from skimage.measure import block_reduce
 from tqdm import tqdm
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import curve_fit
