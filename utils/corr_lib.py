@@ -13,6 +13,8 @@ from scipy.stats import binned_statistic,binned_statistic_2d
 from skimage.measure import block_reduce
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+
 from utils.plot_lib import *
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.tuning import mean_resp_gn,mean_resp_gr,mean_resp_image 
@@ -30,6 +32,7 @@ import itertools
 import scipy.stats as ss
 from scipy.optimize import curve_fit
 from scipy.stats import linregress
+from utils.arrayop_lib import nanweightedaverage
 
 
  #####  ####### #     # ######  #     # ####### #######     #####  ####### ######  ######  
@@ -290,15 +293,13 @@ def hist_corr_areas_labeling(sessions,corr_type='trace_corr',filternear=True,min
             if zscore:
                 corrdata = corrdata/np.nanstd(corrdata,axis=None) - np.nanmean(corrdata,axis=None)
             
-            rf_type = 'Fsmo4oth'
+            rf_type = 'Fsmooth'
             if 'rf_r2_' + rf_type in sessions[ises].celldata:
-                source_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                target_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                delta_el        = source_el[:,None] - target_el[None,:]
-
-                source_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                target_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                delta_az        = source_az[:,None] - target_az[None,:]
+                el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
+                az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+                
+                delta_el        = el[:,None] - el[None,:]
+                delta_az        = az[:,None] - az[None,:]
 
                 delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
                 rffilter        = delta_rf<50
@@ -498,8 +499,8 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
     #Binning parameters 1D distance
     binlim          = 600
     binedges_dist   = np.arange(0,binlim,binresolution)+binresolution/2 
-    bincenters_dist = binedges_dist[:-1]+binresolution/2 
-    nBins           = len(bincenters_dist)
+    binsdRF = binedges_dist[:-1]+binresolution/2 
+    nBins           = len(binsdRF)
 
     bin_dist        = np.zeros((nBins,len(areapairs),len(layerpairs),len(projpairs)))
     bin_dist_count  = np.zeros((nBins,len(areapairs),len(layerpairs),len(projpairs)))
@@ -668,7 +669,7 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
     bin_angle_cent = bin_angle_cent / bin_angle_cent_count
     bin_angle_surr = bin_angle_surr / bin_angle_surr_count
 
-    return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,bincenters_dist,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
+    return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,binsdRF,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
 
 
 def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False):
@@ -774,8 +775,8 @@ def bin_corr_deltarf(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
     #Binning parameters 1D distance
     binlim          = 75
     binedges_dist   = np.arange(-binresolution/2,binlim,binresolution)+binresolution/2 
-    bincenters_dist = binedges_dist[:-1]+binresolution/2 
-    nBins           = len(bincenters_dist)
+    binsdRF = binedges_dist[:-1]+binresolution/2 
+    nBins           = len(binsdRF)
 
     bin_dist        = np.zeros((nBins,len(areapairs),len(layerpairs),len(projpairs)))
     bin_dist_count  = np.zeros((nBins,len(areapairs),len(layerpairs),len(projpairs)))
@@ -799,13 +800,13 @@ def bin_corr_deltarf(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
             corrdata = getattr(sessions[ises],corr_type).copy()
             if 'rf_r2_' + rf_type in sessions[ises].celldata:
 
-                source_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                target_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                delta_el        = source_el[:,None] - target_el[None,:]
+                el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
+                az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+                
+                # [az,el]         = my_shuffleRF(az,el, sessions[ises].celldata['roi_name'].to_numpy())
 
-                source_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                target_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                delta_az        = source_az[:,None] - target_az[None,:]
+                delta_el        = el[:,None] - el[None,:]
+                delta_az        = az[:,None] - az[None,:]
 
                 delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
                 angle_rf        = np.mod(np.arctan2(delta_el,delta_az)-np.pi,np.pi*2)
@@ -1012,7 +1013,7 @@ def bin_corr_deltarf(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
     bin_angle_cent = bin_angle_cent / bin_angle_cent_count
     bin_angle_surr = bin_angle_surr / bin_angle_surr_count
 
-    return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,bincenters_dist,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
+    return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,binsdRF,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
 
 
 def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='Fsmooth',
@@ -1055,8 +1056,8 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
     #Binning parameters 1D distance
     binlim          = 75
     binedges_dist   = np.arange(-binresolution/2,binlim,binresolution)+binresolution/2 
-    bincenters_dist = binedges_dist[:-1]+binresolution/2 
-    nBins           = len(bincenters_dist)
+    binsdRF = binedges_dist[:-1]+binresolution/2 
+    nBins           = len(binsdRF)
 
     bin_dist        = np.zeros((nSessions,nBins,len(areapairs),len(layerpairs),len(projpairs)))
     bin_dist_count  = np.zeros((nSessions,nBins,len(areapairs),len(layerpairs),len(projpairs)))
@@ -1080,13 +1081,11 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
             corrdata = getattr(sessions[ises],corr_type).copy()
             if 'rf_r2_' + rf_type in sessions[ises].celldata:
 
-                source_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                target_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                delta_el        = source_el[:,None] - target_el[None,:]
-
-                source_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                target_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                delta_az        = source_az[:,None] - target_az[None,:]
+                el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
+                az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+                
+                delta_el        = el[:,None] - el[None,:]
+                delta_az        = az[:,None] - az[None,:]
 
                 delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
                 angle_rf        = np.mod(np.arctan2(delta_el,delta_az)-np.pi,np.pi*2)
@@ -1201,7 +1200,7 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                     if np.shape(deltaori) == (1,):
                         deltaori = np.tile(deltaori,2)
                     assert np.shape(deltaori) == (2,),'deltaori must be a 2x1 array'
-                    delta_pref = sessions[ises].delta_pref 
+                    delta_pref = sessions[ises].delta_pref.copy()
                     # delta_pref = np.mod(sessions[ises].delta_pref,90) #convert to 0-90, direction tuning is ignored
                     # delta_pref[sessions[ises].delta_pref == 90] = 90 #after modulo operation, restore 90 as 90
                     deltaorifilter = np.all((delta_pref >= deltaori[0], #find all entries with delta_pref between deltaori[0] and deltaori[1]
@@ -1243,23 +1242,23 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                                 
                                 #Take the sum of the correlations in each bin:
                                 if method == 'mean': 
-                                    bin_2d[:,:,iap,ilp,ipp]   += binned_statistic_2d(x=xdata, y=ydata, values=vdata,bins=binedges_2d, statistic='sum')[0]
+                                    bin_2d[ises,:,:,iap,ilp,ipp]   = binned_statistic_2d(x=xdata, y=ydata, values=vdata,bins=binedges_2d, statistic='sum')[0]
                                 elif method == 'frac':
-                                    bin_2d[:,:,iap,ilp,ipp]   += np.histogram2d(x=delta_az[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), 
+                                    bin_2d[ises,:,:,iap,ilp,ipp]   = np.histogram2d(x=delta_az[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), 
                                             y=delta_el[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), bins=binedges_2d)[0]                                       
                                     # bin_2d[:,:,iap,ilp,ipp]   += np.histogram2d(x=delta_el[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), 
                                             # y=delta_az[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), bins=binedges_2d)[0]                                       
 
                                 # Count how many correlation observations are in each bin:
-                                bin_2d_count[:,:,iap,ilp,ipp]  += np.histogram2d(x=xdata,y=ydata,bins=binedges_2d)[0]
+                                bin_2d_count[ises,:,:,iap,ilp,ipp]  = np.histogram2d(x=xdata,y=ydata,bins=binedges_2d)[0]
 
                                 #Now 1D, so only by deltarf:
                                 xdata           = delta_rf[cellfilter].flatten()
                                 if method == 'mean': 
-                                    bin_dist[:,iap,ilp,ipp] += binned_statistic(x=xdata,values=vdata,statistic='sum', bins=binedges_dist)[0]
+                                    bin_dist[ises,:,iap,ilp,ipp] = binned_statistic(x=xdata,values=vdata,statistic='sum', bins=binedges_dist)[0]
                                 elif method == 'frac':
-                                    bin_dist[:,iap,ilp,ipp] += np.histogram(delta_rf[np.all((cellfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_dist)[0]
-                                bin_dist_count[:,iap,ilp,ipp] += np.histogram(xdata,bins=binedges_dist)[0]
+                                    bin_dist[ises,:,iap,ilp,ipp] = np.histogram(delta_rf[np.all((cellfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_dist)[0]
+                                bin_dist_count[ises,:,iap,ilp,ipp] = np.histogram(xdata,bins=binedges_dist)[0]
 
                                 #Now polar binning:
                                 tempfilter      = np.all((cellfilter,delta_rf<centerthr[iap]),axis=0)
@@ -1268,11 +1267,11 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
 
                                 if method == 'mean': 
                                     if np.any(tempfilter):
-                                        bin_angle_cent[:,iap,ilp,ipp]  += binned_statistic(x=xdata,values=vdata,
+                                        bin_angle_cent[ises,:,iap,ilp,ipp]  = binned_statistic(x=xdata,values=vdata,
                                                                     statistic='sum',bins=binedges_angle)[0]
                                 elif method == 'frac':
-                                    bin_angle_cent[:,iap,ilp,ipp] += np.histogram(angle_rf[np.all((tempfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_angle)[0]
-                                bin_angle_cent_count[:,iap,ilp,ipp] += np.histogram(xdata,bins=binedges_angle)[0]
+                                    bin_angle_cent[ises,:,iap,ilp,ipp] = np.histogram(angle_rf[np.all((tempfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_angle)[0]
+                                bin_angle_cent_count[ises,:,iap,ilp,ipp] = np.histogram(xdata,bins=binedges_angle)[0]
                                 
                                 tempfilter      = np.all((cellfilter,delta_rf>centerthr[iap]),axis=0)
                                 vdata           = corrdata[tempfilter].flatten()
@@ -1280,20 +1279,21 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                                 
                                 if method == 'mean': 
                                     if np.any(tempfilter):
-                                        bin_angle_surr[:,iap,ilp,ipp]  += binned_statistic(x=xdata,values=vdata,
+                                        bin_angle_surr[ises,:,iap,ilp,ipp]  = binned_statistic(x=xdata,values=vdata,
                                                                     statistic='sum',bins=binedges_angle)[0]
                                 elif method == 'frac':
-                                    bin_angle_surr[:,iap,ilp,ipp] += np.histogram(angle_rf[np.all((tempfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_angle)[0]
-                                bin_angle_surr_count[:,iap,ilp,ipp] += np.histogram(xdata,bins=binedges_angle)[0]
+                                    bin_angle_surr[ises,:,iap,ilp,ipp] = np.histogram(angle_rf[np.all((tempfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_angle)[0]
+                                bin_angle_surr_count[ises,:,iap,ilp,ipp] = np.histogram(xdata,bins=binedges_angle)[0]
         
 
     # divide the total summed correlations by the number of counts in that bin to get the mean:
-    bin_2d = bin_2d / bin_2d_count
-    bin_dist = bin_dist / bin_dist_count
-    bin_angle_cent = bin_angle_cent / bin_angle_cent_count
-    bin_angle_surr = bin_angle_surr / bin_angle_surr_count
+    with np.errstate(invalid='ignore'):
+        bin_2d = bin_2d / bin_2d_count
+        bin_dist = bin_dist / bin_dist_count
+        bin_angle_cent = bin_angle_cent / bin_angle_cent_count
+        bin_angle_surr = bin_angle_surr / bin_angle_surr_count
 
-    return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,bincenters_dist,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
+    return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,binsdRF,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
 
 
 ######  #       ####### #######    ######  ####### #       #######    #       ######  ####### 
@@ -1305,9 +1305,122 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
 #       ####### #######    #       ######  ####### #######    #    #     #    #     # #       
 
 
-def plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_mean,	
-                           areapairs=' ',layerpairs=' ',projpairs=' '):
-    if np.max(bincenters_dist)>100:
+def plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_data_ses,	
+                           areapairs=' ',layerpairs=' ',projpairs=' ',datatype='Correlation'):
+    if np.max(binsdRF)>100:
+        xylim               = 250
+        dim12label = 'XY (um)'
+    else:
+        xylim               = 65
+        dim12label = 'RF (\N{DEGREE SIGN})'
+
+    min_counts      = 100
+
+    #Colors:
+    clrs_areapairs      = get_clr_area_pairs(areapairs) 
+    if len(areapairs)==1:
+        clrs_areapairs =[clrs_areapairs]
+
+    #Compute data mean and error:
+    bin_dist_data_ses[bin_dist_count_ses<min_counts] = np.nan
+    data_mean   = np.nanmean(bin_dist_data_ses,axis=0)
+    data_error  = np.nanstd(bin_dist_data_ses,axis=0) / np.sqrt(np.shape(bin_dist_data_ses)[0])
+
+    fig,axes    = plt.subplots(1,len(areapairs),figsize=(2*len(areapairs),3),sharex=True,sharey=True)
+    ilp = 0
+    ipp = 0
+    handles = []
+
+    for iap,areapair in enumerate(areapairs):
+        ax = axes[iap]
+        # bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.5
+
+        ax.plot(binsdRF,bin_dist_data_ses[:,:,iap,ilp,ipp].T,color=clrs_areapairs[iap],alpha=0.5,linewidth=0.5)
+        handles.append(shaded_error(x=binsdRF,y=data_mean[:,iap,ilp,ipp],yerror=data_error[:,iap,ilp,ipp],
+                        ax = ax,color=clrs_areapairs[iap],label=areapair))
+        bindata = data_mean[:,iap,ilp,ipp]
+        xdata = binsdRF[(~np.isnan(bindata)) & (binsdRF<=70)]
+        ydata = bindata[(~np.isnan(bindata)) & (binsdRF<=70)]
+        try:
+            from scipy.stats import linregress
+            # slope, intercept, r_value, p_value, std_err = linregress(xdata,ydata)
+            # ax.plot(xdata, intercept + slope*xdata,linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} linfit',linewidth=1)
+            
+            popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[ydata[0]-ydata[-1], 0, ydata[-1]],bounds=(-10, 10))
+            # popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[ydata[0]-ydata[-1], 0, ydata[-1]])
+            ax.plot(xdata, popt[0] * np.exp(-popt[1] * xdata) + popt[2],linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} fit',linewidth=1)
+        except:
+            print('curve_fit failed for %s' % (areapair))
+            continue
+        
+        # ax.legend(handles=handles,labels=areapairs,frameon=False)
+        ax.set_xlim([0,xylim])
+        # ax.set_ylim([my_floor(np.min(data_mean)*0.65,3),my_ceil(np.max(data_mean)*1.1,3)])
+        ax.set_ylim([0.01,0.08])
+        ax.set_xlabel(u'Δ %s' % dim12label)   
+        ax.set_title('%s' % (areapair),c=clrs_areapairs[iap])
+        ax.set_ylabel(datatype)
+
+    plt.tight_layout()
+    return fig
+
+def plot_corr_radial_tuning_areas(binsdRF,bin_dist_count_ses,bin_dist_data_ses,	
+                           areapairs=' ',layerpairs=' ',projpairs=' ',datatype='Correlation'):
+    if np.max(binsdRF)>100:
+        xylim               = 250
+        dim12label = 'XY (um)'
+    else:
+        xylim               = 65
+        dim12label = 'RF (\N{DEGREE SIGN})'
+
+    min_counts      = 100
+
+    #Colors:
+    clrs_areapairs      = get_clr_area_pairs(areapairs) 
+    if len(areapairs)==1:
+        clrs_areapairs =[clrs_areapairs]
+
+    #Compute data mean and error:
+    bin_dist_data_ses[bin_dist_count_ses<min_counts] = np.nan
+    data_mean   = np.nanmean(bin_dist_data_ses,axis=0)
+    data_error  = np.nanstd(bin_dist_data_ses,axis=0) / np.sqrt(np.shape(bin_dist_data_ses)[0])
+
+    fig,ax    = plt.subplots(1,1,figsize=(3,3))
+    ilp = 0
+    ipp = 0
+    handles = []
+    for iap,areapair in enumerate(areapairs):
+        # bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.5
+        handles.append(shaded_error(x=binsdRF,y=data_mean[:,iap,ilp,ipp],yerror=data_error[:,iap,ilp,ipp],
+                        ax = ax,color=clrs_areapairs[iap],label=areapair))
+        bindata = data_mean[:,iap,ilp,ipp]
+        xdata = binsdRF[(~np.isnan(bindata)) & (binsdRF<=70)]
+        ydata = bindata[(~np.isnan(bindata)) & (binsdRF<=70)]
+        try:
+            from scipy.stats import linregress
+            # slope, intercept, r_value, p_value, std_err = linregress(xdata,ydata)
+            # ax.plot(xdata, intercept + slope*xdata,linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} linfit',linewidth=1)
+            
+            popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[ydata[0]-ydata[-1], 0, ydata[-1]],bounds=(-10, 10))
+            # popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[ydata[0]-ydata[-1], 0, ydata[-1]])
+            ax.plot(xdata, popt[0] * np.exp(-popt[1] * xdata) + popt[2],linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} fit',linewidth=1)
+        except:
+            print('curve_fit failed for %s' % (areapair))
+            continue
+        
+    ax.legend(handles=handles,labels=areapairs,frameon=False)
+    ax.set_xlim([0,xylim])
+    ax.set_ylim([my_floor(np.nanmin(data_mean)*0.65,3),my_ceil(np.nanmax(data_mean)*1.1,3)])
+    ax.set_xlabel(u'Δ %s' % dim12label)   
+    # ax.set_title('%s\n Joint' % (areapair),c=clrs_areapairs[iap])
+    ax.set_ylabel(datatype)
+
+    plt.tight_layout()
+    return fig
+
+def plot_corr_radial_tuning_areas_mean(binsdRF,bin_dist_count,bin_dist_mean,	
+                           areapairs=' ',layerpairs=' ',projpairs=' ',datatype='Correlation'):
+    if np.max(binsdRF)>100:
         xylim               = 250
         dim12label = 'XY (um)'
     else:
@@ -1324,11 +1437,11 @@ def plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_mean,
     handles = []
     for iap,areapair in enumerate(areapairs):
         bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.5
-        handles.append(shaded_error(x=bincenters_dist,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
+        handles.append(shaded_error(x=binsdRF,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
                         ax = ax,color=clrs_areapairs[iap],label=areapair))
         bindata = bin_dist_mean[:,iap,ilp,ipp]
-        xdata = bincenters_dist[(~np.isnan(bindata)) & (bincenters_dist<=60)]
-        ydata = bindata[(~np.isnan(bindata)) & (bincenters_dist<=60)]
+        xdata = binsdRF[(~np.isnan(bindata)) & (binsdRF<=60)]
+        ydata = bindata[(~np.isnan(bindata)) & (binsdRF<=60)]
         try:
             from scipy.stats import linregress
             slope, intercept, r_value, p_value, std_err = linregress(xdata,ydata)
@@ -1345,35 +1458,66 @@ def plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_mean,
     ax.set_ylim([my_floor(np.min(bin_dist_mean)*0.65,3),my_ceil(np.max(bin_dist_mean)*1.1,3)])
     ax.set_xlabel(u'Δ %s' % dim12label)   
     # ax.set_title('%s\n Joint' % (areapair),c=clrs_areapairs[iap])
-    ax.set_ylabel('Correlation')
+    ax.set_ylabel(datatype)
 
     plt.tight_layout()
     return fig
 
-def plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_data,	
+def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,	
                            areapairs=' ',layerpairs=' ',projpairs=' ',datatype='Correlation'):
-    if np.max(bincenters_dist)>100:
-        xylim               = 250
-        dim12label = 'XY (um)'
-    else:
-        xylim               = 70
-        dim12label = 'RF (\N{DEGREE SIGN})'
-
+    
+    #Colors:
     clrs_areapairs      = get_clr_area_pairs(areapairs) 
     clrs_projpairs      = get_clr_labelpairs(projpairs)
     if len(projpairs)==1:
         clrs_projpairs =[clrs_projpairs]
 
-    fig,axes    = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*3,3),sharex=True,sharey=True)
+    #Stats:
+    testbins        = [[0,20],[25,70]]
+    testbincolors   = ['grey','grey']
+    testlabels      = ['Center','Surround']
+    min_counts      = 50
+
+    statpairs_areas = [[('unl-unl','lab-unl'),
+            ('unl-unl','lab-lab'),
+            ('lab-unl','lab-lab'),
+            ],
+            [('unl-unl','lab-unl'),
+            ('unl-unl','lab-lab'),
+            ('lab-unl','lab-lab'),
+            ],
+            [('unl-unl','lab-unl'),
+            ('unl-unl','unl-lab'),
+            ('unl-unl','lab-lab'),
+            ('unl-lab','lab-unl'),
+            ('unl-lab','lab-lab'),
+            ('lab-unl','lab-lab'),
+            ]] #for statistics
+
+    # stattest = 't-test_paired'
+    stattest = 'Wilcoxon'
+    # multcompcorr = 'Benjamini-Hochberg'
+    multcompcorr = None
+
+    #Compute data mean and error:
+    temp = copy.deepcopy(bin_dist_data_ses)
+    temp[bin_dist_count_ses<min_counts] = np.nan
+    data_mean   = np.nanmean(temp,axis=0)
+    data_error  = np.nanstd(temp,axis=0) / np.sqrt(np.shape(temp)[0])
+    
+    #Make figure:
+    fig,axes    = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*4,3),sharex=False,sharey=True)
+
     if len(areapairs)==1:
         axes = [axes]
         clrs_areapairs      = [clrs_areapairs]
 
-    if datatype=='Correlation':
-        bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.5
-    elif datatype=='Fraction':
-        bin_dist_error = np.sqrt(bin_dist_data*(1-bin_dist_data)/bin_dist_count) * 2.576 #99% CI
-        
+    #Make stats figure:
+    fig2,axes2    = plt.subplots(2,len(areapairs),figsize=(len(areapairs)*3,6),sharex=True)
+   
+    # Number of bootstrap iterations
+    # n_bootstrap     = 1000
+    # slopedata   = np.empty((len(areapairs),len(projpairs),n_bootstrap))
     ilp = 0
     handles = []
     for iap,areapair in enumerate(areapairs):
@@ -1383,31 +1527,194 @@ def plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_data,
             areaprojpairs[ipp]       = areapair.split('-')[0] + projpair.split('-')[0] + '-' + areapair.split('-')[1] + projpair.split('-')[1]
 
         for ipp,projpair in enumerate(projpairs):
-            handles.append(shaded_error(x=bincenters_dist,y=bin_dist_data[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
+            handles.append(shaded_error(x=binsdRF,y=data_mean[:,iap,ilp,ipp],yerror=data_error[:,iap,ilp,ipp],
                             ax = ax,color=clrs_projpairs[ipp],label=projpair))
-            bindata = bin_dist_data[:,iap,ilp,ipp]
-            xdata = bincenters_dist[(~np.isnan(bindata)) & (bincenters_dist<=60)]
-            ydata = bindata[(~np.isnan(bindata)) & (bincenters_dist<=60)]
+            bindata     = data_mean[:,iap,ilp,ipp]
+            xdata       = binsdRF[(~np.isnan(bindata)) & (binsdRF<=60)]
+            ydata       = bindata[(~np.isnan(bindata)) & (binsdRF<=60)]
+            # countdata   = bin_dist_count_ses[(~np.isnan(bindata)) & (binsdRF<=60),0,0,0].astype(int)
+            # countdata   = np.clip(countdata,a_min=0,a_max=1000)
+            # var_y = np.tile(0.08,len(xdata))   # Bin-level variances
+            # try:
+            #     slope, intercept, r_value, p_value, std_err = linregress(xdata,ydata)
+            #     ax.plot(xdata, intercept + slope*xdata,linestyle='--',color=clrs_projpairs[ipp],label=f'{projpair} linfit',linewidth=1)
+            # except:
+            #     print('curve_fit failed for %s' % (projpair))
+            #     continue
 
-        # ax.legend(handles=handles,labels=areaprojpairs,frameon=False,bbox_to_anchor=(1.05, 1), loc='upper left',fontsize=7)
-        # ax.legend(handles=handles,labels=areaprojpairs,frameon=False,loc='lower right',fontsize=7)
-        ax.legend(handles=handles,labels=areaprojpairs,frameon=False,loc='best',fontsize=7)
-        ax.set_xlim([0,xylim])
-        ax.set_xlabel(u'Δ %s' % dim12label)   
+        for i,bin in enumerate(testbins):
+            rectmin,rectmax = np.nanpercentile(data_mean,99),np.nanpercentile(data_mean,100)
+            ax.add_patch(Rectangle((bin[0], rectmin), bin[1]-bin[0], rectmax-rectmin, 
+                                   color=testbincolors[i], alpha=0.3, transform=ax.transData))
+            ax.text((bin[0]+bin[1])/2, rectmin, testlabels[i], ha='center', va='bottom', transform=ax.transData)
+        
+            # for ibt in range(n_bootstrap):
+            #     # Generate bootstrap samples for y
+            #     y_bootstrap = [np.random.normal(mean, np.sqrt(var / n), size=n) 
+            #                 for mean, var, n in zip(ydata, var_y, countdata)]
+            #     y_bootstrap_means = [np.mean(y) for y in y_bootstrap]
+                
+            #     # Fit a linear trend
+            #     slope, intercept, _, _, _ = linregress(xdata, y_bootstrap_means)
+            #     slopedata[iap,ipp,ibt] = slope
+
+            # Compute confidence intervals
+            # trend_ci = np.percentile(slopedata[iap,ipp,:], [2.5, 97.5])
+            # print(f"Bootstrap Trend CI: {trend_ci}")
+
+        # Shrink current axis by 20%
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        
+        # ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05),
+                # fancybox=True, shadow=True, ncol=5)
+        ax.legend(handles=handles,labels=areaprojpairs,
+                  fancybox=True, shadow=True,  loc='center left',bbox_to_anchor=(1.02, 0.5),fontsize=7)
+
+        ax.set_xlim([0,65])
+        ax.set_ylim(np.nanpercentile(data_mean,[0,100]))
+        ax.set_ylim(my_floor(ax.get_ylim()[0],2),my_ceil(ax.get_ylim()[1],2))
+        ax.set_yticks([ax.get_ylim()[0],np.mean(ax.get_ylim()),ax.get_ylim()[1]])
+        ax.set_xlabel(u'Δ %s' % 'RF (\N{DEGREE SIGN})')   
         ax.set_title('%s' % (areapair),c=clrs_areapairs[iap])
         if iap==0:
             ax.set_ylabel(datatype)
 
-    plt.tight_layout(rect=(0,0,1,1))
-    return fig
+        for i,bin in enumerate(testbins):
+            # rectmin,rectmax = np.nanpercentile(data_mean,99),np.nanpercentile(data_mean,100)
+            # ax.add_patch(Rectangle((bin[0], rectmin), bin[1]-bin[0], rectmax-rectmin, 
+            #                        color=testbincolors[i], alpha=0.3, transform=ax.transData))
+            # ax.text((bin[0]+bin[1])/2, rectmin, testlabels[i], ha='center', va='bottom', transform=ax.transData)
+            idx = np.logical_and(binsdRF>=bin[0],binsdRF<=bin[1])
+            data = nanweightedaverage(bin_dist_data_ses[:,idx,:,:,:],
+                                                bin_dist_count_ses[:,idx,:,:,:],axis=1)
+            bin_center_count = np.nansum(bin_dist_count_ses[:,idx,:,:,:],axis=1)
+            data[bin_center_count<min_counts] = np.nan
+            df              = pd.DataFrame(data=data[:,iap,:,:].squeeze(),columns=projpairs)
+            df              = df.dropna(axis=0).reset_index(drop=True) #drop occasional missing data
+            ax = axes2[i,iap]
+
+            sns.stripplot(data=df,ax=ax,palette=clrs_projpairs,legend=False)
+            sns.lineplot(data=df.T,ax=ax,palette='gray',legend=False,linewidth=0.5,linestyle='-')
+            ax.set_xticks(range(len(df.columns)))
+            ax.set_xticklabels(labels=projpairs,rotation=60,fontsize=7)
+            annotator = Annotator(ax, statpairs_areas[iap], data=df,order=list(df.columns))
+            annotator.configure(test=stattest, text_format='star', loc='inside',line_height=0,text_offset=-0.5,fontsize=7,	
+                                line_width=1,comparisons_correction=multcompcorr,verbose=0,
+                                correction_format='replace')
+            annotator.apply_and_annotate()
+            # from scipy.stats import wilcoxon
+            # print('wilcoxon signed rank test (unl-unl vs lab-lab), p = %1.3f' % wilcoxon(df['unl-unl'],df['lab-lab'],alternative='two-sided')[1])
+            ax.set_title('%s - %s' % (areapair,testlabels[i]),c=clrs_areapairs[iap])
+            if iap==0:
+                ax.set_ylabel(datatype)
+
+    # fig.tight_layout()
+    fig2.tight_layout()
+
+    return fig,fig2
+
+# def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count,bin_dist_data,	
+#                            areapairs=' ',layerpairs=' ',projpairs=' ',datatype='Correlation'):
+#     if np.max(binsdRF)>100:
+#         xlim               = 250
+#         dim12label = 'XY (um)'
+#     else:
+#         xlim               = 65
+#         dim12label = 'RF (\N{DEGREE SIGN})'
+
+#     clrs_areapairs      = get_clr_area_pairs(areapairs) 
+#     clrs_projpairs      = get_clr_labelpairs(projpairs)
+#     if len(projpairs)==1:
+#         clrs_projpairs =[clrs_projpairs]
+
+#     fig,axes    = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*3,3),sharex=True,sharey=True)
+#     if len(areapairs)==1:
+#         axes = [axes]
+#         clrs_areapairs      = [clrs_areapairs]
+
+#     if datatype=='Correlation':
+#         bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.5
+#     elif datatype=='Fraction':
+#         bin_dist_error = np.sqrt(bin_dist_data*(1-bin_dist_data)/bin_dist_count) * 2.576 #99% CI
+    
+#     # Number of bootstrap iterations
+#     n_bootstrap     = 1000
+#     slopedata   = np.empty((len(areapairs),len(projpairs),n_bootstrap))
+#     ilp = 0
+#     handles = []
+#     for iap,areapair in enumerate(areapairs):
+#         ax = axes[iap]
+#         areaprojpairs = projpairs.copy()
+#         for ipp,projpair in enumerate(projpairs):
+#             areaprojpairs[ipp]       = areapair.split('-')[0] + projpair.split('-')[0] + '-' + areapair.split('-')[1] + projpair.split('-')[1]
+
+#         for ipp,projpair in enumerate(projpairs):
+#             handles.append(shaded_error(x=binsdRF,y=bin_dist_data[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
+#                             ax = ax,color=clrs_projpairs[ipp],label=projpair))
+#             bindata     = bin_dist_data[:,iap,ilp,ipp]
+#             xdata       = binsdRF[(~np.isnan(bindata)) & (binsdRF<=60)]
+#             ydata       = bindata[(~np.isnan(bindata)) & (binsdRF<=60)]
+#             countdata   = bin_dist_count[(~np.isnan(bindata)) & (binsdRF<=60),0,0,0].astype(int)
+#             countdata   = np.clip(countdata,a_min=0,a_max=1000)
+#             var_y = np.tile(0.08,len(xdata))   # Bin-level variances
+#             try:
+#                 slope, intercept, r_value, p_value, std_err = linregress(xdata,ydata)
+#                 ax.plot(xdata, intercept + slope*xdata,linestyle='--',color=clrs_projpairs[ipp],label=f'{projpair} linfit',linewidth=1)
+#             except:
+#                 print('curve_fit failed for %s' % (projpair))
+#                 continue
 
 
 
-def plot_corr_radial_tuning_dori(bincenters_dist,bin_dist_count,bin_dist_data,deltaoris,	
+#             for ibt in range(n_bootstrap):
+#                 # Generate bootstrap samples for y
+#                 y_bootstrap = [np.random.normal(mean, np.sqrt(var / n), size=n) 
+#                             for mean, var, n in zip(ydata, var_y, countdata)]
+#                 y_bootstrap_means = [np.mean(y) for y in y_bootstrap]
+                
+#                 # Fit a linear trend
+#                 slope, intercept, _, _, _ = linregress(xdata, y_bootstrap_means)
+#                 slopedata[iap,ipp,ibt] = slope
+
+#             # Compute confidence intervals
+#             # trend_ci = np.percentile(slopedata[iap,ipp,:], [2.5, 97.5])
+#             # print(f"Bootstrap Trend CI: {trend_ci}")
+
+#         # ax.legend(handles=handles,labels=areaprojpairs,frameon=False,bbox_to_anchor=(1.05, 1), loc='upper left',fontsize=7)
+#         # ax.legend(handles=handles,labels=areaprojpairs,frameon=False,loc='lower right',fontsize=7)
+#         ax.legend(handles=handles,labels=areaprojpairs,frameon=False,loc='best',fontsize=7)
+#         ax.set_xlim([0,xlim])
+#         ax.set_ylim(np.percentile(bin_dist_data,[1,99]))
+#         ax.set_xlabel(u'Δ %s' % dim12label)   
+#         ax.set_title('%s' % (areapair),c=clrs_areapairs[iap])
+#         if iap==0:
+#             ax.set_ylabel(datatype)
+
+#     fig.tight_layout(rect=(0,0,1,1))
+
+#     # fig2,axes = plt.subplots(len(areapairs),1,figsize=(3,len(areapairs)*3),sharex=True)
+#     # for iap,areapair in enumerate(areapairs):
+#     #     ax = axes[iap]
+#     #     for ipp,projpair in enumerate(projpairs):
+#     #         ax.violinplot(slopedata[iap,ipp,:],showextrema=False,vert=False,color=clrs_projpairs[ipp])
+#     #         # ax.set_title('%s' % (areapair),c=clrs_projpairs[ipp])
+#     #     ax.set_ylabel('Slope')
+#     #     ax.set_xlabel('Labelpair')
+#     #     ax.set_title('%s' % (areapair),c=clrs_areapairs[iap])
+
+#     #     # ax.set_xlim([-0.02,0.02])
+#     # fig2.tight_layout(rect=(0,0,1,1))
+    
+#     return fig
+
+
+
+def plot_corr_radial_tuning_dori(binsdRF,bin_dist_count,bin_dist_data,deltaoris,	
                            areapairs=' ',layerpairs=' ',projpairs=' '):
     bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.5
     
-    if np.max(bincenters_dist)>100:
+    if np.max(binsdRF)>100:
         xylim               = 250
         dim12label = 'XY (um)'
     else:
@@ -1429,12 +1736,12 @@ def plot_corr_radial_tuning_dori(bincenters_dist,bin_dist_count,bin_dist_data,de
         ax = axes[iap]
         handles = []
         for idOri,dOri in enumerate(deltaoris):
-            handles.append(shaded_error(x=bincenters_dist,y=bin_dist_data[idOri,:,iap,ilp,ipp],yerror=bin_dist_error[idOri,:,iap,ilp,ipp],
+            handles.append(shaded_error(x=binsdRF,y=bin_dist_data[idOri,:,iap,ilp,ipp],yerror=bin_dist_error[idOri,:,iap,ilp,ipp],
                             ax = ax,color=clrs_deltaoris[idOri],label=areapair))
                             # ax = ax,color=clrs_areapairs[iap],label=areapair))
             bindata = bin_dist_data[idOri,:,iap,ilp,ipp]
-            xdata = bincenters_dist[(~np.isnan(bindata)) & (bincenters_dist<=60)]
-            ydata = bindata[(~np.isnan(bindata)) & (bincenters_dist<=60)]
+            xdata = binsdRF[(~np.isnan(bindata)) & (binsdRF<=60)]
+            ydata = bindata[(~np.isnan(bindata)) & (binsdRF<=60)]
         
         ax.legend(handles=handles,labels=[str(x) for x in deltaoris],frameon=False,ncol=3,fontsize=6)
         ax.set_xlim([0,xylim])
@@ -1447,13 +1754,13 @@ def plot_corr_radial_tuning_dori(bincenters_dist,bin_dist_count,bin_dist_data,de
     return fig
 
 
-def plot_corr_radial_tuning_projs_dori(bincenters_dist,bin_dist_count,bin_dist_data,deltaoris,	
+def plot_corr_radial_tuning_projs_dori(binsdRF,bin_dist_count,bin_dist_data,deltaoris,	
                            areapairs=' ',layerpairs=' ',projpairs=' '):
     bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.5
     bin_dist_data[bin_dist_count<50] = np.nan
     bin_dist_error[bin_dist_count<50] = 0
     
-    if np.max(bincenters_dist)>100:
+    if np.max(binsdRF)>100:
         xylim               = 250
         dim12label = 'XY (um)'
     else:
@@ -1477,13 +1784,13 @@ def plot_corr_radial_tuning_projs_dori(bincenters_dist,bin_dist_count,bin_dist_d
             handles = []
             for ipp,projpair in enumerate(projpairs):
 
-                handles.append(shaded_error(x=bincenters_dist,y=bin_dist_data[idOri,:,iap,ilp,ipp],yerror=bin_dist_error[idOri,:,iap,ilp,ipp],
+                handles.append(shaded_error(x=binsdRF,y=bin_dist_data[idOri,:,iap,ilp,ipp],yerror=bin_dist_error[idOri,:,iap,ilp,ipp],
                                 ax = ax,color=clrs_projpairs[ipp],label=projpair))
                 # bindata = bin_dist_data[idOri,:,iap,ilp,ipp]
                 # bindata[bin_dist_count<50] = np.nan
 
-                # xdata = bincenters_dist[(~np.isnan(bindata)) & (bincenters_dist<=60)]
-                # ydata = bindata[(~np.isnan(bindata)) & (bincenters_dist<=60)]
+                # xdata = binsdRF[(~np.isnan(bindata)) & (binsdRF<=60)]
+                # ydata = bindata[(~np.isnan(bindata)) & (binsdRF<=60)]
         
             ax.set_xlim([0,xylim])
             # ax.set_ylim([my_floor(np.nanmin(bin_dist_data)*0.65,3),my_ceil(np.nanmax(bin_dist_data)*1.1,3)])
@@ -1507,7 +1814,7 @@ def plot_corr_radial_tuning_projs_dori(bincenters_dist,bin_dist_count,bin_dist_d
     return fig
 
 def plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
-                            bincenters_dist,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,	
+                            binsdRF,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,	
                            areapairs=' ',layerpairs=' ',projpairs=' '):
     delta_x,delta_y   = np.meshgrid(bincenters_2d,bincenters_2d)
 
@@ -1562,11 +1869,11 @@ def plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf
         data_pos_error = np.sqrt(bin_dist_posf*(1-bin_dist_posf)/bin_dist_count) * 2.576 #99% CI
         data_neg_error = np.sqrt(bin_dist_negf*(1-bin_dist_negf)/bin_dist_count) * 2.576 #99% CI
         
-        shaded_error(x=bincenters_dist,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
+        shaded_error(x=binsdRF,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
                     ax = ax,color='k',label='mean')
-        shaded_error(x=bincenters_dist,y=bin_dist_posf[:,iap,ilp,ipp],yerror=data_pos_error[:,iap,ilp,ipp],
+        shaded_error(x=binsdRF,y=bin_dist_posf[:,iap,ilp,ipp],yerror=data_pos_error[:,iap,ilp,ipp],
                     ax = ax2,color='r',label='pos')
-        shaded_error(x=bincenters_dist,y=bin_dist_negf[:,iap,ilp,ipp],yerror=data_neg_error[:,iap,ilp,ipp],
+        shaded_error(x=binsdRF,y=bin_dist_negf[:,iap,ilp,ipp],yerror=data_neg_error[:,iap,ilp,ipp],
                     ax = ax2,color='b',label='neg')
         ax.legend(frameon=False)
         ax.set_xlim([0,xylim])
@@ -1578,7 +1885,7 @@ def plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf
     return fig
 
 def plot_mean_frac_corr_projs(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
-                            bincenters_dist,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,	
+                            binsdRF,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,	
                            areapairs=' ',layerpairs=' ',projpairs=' '):
     delta_x,delta_y   = np.meshgrid(bincenters_2d,bincenters_2d)
 
@@ -1637,16 +1944,16 @@ def plot_mean_frac_corr_projs(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf
         data_pos_error = np.sqrt(bin_dist_posf*(1-bin_dist_posf)/bin_dist_count) * 2.576 #99% CI
         data_neg_error = np.sqrt(bin_dist_negf*(1-bin_dist_negf)/bin_dist_count) * 2.576 #99% CI
         
-        shaded_error(x=bincenters_dist,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
+        shaded_error(x=binsdRF,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
                     ax = ax,color='k',label='mean')
-        shaded_error(x=bincenters_dist,y=bin_dist_posf[:,iap,ilp,ipp],yerror=data_pos_error[:,iap,ilp,ipp],
+        shaded_error(x=binsdRF,y=bin_dist_posf[:,iap,ilp,ipp],yerror=data_pos_error[:,iap,ilp,ipp],
                     ax = ax2,color='r',label='pos')
-        shaded_error(x=bincenters_dist,y=bin_dist_negf[:,iap,ilp,ipp],yerror=data_neg_error[:,iap,ilp,ipp],
+        shaded_error(x=binsdRF,y=bin_dist_negf[:,iap,ilp,ipp],yerror=data_neg_error[:,iap,ilp,ipp],
                     ax = ax2,color='b',label='neg')
 
-        # ax.plot(bincenters_dist,bin_dist_mean[:,iap,ilp,ipp],color='k',label='mean')
-        # ax.plot(bincenters_dist,bin_dist_posf[:,iap,ilp,ipp],color='r',label='pos')
-        # ax.plot(bincenters_dist,bin_dist_negf[:,iap,ilp,ipp],color='b',label='neg')
+        # ax.plot(binsdRF,bin_dist_mean[:,iap,ilp,ipp],color='k',label='mean')
+        # ax.plot(binsdRF,bin_dist_posf[:,iap,ilp,ipp],color='r',label='pos')
+        # ax.plot(binsdRF,bin_dist_negf[:,iap,ilp,ipp],color='b',label='neg')
         ax.legend(frameon=False)
         ax.set_xlim([0,xylim])
         ax.set_xlabel(u'Δ %s' % dim12label)   
@@ -1657,9 +1964,9 @@ def plot_mean_frac_corr_projs(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf
 
 
 
-def plot_mean_corr_layers(bincenters_dist,bin_dist_count,bin_dist_mean,	
+def plot_mean_corr_layers(binsdRF,bin_dist_count,bin_dist_mean,	
                            areapairs=' ',layerpairs=' ',projpairs=' '):
-    if np.max(bincenters_dist)>100:
+    if np.max(binsdRF)>100:
         xylim               = 250
         dim12label = 'XY (um)'
     else:
@@ -1681,11 +1988,11 @@ def plot_mean_corr_layers(bincenters_dist,bin_dist_count,bin_dist_mean,
     handles = []
     for ilp,layerpair in enumerate(layerpairs):
         bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.5
-        handles.append(shaded_error(x=bincenters_dist,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
+        handles.append(shaded_error(x=binsdRF,y=bin_dist_mean[:,iap,ilp,ipp],yerror=bin_dist_error[:,iap,ilp,ipp],
                         ax = ax,color=clrs_layerpairs[ilp],label=layerpair))
         bindata = bin_dist_mean[:,iap,ilp,ipp]
-        xdata = bincenters_dist[(~np.isnan(bindata)) & (bincenters_dist<=60)]
-        ydata = bindata[(~np.isnan(bindata)) & (bincenters_dist<=60)]
+        xdata = binsdRF[(~np.isnan(bindata)) & (binsdRF<=60)]
+        ydata = bindata[(~np.isnan(bindata)) & (binsdRF<=60)]
         # try:
         #     popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[0.02, 0, 0.02],bounds=(-10, 10))
         #     ax.plot(xdata, popt[0] * np.exp(-popt[1] * xdata) + popt[2],linestyle='--',color=clrs_layerpairs[ipp],label=f'{areapair} fit',linewidth=1)
@@ -1714,31 +2021,33 @@ def plot_2D_mean_corr(bin_2d,bin_2d_count,bincenters_2d,areapairs=' ',layerpairs
     if len(areapairs)==1:
         clrs_areapairs =[clrs_areapairs]
 
-    fig,axes    = plt.subplots(len(projpairs),len(areapairs),figsize=(len(areapairs)*3,len(projpairs)*3))
+    fig,axes    = plt.subplots(len(projpairs),len(areapairs),figsize=(len(areapairs)*3.3,len(projpairs)*3),gridspec_kw={'width_ratios': [1,1,1]})
     if len(projpairs)==1 and len(areapairs)==1:
         axes = np.array([axes])
     axes = axes.reshape(len(projpairs),len(areapairs))
-
+    ilp = 0
     for iap,areapair in enumerate(areapairs):
-        for ilp,layerpair in enumerate(layerpairs):
-            for ipp,projpair in enumerate(projpairs):
-                ax                                              = axes[ipp,iap]
-                data                                            = copy.deepcopy(bin_2d[:,:,iap,ilp,ipp])
-                data[np.isnan(data)]                            = np.nanmean(data)
-                data                                            = gaussian_filter(data,sigma=[gaussian_sigma,gaussian_sigma])
-                data[bin_2d_count[:,:,iap,ilp,ipp]<min_counts]     = np.nan
+        # for ilp,layerpair in enumerate(layerpairs):
+        for ipp,projpair in enumerate(projpairs):
+            ax                                              = axes[ipp,iap]
+            data                                            = copy.deepcopy(bin_2d[:,:,iap,ilp,ipp])
+            data[np.isnan(data)]                            = np.nanmean(data)
+            data                                            = gaussian_filter(data,sigma=[gaussian_sigma,gaussian_sigma])
+            data[bin_2d_count[:,:,iap,ilp,ipp]<min_counts]     = np.nan
 
-                # ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,10),vmax=np.nanpercentile(data,95),cmap=cmap)
-                ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(bin_2d[:,:,iap,:,:],25),vmax=np.nanpercentile(bin_2d[:,:,iap,:,:],80),cmap=cmap)
-                # ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,10),vmax=np.nanpercentile(data,95),cmap=cmap)
-                ax.set_facecolor('grey')
-                ax.set_title('%s\n%s' % (areapair, projpair),c=clrs_areapairs[iap])
-                ax.set_xlim([-deglim,deglim])
-                ax.set_ylim([-deglim,deglim])
-                ax.set_xlabel(u'Δ deg Orthogonal')
-                ax.set_ylabel(u'Δ deg Collinear')
-                circle=plt.Circle((0,0),centerthr[iap], color='g', fill=False,linestyle='--',linewidth=1)
-                ax.add_patch(circle)
+            # ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,10),vmax=np.nanpercentile(data,95),cmap=cmap)
+            im = ax.pcolor(delta_az,delta_el,data,vmin=my_floor(np.nanpercentile(bin_2d[:,:,iap,:,:],25),2),
+                           vmax=my_ceil(np.nanpercentile(bin_2d[:,:,iap,:,:],80),2),cmap=cmap)
+            # ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,10),vmax=np.nanpercentile(data,95),cmap=cmap)
+            ax.set_facecolor('grey')
+            ax.set_title('%s\n%s' % (areapair, projpair),c=clrs_areapairs[iap])
+            ax.set_xlim([-deglim,deglim])
+            ax.set_ylim([-deglim,deglim])
+            ax.set_ylabel(u'Δ deg Orthogonal')
+            ax.set_xlabel(u'Δ deg Collinear')
+            circle=plt.Circle((0,0),centerthr[iap], color='g', fill=False,linestyle='--',linewidth=1)
+            ax.add_patch(circle)
+            fig.colorbar(im, ax=ax,shrink=0.5)
 
     plt.tight_layout()
     return fig
@@ -1773,8 +2082,8 @@ def plot_2D_mean_corr_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs
             ax.set_title('%s-%s deg' % (areapair, deltaori),c=clrs_areapairs[iap],fontsize=10)
             ax.set_xlim([-deglim,deglim])
             ax.set_ylim([-deglim,deglim])
-            ax.set_xlabel(u'Δ deg Orthogonal')
-            ax.set_ylabel(u'Δ deg Collinear')
+            ax.set_ylabel(u'Δ deg Orthogonal')
+            ax.set_xlabel(u'Δ deg Collinear')
             circle=plt.Circle((0,0),centerthr[iap], color='g', fill=False,linestyle='--',linewidth=1)
             ax.add_patch(circle)
 
@@ -1807,8 +2116,8 @@ def plot_2D_mean_corr_projs_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,are
             ax.set_title('%s-%s deg' % (projpair, deltaori),c=clrs_projpairs[ipp],fontsize=10)
             ax.set_xlim([-deglim,deglim])
             ax.set_ylim([-deglim,deglim])
-            ax.set_xlabel(u'Δ deg Orthogonal')
-            ax.set_ylabel(u'Δ deg Collinear')
+            ax.set_ylabel(u'Δ deg Orthogonal')
+            ax.set_xlabel(u'Δ deg Collinear')
             circle=plt.Circle((0,0),centerthr[iap], color='g', fill=False,linestyle='--',linewidth=1)
             ax.add_patch(circle)
 
@@ -2396,13 +2705,12 @@ def bin_2d_rangecorr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' '
         if hasattr(sessions[ises],corr_type):
             corrdata = getattr(sessions[ises],corr_type).copy()
             if 'rf_r2_' + rf_type in sessions[ises].celldata:
-                source_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                target_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                delta_el        = source_el[:,None] - target_el[None,:]
-
-                source_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                target_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                delta_az        = source_az[:,None] - target_az[None,:]
+                
+                el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
+                az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+                
+                delta_el        = el[:,None] - el[None,:]
+                delta_az        = az[:,None] - az[None,:]
 
                 delta_rf        = np.sqrt(delta_el**2 + delta_az**2)
 
@@ -2569,14 +2877,11 @@ def bin_1d_fraccorr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',
 
             if 'rf_r2_' + rf_type in sessions[ises].celldata:
 
-                source_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                target_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                delta_el        = source_el[:,None] - target_el[None,:]
-
-                source_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                target_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-                delta_az        = source_az[:,None] - target_az[None,:]
-
+                el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
+                az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+                
+                delta_el        = el[:,None] - el[None,:]
+                delta_az        = az[:,None] - az[None,:]
                 delta_rf        = np.sqrt(delta_el**2 + delta_az**2)
 
                 if filternear:

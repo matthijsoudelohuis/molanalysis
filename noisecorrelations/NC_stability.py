@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 os.chdir('e:\\Python\\molanalysis')
 from loaddata.get_data_folder import get_local_drive
 from loaddata.session_info import filter_sessions,load_sessions
-from corr_lib import compute_signal_noise_correlation
+from utils.corr_lib import *
+from utils.psth import compute_tensor
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
 
@@ -80,3 +81,66 @@ plt.tight_layout()
 fig.savefig(os.path.join(savedir,'NC_stability_deconv_%s.png' % sessions[ises].sessiondata['session_id'][0]), format = 'png')
 
 plt.scatter(xdata,ydata,s=3,c='k',alpha=0.05)
+
+#%% Compute types of correlations and show the difference between them: 
+
+idx         = np.zeros(np.shape(sessions[ises].ts_F)[0],dtype=bool)
+
+for it in range(sessions[ises].trialdata.shape[0]):
+    idx[np.logical_and(sessions[ises].ts_F>=sessions[ises].trialdata['tOnset'][it],
+        sessions[ises].ts_F<=sessions[ises].trialdata['tOnset'][it]+0.75)] = True
+
+N = sessions[ises].calciumdata.shape[1]
+labels = ['trace','trace-act','tensor','resp','noise','noise-still','noise-PC','noise-GM']
+M = len(labels)
+
+corrmats = np.empty([M,N,N])
+corrmats[0,:,:]  = np.corrcoef(sessions[ises].calciumdata.T.to_numpy())
+corrmats[1,:,:]  = np.corrcoef(sessions[ises].calciumdata[idx].T.to_numpy())
+
+[tensor,t_axis] = compute_tensor(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'], 
+                                 t_pre=-1, t_post=2,method='nearby')
+
+corrmats[2,:,:]  = np.corrcoef(np.reshape(tensor,(N,-1)))
+
+corrmats[3,:,:]  = np.corrcoef(sessions[ises].respmat)
+
+resp_meanori,respmat_res        = mean_resp_gr(sessions[ises])
+# Compute noise correlations from residuals:
+corrmats[4,:,:]  =  np.corrcoef(respmat_res)
+
+sessions = compute_signal_noise_correlation(sessions,filter_stationary=True,uppertriangular=False)
+corrmats[5,:,:]  =  sessions[ises].noise_corr
+
+sessions = compute_signal_noise_correlation(sessions,filter_stationary=False,uppertriangular=False,remove_method='PCA',remove_rank=1)
+corrmats[6,:,:]  =  sessions[ises].noise_corr
+
+sessions = compute_signal_noise_correlation(sessions,filter_stationary=False,uppertriangular=False,remove_method='GM')
+corrmats[7,:,:]  =  sessions[ises].noise_corr
+
+crosscorr = np.empty([M,M])
+for ix in range(M):
+    for iy in range(M):
+        data1 = corrmats[ix,:,:]
+        data2 = corrmats[iy,:,:]
+        nanfilter = np.all((~np.isnan(data1),~np.isnan(data2),np.eye(N,N)==0),axis=0)
+        crosscorr[ix,iy] = np.corrcoef(data1[nanfilter].flatten(),data2[nanfilter].flatten())[0,1]
+
+#%% heatmap of cross correlations
+fig,axes = plt.subplots(1,M,figsize=(10,6))
+for iM in range(M):
+    ax = axes[iM]
+    ax.imshow(corrmats[iM,:,:] , cmap='coolwarm',
+            vmin=np.nanpercentile(corrmats,10),
+            vmax=np.nanpercentile(corrmats,90))
+    ax.set_title(labels[iM])
+    ax.set_xticks([])
+    ax.set_yticks([])
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'Corr_types_%s.png' % sessions[ises].sessiondata['session_id'][0]), format = 'png')
+
+#%%
+fig,ax = plt.subplots(figsize=(6,4.5))
+sns.heatmap(crosscorr,vmin=-1,vmax=1,cmap="vlag",xticklabels=labels,yticklabels=labels,ax=ax)
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'Crosscorr_corrtypes_%s.png' % sessions[ises].sessiondata['session_id'][0]), format = 'png')

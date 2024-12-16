@@ -342,7 +342,7 @@ def plot_tuned_response(calciumdata, trialdata, t_axis, example_cells):
 
     return fig
 
-def plot_PCA_gratings(ses,size='runspeed',cellfilter=None,apply_zscore=True):
+def plot_PCA_gratings(ses,size='runspeed',cellfilter=None,apply_zscore=True,plotgainaxis=False):
     """
     The plot_PCA_gratings function is used to visualize the first two principal components of a population of neurons' responses to grating stimuli. It takes in three inputs:
     ses: a Session object containing the responses to be analyzed.
@@ -412,7 +412,7 @@ def plot_PCA_gratings(ses,size='runspeed',cellfilter=None,apply_zscore=True):
     return fig
 
 
-def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=None,thr_tuning=0):
+def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=None,thr_tuning=0,plotgainaxis=False):
 
     ########### PCA on trial-averaged responses ############
     ######### plot result as scatter by orientation ########
@@ -452,6 +452,16 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
         Xp = pca.fit_transform(respmat_zsc.T).T
         # dimensionality is now reduced from N by K to ncomp by K
 
+        if plotgainaxis:
+            data                = respmat_zsc
+            poprate             = np.nanmean(data,axis=0)
+            gain_weights        = np.array([np.corrcoef(poprate,data[n,:])[0,1] for n in range(data.shape[0])])
+            gain_trials         = poprate - np.nanmean(data,axis=None)
+            # g = np.outer(np.percentile(gain_trials,[0,100]),gain_weights)
+            g = np.outer([0,10],gain_weights)
+            # g = np.outer(np.percentile(gain_trials,[0,100])*np.percentile(poprate,[0,100]),gain_weights)
+            Xg = pca.transform(g).T
+
         ax = fig.add_subplot(1, len(areas), iarea+1, projection='3d')
         
         # plot orientation separately with diff colors
@@ -465,6 +475,8 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
             # each trial is one dot
             ax.scatter(x, y, z, color=pal[t], s=sizes[ori_ind[t]]*6, alpha=0.8)
             # ax.scatter(x, y, z,marker='o')     #each trial is one dot
+        if plotgainaxis:
+            ax.plot(Xg[0,:],Xg[1,:],Xg[2,:],color='k',linewidth=1)
         ax.set_xlabel('PC 1')  # give labels to axes
         ax.set_ylabel('PC 2')
         ax.set_zlabel('PC 3')

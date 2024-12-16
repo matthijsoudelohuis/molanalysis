@@ -76,7 +76,7 @@ for ises in range(nSessions):
 #%% 
 def ori_remapping(sessions):
     for ises in range(nSessions):
-        if sessions[ises].sessiondata['protocol'] == 'GR':
+        if sessions[ises].sessiondata['protocol'][0] == 'GR':
             sessions[ises].trialdata['Orientation_orig']    = sessions[ises].trialdata['Orientation']
             sessions[ises].trialdata['Orientation']         = np.mod(270 - sessions[ises].trialdata['Orientation'],360)
     return sessions
@@ -108,6 +108,35 @@ cm_red = LinearSegmentedColormap.from_list("Custom", colors, N=20)
 colors = [(0, 0, 0), (0, 0, 1), (1, 1, 1)] # first color is black, last is red
 cm_blue = LinearSegmentedColormap.from_list("Custom", colors, N=20)
 
+
+#%% Show preferred orientation across all cells in GR protocol:
+sessions_GR = [ses for ses in sessions if ses.protocol == 'GR']
+celldata = pd.concat([ses.celldata for ses in sessions_GR]).reset_index(drop=True)
+
+arealabeled = ['V1unl','V1lab','PMunl','PMlab']
+clrs_arealabeled = get_clr_area_labeled(arealabeled)
+
+# pal = sns.color_palette('husl',8)
+# pal = np.tile(sns.color_palette('husl', int(16/2)),(2,1))
+# fig,axes = plt.subplots(1,2,figsize=(6,3))
+fig,ax = plt.subplots(1,1,figsize=(3.5,2.75))
+
+for ial,al in enumerate(arealabeled):
+    df = pd.DataFrame({'Ori': celldata.loc[(celldata['arealabel']==al),'pref_ori']})
+    ax.hist(df['Ori'],bins=np.arange(0,360+22.5,22.5)-22.5/2,edgecolor=clrs_arealabeled[ial],
+            histtype='step',color=clrs_arealabeled[ial],label=al,alpha=1,density=True)
+leg = ax.legend(arealabeled,frameon=False,ncol=2,loc='lower left')
+for lh in leg.legend_handles:
+    lh.set_visible(False)
+for text, color in zip(leg.texts, clrs_arealabeled):
+    text.set_color(color)
+ax.set_xlabel('Pref. Ori (deg)')
+ax.set_ylabel('Density (a.u.)')
+ax.set_xticks(np.arange(0,360,45))
+ax.set_xlim([-10, 340]) #ax.set_xticks(np.arange(0,360,45))
+plt.tight_layout()
+fig.savefig(os.path.join('E:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\Tuning\\','PreferredOri_%s_%s_GR' % (corr_type,calciumversion) + '.png'), format = 'png')
+# fig.savefig(os.path.join('E:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\Tuning\\','PreferredOri_%s_GR' % (corr_type) + '.png'), format = 'png')
 
 
 #%% Compute collinear selectivity index:

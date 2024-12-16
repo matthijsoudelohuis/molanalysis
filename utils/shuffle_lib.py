@@ -34,19 +34,14 @@ def corr_shuffle(sessions,method='random'):
             np.fill_diagonal(sessions[ises].corr_shuffle,np.nan)
     return sessions
 
-def my_shuffleRF(az,el):
+def my_shuffleRF(az,el,area):
+    uareas = np.unique(area)
+    for uarea in uareas:
+        idx_area = area == uarea
+        az_area = az[idx_area]
+        el_area = el[idx_area]
+        shuffle_idx = np.random.permutation(len(az_area))
+        az[idx_area] = az_area[shuffle_idx]
+        el[idx_area] = el_area[shuffle_idx]
 
-
-    source_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-    target_el       = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-    delta_el        = source_el[:,None] - target_el[None,:]
-
-    source_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-    target_az       = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
-    delta_az        = source_az[:,None] - target_az[None,:]
-
-    delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
-    angle_rf        = np.mod(np.arctan2(delta_el,delta_az)-np.pi,np.pi*2)
-    angle_rf        = np.mod(angle_rf+np.deg2rad(polarbinres/2),np.pi*2) - np.deg2rad(polarbinres/2)
-    
     return az,el

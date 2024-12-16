@@ -231,7 +231,7 @@ dataset_labels      = ['original','tuning','pop rate gain']
 datasets            = (data,data_hat_tuned,data_hat_gainonly,data_hat_poprate)
 dataset_labels      = ['original','tuning only','gain only','tuned gain',]
 
-fig = plot_respmat(orientations, datasets, dataset_labels)
+fig = plot_respmat(orientations, datasets, dataset_labels,sessions[ises].celldata['pref_ori'].to_numpy())
 fig.savefig(os.path.join(savedir,'Heatmap_respmat_modelversions_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 fig = plot_tuned_response(orientations, datasets, dataset_labels)

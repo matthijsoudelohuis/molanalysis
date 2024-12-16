@@ -8,7 +8,7 @@ os.chdir('e:\\Python\\molanalysis')
 
 from utils.explorefigs import plot_PCA_gratings_3D,plot_PCA_gratings
 from loaddata.session_info import filter_sessions,load_sessions
-from utils.tuning import compute_tuning
+from utils.tuning import compute_tuning_wrapper
 from utils.gain_lib import * 
 
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\SharedGain'
@@ -24,12 +24,12 @@ sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list,f
 sessions[0].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
                                 calciumversion='deconv',keepraw=True)
 
+
 #%% ########################### Compute tuning metrics: ###################################
-sessions[0].celldata['tuning_var'] = compute_tuning(sessions[0].respmat,
-                                        sessions[0].trialdata['Orientation'],tuning_metric='tuning_var')
+sessions = compute_tuning_wrapper(sessions)
 
 #%% Make the 3D figure:
-fig = plot_PCA_gratings_3D(sessions[0],thr_tuning=0.05)
+fig = plot_PCA_gratings_3D(sessions[0],thr_tuning=0.05,plotgainaxis=True)
 axes = fig.get_axes()
 axes[0].view_init(elev=-30, azim=25, roll=40)
 axes[1].view_init(elev=15, azim=0, roll=-10)

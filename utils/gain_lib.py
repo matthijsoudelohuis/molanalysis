@@ -17,13 +17,22 @@ from utils.psth import compute_respmat
 from utils.plotting_style import * #get all the fixed color schemes
 
 
-def plot_respmat(orientations, datasets, labels):
+def plot_respmat(orientations, datasets, labels,prefori):
+    data = datasets[0]
+    poprate = np.nanmean(data,axis=0)
+
+    sort_idx_trials = np.lexsort((poprate, orientations))[::-1]
+    gain_weights        = np.array([np.corrcoef(poprate,data[n,:])[0,1] for n in range(data.shape[0])])
+    sort_idx_neurons = np.lexsort((gain_weights, prefori))[::-1]
+
     fig,axes = plt.subplots(1, len(datasets),figsize=(3*len(datasets),4))
     if len(datasets) == 1:
         axes = [axes]
     for d,data in enumerate(datasets):
         ax = axes[d]
+        data = data[sort_idx_neurons,:][:,sort_idx_trials]
         # ax.imshow(data,aspect='auto',vmin=0.1,vmax=0.5,cmap='magma')
+        # ax.imshow(data,aspect='auto',vmin=np.percentile(datasets[0],20),vmax=np.percentile(datasets[0],90),cmap='magma')
         ax.imshow(data,aspect='auto',vmin=np.percentile(datasets[0],20),vmax=np.percentile(datasets[0],90),cmap='magma')
         ax.set_yticks([0,np.shape(data)[0]],labels=[0,np.shape(data)[0]],fontsize=7)
         ax.set_xticks([0,np.shape(data)[1]],labels=[0,np.shape(data)[1]],fontsize=7)
