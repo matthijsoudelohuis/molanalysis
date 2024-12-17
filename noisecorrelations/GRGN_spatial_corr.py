@@ -53,8 +53,8 @@ sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
 
 #%%  Load data properly:        
-calciumversion = 'dF'
-# calciumversion = 'deconv'
+# calciumversion = 'dF'
+calciumversion = 'deconv'
 
 for ises in range(nSessions):
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
@@ -185,15 +185,21 @@ for ses in sessions:
 #   2D     DELTA RECEPTIVE FIELD                 2D
 # ##########################################################################################################
 
+sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='GM')
+# sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
+
 #%% #########################################################################################
 # Contrast: across areas
 areapairs           = ['V1-V1','PM-PM','V1-PM']
-layerpairs          = ['L2/3-L2/3']
-# layerpairs          = ['L2/3-L5']
+# areapairs           = ['V1-PM']
+# areapairs           = ['PM-PM']
+# layerpairs          = ['L2/3-L2/3']
+layerpairs          = ['L2/3-L5']
+# layerpairs          = ['L5-L5']
 projpairs           = ' '
 
-corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
-# corr_thr            = 0.01 #thr in percentile of total corr for significant pos or neg
+# corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
+corr_thr            = 0.01 #thr in percentile of total corr for significant pos or neg
 rf_type             = 'Fsmooth'
 corr_type           = 'noise_corr'
 # corr_type           = 'trace_corr'
@@ -235,22 +241,34 @@ bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_t
 #                         filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr)
 
 #%% Plot radial tuning:
+filestring = 'RadialTuning_areas_%s_%s_' % (corr_type,layerpairs[0].replace('/',''))
+# filestring = 'RadialTuning_areas_%sGM_%s_' % (corr_type,layerpairs[0].replace('/',''))
+
 fig = plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,areapairs,layerpairs,projpairs)
-fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_mean_sessions' % (corr_type) + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_mean_sessions' % (corr_type) + '.pdf'), format = 'pdf')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'mean_sessions' + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'mean_sessions' + '.pdf'), format = 'pdf')
+
+fig = plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_posf_ses,areapairs,layerpairs,projpairs,datatype='Fraction Pos.')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'posf_sessions' + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'posf_sessions' + '.pdf'), format = 'pdf')
+
+fig = plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_negf_ses,areapairs,layerpairs,projpairs,datatype='Fraction Neg.')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'negf_sessions' + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'negf_sessions' + '.pdf'), format = 'pdf')
 
 fig = plot_corr_radial_tuning_areas(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,areapairs,layerpairs,projpairs)
 # fig = plot_corr_radial_tuning_areas(binsdRF,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
-fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_mean' % (corr_type) + '.pdf'), format = 'pdf')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'mean' + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'mean' + '.pdf'), format = 'pdf')
 
 fig = plot_corr_radial_tuning_areas(binsdRF,bin_dist_count_ses,bin_dist_posf_ses,areapairs,layerpairs,projpairs,datatype='Fraction Pos.')
-fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_posf' % (corr_type) + '.pdf'), format = 'pdf')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'posf' + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'posf' + '.pdf'), format = 'pdf')
 
 fig = plot_corr_radial_tuning_areas(binsdRF,bin_dist_count_ses,bin_dist_negf_ses,areapairs,layerpairs,projpairs,datatype='Fraction Neg.')
-fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'RadialTuning_areas_%s_negf' % (corr_type) + '.pdf'), format = 'pdf')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'negf' + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning',filestring + 'negf' + '.pdf'), format = 'pdf')
+
 
 #%% 1D delta RF weighted mean across sessions:
 
@@ -264,40 +282,8 @@ fig = plot_corr_radial_tuning_areas_mean(binsdRF,bin_dist_count,bin_dist_mean,ar
 #%%
 
 
-# import numpy as np
-# from scipy.stats import linregress
 
-# # Example: Precomputed summary statistics
-# x_bins = np.array([1, 2, 3, 4, 5])
-# mean_y = np.array([2.0, 2.5, 3.0, 3.5, 4.0])  # Bin-level means
-# var_y = np.array([0.1, 0.2, 0.3, 0.4, 0.5])   # Bin-level variances
-# n_y = np.array([100, 120, 150, 130, 110])     # Number of samples per bin
 
-# x_bins = binsdRF
-# mean_y = bin_dist_mean[:,0,0,0]  # Bin-level means
-# var_y = np.tile(0.08,len(binsdRF))   # Bin-level variances
-# n_y = bin_dist_count[:,0,0,0].astype(int)    # Number of samples per bin
-# n_y = np.clip(bin_dist_count[:,0,0,0].astype(int),a_min=0,a_max=1000)    # Number of samples per bin
-
-# # Number of bootstrap iterations
-# n_bootstrap = 1000
-# trends = []
-
-# for _ in range(n_bootstrap):
-#     # Generate bootstrap samples for y
-#     y_bootstrap = [np.random.normal(mean, np.sqrt(var / n), size=n) 
-#                    for mean, var, n in zip(mean_y, var_y, n_y)]
-#     y_bootstrap_means = [np.mean(y) for y in y_bootstrap]
-    
-#     # Fit a linear trend
-#     slope, intercept, _, _, _ = linregress(x_bins, y_bootstrap_means)
-#     trends.append(slope)
-
-# # Compute confidence intervals
-# trend_ci = np.percentile(trends, [2.5, 97.5])
-# print(f"Bootstrap Trend CI: {trend_ci}")
-
-# sns.violinplot(trends)
 
 #%% #########################################################################################
 # Contrast: across projections:
@@ -306,10 +292,9 @@ areapairs           = ['V1-V1','PM-PM','V1-PM']
 projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
 layerpairs          = ' '
 layerpairs          = ['L2/3-L2/3']
+# layerpairs          = ['L2/3-L5']
 
 corr_thr            = 0.01 #thr in percentile of total corr for significant pos or neg
-deltaori            = None
-rotate_prefori      = False
 rf_type             = 'Fsmooth'
 corr_type           = 'noise_corr'
 # corr_type           = 'trace_corr'
@@ -362,7 +347,8 @@ bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_t
 # bin_dist_count = np.nansum(bin_dist_count_ses,axis=0)
 
 #%% Plot radial tuning:
-fig,fig2 = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,areapairs,layerpairs,projpairs,datatype='Correlation')
+fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,areapairs,layerpairs,projpairs,datatype='Correlation')
+# fig,fig2 = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,areapairs,layerpairs,projpairs,datatype='Correlation')
 # fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs,datatype='Correlation')
 # axes = fig.get_axes()
 # axes[0].set_ylim([-0.05,0.05])
@@ -371,13 +357,13 @@ fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN' % (corr_type)
 fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_stats' % (corr_type) + '.png'), format = 'png')
 fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_stats' % (corr_type) + '.pdf'), format = 'pdf')
 
-fig,fig2 = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_posf_ses,areapairs,layerpairs,projpairs,datatype='Fraction')
+fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_posf_ses,areapairs,layerpairs,projpairs,datatype='Fraction')
 fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_posf_GRGN' % (corr_type) + '.png'), format = 'png')
 fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_posf_GRGN' % (corr_type) + '.pdf'), format = 'pdf')
 fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_posf_GRGN_stats' % (corr_type) + '.png'), format = 'png')
 fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_posf_GRGN_stats' % (corr_type) + '.pdf'), format = 'pdf')
 
-fig,fig2 = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_negf_ses,areapairs,layerpairs,projpairs,datatype='Fraction')
+fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_negf_ses,areapairs,layerpairs,projpairs,datatype='Fraction')
 fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_negf_GRGN' % (corr_type) + '.png'), format = 'png')
 fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_negf_GRGN' % (corr_type) + '.pdf'), format = 'pdf')
 fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_negf_GRGN_stats' % (corr_type) + '.png'), format = 'png')
@@ -407,8 +393,6 @@ projpairs           = ' '
 layerpairs          = ['L2/3-L2/3','L2/3-L5','L5-L2/3','L5-L5']
 
 corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
-deltaori            = None
-rotate_prefori      = False
 rf_type             = 'Fsmooth'
 corr_type           = 'noise_corr'
 # corr_type           = 'trace_corr'

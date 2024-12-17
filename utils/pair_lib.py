@@ -67,7 +67,8 @@ def compute_pairwise_delta_rf(sessions,rf_type='F'):
 
 # Define function to filter neuronpairs based on area combination
 def filter_2d_areapair(ses,areapair):
-    if  areapair == ' ':
+    #first entry of the areapair determines x, second entry determines y
+    if areapair == ' ':
         return np.full(np.shape(ses.distmat_xy),True)
     area1,area2 = areapair.split('-')
     assert 'roi_name' in ses.celldata, "Error: 'roi_name' is not in ses.celldata. Please run the function filter_sessions() with the argument has_pupil=True"
@@ -77,6 +78,7 @@ def filter_2d_areapair(ses,areapair):
 
 # Define function to filter neuronpairs based on layer combination
 def filter_2d_layerpair(ses,layerpair):
+    #first entry of the layerpair determines x, second entry determines y
     if layerpair == ' ':
         return np.full(np.shape(ses.distmat_xy),True)
     layer1,layer2 = layerpair.split('-')
@@ -87,6 +89,7 @@ def filter_2d_layerpair(ses,layerpair):
 
 # Define function to filter neuronpairs based on projection combination
 def filter_2d_projpair(ses,projpair):
+    #first entry of the projpair determines x, second entry determines y
     if projpair == ' ':
         return np.full(np.shape(ses.distmat_xy),True)
     proj1,proj2 = projpair.split('-')

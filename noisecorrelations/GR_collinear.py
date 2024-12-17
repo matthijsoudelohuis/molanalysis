@@ -38,6 +38,7 @@ cm_blue = LinearSegmentedColormap.from_list("Custom", colors, N=20)
 
 centerthr           = [15,15,15,15]
 centerthr           = [20,20,20,20]
+gaussian_sigma = 1
 
 #%% #############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
@@ -57,7 +58,8 @@ sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
 
 #%%  Load data properly:      
-calciumversion = 'deconv'
+# calciumversion = 'deconv'
+calciumversion = 'dF'
 
 for ises in range(nSessions):
     # sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,calciumversion='dF')
@@ -96,46 +98,37 @@ sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 sessions = compute_pairwise_anatomical_distance(sessions)
 
 #%% ##################### Compute pairwise receptive field distances: ##############################
-sessions = smooth_rf(sessions,radius=50,rf_type='Fneu',mincellsFneu=5)
-sessions = exclude_outlier_rf(sessions) 
-sessions = replace_smooth_with_Fsig(sessions) 
-
-#%% 
-gaussian_sigma = 1
-
-colors = [(0, 0, 0), (1, 0, 0), (1, 1, 1)] # first color is black, last is red
-cm_red = LinearSegmentedColormap.from_list("Custom", colors, N=20)
-colors = [(0, 0, 0), (0, 0, 1), (1, 1, 1)] # first color is black, last is red
-cm_blue = LinearSegmentedColormap.from_list("Custom", colors, N=20)
-
+# sessions = smooth_rf(sessions,radius=50,rf_type='Fneu',mincellsFneu=5)
+# sessions = exclude_outlier_rf(sessions) 
+# sessions = replace_smooth_with_Fsig(sessions) 
 
 #%% Show preferred orientation across all cells in GR protocol:
 sessions_GR = [ses for ses in sessions if ses.protocol == 'GR']
 celldata = pd.concat([ses.celldata for ses in sessions_GR]).reset_index(drop=True)
 
-arealabeled = ['V1unl','V1lab','PMunl','PMlab']
-clrs_arealabeled = get_clr_area_labeled(arealabeled)
+areas = ['V1','PM']
+labeled = ['unl','lab']
 
-# pal = sns.color_palette('husl',8)
-# pal = np.tile(sns.color_palette('husl', int(16/2)),(2,1))
-# fig,axes = plt.subplots(1,2,figsize=(6,3))
-fig,ax = plt.subplots(1,1,figsize=(3.5,2.75))
-
-for ial,al in enumerate(arealabeled):
-    df = pd.DataFrame({'Ori': celldata.loc[(celldata['arealabel']==al),'pref_ori']})
-    ax.hist(df['Ori'],bins=np.arange(0,360+22.5,22.5)-22.5/2,edgecolor=clrs_arealabeled[ial],
-            histtype='step',color=clrs_arealabeled[ial],label=al,alpha=1,density=True)
-leg = ax.legend(arealabeled,frameon=False,ncol=2,loc='lower left')
-for lh in leg.legend_handles:
-    lh.set_visible(False)
-for text, color in zip(leg.texts, clrs_arealabeled):
-    text.set_color(color)
-ax.set_xlabel('Pref. Ori (deg)')
-ax.set_ylabel('Density (a.u.)')
-ax.set_xticks(np.arange(0,360,45))
-ax.set_xlim([-10, 340]) #ax.set_xticks(np.arange(0,360,45))
+fig,axes = plt.subplots(1,2,figsize=(5,2.5),sharex=True,sharey=True)
+for iarea,area in enumerate(areas):
+    ax = axes[iarea]
+    for ilab,lab in enumerate(labeled):
+        df = pd.DataFrame({'Ori': celldata.loc[(celldata['roi_name']==area)&(celldata['labeled']==lab),'pref_ori']})
+        ax.hist(df['Ori'],bins=np.arange(0,360+22.5,22.5)-22.5/2,
+            histtype='step',color=get_clr_area_labeled([area+lab]),label=lab,alpha=1,density=True)
+    leg = ax.legend(labeled,frameon=False,ncol=1,loc='upper right')
+    for lh in leg.legend_handles:
+        lh.set_visible(False)
+    for text, color in zip(leg.texts, get_clr_area_labeled([area+labeled[0],area+labeled[1]])):
+        text.set_color(color)
+    ax.set_xlabel('Pref. Ori (deg)')
+    if iarea == 0: 
+        ax.set_ylabel('Density (a.u.)')
+    ax.set_xticks(np.arange(0,360,45))
+    ax.set_xlim([-10, 340]) #ax.set_xticks(np.arange(0,360,45))
+    ax.set_title('%s' % area)
 plt.tight_layout()
-fig.savefig(os.path.join('E:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\Tuning\\','PreferredOri_%s_%s_GR' % (corr_type,calciumversion) + '.png'), format = 'png')
+fig.savefig(os.path.join('E:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\Tuning\\','PreferredOri_%s_GR' % (calciumversion) + '.png'), format = 'png')
 # fig.savefig(os.path.join('E:\\OneDrive\\PostDoc\\Figures\\Neural - Gratings\\Tuning\\','PreferredOri_%s_GR' % (corr_type) + '.png'), format = 'png')
 
 
@@ -171,12 +164,18 @@ binedges_2d     = np.arange(-binlim,binlim,binresolution)+binresolution/2
 bincenters_2d   = binedges_2d[:-1]+binresolution/2 
 nBins           = len(bincenters_2d)
 
-delta_el,delta_az = np.meshgrid(bincenters_2d,bincenters_2d)
+delta_az,delta_el = np.meshgrid(bincenters_2d,-bincenters_2d)
 delta_rf         = np.sqrt(delta_az**2 + delta_el**2)
-angle_rf         = np.mod(np.arctan2(delta_el,delta_az)-np.pi,np.pi*2)
+# angle_rf         = np.mod(np.arctan2(delta_el,delta_az)-np.pi,np.pi*2)
+angle_rf         = np.mod(np.arctan2(delta_az,delta_el)+np.pi/2,np.pi*2)
+# angle_rf         = np.mod(np.arctan2(delta_el,delta_az)+np.pi,np.pi*2)
+
+cmap = 'cool'
+cmap = 'bone_r'
+cmap = 'copper_r'
 
 fig,axes = plt.subplots(1,2,figsize=(5,2.5))
-im = axes[0].imshow(delta_rf,extent=[-binlim,binlim,-binlim,binlim],cmap='viridis')
+im = axes[0].imshow(delta_rf,extent=[-binlim,binlim,-binlim,binlim],cmap=cmap)
 axes[0].set_title('Δ RF')
 axes[0].set_xlabel(u'Δ Azimuth (\N{DEGREE SIGN})')
 axes[0].set_ylabel(u'Δ Elevation (\N{DEGREE SIGN})')
@@ -186,9 +185,11 @@ cbar = fig.colorbar(im,ax=axes[0],shrink=0.35,aspect=5,pad=0.2)
 cbar.ax.set_title(u'ΔRF (\N{DEGREE SIGN})',fontsize=10)
 cbar.set_ticks([0,50,100])
 
-im = axes[1].imshow(np.rad2deg(angle_rf),extent=[-binlim,binlim,-binlim,binlim],cmap='viridis')
+cmap = 'twilight'
+# cmap = 'cool'
+im = axes[1].imshow(np.rad2deg(angle_rf),extent=[-binlim,binlim,-binlim,binlim],cmap=cmap)
 axes[1].set_title('RF Angle')
-axes[0].set_xlabel(u'Δ Azimuth (\N{DEGREE SIGN})')
+axes[1].set_xlabel(u'Δ Azimuth (\N{DEGREE SIGN})')
 axes[1].set_xticks([-50,0,50])
 axes[1].set_yticks([-50,0,50])
 cbar = fig.colorbar(im,ax=axes[1],shrink=0.35,aspect=5,pad=0.2)
@@ -196,7 +197,36 @@ cbar.set_ticks([0,180,360])
 cbar.ax.set_title(u'Angle (\N{DEGREE SIGN})',fontsize=10)
 
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'DeltaRF_AngleRF_2D' + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'DeltaRF_AngleRF_2D' + '.png'), format = 'png')
+
+#%% Show definition of delta azimuth and elevation:
+
+cmap = 'twilight_r'
+cmap = 'coolwarm'
+
+fig,axes = plt.subplots(1,2,figsize=(5,2.5))
+im = axes[0].imshow(delta_az,extent=[-binlim,binlim,-binlim,binlim],cmap=cmap)
+axes[0].set_title('Azimuth')
+axes[0].set_xlabel(u'Δ Azimuth (\N{DEGREE SIGN})')
+axes[0].set_ylabel(u'Δ Elevation (\N{DEGREE SIGN})')
+axes[0].set_xticks([-50,0,50])
+axes[0].set_yticks([-50,0,50])
+cbar = fig.colorbar(im,ax=axes[0],shrink=0.35,aspect=5,pad=0.2)
+cbar.set_ticks([-70,0,70])
+cbar.set_ticklabels([u'-70\N{DEGREE SIGN}',u'0\N{DEGREE SIGN}',u'+70\N{DEGREE SIGN}'])
+
+# cmap = 'cool'
+im = axes[1].imshow(delta_el,extent=[-binlim,binlim,-binlim,binlim],cmap=cmap)
+axes[1].set_title('Elevation')
+axes[1].set_xlabel(u'Δ Azimuth (\N{DEGREE SIGN})')
+axes[1].set_xticks([-50,0,50])
+axes[1].set_yticks([-50,0,50])
+cbar = fig.colorbar(im,ax=axes[1],shrink=0.35,aspect=5,pad=0.2)
+cbar.set_ticks([-70,0,70])
+cbar.set_ticklabels([u'-70\N{DEGREE SIGN}',u'0\N{DEGREE SIGN}',u'+70\N{DEGREE SIGN}'])
+
+plt.tight_layout()
+# fig.savefig(os.path.join(savedir,'DeltaAz_DeltaEl_2D' + '.png'), format = 'png')
 
 #%% 
 rf_type             = 'Fsmooth'
@@ -256,14 +286,15 @@ fig.savefig(os.path.join(savedir,'Hist_Delta_Az_El_areapairs' + '.png'), format 
 # Contrast: across areas
 areapairs           = ['V1-V1','PM-PM','V1-PM','PM-V1']
 layerpairs          = ' '
+# layerpairs          = ['L2/3-L2/3']
 projpairs           = ' '
 
 deltaori            = None
 rotate_prefori      = True
 rf_type             = 'Fsmooth'
-# corr_type           = 'noise_corr'
-corr_type           = 'trace_corr'
-tuned_thr           = 0.025
+corr_type           = 'noise_corr'
+# corr_type           = 'trace_corr'
+tuned_thr           = 0.0
 noise_thr           = 20
 min_counts          = 100
 corr_thr            = 0.01
@@ -301,7 +332,7 @@ csi_surr_negf =  collinear_selectivity_index(bin_angle_surr_negf,bincenters_angl
 #%% Show spatial maps for the mean correlation
 fig = plot_2D_mean_corr(bin_2d_mean,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
                         projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap='magma')
-# fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
 
 #%% Show spatial maps for the fraction positive
 fig = plot_2D_mean_corr(bin_2d_posf,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
@@ -315,13 +346,13 @@ fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_areas_%s_negf' % (corr_type
 
 
 #%% Plot radial tuning:
-fig = plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
+fig = plot_corr_radial_tuning_areas_mean(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
 fig.savefig(os.path.join(savedir,'Rotated_RadialTuning_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
 
-fig = plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_posf,areapairs,layerpairs,projpairs)
+fig = plot_corr_radial_tuning_areas_mean(bincenters_dist,bin_dist_count,bin_dist_posf,areapairs,layerpairs,projpairs)
 fig.savefig(os.path.join(savedir,'Rotated_RadialTuning_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
 
-fig = plot_corr_radial_tuning_areas(bincenters_dist,bin_dist_count,bin_dist_negf,areapairs,layerpairs,projpairs)
+fig = plot_corr_radial_tuning_areas_mean(bincenters_dist,bin_dist_count,bin_dist_negf,areapairs,layerpairs,projpairs)
 fig.savefig(os.path.join(savedir,'Rotated_RadialTuning_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
 
 
@@ -337,7 +368,6 @@ fig.savefig(os.path.join(savedir,'Rotated_AngularTuning_areas_%s_posf' % (corr_t
 fig = plot_corr_angular_tuning(sessions,bin_angle_surr_negf,bin_angle_surr_count,
                                bincenters_angle,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
 fig.savefig(os.path.join(savedir,'Rotated_AngularTuning_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
-
 
 
 
@@ -401,7 +431,7 @@ csi_surr_negf =  collinear_selectivity_index(bin_angle_surr_negf,bincenters_angl
 
 
 #%% 
-corr_type           = 'noise_corr_GM'
+# corr_type           = 'noise_corr_GM'
 
 gaussian_sigma = 1
 
@@ -443,9 +473,6 @@ fig.savefig(os.path.join(savedir,'Rotated_AngularTuning_2D_projs_%s_posf' % (cor
 fig = plot_corr_angular_tuning(sessions,bin_angle_surr_negf,bin_angle_surr_count,
                                bincenters_angle,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
 fig.savefig(os.path.join(savedir,'Rotated_AngularTuning_2D_projs_%s_negf' % (corr_type) + '.png'), format = 'png')
-
-
-
 
 
 
@@ -622,17 +649,21 @@ fig = plot_csi_deltaori_areas(csi_surr_mean_oris,csi_surr_posf_oris,csi_surr_neg
 
 #%% Loop over all delta preferred orientations and store mean correlations as well as distribution of pos and neg correlations:
 areapairs           = ['V1-V1','PM-PM','V1-PM','PM-V1']
+# areapairs           = ['V1-V1']
 layerpairs          = ' '
 projpairs           = ' '
 
-deltaoris           = np.array([0,22.5,45,67.5,90])
+# deltaoris           = np.array([0,22.5,45,67.5,90])
 for ises in range(len(sessions)):
     dpref = np.subtract.outer(sessions[ises].celldata['pref_ori'].to_numpy(),sessions[ises].celldata['pref_ori'].to_numpy())
-    sessions[ises].delta_pref = np.abs(np.mod(dpref,180))
-    sessions[ises].delta_pref[dpref == 180] = 180
+    # sessions[ises].delta_pref = np.abs(np.mod(dpref,180))
+    # sessions[ises].delta_pref[dpref == 180] = 180
+    sessions[ises].delta_pref = np.min(np.array([np.abs(dpref+360),np.abs(dpref+180),np.abs(dpref-0),np.abs(dpref-180),np.abs(dpref-360)]),axis=0)
 
 deltaoris           = np.unique(sessions[0].delta_pref[~np.isnan(sessions[0].delta_pref)])
+# deltaoris           = np.array([0,22.5])
 ndeltaoris          = len(deltaoris)
+
 rotate_prefori      = True
 rf_type             = 'Fsmooth'
 corr_type           = 'noise_corr'
@@ -641,14 +672,6 @@ tuned_thr           = 0.025
 noise_thr           = 20
 min_counts          = 50
 corr_thr            = 0.01
-
-# for ises in range(len(sessions)):
-#     dpref = np.subtract.outer(sessions[ises].celldata['pref_ori'].to_numpy(),sessions[ises].celldata['pref_ori'].to_numpy())
-#     sessions[ises].delta_pref = dpref
-#     # sessions[ises].delta_pref[dpref == 180] = 180
-# deltaoris           = [-22.5,0,22.5]
-# ndeltaoris          = len(deltaoris)
-
 
 #Do for one session to get the dimensions: (data is discarded)
 [bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
@@ -712,6 +735,8 @@ csi_surr_posf_oris =  collinear_selectivity_index(bin_angle_surr_posf_oris,bince
 csi_cent_negf_oris =  collinear_selectivity_index(bin_angle_cent_negf_oris,bincenters_angle)
 csi_surr_negf_oris =  collinear_selectivity_index(bin_angle_surr_negf_oris,bincenters_angle)
 
+# plt.plot(np.rad2deg(bincenters_angle),bin_angle_surr_mean_oris[1,:,0,0,0])
+# plt.imshow(bin_2d_mean_oris[1,:,:,0,0,0])
 
 #%% 
 gaussian_sigma = 1
@@ -758,7 +783,6 @@ fig = plot_corr_radial_tuning_dori(bincenters_dist,bin_dist_count_oris,bin_dist_
 fig.savefig(os.path.join(savedir,'Collinear_Radial_Tuning_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
 
 
-
 #%% Show spatial maps per delta ori for the fraction negative 
 fig = plot_2D_mean_corr_dori(bin_2d_negf_oris,bin_2d_count_oris,bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
                         projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_blue)
@@ -802,6 +826,177 @@ fig.savefig(os.path.join(savedir,'Collinear_CSI_Surr_areas_%s' % (corr_type) + '
 
 
 
+
+
+
+
+#%% 
+       ####### ######  ###    ######  ### ######  #######  #####  ####### ### ####### #     # 
+#####  #     # #     #  #     #     #  #  #     # #       #     #    #     #  #     # ##    # 
+#    # #     # #     #  #     #     #  #  #     # #       #          #     #  #     # # #   # 
+#    # #     # ######   #     #     #  #  ######  #####   #          #     #  #     # #  #  # 
+#    # #     # #   #    #     #     #  #  #   #   #       #          #     #  #     # #   # # 
+#    # #     # #    #   #     #     #  #  #    #  #       #     #    #     #  #     # #    ## 
+#####  ####### #     # ###    ######  ### #     # #######  #####     #    ### ####### #     # 
+
+#%% Loop over all delta preferred orientations and store mean correlations as well as distribution of pos and neg correlations:
+areapairs           = ['V1-PM','PM-V1']
+layerpairs          = ' '
+projpairs           = ' '
+
+# deltaoris           = np.array([0,22.5,45,67.5,90])
+for ises in range(len(sessions)):
+    dpref = np.subtract.outer(sessions[ises].celldata['pref_ori'].to_numpy(),sessions[ises].celldata['pref_ori'].to_numpy())
+    sessions[ises].delta_pref = np.min(np.array([np.abs(dpref+360),np.abs(dpref-0),np.abs(dpref-360)]),axis=0)
+
+deltaoris           = np.unique(sessions[0].delta_pref[~np.isnan(sessions[0].delta_pref)])
+deltaoris           = np.array([0.,90.,180.])
+ndeltaoris          = len(deltaoris)
+rotate_prefori      = True
+rf_type             = 'Fsmooth'
+# corr_type           = 'noise_corr'
+corr_type           = 'trace_corr'
+tuned_thr           = 0.0
+noise_thr           = 20
+min_counts          = 50
+corr_thr            = 0.01
+
+#Do for one session to get the dimensions: (data is discarded)
+[bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
+    bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
+    bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf([sessions[0]],method='mean',areapairs=areapairs,
+                                                              layerpairs=layerpairs,projpairs=projpairs,binresolution=5)
+
+#Init output arrays:
+bin_2d_mean_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
+bin_2d_posf_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
+bin_2d_negf_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
+bin_2d_count_oris       = np.empty((ndeltaoris,*np.shape(bin_2d_count)))
+
+bin_dist_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
+bin_dist_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
+bin_dist_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
+bin_dist_count_oris     = np.empty((ndeltaoris,*np.shape(bin_dist_count)))
+
+bin_angle_cent_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
+bin_angle_cent_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
+bin_angle_cent_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
+bin_angle_cent_count_oris     = np.empty((ndeltaoris,*np.shape(bin_angle_cent_count)))
+
+bin_angle_surr_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
+bin_angle_surr_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
+bin_angle_surr_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
+bin_angle_surr_count_oris     = np.empty((ndeltaoris,*np.shape(bin_angle_surr_count)))
+
+for idOri,deltaori in enumerate(deltaoris):
+    [_,bin_2d_mean_oris[idOri,:,:,:,:,:],bin_2d_count_oris[idOri,:,:,:,:,:],
+     bin_dist_mean_oris[idOri,:,:,:,:],bin_dist_count_oris[idOri,:,:,:],_,
+     bin_angle_cent_mean_oris[idOri,:,:,:,:],bin_angle_cent_count_oris[idOri,:,:,:,:],
+     bin_angle_surr_mean_oris[idOri,:,:,:,:],bin_angle_surr_count_oris[idOri,:,:,:,:],_] = bin_corr_deltarf(sessions,
+                                                    method='mean',filtersign=None,areapairs=areapairs,layerpairs=layerpairs,
+                                                    projpairs=projpairs,corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,
+                                                    deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+    
+    [_,bin_2d_posf_oris[idOri,:,:,:,:,:],_,
+     bin_dist_posf_oris[idOri,:,:,:,:],_,_,
+     bin_angle_cent_posf_oris[idOri,:,:,:,:],_,
+     bin_angle_surr_posf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='pos',
+                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                                                    corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+                                                    deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
+    [_,bin_2d_negf_oris[idOri,:,:,:,:,:],_,
+     bin_dist_negf_oris[idOri,:,:,:,:],_,_,
+     bin_angle_cent_negf_oris[idOri,:,:,:,:],_,
+     bin_angle_surr_negf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='neg',
+                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                                                    corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+                                                    deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
+
+#%% 
+gaussian_sigma = 1
+
+#%% Show spatial maps per delta ori for the mean correlation
+fig = plot_2D_mean_corr_dori(bin_2d_mean_oris,bin_2d_count_oris,bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap='magma')
+# fig.savefig(os.path.join(savedir,'Collinear_DeltaRF_2D_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
+
+#%% Show angular tuning of center area (matched RF) for each delta ori:
+fig = plot_corr_angular_tuning_dori(bin_angle_cent_mean_oris,bin_angle_cent_count_oris,bincenters_angle,
+            deltaoris,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
+# fig.savefig(os.path.join(savedir,'Collinear_Tuning_Cent_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
+
+#%% Show angular tuning of surround area (mismatched RF) for each delta ori:
+fig = plot_corr_angular_tuning_dori(bin_angle_surr_mean_oris,bin_angle_surr_count_oris,bincenters_angle,
+            deltaoris,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
+# fig.savefig(os.path.join(savedir,'Collinear_Tuning_Surr_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
+
+#%% Show spatial maps per delta ori for the fraction positive 
+fig = plot_2D_mean_corr_dori(bin_2d_posf_oris,bin_2d_count_oris,bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_red)
+# fig.savefig(os.path.join(savedir,'Collinear_DeltaRF_2D_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
+
+#%% Show angular tuning of center area (matched RF) for each delta ori:
+fig = plot_corr_angular_tuning_dori(bin_angle_cent_posf_oris,bin_angle_cent_count_oris,bincenters_angle,
+            deltaoris,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
+# fig.savefig(os.path.join(savedir,'Collinear_Tuning_Cent_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
+
+#%% Show angular tuning of surround area (mismatched RF) for each delta ori:
+fig = plot_corr_angular_tuning_dori(bin_angle_surr_posf_oris,bin_angle_surr_count_oris,bincenters_angle,
+            deltaoris,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
+# fig.savefig(os.path.join(savedir,'Collinear_Tuning_Surr_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
+
+
+
+#%% Show spatial maps per delta ori for the fraction negative 
+fig = plot_2D_mean_corr_dori(bin_2d_negf_oris,bin_2d_count_oris,bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_blue)
+# fig.savefig(os.path.join(savedir,'Collinear_DeltaRF_2D_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
+
+#%% Show angular tuning of center area (matched RF) for each delta ori:
+fig = plot_corr_angular_tuning_dori(bin_angle_cent_negf_oris,bin_angle_cent_count_oris,bincenters_angle,
+            deltaoris,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
+# fig.savefig(os.path.join(savedir,'Collinear_Tuning_Cent_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
+
+#%% Show angular tuning of surround area (mismatched RF) for each delta ori:
+fig = plot_corr_angular_tuning_dori(bin_angle_surr_negf_oris,bin_angle_surr_count_oris,bincenters_angle,
+            deltaoris,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
+# fig.savefig(os.path.join(savedir,'Collinear_Tuning_Surr_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
+
+
+
+#%% Compute collinear selectivity index:
+print('Compute direction selectivity index')
+csi_cent_mean_oris =  collinear_selectivity_index(bin_angle_cent_mean_oris,bincenters_angle)
+csi_surr_mean_oris =  collinear_selectivity_index(bin_angle_surr_mean_oris,bincenters_angle)    
+
+csi_cent_posf_oris =  collinear_selectivity_index(bin_angle_cent_posf_oris,bincenters_angle)
+csi_surr_posf_oris =  collinear_selectivity_index(bin_angle_surr_posf_oris,bincenters_angle)
+
+csi_cent_negf_oris =  collinear_selectivity_index(bin_angle_cent_negf_oris,bincenters_angle)
+csi_surr_negf_oris =  collinear_selectivity_index(bin_angle_surr_negf_oris,bincenters_angle)
+
+
+#%% Plot the CSI values as function of delta ori for the three different areapairs
+fig = plot_csi_deltaori_areas(csi_cent_mean_oris,csi_cent_posf_oris,csi_cent_negf_oris,deltaoris,areapairs)
+fig.savefig(os.path.join(savedir,'Collinear_CSI_Cent_areas_%s' % (corr_type) + '.png'), format = 'png')
+
+fig = plot_csi_deltaori_areas(csi_surr_mean_oris,csi_surr_posf_oris,csi_surr_negf_oris,deltaoris,areapairs)
+fig.savefig(os.path.join(savedir,'Collinear_CSI_Surr_areas_%s' % (corr_type) + '.png'), format = 'png')
+
+#%% 
+
+
+
+
+
+
+
+
+
+
+
      #    ####### ######  ###    ######  ######  #######       #  #####  
      #    #     # #     #  #     #     # #     # #     #       # #     # 
      #    #     # #     #  #     #     # #     # #     #       # #       
@@ -817,8 +1012,9 @@ projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
 
 for ises in range(len(sessions)):
     dpref = np.subtract.outer(sessions[ises].celldata['pref_ori'].to_numpy(),sessions[ises].celldata['pref_ori'].to_numpy())
-    sessions[ises].delta_pref = np.abs(np.mod(dpref,180))
-    sessions[ises].delta_pref[dpref == 180] = 180
+    # sessions[ises].delta_pref = np.abs(np.mod(dpref,180))
+    # sessions[ises].delta_pref[dpref == 180] = 180
+    sessions[ises].delta_pref = np.min(np.array([np.abs(dpref+360),np.abs(dpref+180),np.abs(dpref-0),np.abs(dpref-180),np.abs(dpref-360)]),axis=0)
 
 deltaoris           = np.unique(sessions[0].delta_pref[~np.isnan(sessions[0].delta_pref)])
 ndeltaoris          = len(deltaoris)
@@ -929,8 +1125,6 @@ fig = plot_corr_radial_tuning_projs_dori(bincenters_dist,bin_dist_count_oris,bin
 fig.savefig(os.path.join(savedir,'Projs','Collinear_Radial_Tuning_projs_%s_mean' % (corr_type) + '.png'), format = 'png')
 
 
-
-
 #%% Show spatial maps per delta ori for the fraction positive 
 fig = plot_2D_mean_corr_projs_dori(bin_2d_posf_oris[:,:,:,[iap],:,:],bin_2d_count_oris[:,:,:,[iap],:,:],bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
                         projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_red)
@@ -954,8 +1148,6 @@ fig = plot_corr_radial_tuning_projs_dori(bincenters_dist,bin_dist_count_oris,bin
                            areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
 fig.savefig(os.path.join(savedir,'Projs','Collinear_Radial_Tuning_projs_%s_posf' % (corr_type) + '.png'), format = 'png')
 
-
-
 #%% Show spatial maps per delta ori for the fraction negative 
 fig = plot_2D_mean_corr_projs_dori(bin_2d_negf_oris[:,:,:,[iap],:,:],bin_2d_count_oris[:,:,:,[iap],:,:],bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
                         projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_blue)
@@ -978,7 +1170,6 @@ fig.savefig(os.path.join(savedir,'Projs','Collinear_Tuning_Surr_projs_%s_%s_negf
 fig = plot_corr_radial_tuning_projs_dori(bincenters_dist,bin_dist_count_oris,bin_dist_negf_oris,deltaoris,	
                            areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
 fig.savefig(os.path.join(savedir,'Projs','Collinear_Radial_Tuning_projs_%s_negf' % (corr_type) + '.png'), format = 'png')
-
 
 #%% Plot the CSI values as function of delta ori for the three different areapairs
 fig = plot_csi_deltaori_projs(csi_cent_mean_oris[:,[iap],:,:],csi_cent_posf_oris[:,[iap],:,:],csi_cent_negf_oris[:,[iap],:,:],deltaoris,projpairs)
