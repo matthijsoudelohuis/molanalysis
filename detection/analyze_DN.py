@@ -5,7 +5,7 @@ dataset with labeled projection neurons. The visual stimuli are oriented grating
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
-####################################################
+#%% ###################################################
 import math, os
 import numpy as np
 import pandas as pd
@@ -34,7 +34,7 @@ from sklearn.preprocessing import StandardScaler
 
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Neural - DN regression\\'
 
-#################################################
+#%% ################################################
 session_list        = np.array([['LPE11622','2024_02_23']])
 # session_list        = np.array([['LPE10884','2024_01_12']])
 sessions,nSessions  = load_sessions(protocol = 'DN',session_list=session_list,load_behaviordata=True, 

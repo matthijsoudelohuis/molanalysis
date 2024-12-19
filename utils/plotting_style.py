@@ -186,9 +186,9 @@ def get_clr_GN_svars(labels):
 
 def get_clr_outcome(outcomes):
     palette       = {'CR': '#070f7a',
-            'MISS' : '#806900',
-            'HIT' : '#0b7a07',
-            'FA' : '#7a070b'}
+                    'MISS' : '#806900',
+                    'HIT' : '#0b7a07',
+                    'FA' : '#7a070b'}
     # palette       = {'CR': '#89A6FA',
     #         'MISS' : '#FADB89',
     #         'HIT' : '#89FA95',
@@ -206,6 +206,16 @@ def get_clr_psy(signals):
     # palette         = {stims[i]: clrs[i] for i in range(len(stims))}
     return clrs
 
+def get_clr_animal_id(animal_ids):
+    # clrs            = sns.color_palette('inferno', len(signals))
+
+    clrs = sns.color_palette(palette='tab10', n_colors=len(animal_ids))
+
+    # animal_ids  = np.array(['LPE10884', 'LPE11081', 'LPE11086', 'LPE11495', 'LPE11622',
+    #    'LPE11623', 'LPE11997', 'LPE11998', 'LPE12013', 'LPE12223',
+    #    'LPE12385'], dtype=object)
+    
+    return clrs
 
 # decoding_inputs = ['rate', 'phase', 'energy', 'rate+lfp', 'rate+energy']
 # decoding_inputs_control = ['shuffled_rate', 'rate+shuffled_phase']

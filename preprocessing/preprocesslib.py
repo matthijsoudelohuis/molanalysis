@@ -311,7 +311,8 @@ def proc_task(rawdatadir,sessiondata):
     assert sessiondata['stim'][0] == np.unique(trialdata['stimRight'])[0], 'Stimulus in overview does not match stimulus in trialdata'
 
     if sessiondata['stim'][0] == 'B':
-        sessiondata['stim'][0] = trialdata['stimRight'] = trialdata['stimLeft'] = 'F'
+        sessiondata.at[0,'stim'] = 'F'
+        trialdata.loc[:,'stimRight'] = trialdata.loc[:,'stimLeft'] = 'F'
 
     #Give stimulus category type 
     trialdata['stimcat']            =  ''
@@ -545,7 +546,18 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
         print('Interpolating %d video timestamp issues' % np.sum(issues_ts))
         # Interpolate samples where timestamps are off:
         ts[issues_ts] = np.interp(np.where(issues_ts)[0],np.where(~issues_ts)[0],ts[~issues_ts])
-    assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
+        
+        #Go through another loop:
+        issues_ts = np.concatenate(([False],np.logical_or(np.diff(ts[1:-1])<1/framerate/3,
+                                                  np.diff(ts[1:-1])>1/framerate*2),[False,False]))
+        ts[issues_ts] = np.interp(np.where(issues_ts)[0],np.where(~issues_ts)[0],ts[~issues_ts])
+        #Go through another loop:
+        issues_ts = np.concatenate(([False],np.logical_or(np.diff(ts[1:-1])<1/framerate/3,
+                                                  np.diff(ts[1:-1])>1/framerate*2),[False,False]))
+        ts[issues_ts] = np.interp(np.where(issues_ts)[0],np.where(~issues_ts)[0],ts[~issues_ts])
+
+    # assert ~np.any(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))
+    assert np.sum(np.logical_or(np.diff(ts[1:-1])<1/framerate/3,np.diff(ts[1:-1])>1/framerate*2))<150,'Error! Too many video timestamp issues'
 
     videodata['zpos'] = np.interp(x=videodata['ts'],xp=behaviordata['ts'],
                                     fp=behaviordata['zpos'])               
@@ -705,7 +717,7 @@ def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
             redcell_seg         = np.load(os.path.join(plane_folder,'redim_plane%d_seg.npy' %iplane), allow_pickle=True).item()
             masks_cp_red        = redcell_seg['masks']
             Nredcells_plane     = len(np.unique(masks_cp_red))-1 # number of labeled cells overall, minus 1 because 0 for all nonlabeled pixels
-            redcell         = proc_labeling_plane(iplane,plane_folder,showcells=False,overlap_threshold=0.5)
+            redcell             = proc_labeling_plane(iplane,plane_folder,showcells=False,overlap_threshold=0.5)
         else: 
             print('\n\n Warning: cellpose results not found, setting labeling to zero\n\n')
             redcell             = np.zeros((len(iscell),3))
@@ -1128,8 +1140,14 @@ def assign_layer(celldata):
 
 def add_session_bounds(sessiondata,data):
     if 'trialNumber' in data or 'TrialNumber' in data:
-        sessiondata['tStart']       = np.min(data['tOnset']) - 3 #add session start timestamp
-        sessiondata['tEnd']         = np.max(data['tOffset']) + 3 #add session stop timestamp
+        if 'tOnset' in data:
+            sessiondata['tStart']       = np.min(data['tOnset']) - 3 #add session start timestamp
+            sessiondata['tEnd']         = np.max(data['tOffset']) + 3 #add session stop timestamp
+        elif 'tStart' in data:
+            sessiondata['tStart']       = np.min(data['tStart']) - 3 #add session start timestamp 
+            sessiondata['tEnd']         = np.max(data['tEnd']) + 3 #add session start timestamp
+        else: 
+            raise ValueError('add_session_bounds: data must have either trialNumber, tOnset, tStart, or ts column')
     else: 
         sessiondata['tStart']       = np.min(data['ts']) #add session start timestamp 
         sessiondata['tEnd']         = np.max(data['ts']) #add session start timestamp 

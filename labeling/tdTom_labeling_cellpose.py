@@ -36,7 +36,14 @@ def proc_labeling_plane(iplane,plane_folder,saveoverlay=False,showcells=True,ove
     cellpose_file   = list(filter(lambda a: 'seg.npy' in a, filenames)) #find the files
     redcell_seg     = np.load(os.path.join(plane_folder,cellpose_file[0]), allow_pickle=True).item()
     masks_cp_red    = redcell_seg['masks']
-    
+
+    #Set red cells at the edge of the screen to zero. This makes sure that a suite2p ROI at the edge that is 
+    #is fully red, is labeled as red:
+    masks_cp_red[:ops['yrange'][0],:] = 0
+    masks_cp_red[ops['yrange'][1]:,:] = 0
+    masks_cp_red[:, :ops['xrange'][0]] = 0
+    masks_cp_red[:, ops['xrange'][1]:] = 0
+
     Ncellpose_redcells      = len(np.unique(masks_cp_red))-1
 
     # Compute fraction of suite2p ROI that is red labeled
@@ -51,6 +58,8 @@ def proc_labeling_plane(iplane,plane_folder,saveoverlay=False,showcells=True,ove
     frac_red_in_ROI     = np.zeros(Nsuite2pcells)
     npix_redsomas       = np.histogram(masks_cp_red,
                         bins=np.arange(Ncellpose_redcells+1).astype(int))[0]
+    npix_redsomas[npix_redsomas==0] = 1000 #artificially set soma's outside cropped FOV to being very large
+
     if Ncellpose_redcells:
         for i,s in enumerate(stats):
             c = np.histogram(masks_cp_red[s['ypix'],s['xpix']],

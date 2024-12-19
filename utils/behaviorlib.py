@@ -17,15 +17,23 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import curve_fit
 from scipy.stats import binned_statistic
-
+from utils.plot_lib import my_ceil, my_floor
 from utils.plotting_style import * # get all the fixed color schemes
+
+# def filter_engaged(sessions):
+#     for ises,ses in enumerate(sessions):
+#         ses.trialdata = ses.trialdata[ses.trialdata['engaged']==1]
+#     return sessions
 
 def compute_dprime(signal,response):
     
     ntrials             = len(signal)
     hit_rate            = sum((signal == 1) & (response == 1)) / sum(signal == 1)
     falsealarm_rate     = sum((signal == 0) & (response == 1)) / sum(signal == 0)
-    
+    if hit_rate ==1:
+        hit_rate = 0.9999
+    if falsealarm_rate ==1:
+        falsealarm_rate = 0.9999
     dprime              = st.norm.ppf(hit_rate) - st.norm.ppf(falsealarm_rate)
     criterion           = -0.5 * (st.norm.ppf(hit_rate) + st.norm.ppf(falsealarm_rate))
     return dprime,criterion
@@ -96,17 +104,46 @@ def plot_psycurve(sessions,filter_engaged=False):
         params = fit_psycurve(trialdata,printoutput=True)
 
         ## Plot the results
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(3,3))
         ax.scatter(x, y, label='data',c='k')
         x_highres = np.linspace(np.min(x),np.max(x),1000)
         ax.plot(x_highres, psychometric_function(x_highres, *params), label='fit', color='blue')
-        ax.set_xlabel('Stimulus Intensity')
-        ax.set_ylabel('Probability of Response')
-        ax.legend()
+        ax.set_xlabel('Stimulus (% signal)')
+        ax.set_ylabel('Response Rate')
+        ax.legend(frameon=False)
         ax.set_xlim([np.min(x),np.max(x)])
         ax.set_ylim([0,1])
-        ax.set_title(ses.sessiondata['session_id'][0])
- 
+        ax.axvline(params[0],linestyle='--',color='k')
+        ax.text(params[0], 1.05, f'Threshold: {params[0]:.0f}%', ha='center', va='center', transform=ax.get_xaxis_transform())
+        ax.text(0.6, 0.6, f'{ses.sessiondata["animal_id"][0]}\n{ses.sessiondata["sessiondate"][0]} \nStim {ses.sessiondata["stim"][0]}', ha='left', va='top', transform=ax.transAxes)
+        plt.tight_layout()
+    return fig
+
+def plot_all_psycurve(sessions,filter_engaged=False):
+    ## Plot the results
+    fig, ax = plt.subplots(figsize=(3,3))
+
+    x_highres = np.linspace(0,100,1000)
+
+    params = np.empty((len(sessions),4))
+    for ises,ses in enumerate(sessions):
+        trialdata = ses.trialdata.copy()
+        if filter_engaged:
+            trialdata = trialdata[trialdata['engaged']==1]
+
+        params[ises,:] = fit_psycurve(trialdata,printoutput=False)
+
+        ax.plot(x_highres, psychometric_function(x_highres, *params[ises,:]), label='fit', color='grey',linewidth=0.25)
+        ax.set_xlabel('Stimulus (% signal)')
+    params[ises,:] = fit_psycurve(trialdata,printoutput=False)
+
+    ax.plot(x_highres, psychometric_function(x_highres, *np.median(params,axis=0)), label='fit', 
+            color='black',linewidth=2)
+       
+    ax.set_ylabel('Response Rate')
+    ax.set_xlim([0,100])
+    ax.set_ylim([0,1])
+    plt.tight_layout()
     return fig
 
 
@@ -156,20 +193,20 @@ def noise_to_psy(sessions,filter_engaged=True):
 
 
 def calc_runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+    """
+    Parameters for spatial binning
 
-    ## Parameters for spatial binning
-    # s_pre       #pre cm
-    # s_post      #post cm
-    # binsize     #spatial binning in cm
+    s_pre : int
+        spatial start bin relative to stimulus in centimeters.
+    s_post : int
+        spatial end bin relative to stimulus in centimeters.
+    binsize : int
+        Spatial binning size in centimeters.
+    """
     binedges    = np.arange(s_pre-binsize/2,s_post+binsize+binsize/2,binsize)
     bincenters  = np.arange(s_pre,s_post+binsize,binsize)
 
-    # trialdata   = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
-
     trialdata   = ses.trialdata
-    # runPSTH     = np.empty((len(ses.trialdata),len(bincenters)))
-
-    # for ises,ses in enumerate(sessions):
     ntrials     = len(ses.trialdata)
     runPSTH     = np.empty(shape=(ntrials, len(bincenters)))
 
@@ -177,30 +214,26 @@ def calc_runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
         idx = np.logical_and(itrial-1 <= ses.behaviordata['trialNumber'], ses.behaviordata['trialNumber'] <= itrial+2)
         runPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
                                             ses.behaviordata['runspeed'][idx], statistic='mean', bins=binedges)[0]
-        
-        # idx = ses.behaviordata['trialNumber']==itrial+1
-        # runPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
-        #                                     ses.behaviordata['runspeed'][idx], statistic='mean', bins=binedges)[0]
-    # runPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = runPSTH_ses
 
     return runPSTH, bincenters
 
 
 def calc_lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+    """
+    Parameters for spatial binning
 
-    ## Parameters for spatial binning
-    # s_pre       #pre cm
-    # s_post      #post cm
-    # binsize     #spatial binning in cm
+    s_pre : int
+        spatial start bin relative to stimulus in centimeters.
+    s_post : int
+        spatial end bin relative to stimulus in centimeters.
+    binsize : int
+        Spatial binning size in centimeters.
+    """
 
     binedges    = np.arange(s_pre-binsize/2,s_post+binsize+binsize/2,binsize)
     bincenters  = np.arange(s_pre,s_post+binsize,binsize)
-    # trialdata   = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
-    trialdata   = ses.trialdata
 
-    # lickPSTH     = np.empty((len(ses.trialdata),len(bincenters)))
-                    
-    # for ises,ses in enumerate(sessions):
+    trialdata   = ses.trialdata
     ntrials     = len(ses.trialdata)
     lickPSTH    = np.empty(shape=(ntrials, len(bincenters)))
 
@@ -208,13 +241,62 @@ def calc_lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
         idx = np.logical_and(itrial-1 <= ses.behaviordata['trialNumber'], ses.behaviordata['trialNumber'] <= itrial+2)
         lickPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
                                             ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
-        
-        # lickPSTH[itrial,:] = binned_statistic(ses.behaviordata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
-                                            # ses.behaviordata['lick'][idx], statistic='sum', bins=binedges)[0]
-    # lickPSTH[trialdata['session_id']==ses.sessiondata['session_id'][0],:] = lickPSTH_ses
+
     lickPSTH /= binsize 
 
     return lickPSTH, bincenters
+
+def calc_videomePSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+    """
+    Parameters for spatial binning
+
+    s_pre : int
+        spatial start bin relative to stimulus in centimeters.
+    s_post : int
+        spatial end bin relative to stimulus in centimeters.
+    binsize : int
+        Spatial binning size in centimeters.
+    """
+    binedges    = np.arange(s_pre-binsize/2,s_post+binsize+binsize/2,binsize)
+    bincenters  = np.arange(s_pre,s_post+binsize,binsize)
+
+    trialdata   = ses.trialdata
+    ntrials     = len(ses.trialdata)
+    videomePSTH   = np.empty(shape=(ntrials, len(bincenters)))
+
+    if 'motionenergy' in ses.videodata:
+        for itrial in range(ntrials):
+            videomePSTH[itrial,:] = binned_statistic(ses.videodata['zpos']-ses.trialdata['stimStart'][itrial],
+                                                ses.videodata['motionenergy'], statistic='mean', bins=binedges)[0]
+    return videomePSTH, bincenters
+
+def calc_pupilPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+    """
+    Parameters for spatial binning
+
+    s_pre : int
+        spatial start bin relative to stimulus in centimeters.
+    s_post : int
+        spatial end bin relative to stimulus in centimeters.
+    binsize : int
+        Spatial binning size in centimeters.
+    """
+    binedges    = np.arange(s_pre-binsize/2,s_post+binsize+binsize/2,binsize)
+    bincenters  = np.arange(s_pre,s_post+binsize,binsize)
+
+    trialdata   = ses.trialdata
+    ntrials     = len(ses.trialdata)
+    pupilPSTH   = np.empty(shape=(ntrials, len(bincenters)))
+
+    if 'pupil_area' in ses.videodata:
+        for itrial in range(ntrials):
+            # idx = np.logical_and(itrial-1 <= ses.videodata['trialNumber'], ses.videodata['trialNumber'] <= itrial+2)
+            # pupilPSTH[itrial,:] = binned_statistic(ses.videodata['zpos'][idx]-ses.trialdata['stimStart'][itrial],
+            #                                     ses.videodata['pupil_area'][idx], statistic='mean', bins=binedges)[0]
+            pupilPSTH[itrial,:] = binned_statistic(ses.videodata['zpos']-ses.trialdata['stimStart'][itrial],
+                                                ses.videodata['pupil_area'], statistic='mean', bins=binedges)[0]
+
+    return pupilPSTH, bincenters
 
 def plot_lick_corridor_outcome(trialdata,lickPSTH,bincenters):
     ### Plot licking rate as a function of trial type:
@@ -384,26 +466,36 @@ def plot_run_corridor_psy(trialdata,runPSTH,bincenters,version='signal',hitonly=
     
     return fig
 
-def plot_run_corridor_outcome(trialdata,runPSTH,bincenters):
+def plot_run_corridor_outcome(trialdata,runPSTH,bincenters,plot_mean=True,plot_trials=False):
     ### Plot licking rate as a function of trial type:
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(4,3))
     
     ttypes = pd.unique(trialdata['trialOutcome'])
     colors = get_clr_outcome(ttypes)
 
-    for i,ttype in enumerate(ttypes):
-        idx = trialdata['trialOutcome']==ttype
-        data_mean = np.nanmean(runPSTH[idx,:],axis=0)
-        data_error = np.nanstd(runPSTH[idx,:],axis=0) #/ math.sqrt(sum(idx))
-        ax.plot(bincenters,data_mean,label=ttype,color=colors[i],linewidth=2)
-        ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.2, linewidth=0,color=colors[i])
+    if plot_trials:
+        for i in range(np.shape(runPSTH)[0]):
+            # ax.plot(bincenters,runPSTH[i,:],color=get_clr_outcome([trialdata['trialOutcome'][i]]),alpha=0.1)
+            ax.plot(bincenters,runPSTH[i,:],color='grey',alpha=0.5,linewidth=0.5)
+    
+    if plot_mean:
+        for i,ttype in enumerate(ttypes):
+            idx = trialdata['trialOutcome']==ttype
+            data_mean = np.nanmean(runPSTH[idx,:],axis=0)
+            # data_error = np.nanstd(runPSTH[idx,:],axis=0) #/ math.sqrt(sum(idx))
+            ax.plot(bincenters,data_mean,label=ttype,color=colors[i],linewidth=2)
+            # ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.2, linewidth=0,color=colors[i])
 
     rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
     rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
 
-    ax.legend()
-    ax.set_ylim(0,50)
+    ax.legend(frameon=False,fontsize=8,loc='upper left')
+    if plot_trials:
+        ylim = my_ceil(np.nanmax(runPSTH),-1)
+    else:
+        ylim = my_ceil(np.nanmax(data_mean),-1)
+
     ax.set_xlim(bincenters[0],bincenters[-1])
     ax.set_xlabel('Position rel. to stimulus onset (cm)')
     ax.set_ylabel('Running speed (cm/s)')
@@ -415,13 +507,34 @@ def plot_run_corridor_outcome(trialdata,runPSTH,bincenters):
                             fill = True, alpha=0.2,
                             color = "grey",
                             linewidth = 0))
-
-    plt.text(5, 45, 'Stim',fontsize=11)
-    plt.text(27, 45, 'Reward',fontsize=11)
+    ax.set_ylim(0,ylim)
+    plt.text(3, ylim-3, 'Stim',fontsize=10)
+    plt.text(rewzonestart+3, ylim-3, 'Rew',fontsize=10)
     plt.tight_layout()
-
+    plt.title(trialdata['session_id'][0],fontsize=10)
     return fig
 
+def stim_remapping(sessions):
+    stimmap             = {'Ori45'  : 'A',
+                    'Ori135' : 'B',
+                    'A' : 'C',
+                    'D' : 'D',
+                    'G' : 'E',
+                    'F' : 'F'}
+    
+    sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+    assert len(sessiondata['stim'].unique()) <= 6, "More than 6 stimuli!"
+    assert set(sessiondata['stim'].unique()).issubset(set(stimmap.keys())), "Not all original stimuli in sessiondata are in map"
+
+    for ises,ses in enumerate(sessions):
+        ses.sessiondata['stim'] = ses.sessiondata['stim'].map(stimmap)
+        ses.trialdata['stimRight'] = ses.trialdata['stimRight'].map(stimmap)
+        ses.trialdata['stimLeft'] = ses.trialdata['stimLeft'].map(stimmap)
+    
+    sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+    assert set(sessiondata['stim'].unique()).issubset(set(stimmap.values())), "Not all new stimuli in sessiondata are in map"
+    
+    return sessions
 
 # Alternative psychometric curve function: 
 # d = np.array([75, 80, 90, 95, 100, 105, 110, 115, 120, 125], dtype=float)

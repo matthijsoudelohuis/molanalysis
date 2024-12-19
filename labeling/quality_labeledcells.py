@@ -23,6 +23,7 @@ from utils.psth import compute_tensor,compute_respmat
 
 #%% Load the data from all passive protocols:
 protocols            = ['GR','GN','IM']
+protocols            = ['DN']
 
 sessions,nsessions            = filter_sessions(protocols)
 

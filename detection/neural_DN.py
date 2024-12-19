@@ -6,8 +6,9 @@ Author: Matthijs Oude Lohuis, Champalimaud Research
 This script contains a series of functions that analyze activity in visual VR detection task. 
 """
 
+#%% Import packages
 import os
-os.chdir('D:\\Python\\molanalysis\\')
+os.chdir('E:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 
@@ -33,11 +34,12 @@ import matplotlib.pyplot as plt
 import matplotlib.patches
 from utils.plotting_style import * #get all the fixed color schemes
 from matplotlib.lines import Line2D
-plt.rcParams['svg.fonttype'] = 'none'
 from utils.behaviorlib import * # get support functions for beh analysis 
 from detection.plot_neural_activity_lib import *
 
-################################################################
+plt.rcParams['svg.fonttype'] = 'none'
+
+#%% ###############################################################
 
 protocol            = 'DN'
 
