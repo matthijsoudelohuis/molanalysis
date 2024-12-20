@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.linear_model import LinearRegression
-
+import copy
 # from sklearn import preprocessing
 # from utils.plotting_style import * #get all the fixed color schemes
 # from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
@@ -139,4 +139,117 @@ def plot_snake_neuron_sortnoise(data,sbins,ses):
     cbar_ax = fig.add_axes([0.91, 0.3, 0.04, 0.4])
     fig.colorbar(c, cax=cbar_ax,label='Activity (z)')
 
+    return fig
+
+
+def plot_mean_activity_example_neurons(data,sbins,ses,example_cell_ids):
+    
+    vars        = ['signal','hitmiss','runspeed']
+    # sortvars        = ['signal','hit/miss','runspeed','lickresponse']
+
+    T          = len(ses.trialdata)
+    N          = len(example_cell_ids)
+    S          = len(sbins)
+    fig, axes  = plt.subplots(nrows=N,ncols=len(vars),figsize=(3*len(vars),2*N),sharey='row',sharex=True)
+    
+    for ivar,uvar in enumerate(vars):
+
+        for iN,cell_id in enumerate(example_cell_ids):
+            uN = np.where(ses.celldata['cell_id']==cell_id)[0][0]
+            if uvar=='signal':
+                nbins_noise     = 5
+                C               = nbins_noise + 2
+                noise_signal    = ses.trialdata['signal'][ses.trialdata['stimcat']=='N'].to_numpy()
+                
+                plotdata        = np.empty((C,S))
+                plotdata[0,:]   = np.nanmean(data[uN,ses.trialdata['signal']==0,:],axis=0)
+                plotdata[-1,:]  = np.nanmean(data[uN,ses.trialdata['signal']==100,:],axis=0)
+
+                edges = np.linspace(np.min(noise_signal),np.max(noise_signal),nbins_noise+1)
+                centers = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
+
+                for ibin,(low,high) in enumerate(zip(edges[:-1],edges[1:])):
+                    # print(low,high)
+                    idx = (ses.trialdata['signal']>=low) & (ses.trialdata['signal']<=high)
+                    plotdata[ibin+1,:] = np.mean(data[uN,idx,:],axis=0)
+                    
+                plotlabels = np.round(np.hstack((0,centers,100)))
+                # plotcolors = np.hstack(('k',np.linspace(0,1,nbins_noise),'r'))
+                plotcolors = sns.color_palette("inferno",C)
+                
+                # plotcolors = [sns. sns.color_palette("inferno",C)
+                plotcolors = ['black']  # Start with black
+                plotcolors += sns.color_palette("magma", n_colors=nbins_noise)  # Add 5 colors from the magma palette
+                plotcolors.append('orange')  # Add orange at the end
+
+                # print(plotcolors)
+
+            elif uvar=='hitmiss':
+
+                C               = 2
+                noise_trials        = ses.trialdata['stimcat']=='N'
+
+                # unoise          = np.unique(ses.trialdata['signal'][noise_trials].to_numpy())
+                usignals        = np.unique(ses.trialdata['signal'].to_numpy())
+                
+                plotdata        = np.empty((C,S))
+                
+                temp            = copy.deepcopy(data[uN,:,:])
+
+                for isig,usig in enumerate(usignals):
+                    temp[ses.trialdata['signal']==usig,:] -= np.nanmean(temp[ses.trialdata['signal']==usig,:],axis=0,keepdims=True)
+
+                plotdata[0,:]  = np.nanmean(temp[(ses.trialdata['lickResponse']==0) & (noise_trials),:],axis=0)
+                plotdata[1,:]  = np.nanmean(temp[(ses.trialdata['lickResponse']==1) & (noise_trials),:],axis=0)
+                
+                plotlabels = ['Miss','Hit']
+                # plotcolors = np.hstack(('k',np.linspace(0,1,nbins_noise),'r'))
+                plotcolors = sns.color_palette("husl",C)
+
+            elif uvar=='runspeed':
+                
+                C               = 5
+                # noise_signal    = ses.trialdata['signal'][ses.trialdata['stimcat']=='N'].to_numpy()
+                
+                plotdata        = np.empty((C,S))
+
+                edges = np.nanquantile(ses.runPSTH,np.linspace(0,1,C+1),axis=None)
+                centers = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
+
+                for ibin,(low,high) in enumerate(zip(edges[:-1],edges[1:])):
+                    # print(low,high)
+                    idx         = np.logical_and(ses.runPSTH>=low,ses.runPSTH<=high)
+                    temp        = copy.deepcopy(data[uN,:,:])
+                    # Compute the mean along axis=0 for elements where idx is True
+                    masked_data = np.where(idx, temp, np.nan)  # Replace False with NaN
+                    plotdata[ibin,:] = np.nanmean(masked_data, axis=0)  # Compute the mean ignoring NaN
+                    
+                plotlabels = np.round(centers)
+                # plotcolors = np.hstack(('k',np.linspace(0,1,nbins_noise),'r'))
+                plotcolors = sns.color_palette("inferno",C)
+        
+            ax = axes[iN,ivar]
+            
+            for iC in range(C):
+                ax.plot(sbins, plotdata[iC,:], color=plotcolors[iC], label=plotlabels[iC],linewidth=2)
+            if iN==0:
+                ax.legend(loc='upper left',fontsize=6)
+
+            if iN==N-1:
+                ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
+                ax.set_xticks([-75,-50,-25,0,25,50,75])
+            else:
+                ax.set_xticklabels([])
+            ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
+            ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
+            ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
+            ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
+            ax.set_xlim([-80,60])
+
+            # plt.ylim([0,Ntrials])
+        
+    # fig.subplots_adjust(right=0.88)
+    # cbar_ax = fig.add_axes([0.91, 0.3, 0.04, 0.4])
+    # fig.colorbar(c, cax=cbar_ax,label='Activity (z)')
+    plt.tight_layout()
     return fig

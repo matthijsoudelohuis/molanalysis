@@ -8,7 +8,7 @@ This script contains a series of functions that analyze activity in visual VR de
 
 #%% Import packages
 import os
-os.chdir('E:\\Python\\molanalysis\\')
+os.chdir('c:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -30,6 +30,7 @@ from sklearn.preprocessing import minmax_scale
 from scipy.signal import medfilt
 from sklearn.preprocessing import StandardScaler
 
+from loaddata.get_data_folder import get_local_drive
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches
@@ -46,11 +47,11 @@ protocol            = 'DN'
 calciumversion      = 'deconv'
 
 session_list = np.array([['LPE12385', '2024_06_15']])
-session_list = np.array([['LPE12385', '2024_06_16']])
-session_list = np.array([['LPE11998', '2024_04_23']])
-session_list = np.array([['LPE10884', '2023_12_14']])
-session_list = np.array([['LPE10884', '2023_12_14']])
-session_list        = np.array([['LPE12013','2024_04_25']])
+# session_list = np.array([['LPE12385', '2024_06_16']])
+# session_list = np.array([['LPE11998', '2024_04_23']])
+# session_list = np.array([['LPE10884', '2023_12_14']])
+# session_list = np.array([['LPE10884', '2023_12_14']])
+# session_list        = np.array([['LPE12013','2024_04_25']])
 # session_list = np.array([['LPE09829', '2023_03_29'],
 #                         ['LPE09829', '2023_03_30'],
 #                         ['LPE09829', '2023_03_31']])
@@ -59,7 +60,7 @@ sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,
                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
 # savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
-savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Detection\\Encoding\\'
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\Encoding\\')
 # savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - DN regression\\'
 
 #%% 
@@ -71,17 +72,28 @@ for i in range(nSessions):
 ## Parameters for spatial binning
 s_pre       = -80  #pre cm
 s_post      = 60   #post cm
-binsize     = 5     #spatial binning in cm
+binsize     = 10     #spatial binning in cm
 
 for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
                                        sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=binsize,method='binmean')
 
+## Compute average response in stimulus response zone:
+for i in range(nSessions):
+    sessions[i].respmat             = compute_respmat_space(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['stimStart'],
+                                    sessions[i].zpos_F,sessions[i].trialnum_F,s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
+
+for i in range(nSessions):
+    temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[i].behaviordata['runspeed']),1)))
+    sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
+                                    sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
+
+
 #%% #################### Compute spatial runspeed ####################################
 for ises,ses in enumerate(sessions): # running across the trial:
     sessions[ises].behaviordata['runspeed'] = medfilt(sessions[ises].behaviordata['runspeed'], kernel_size=51)
-    [sessions[ises].runPSTH,_]     = calc_runPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=5)
-    [sessions[ises].lickPSTH,_]    = calc_lickPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=5)
+    [sessions[ises].runPSTH,_]     = calc_runPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=binsize)
+    [sessions[ises].lickPSTH,_]    = calc_lickPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=binsize)
 
 #%% #################### Compute encoding of variables in single neurons  ####################################
 
@@ -106,9 +118,32 @@ for iN in np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))
     plot_snake_neuron_sortnoise(sessions[ises].stensor[iN,:,:],sbins,sessions[ises])
     plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
 
-ises = 0
-example_cell_ids = ['LPE12385_2024_06_15_0_0098', #hit specific activity?
-            'LPE12385_2024_06_15_1_0075'] #some structure
+# ises = 0
+# example_cell_ids = ['LPE12385_2024_06_15_0_0098', #hit specific activity?
+#             'LPE12385_2024_06_15_1_0075'] #some structure
+
+
+#%%
+example_cell_ids = ['LPE12385_2024_06_15_0_0075',
+'LPE12385_2024_06_15_0_0126',
+'LPE12385_2024_06_15_0_0105', # reduction upon stimulus zone
+'LPE12385_2024_06_15_0_0114', # noise trial specific response, very nice one
+'LPE12385_2024_06_15_0_0183',
+'LPE12385_2024_06_15_3_0016',
+'LPE12385_2024_06_15_0_0031', # noise trial specific response
+'LPE12385_2024_06_15_1_0075', # hit specific activity?
+'LPE12385_2024_06_15_6_0027', # hit specific activity?
+'LPE12385_2024_06_15_7_0212', # hit specific activity?
+'LPE12385_2024_06_15_1_0475', # very clean response
+'LPE12385_2024_06_15_2_0099', # nice responses
+'LPE12385_2024_06_15_2_0499'] #variable responsiveness
+
+# 'LPE12385_2024_06_15_0_0129'
+
+# example_cell_ids = np.randsom.choice(sessions[0].celldata['cell_id'],size=8,replace=False)
+
+fig = plot_mean_activity_example_neurons(sessions[ises].stensor,sbins,sessions[ises],example_cell_ids)
+
 
 
 #%% Run encoding model: 
@@ -219,29 +254,38 @@ for iN in tqdm(range(N),desc='Fitting encoding model across neurons'):
             weights[iN,ibin,:] = np.mean(fold_weights, axis=0)
 
 #%% Show the decoding performance
-fig,ax = plt.subplots(1,1,figsize=(4,3))
+
+labeled     = ['unl','lab']
+nlabels     = 2
+areas       = np.unique(sessions[0].celldata['roi_name'])
+nareas      = len(areas)
+
+clrs_vars = sns.color_palette('inferno', 3)
+
+fig,axes = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2))
 
 # plt.plot(sbins,r2_cv.mean(axis=0),color='k',linewidth=2)
+for ilab,label in enumerate(labeled):
+    for iarea, area in enumerate(areas):
+        ax = axes[ilab,iarea]
+        idx = np.all((sessions[0].celldata['roi_name']==area, sessions[0].celldata['labeled']==label), axis=0)
+        if np.sum(idx) > 0:
+            for ivar,var in enumerate(variables):
+                # plt.plot(sbins,r2_cv[idx,iarea],color=clrs[ilab],linewidth=1)
+                ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
+        ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
+        ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
+        ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
+        ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
+        ax.set_xlim([-80,60])
+        if ilab == 0:
+            ax.set_title(area)
+        if ilab == 1:
+            ax.set_xlabel('Position relative to stim (cm)')
+            ax.set_ylabel('Encoding weights')
+        ax.legend(frameon=False)
 
-clrs = sns.color_palette('inferno', 3)
-for ivar,var in enumerate(variables):
-    # plt.plot(sbins,np.nanmean(weights[:,:,ivar],axis=0),color=clrs[ivar],linewidth=1)
-    plt.plot(sbins,np.nanmean(np.abs(weights[:,:,ivar]),axis=0),color=clrs[ivar],linewidth=2,label=var)
-    # plt.plot(sbins,np.nanmean(weights[:,:,ivar],axis=0),color=clrs[ivar],linewidth=1,label=var)
-ax.legend(frameon=False)
-# for i,ses in enumerate(sessions):
-#     if np.any(performance[i,:]):
-#         ax.plot(bincenters,performance[i,:],color='grey',alpha=0.5,linewidth=1)
-# shaded_error(bincenters,performance,error='sem',ax=ax,color='b')
-ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
-ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
-ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
-ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
-
-ax.set_xlabel('Position relative to stim (cm)')
-ax.set_ylabel('Encoding weights')
-# ax.set_title('Decoding Performance')
-ax.set_xlim([-80,60])
 plt.tight_layout()
-plt.savefig(os.path.join(savedir, 'EncodingWeights_%s.png') % sessions[ises].sessiondata['session_id'][0], format='png')
+plt.savefig(os.path.join(savedir, 'EncodingWeights_areas_%s.png') % sessions[ises].sessiondata['session_id'][0], format='png')
+
 

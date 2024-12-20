@@ -12,7 +12,7 @@ import os
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
-os.chdir('e:\\Python\\molanalysis\\')
+os.chdir('c:\\Python\\molanalysis\\')
 from scipy.signal import medfilt
 from tqdm import tqdm
 
