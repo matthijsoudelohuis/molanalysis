@@ -39,7 +39,7 @@ def plot_snake_area(snakeplot,sbins,stimtypes=['C','N','M']):
         else:
             axes[iTT].set_yticks([])
         plt.xlabel('Pos. relative to stim (cm)',fontsize=9)
-        plt.xlim([-80,80])
+        plt.xlim([-80,60])
         plt.ylim([0,Narea])
     
     fig.subplots_adjust(right=0.88)

@@ -61,20 +61,30 @@ sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,
 # sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE12013'],
 #                            load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
 
-# savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - VR\\Stim\\'
-savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Detection\\ExampleActivity\\'
-# savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Neural - DN regression\\'
+
+
+
+#%% ### Show for all sessions which region of the psychometric curve the noise spans #############
+sessions = noise_to_psy(sessions,filter_engaged=True)
+
+idx_inclthr = np.empty(nSessions).astype('int')
+for ises,ses in enumerate(sessions):
+    idx_inclthr[ises] = int(np.logical_and(np.any(sessions[ises].trialdata['signal_psy']<=0),np.any(sessions[ises].trialdata['signal_psy']>=0)))
+    ses.sessiondata['incl_thr'] = idx_inclthr[ises]
+
+sessions = [ses for ises,ses in enumerate(sessions) if ses.sessiondata['incl_thr'][0]]
+nSessions = len(sessions)
 
 #%% 
 for i in range(nSessions):
     sessions[i].calciumdata = sessions[i].calciumdata.apply(zscore,axis=0)
 
-#%% ############################### Spatial Tensor #################################
+################################ Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning
-s_pre       = -80  #pre cm
-s_post      = 60   #post cm
-binsize     = 5     #spatial binning in cm
+s_pre       = -100  #pre cm
+s_post      = 100   #post cm
+binsize     = 10     #spatial binning in cm
 
 for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
@@ -122,8 +132,8 @@ for iarea,area in enumerate(areas):
     plt.tight_layout()
     plt.savefig(os.path.join(savedir,'ActivityInCorridor_perStim_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-#%% ############################ Plot the activity during one session: ####################################
-ises = 0
+#%% ############################ Plot the activity during  one session: ####################################
+ises = 1
 
 for iN in range(1000,1200):
     plot_snake_neuron_stimtypes(sessions[ises].stensor[iN,:,:],sbins,sessions[ises].trialdata)
@@ -149,9 +159,8 @@ for iN in np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))
     plt.savefig(os.path.join(savedir,'SingleNeuron','ActivityInCorridor_perStim_' + sessions[ises].celldata['cell_id'][iN] + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Show example neurons that are correlated either to the stimulus signal, lickresponse or to running speed:
-ises = 0
-# for iN in range(900,1100):
-for iN in np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))[0]:
+ises = 1
+for iN in range(900,1100):
     plot_snake_neuron_sortnoise(sessions[ises].stensor[iN,:,:],sbins,sessions[ises])
     plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
 
