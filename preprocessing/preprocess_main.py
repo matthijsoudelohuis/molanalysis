@@ -83,6 +83,9 @@ for animal_id in animal_ids: #for each animal
 
                 if 'IM' in protocol: #Natural Image Dataset
                     sessiondata,trialdata   = proc_IM(rawdatadir,sessiondata)
+
+                # if 'MV' in protocol: #MEI validation protocol
+                #     sessiondata,trialdata   = proc_MV(rawdatadir,sessiondata)
                 
                 videodata         = proc_videodata(rawdatadir,sessiondata,behaviordata)
 
