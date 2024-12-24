@@ -19,20 +19,23 @@ import copy
 
 ######################## Function to plot snakestyle heatmaps per stim per area #####################
 
-def plot_snake_area(snakeplot,sbins,stimtypes=['C','N','M']):
-    #Sort the neurons based on location of peak response:
-    sortidx     = np.argsort(-np.nanargmax(np.nanmean(snakeplot,axis=2),axis=1))
-    snakeplot   = snakeplot[sortidx,:,:]
-    Narea       = np.shape(snakeplot)[0]
+def plot_snake_area(data,sbins,stimtypes=['C','N','M'],sort='peakloc'):
+    if sort=='peakloc': #Sort the neurons based on location of peak response:
+        sortidx     = np.argsort(-np.nanargmax(np.nanmean(data,axis=2),axis=1))
+    elif sort=='stimresp': #Sort the neurons based on peak response:
+        sortidx     = np.argsort(np.nanmean(np.nanmean(data[:,(sbins>=0) & (sbins<=20),:],axis=2),axis=1))
+    
+    data        = data[sortidx,:,:]
+    Narea       = np.shape(data)[0]
     X, Y        = np.meshgrid(sbins, range(Narea)) #Construct X Y positions of the heatmaps:
 
     fig, axes = plt.subplots(nrows=1,ncols=3,figsize=(10,5))
     for iTT in range(len(stimtypes)):
         plt.subplot(1,3,iTT+1)
-        c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'bwr',
-                           vmin=-np.percentile(snakeplot,99),vmax=np.percentile(snakeplot,99))
-        # c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.25)
-        # c = plt.pcolormesh(X,Y,snakeplot[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.5)
+        c = plt.pcolormesh(X,Y,data[:,:,iTT], cmap = 'bwr',
+                           vmin=-np.percentile(data,99),vmax=np.percentile(data,99))
+        # c = plt.pcolormesh(X,Y,data[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.25)
+        # c = plt.pcolormesh(X,Y,data[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.5)
         plt.title(stimtypes[iTT],fontsize=11)
         if iTT==0:
             plt.ylabel('nNeurons',fontsize=10)
@@ -52,7 +55,7 @@ def plot_snake_area(snakeplot,sbins,stimtypes=['C','N','M']):
 ##################### Function to plot activity across trials for individual neurons #####################
 
 def plot_snake_neuron_stimtypes(data,sbins,trialdata,stimtypes=['C','N','M']):
-    # sortidx     = np.argsort(-np.nanargmax(np.nanmean(snakeplot,axis=2),axis=1))
+    # sortidx     = np.argsort(-np.nanargmax(np.nanmean(data,axis=2),axis=1))
     # data        = data[sortidx,:,:]
     Ntrials         = np.shape(data)[0]
 

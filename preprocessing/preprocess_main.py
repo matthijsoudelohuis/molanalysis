@@ -25,11 +25,11 @@ date_filter         = []
 # animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
 
 # animal_ids          = ['LPE12013'] #If empty than all animals in folder will be processed
-# date_filter         = ['2024_04_25']
-# animal_ids          = ['LPE11997'] #If empty than all animals in folder will be processed
-# date_filter         = ['2024_04_17']
-animal_ids          = ['LPE12385'] #If empty than all animals in folder will be processed
-date_filter         = ['2024_06_15']
+# date_filter         = ['2024_04_26']
+animal_ids          = ['LPE11997'] #If empty than all animals in folder will be processed
+date_filter         = ['2024_04_17']
+# animal_ids          = ['LPE12385'] #If empty than all animals in folder will be processed
+# date_filter         = ['2024_06_16']
 
 # protocols           = ['GR','SP','GN','RF']
 # protocols           = ['GR','GN']

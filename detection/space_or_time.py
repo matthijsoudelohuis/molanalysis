@@ -9,7 +9,7 @@ activity captures the relevant feature encoding better.
 
 #%% Import packages
 import os
-os.chdir('c:\\Python\\molanalysis\\')
+os.chdir('e:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -52,6 +52,9 @@ calciumversion      = 'deconv'
 
 session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
+session_list = np.array([['LPE12013', '2024_04_26']])
+session_list = np.array([['LPE11997', '2024_04_16']])
+# session_list = np.array([['LPE12013', '2024_04_25']])
 
 sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
@@ -69,31 +72,35 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\
 ## Parameters for spatial binning
 s_pre       = -60  #pre cm
 s_post      = 60   #post cm
-binsize     = 10     #spatial binning in cm
+sbinsize     = 10     #spatial binning in cm
 
 for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
-                                       sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=binsize,method='binmean')
+                                       sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=sbinsize,method='binmean')
 
 #%% #################### Spatial runspeed  ####################################
 for ises,ses in enumerate(sessions):
     [sessions[ises].runPSTH,bincenters] = calc_runPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=binsize)
    
 mu_runspeed = np.nanmean(sessions[ises].runPSTH[:,(bincenters>-10) & (bincenters<50)],axis=None)
+t_pre       = s_pre/mu_runspeed  #pre sec
+t_post      = s_post/mu_runspeed   #post sec
+tbinsize     = sbinsize/mu_runspeed  #spatial binning in cm
+
 print('Mean running speed: %1.2f cm/s' % mu_runspeed)
-print('%2.1f cm bins would correspond to %1.2f sec bins' % (binsize,binsize/mu_runspeed))
+print('%2.1f cm bins would correspond to %1.2f sec bins' % (sbinsize,tbinsize))
 
 #%% ############################### Time Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by T time bins
 ## Parameters for spatial binning
-t_pre       = -5  #pre sec
-t_post      = 5   #post sec
-binsize     = 0.6  #spatial binning in cm
+
+# t_pre       = -5  #pre sec
+# t_post      = 5   #post sec
+# tbinsize     = 0.6  #spatial binning in cm
 
 for i in range(nSessions):
     sessions[i].tensor,tbins    = compute_tensor(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['tStimStart'],
-                                       t_pre=t_pre,t_post=t_post,binsize=binsize,method='binmean')
-
+                                       t_pre=t_pre,t_post=t_post,binsize=tbinsize,method='binmean')
 
 
 
@@ -178,6 +185,24 @@ example_cell_ids = ['LPE12385_2024_06_15_0_0075',
 'LPE12385_2024_06_15_2_0099', # nice responses
 'LPE12385_2024_06_15_2_0499'] #variable responsiveness
 
+example_cell_ids = ['LPE12013_2024_04_25_4_0187',
+                    'LPE12013_2024_04_25_0_0007',
+                    'LPE12013_2024_04_25_1_0046',
+                    'LPE12013_2024_04_25_7_0161'] #
+
+example_cell_ids = ['LPE12013_2024_04_26_2_0259',
+                    'LPE12013_2024_04_26_2_0250',
+                    'LPE12013_2024_04_26_0_0016',
+                    'LPE12013_2024_04_26_7_0310',
+                    'LPE12013_2024_04_26_0_0017'] #
+
+example_cell_ids = ['LPE11997_2024_04_16_0_0013',
+                    'LPE11997_2024_04_16_1_0001',
+                    'LPE11997_2024_04_16_2_0047',
+                    'LPE11997_2024_04_16_0_0134',
+                    'LPE11997_2024_04_16_4_0115'] #
+
+
 #%% 
 example_cell_ids = np.random.choice(sessions[ises].celldata['cell_id'],size=8,replace=False)
 
@@ -186,7 +211,6 @@ example_cell_ids = np.random.choice(sessions[ises].celldata['cell_id'],size=8,re
 for icell,cell_id in enumerate(example_cell_ids):
     if np.isin(cell_id,sessions[ises].celldata['cell_id']):
         plot_neuron_spacetime_alignment(sessions[ises],cell_id,sbins,tbins)
-        
 
 #%% 
 idx_N = np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))[0]
@@ -208,7 +232,6 @@ std_time = np.nanmean(np.nanstd(data,axis=1),axis=0)
 # std_time = np.nanmean(np.nanstd(sessions[ises].tensor[idx,:,:],axis=1),axis=0)
 
 #%% Compare the variability in responses across spatial or temporal bins:
-
 fig,axes = plt.subplots(1,2,figsize=(5,2.5),sharey=True)
 ax = axes[0]
 ax.plot(sbins,std_space,color='r')
@@ -226,4 +249,110 @@ ax.set_xlabel('Stimulus passing (sec)')
 ax.set_yticklabels(axes[1].get_yticks())
 ax.set_title('Time')
 ax.grid(True)
+plt.tight_layout()
+plt.savefig(os.path.join(savedir, 'Var_Comparison_%s.png') % sessions[ises].sessiondata['session_id'][0], format='png')
+
+#%% Decoding performance across space or across time: 
+
+
+
+# from sklearn.model_selection import KFold
+# from sklearn.linear_model import LogisticRegression
+# from sklearn.metrics import accuracy_score
+# from sklearn.model_selection import cross_val_score
+# from scipy.stats import zscore
+
+# # Define the variables to use for decoding
+# variables = ['runspeed', 'pupil_area', 'videoME', 'lick_rate']
+
+# # Define the number of folds for cross-validation
+# kfold = 5
+
+# # Initialize an array to store the decoding performance
+# performance = np.full((nsessions,len(bincenters)), np.nan)
+
+# # Loop through each session
+# for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across sessions'):
+#     idx = np.all((ses.trialdata['engaged']==1,ses.trialdata['stimcat']=='N'), axis=0)
+            
+#     if np.sum(idx) > 50:
+#         # Get the lickresponse data for this session
+#         y = ses.trialdata['lickResponse'][idx].to_numpy()
+
+#         X = np.stack((ses.runPSTH[idx,:], ses.pupilPSTH[idx,:], ses.videomePSTH[idx,:], ses.lickPSTH[idx,:]), axis=2)
+#         X = np.nanmean(X, axis=1)
+#         X = zscore(X, axis=0)
+#         X = X[:,np.all(~np.isnan(X),axis=0)]
+#         X = X[:,np.all(~np.isinf(X),axis=0)]
+
+#         # # Find the optimal regularization strength (lambda)
+#         # lambdas = np.logspace(-4, 4, 10)
+#         # cv_scores = np.zeros((len(lambdas),))
+#         # for ilambda, lambda_ in enumerate(lambdas):
+#         #     model = LogisticRegression(penalty='l1', solver='liblinear', C=lambda_)
+#         #     scores = cross_val_score(model, X, y, cv=kf, scoring='accuracy')
+#         #     cv_scores[ilambda] = np.mean(scores)
+#         # optimal_lambda = lambdas[np.argmax(cv_scores)]
+#         # # print('Optimal lambda for session %d: %0.4f' % (ises, optimal_lambda))
+#         # optimal_lambda = np.clip(optimal_lambda, 0.03, 166)
+#         optimal_lambda = 1
+
+#         # Loop through each spatial bin
+#         for ibin, bincenter in enumerate(bincenters):
+            
+#             # Define the X and y variables
+#             X = np.stack((ses.runPSTH[idx,ibin], ses.pupilPSTH[idx,ibin], ses.videomePSTH[idx,ibin], ses.lickPSTH[idx,ibin]), axis=1)
+#             X = zscore(X, axis=0)
+#             X = X[:,np.all(~np.isnan(X),axis=0)]
+#             X = X[:,np.all(~np.isinf(X),axis=0)]
+
+#             # Define the k-fold cross-validation object
+#             kf = KFold(n_splits=kfold, shuffle=True, random_state=42)
+            
+#             # Initialize an array to store the decoding performance for each fold
+#             fold_performance = np.zeros((kfold,))
+#             fold_performance_shuffle = np.zeros((kfold,))
+            
+#             # Loop through each fold
+#             for ifold, (train_index, test_index) in enumerate(kf.split(X)):
+#                 # Split the data into training and testing sets
+#                 X_train, X_test = X[train_index], X[test_index]
+#                 y_train, y_test = y[train_index], y[test_index]
+                
+#                 # Train a logistic regression model on the training data with regularization
+#                 model = LogisticRegression(penalty='l1',solver='liblinear',C=optimal_lambda)
+#                 model.fit(X_train, y_train)
+                
+#                 # Make predictions on the test data
+#                 y_pred = model.predict(X_test)
+                
+#                 # Calculate the decoding performance for this fold
+#                 fold_performance[ifold] = accuracy_score(y_test, y_pred)
+                
+#                 # Shuffle the labels and calculate the decoding performance for this fold
+#                 np.random.shuffle(y_train)
+#                 model.fit(X_train, y_train)
+#                 y_pred = model.predict(X_test)
+#                 fold_performance_shuffle[ifold] = accuracy_score(y_test, y_pred)
+            
+#             # Calculate the average decoding performance across folds
+#             performance[ises,ibin] = np.mean(fold_performance - fold_performance_shuffle)
+
+# #%% Show the decoding performance
+# fig,ax = plt.subplots(1,1,figsize=(4,3))
+# for i,ses in enumerate(sessions):
+#     if np.any(performance[i,:]):
+#         ax.plot(bincenters,performance[i,:],color='grey',alpha=0.5,linewidth=1)
+# shaded_error(bincenters,performance,error='sem',ax=ax,color='b')
+# ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
+# ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
+# ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
+# ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
+
+# ax.set_xlabel('Position relative to stim (cm)')
+# ax.set_ylabel('Decoding Performance \n (accuracy - shuffle)')
+# ax.set_title('Decoding Performance')
+# ax.set_xlim([-80,60])
+# plt.tight_layout()
+# plt.savefig(os.path.join(savedir, 'Spatial', 'LogisticDecodingPerformance_LickResponse.png'), format='png')
 

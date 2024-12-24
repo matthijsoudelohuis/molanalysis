@@ -48,6 +48,7 @@ calciumversion      = 'deconv'
 
 session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
+# session_list = np.array([['LPE12385', '2024_06_16']])
 # session_list = np.array([['LPE11998', '2024_04_23']])
 # session_list = np.array([['LPE10884', '2023_12_14']])
 # session_list = np.array([['LPE10884', '2023_12_14']])

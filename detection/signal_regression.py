@@ -8,7 +8,7 @@ This script contains a series of functions that analyze activity in visual VR de
 
 #%% Import packages
 import os
-os.chdir('c:\\Python\\molanalysis\\')
+os.chdir('e:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 
@@ -40,7 +40,7 @@ from detection.plot_neural_activity_lib import *
 
 plt.rcParams['svg.fonttype'] = 'none'
 
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\Regression\\')
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\')
 
 #%% ###############################################################
 
@@ -50,6 +50,7 @@ calciumversion      = 'deconv'
 
 session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
+session_list = np.array([['LPE12013', '2024_04_25']])
 # session_list = np.array([['LPE11998', '2024_04_23']])
 # session_list = np.array([['LPE10884', '2023_12_14']])
 # session_list = np.array([['LPE10884', '2023_12_14']])
@@ -130,10 +131,10 @@ areas   = sessions[ises].celldata['roi_name'].unique()
 for iarea,area in enumerate(areas):
     idx         = sessions[ises].celldata['roi_name'] == area
     areasnake   = snakeplots[idx,:,:]
-    plot_snake_area(snakeplots[idx,:,:],sbins,stimtypes=stimlabels)
+    plot_snake_area(snakeplots[idx,:,:],sbins,stimtypes=stimlabels,sort='stimresp')
     plt.suptitle(area,fontsize=16,y=0.96)
     plt.tight_layout()
-    plt.savefig(os.path.join(savedir,'ActivityInCorridor_perStim_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+    # plt.savefig(os.path.join(savedir,'ActivityInCorridor_perStim_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% ############################ Plot the activity during  one session: ####################################
 ises = 0
@@ -431,12 +432,15 @@ def pca_scatter_stimresp(respmat,ses,colorversion='stimresp'):
 sesidx = 0
 #For all areas:
 fig = pca_scatter_stimresp(sessions[sesidx].respmat,sessions[sesidx],colorversion='stimresp')
-# plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_stimResp_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.suptitle('stimresp',fontsize=14)
+plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_stimResp_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 fig = pca_scatter_stimresp(sessions[sesidx].respmat,sessions[sesidx],colorversion='runspeed')
+plt.suptitle('runspeed',fontsize=14)
 plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_runspeed_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 fig = pca_scatter_stimresp(sessions[sesidx].respmat,sessions[sesidx],colorversion='signal')
+plt.suptitle('signal',fontsize=14)
 plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_signal_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% 
@@ -448,16 +452,16 @@ for iarea,area in enumerate(areas):
     respmat     = sessions[sesidx].respmat[idx,:]
     
     fig = pca_scatter_stimresp(respmat,sessions[sesidx],colorversion='stimresp')
-    plt.suptitle(area,fontsize=14)
-    # plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_stimResp_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+    plt.suptitle(area + ' stimresp',fontsize=14)
+    plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_stimResp_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
     fig = pca_scatter_stimresp(respmat,sessions[sesidx],colorversion='runspeed')
-    plt.suptitle(area,fontsize=14)
-    # plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_runspeed_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+    plt.suptitle(area + ' runspeed',fontsize=14)
+    plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_runspeed_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
     fig = pca_scatter_stimresp(respmat,sessions[sesidx],colorversion='signal')
-    plt.suptitle(area,fontsize=14)
-    # plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_signal_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+    plt.suptitle(area + ' signal',fontsize=14)
+    plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_signal_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
     # pca_scatter_stimresp(respmat,sessions[sesidx])
     # plt.suptitle(area,fontsize=14)
