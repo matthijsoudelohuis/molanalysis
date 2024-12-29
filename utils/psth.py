@@ -59,7 +59,7 @@ def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='in
     elif method == 'binmean':
         binedges = np.arange(t_pre-binsize/2, t_post +
                              binsize+binsize/2, binsize)
-        bincenters = np.arange(t_pre, t_post+binsize, binsize)
+        bincenters = np.mean(np.vstack((binedges[:-1], binedges[1:])), axis=0)
 
         N = np.shape(data)[1]
         K = len(ts_T)
