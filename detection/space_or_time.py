@@ -9,7 +9,7 @@ activity captures the relevant feature encoding better.
 
 #%% Import packages
 import os
-os.chdir('e:\\Python\\molanalysis\\')
+os.chdir('c:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -52,8 +52,8 @@ calciumversion      = 'deconv'
 
 session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
-session_list = np.array([['LPE12013', '2024_04_26']])
-session_list = np.array([['LPE11997', '2024_04_16']])
+# session_list = np.array([['LPE12013', '2024_04_26']])
+# session_list = np.array([['LPE11997', '2024_04_16']])
 # session_list = np.array([['LPE12013', '2024_04_25']])
 
 sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
@@ -80,7 +80,7 @@ for i in range(nSessions):
 
 #%% #################### Spatial runspeed  ####################################
 for ises,ses in enumerate(sessions):
-    [sessions[ises].runPSTH,bincenters] = calc_runPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=binsize)
+    [sessions[ises].runPSTH,bincenters] = calc_runPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=sbinsize)
    
 mu_runspeed = np.nanmean(sessions[ises].runPSTH[:,(bincenters>-10) & (bincenters<50)],axis=None)
 t_pre       = s_pre/mu_runspeed  #pre sec
@@ -180,7 +180,6 @@ example_cell_ids = ['LPE12385_2024_06_15_0_0075',
 'LPE12385_2024_06_15_3_0016',
 'LPE12385_2024_06_15_0_0031', # noise trial specific response
 'LPE12385_2024_06_15_1_0075', # hit specific activity?
-'LPE12385_2024_06_15_7_0212', # hit specific activity?
 'LPE12385_2024_06_15_1_0475', # very clean response
 'LPE12385_2024_06_15_2_0099', # nice responses
 'LPE12385_2024_06_15_2_0499'] #variable responsiveness
@@ -255,88 +254,150 @@ plt.savefig(os.path.join(savedir, 'Var_Comparison_%s.png') % sessions[ises].sess
 #%% Decoding performance across space or across time: 
 
 
+from sklearn.model_selection import KFold
+from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge, Lasso
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import cross_val_score
+from scipy.stats import zscore
+# import sklearn
 
-# from sklearn.model_selection import KFold
-# from sklearn.linear_model import LogisticRegression
-# from sklearn.metrics import accuracy_score
-# from sklearn.model_selection import cross_val_score
-# from scipy.stats import zscore
 
-# # Define the variables to use for decoding
-# variables = ['runspeed', 'pupil_area', 'videoME', 'lick_rate']
+def find_optimal_lambda(X,y,model_name='LogisticRegression',kfold=5,clip=False):
+    assert len(X.shape)==2, 'X must be a matrix of samples by features'
+    assert len(y.shape)==1, 'y must be a vector'
+    assert X.shape[0]==y.shape[0], 'X and y must have the same number of samples'
+    assert model_name in ['LogisticRegression','LinearRegression','Ridge','Lasso','ElasticNet','SVR','SVC']
 
-# # Define the number of folds for cross-validation
-# kfold = 5
+    # Define the k-fold cross-validation object
+    kf = KFold(n_splits=kfold, shuffle=True, random_state=0)
 
-# # Initialize an array to store the decoding performance
-# performance = np.full((nsessions,len(bincenters)), np.nan)
+    # Initialize an array to store the decoding performance for each fold
+    fold_performance = np.zeros((kfold,))
 
-# # Loop through each session
-# for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across sessions'):
-#     idx = np.all((ses.trialdata['engaged']==1,ses.trialdata['stimcat']=='N'), axis=0)
-            
-#     if np.sum(idx) > 50:
-#         # Get the lickresponse data for this session
-#         y = ses.trialdata['lickResponse'][idx].to_numpy()
+    # Find the optimal regularization strength (lambda)
+    lambdas = np.logspace(-4, 4, 10)
+    cv_scores = np.zeros((len(lambdas),))
+    for ilambda, lambda_ in enumerate(lambdas):
+        
+        if model_name == 'LogisticRegression':
+            model = LogisticRegression(penalty='l1', solver='liblinear', C=lambda_)
+        elif model_name == 'LinearRegression':
+            model = LinearRegression(penalty='l1', solver='liblinear', C=lambda_)
+        elif model_name == 'Ridge':
+            model = Ridge(solver='liblinear', C=lambda_)
+        elif model_name == 'Lasso':
+            model = Lasso(solver='liblinear', C=lambda_)
+        
+        scores = cross_val_score(model, X, y, cv=kf, scoring='accuracy')
+        cv_scores[ilambda] = np.mean(scores)
+    optimal_lambda = lambdas[np.argmax(cv_scores)]
+    # print('Optimal lambda for session %d: %0.4f' % (ises, optimal_lambda))
+    if clip:
+        optimal_lambda = np.clip(optimal_lambda, 0.03, 166)
+    # optimal_lambda = 1
+    return optimal_lambda
 
-#         X = np.stack((ses.runPSTH[idx,:], ses.pupilPSTH[idx,:], ses.videomePSTH[idx,:], ses.lickPSTH[idx,:]), axis=2)
-#         X = np.nanmean(X, axis=1)
-#         X = zscore(X, axis=0)
-#         X = X[:,np.all(~np.isnan(X),axis=0)]
-#         X = X[:,np.all(~np.isinf(X),axis=0)]
+def my_classifier_wrapper(Xfull,Yfull,model_name='LogisticRegression',kfold=5,lam=None,subtract_shuffle=True,norm_out=False): 
+    assert len(Xfull.shape)==2, 'Xfull must be a matrix of samples by features'
+    assert len(Yfull.shape)==1, 'Yfull must be a vector'
+    assert Xfull.shape[0]==Yfull.shape[0], 'Xfull and Yfull must have the same number of samples'
+    assert model_name in ['LogisticRegression','LinearRegression','Ridge','Lasso','ElasticNet']
+    assert lam is None or lam > 0
+    
+    
+    if lam is None:
+        lam = find_optimal_lambda(Xfull,Yfull,model_name=model_name,kfold=kfold)
 
-#         # # Find the optimal regularization strength (lambda)
-#         # lambdas = np.logspace(-4, 4, 10)
-#         # cv_scores = np.zeros((len(lambdas),))
-#         # for ilambda, lambda_ in enumerate(lambdas):
-#         #     model = LogisticRegression(penalty='l1', solver='liblinear', C=lambda_)
-#         #     scores = cross_val_score(model, X, y, cv=kf, scoring='accuracy')
-#         #     cv_scores[ilambda] = np.mean(scores)
-#         # optimal_lambda = lambdas[np.argmax(cv_scores)]
-#         # # print('Optimal lambda for session %d: %0.4f' % (ises, optimal_lambda))
-#         # optimal_lambda = np.clip(optimal_lambda, 0.03, 166)
-#         optimal_lambda = 1
+    if model_name == 'LogisticRegression':
+        model = LogisticRegression(penalty='l1', solver='liblinear', C=lam)
+    elif model_name == 'LinearRegression':
+        model = LinearRegression(penalty='l1', solver='liblinear', C=lam)
+    elif model_name == 'Ridge':
+        model = Ridge(solver='liblinear', C=lam)
+    elif model_name == 'Lasso':
+        model = Lasso(solver='liblinear', C=lam)
 
-#         # Loop through each spatial bin
-#         for ibin, bincenter in enumerate(bincenters):
-            
-#             # Define the X and y variables
-#             X = np.stack((ses.runPSTH[idx,ibin], ses.pupilPSTH[idx,ibin], ses.videomePSTH[idx,ibin], ses.lickPSTH[idx,ibin]), axis=1)
-#             X = zscore(X, axis=0)
-#             X = X[:,np.all(~np.isnan(X),axis=0)]
-#             X = X[:,np.all(~np.isinf(X),axis=0)]
+    # Define the number of folds for cross-validation
+    kf = KFold(n_splits=kfold, shuffle=True, random_state=0)
 
-#             # Define the k-fold cross-validation object
-#             kf = KFold(n_splits=kfold, shuffle=True, random_state=42)
-            
-#             # Initialize an array to store the decoding performance for each fold
-#             fold_performance = np.zeros((kfold,))
-#             fold_performance_shuffle = np.zeros((kfold,))
-            
-#             # Loop through each fold
-#             for ifold, (train_index, test_index) in enumerate(kf.split(X)):
-#                 # Split the data into training and testing sets
-#                 X_train, X_test = X[train_index], X[test_index]
-#                 y_train, y_test = y[train_index], y[test_index]
-                
-#                 # Train a logistic regression model on the training data with regularization
-#                 model = LogisticRegression(penalty='l1',solver='liblinear',C=optimal_lambda)
-#                 model.fit(X_train, y_train)
-                
-#                 # Make predictions on the test data
-#                 y_pred = model.predict(X_test)
-                
-#                 # Calculate the decoding performance for this fold
-#                 fold_performance[ifold] = accuracy_score(y_test, y_pred)
-                
-#                 # Shuffle the labels and calculate the decoding performance for this fold
-#                 np.random.shuffle(y_train)
-#                 model.fit(X_train, y_train)
-#                 y_pred = model.predict(X_test)
-#                 fold_performance_shuffle[ifold] = accuracy_score(y_test, y_pred)
-            
-#             # Calculate the average decoding performance across folds
-#             performance[ises,ibin] = np.mean(fold_performance - fold_performance_shuffle)
+    # Initialize an array to store the decoding performance
+    performance = np.full((kfold,), np.nan)
+    performance_shuffle = np.full((kfold,), np.nan)
+
+    # Loop through each fold
+    for ifold, (train_index, test_index) in enumerate(kf.split(Xfull)):
+        # Split the data into training and testing sets
+        X_train, X_test = Xfull[train_index], Xfull[test_index]
+        y_train, y_test = Yfull[train_index], Yfull[test_index]
+
+        # Train a classification model on the training data with regularization
+        model.fit(X_train, y_train)
+
+        # Make predictions on the test data
+        y_pred = model.predict(X_test)
+
+        # Calculate the decoding performance for this fold
+        performance[ifold] = accuracy_score(y_test, y_pred)
+
+        # Shuffle the labels and calculate the decoding performance for this fold
+        np.random.shuffle(y_train)
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        performance_shuffle[ifold] = accuracy_score(y_test, y_pred)
+
+    # Calculate the average decoding performance across folds
+    performance_avg = np.mean(performance)
+    if subtract_shuffle: # subtract the shuffling performance from the average perf
+        performance_avg = np.mean(performance_avg - performance_shuffle)
+    if norm_out: # normalize to maximal range of performance (between shuffle and 1)
+        performance_avg = performance_avg / (1-np.mean(performance_shuffle))
+    
+    return performance_avg
+
+#%% Decoding performance across space or across time:
+
+sperf = np.full((nSessions,len(sbins)), np.nan)
+tperf = np.full((nSessions,len(tbins)), np.nan)
+
+# Loop through each session
+for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across sessions'):
+    # idx = np.all((ses.trialdata['engaged']==1,ses.trialdata['stimcat']=='N'), axis=0)
+    idx_T = np.isin(ses.trialdata['stimcat'],['C','M'])
+    idx_N = ses.celldata['roi_name']=='V1'
+
+    if np.sum(idx_T) > 50:
+        # Get the maximum signal vs catch for this session
+        y = (ses.trialdata['stimcat'][idx_T] == 'M').to_numpy()
+
+        # X = ses.stensor[np.ix_(idx_N,idx_T,np.ones(len(sbins)).astype(bool))]
+        X = np.mean(ses.stensor[np.ix_(idx_N,idx_T,((sbins>-5) & (sbins<20)).astype(bool))],axis=2)
+        X = X.T
+
+        # X = np.stack((ses.runPSTH[idx,:], ses.pupilPSTH[idx,:], ses.videomePSTH[idx,:], ses.lickPSTH[idx,:]), axis=2)
+        # X = np.nanmean(X, axis=1)
+        X = zscore(X, axis=0)
+        # X = X[:,np.all(~np.isnan(X),axis=0)]
+        # X = X[:,np.all(~np.isinf(X),axis=0)]
+
+        optimal_lambda = find_optimal_lambda(X,y,model_name='LogisticRegression',kfold=5)
+        # Loop through each spatial bin
+        for ibin, bincenter in enumerate(sbins):
+            X = ses.stensor[np.ix_(idx_N,idx_T,sbins==bincenter)].squeeze()
+            X = X.T
+            X = zscore(X, axis=0)
+
+            # Calculate the average decoding performance across folds
+            sperf[ises,ibin] = my_classifier_wrapper(X,y,model_name='LogisticRegression',kfold=5,lam=optimal_lambda)
+
+        # Loop through each time bin
+        for ibin, bincenter in enumerate(tbins):
+            X = ses.tensor[np.ix_(idx_N,idx_T,tbins==bincenter)].squeeze()
+            X = X.T
+            X = zscore(X, axis=0)
+
+            # Calculate the average decoding performance across folds
+            tperf[ises,ibin] = my_classifier_wrapper(X,y,model_name='LogisticRegression',kfold=5,lam=optimal_lambda)
 
 # #%% Show the decoding performance
 # fig,ax = plt.subplots(1,1,figsize=(4,3))
