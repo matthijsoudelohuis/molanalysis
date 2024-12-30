@@ -8,10 +8,11 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn import svm as SVM
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_score
-# import sklearn
 
 
 def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
+    if model_name == 'LogisticRegression':
+        model_name = 'LOGR'
     assert len(X.shape)==2, 'X must be a matrix of samples by features'
     assert len(y.shape)==1, 'y must be a vector'
     assert X.shape[0]==y.shape[0], 'X and y must have the same number of samples'

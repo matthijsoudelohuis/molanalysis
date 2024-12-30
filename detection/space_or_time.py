@@ -9,7 +9,7 @@ activity captures the relevant feature encoding better.
 
 #%% Import packages
 import os
-os.chdir('c:\\Python\\molanalysis\\')
+os.chdir('e:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -177,34 +177,10 @@ def plot_neuron_spacetime_alignment(ses,cell_id,sbins,tbins):
 #%%
 ises = 0
 
-example_cell_ids = ['LPE12385_2024_06_15_0_0075',
-'LPE12385_2024_06_15_0_0126',
-'LPE12385_2024_06_15_0_0105', # reduction upon stimulus zone
-'LPE12385_2024_06_15_0_0114', # noise trial specific response, very nice one
-'LPE12385_2024_06_15_0_0183',
-'LPE12385_2024_06_15_3_0016',
-'LPE12385_2024_06_15_0_0031', # noise trial specific response
-'LPE12385_2024_06_15_1_0075', # hit specific activity?
-'LPE12385_2024_06_15_1_0475', # very clean response
-'LPE12385_2024_06_15_2_0099', # nice responses
-'LPE12385_2024_06_15_2_0499'] #variable responsiveness
+from detection.example_cells import get_example_cells
 
-example_cell_ids = ['LPE12013_2024_04_25_4_0187',
-                    'LPE12013_2024_04_25_0_0007',
-                    'LPE12013_2024_04_25_1_0046',
-                    'LPE12013_2024_04_25_7_0161'] #
+example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
 
-example_cell_ids = ['LPE12013_2024_04_26_2_0259',
-                    'LPE12013_2024_04_26_2_0250',
-                    'LPE12013_2024_04_26_0_0016',
-                    'LPE12013_2024_04_26_7_0310',
-                    'LPE12013_2024_04_26_0_0017'] #
-
-example_cell_ids = ['LPE11997_2024_04_16_0_0013',
-                    'LPE11997_2024_04_16_1_0001',
-                    'LPE11997_2024_04_16_2_0047',
-                    'LPE11997_2024_04_16_0_0134',
-                    'LPE11997_2024_04_16_4_0115'] #
 
 
 #%% 
@@ -375,14 +351,32 @@ for i in range(nSessions):
     sessions[i].srespmat = compute_respmat_space(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['stimStart'],
                                                 sessions[i].zpos_F,sessions[i].trialnum_F,s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
     sessions[i].trespmat = compute_respmat(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['tStimStart'],
-                                                t_resp_start=0,t_resp_stop=0.6,method='mean',subtr_baseline=False)
+                                                t_resp_start=0,t_resp_stop=0.66,method='mean',subtr_baseline=False)
 
 #%% ############################### Correlation Matrix###############################
 for i in range(nSessions):
+    N = sessions[i].srespmat.shape[0]
 
+    sessions[i].corrmat = np.empty((2,2,N,N))
+    sessions[i].corrmat[0,0,:,:] = np.corrcoef(sessions[i].srespmat[:,:int(sessions[i].trespmat.shape[1]/2)])
+    sessions[i].corrmat[0,1,:,:] = np.corrcoef(sessions[i].srespmat[:,int(sessions[i].trespmat.shape[1]/2):])
 
+    sessions[i].corrmat[1,0,:,:] = np.corrcoef(sessions[i].trespmat[:,:int(sessions[i].trespmat.shape[1]/2)])
+    sessions[i].corrmat[1,1,:,:] = np.corrcoef(sessions[i].trespmat[:,int(sessions[i].trespmat.shape[1]/2):])
+    
+    
     sessions[i].noise_corr_s = np.corrcoef(sessions[i].srespmat)
     sessions[i].noise_corr_t = np.corrcoef(sessions[i].trespmat)
+
+#%% Which binning has most correlated activity?
+r_abs = np.empty((nSessions,2))
+for i in range(nSessions):
+    r_abs[i,0] = np.nanmean(np.abs(sessions[i].noise_corr_s),axis=None)
+    r_abs[i,1] = np.nanmean(np.abs(sessions[i].noise_corr_t),axis=None)
+
+print('Absolute mean correlation spatial: %1.4f' % np.mean(r_abs[:,0]))
+print('Absolute mean correlation temporal: %1.4f' % np.mean(r_abs[:,1]))
+
 
 #%% 
 sesidx = 2
@@ -395,9 +389,31 @@ ax[1].set_title('Temporal')
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'CorrelationMatrix_SpatialVsTemporal.png'), format='png')
 
+#%% show the correlation matrix for spatial and temporal binning side by side for one session:
+# For the first half and second half:
+sesidx = 2
+fig,axes = plt.subplots(2,2,figsize=(6,6))
+xlabels = ['Spatial','Temporal']
+ylabels = ['First Half','Second Half']
+for i in range(2):
+    for j in range(2):
+        axes[i,j].imshow(sessions[sesidx].corrmat[i,j,:,:],vmin=-0.1,vmax=0.1,cmap='bwr')
+        axes[i,j].set_title('%s-%s' % (xlabels[i],ylabels[j]))
+        axes[i,j].set_xticks([])
+        axes[i,j].set_yticks([])
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'CorrelationMatrix_SpatialVsTemporal_Halfs.png'), format='png')
+
+#%% Which binning has most correlated activity?
+r_halfs = np.empty((nSessions,2))
+for i in range(nSessions):
+    r_halfs[i,0] = np.corrcoef(sessions[i].corrmat[0,0,:,:].flatten(),sessions[i].corrmat[0,1,:,:].flatten())[0,1]
+    r_halfs[i,1] = np.corrcoef(sessions[i].corrmat[1,0,:,:].flatten(),sessions[i].corrmat[1,1,:,:].flatten())[0,1]
+print('Correlation between halfs:\nSpatial: %1.3f\nTemporal: %1.3f' % (np.mean(r_halfs[:,0]),np.mean(r_halfs[:,1]))) 
+
 #%% 
 r_st = np.empty(nSessions)
 for i in range(nSessions):
     r_st[i] = np.corrcoef(sessions[i].noise_corr_s.flatten(),sessions[i].noise_corr_t.flatten())[0,1]
-print('Correlation between spatial and temporal noise correlation: %1.2f' % np.mean(r_st))
+print('Correlation between spatial and temporal noise correlation: %1.3f' % np.mean(r_st))
 

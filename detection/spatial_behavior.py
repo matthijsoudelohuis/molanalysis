@@ -12,7 +12,7 @@ import os
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
-os.chdir('c:\\Python\\molanalysis\\')
+os.chdir('e:\\Python\\molanalysis\\')
 from scipy.signal import medfilt
 from tqdm import tqdm
 
@@ -28,7 +28,7 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\
 
 #%% ########################## Load psychometric data #######################
 protocol            = ['DP']
-sessions,nsessions  = filter_sessions(protocol,load_behaviordata=True)
+sessions,nSessions  = filter_sessions(protocol,load_behaviordata=True)
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
 # Apply median filter to smooth runspeed
@@ -58,42 +58,51 @@ for ises,ses in enumerate(sessions):
 # [sessions[sesidx].lickPSTH,bincenters] = calc_lickPSTH(sessions[sesidx],binsize=5)
 
 
+
+
+
+
+
+
+
+
 #%% ########################## Load data #######################
 protocol            = ['DM','DP','DN']
-sessions,nsessions  = filter_sessions(protocol,load_behaviordata=True,load_videodata=True)
+sessions,nSessions  = filter_sessions(protocol,load_behaviordata=True,load_videodata=True)
 
 # Remove sessions LPE10884 that are too bad:
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE10884_2023_12_14','LPE10884_2023_12_15','LPE10884_2024_01_11','LPE10884_2024_01_16']))[0]
 sessions            = [sessions[i] for i in sessions_in_list]
-nsessions           = len(sessions)
+nSessions           = len(sessions)
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
 # Only sessions that have rewardZoneOffset == 25
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 sessions_in_list    = np.where(sessiondata['rewardZoneOffset'] == 25)[0]
 sessions            = [sessions[i] for i in sessions_in_list]
-nsessions           = len(sessions)
+nSessions           = len(sessions)
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
 #%% #################### Define the stimulus window ############################
 s_min       = -10   #cm, start of stimulus window
 s_max       = 10
+sbinsize    = 5
 
 #%% #################### Compute spatial runspeed ####################################
 for ises,ses in enumerate(sessions): # running across the trial:
     sessions[ises].behaviordata['runspeed'] = medfilt(sessions[ises].behaviordata['runspeed'], kernel_size=51)
-    [sessions[ises].runPSTH,bincenters]     = calc_runPSTH(sessions[ises],binsize=5)
+    [sessions[ises].runPSTH,bincenters]     = calc_runPSTH(sessions[ises],binsize=sbinsize)
     sessions[ises].trialdata['runspeed_stim'] = np.mean(sessions[ises].runPSTH[:,(bincenters>=s_min) & (bincenters<=s_max)],axis=1)
 
 #%% #################### Compute spatial pupil size and video ME  ####################################
 for ises,ses in enumerate(sessions): # licking rate across the trial:
-    [sessions[ises].pupilPSTH,bincenters]     = calc_pupilPSTH(sessions[ises],binsize=5)
-    [sessions[ises].videomePSTH,bincenters]   = calc_videomePSTH(sessions[ises],binsize=5)
+    [sessions[ises].pupilPSTH,bincenters]     = calc_pupilPSTH(sessions[ises],binsize=sbinsize)
+    [sessions[ises].videomePSTH,bincenters]   = calc_videomePSTH(sessions[ises],binsize=sbinsize)
 
 #%% #################### Compute spatial lick rate ####################################
 for ises,ses in enumerate(sessions): # licking rate across the trial:
-    [sessions[ises].lickPSTH,bincenters]     = calc_lickPSTH(sessions[ises],binsize=5)
+    [sessions[ises].lickPSTH,bincenters]     = calc_lickPSTH(sessions[ises],binsize=sbinsize)
     sessions[ises].trialdata['lickrate_stim'] = np.mean(sessions[ises].lickPSTH[:,(bincenters>=s_min) & (bincenters<=s_max)],axis=1)
 
 #%% Show histograms of running speed during the stimulus window:
@@ -107,7 +116,7 @@ nspeedbins      = len(speedbincenters)
 
 u_animals       = np.unique(sessiondata['animal_id'])
 clrs_animals    = get_clr_animal_id(u_animals)
-runstimspeed    = np.empty((nsessions,nspeedbins)) #init array for hist data
+runstimspeed    = np.empty((nSessions,nspeedbins)) #init array for hist data
 
 filter_engaged   = True
 
@@ -149,7 +158,7 @@ nbins           = len(tbincenters)
 
 u_animals       = np.unique(sessiondata['animal_id'])
 clrs_animals    = get_clr_animal_id(u_animals)
-stimdur         = np.empty((nsessions,nbins)) #init array for hist data
+stimdur         = np.empty((nSessions,nbins)) #init array for hist data
 
 filter_engaged   = True
 
@@ -193,7 +202,7 @@ nspeedbins      = len(speedbincenters)
 
 nspatbins       = len(bincenters)
 
-datamat = np.full((nsessions, nspeedbins, nspatbins, 2), np.nan)  # init array with NaN for hist data
+datamat = np.full((nSessions, nspeedbins, nspatbins, 2), np.nan)  # init array with NaN for hist data
 for ises,ses in enumerate(sessions):
     for isp,sp in enumerate(bincenters):
         for ihit, hit in enumerate([0,1]):
@@ -273,89 +282,66 @@ plt.savefig(os.path.join(savedir, 'Spatial', 'RunSpeed_Space_Heatmap_Average.png
 #%% 
 
 
-#%% 
+
+
+#%% Decoding of choice from behavioral variables:
 
 from sklearn.model_selection import KFold
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_score
 from scipy.stats import zscore
+from utils.decode_lib import *
 
 # Define the variables to use for decoding
 variables = ['runspeed', 'pupil_area', 'videoME', 'lick_rate']
 
 # Define the number of folds for cross-validation
-kfold = 5
+kfold = 10
 
 # Initialize an array to store the decoding performance
-performance = np.full((nsessions,len(bincenters)), np.nan)
+performance = np.full((nSessions,len(bincenters)), np.nan)
 
 # Loop through each session
 for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across sessions'):
     idx = np.all((ses.trialdata['engaged']==1,ses.trialdata['stimcat']=='N'), axis=0)
-            
+    # idx = np.all((ses.trialdata['engaged']==1,np.isin(ses.trialdata['stimcat']==['M','N'])), axis=0)
+    
     if np.sum(idx) > 50:
         # Get the lickresponse data for this session
         y = ses.trialdata['lickResponse'][idx].to_numpy()
 
         X = np.stack((ses.runPSTH[idx,:], ses.pupilPSTH[idx,:], ses.videomePSTH[idx,:], ses.lickPSTH[idx,:]), axis=2)
-        X = np.nanmean(X, axis=1)
+        #take the mean during the response window to determine optimal lambda
+        X = np.nanmean(X[:, (bincenters>=25) & (bincenters<=45), :], axis=1)
+        idx_notnan = np.all((np.all(~np.isnan(X),axis=0),
+                             np.all(~np.isinf(X),axis=0),
+                             np.any(X>0,axis=0)),axis=0)
+        X = X[:,idx_notnan]
         X = zscore(X, axis=0)
-        X = X[:,np.all(~np.isnan(X),axis=0)]
-        X = X[:,np.all(~np.isinf(X),axis=0)]
+        # X = X[:,np.all(~np.isnan(X),axis=0)]
+        # X = X[:,np.all(~np.isinf(X),axis=0)]
 
-        # # Find the optimal regularization strength (lambda)
-        # lambdas = np.logspace(-4, 4, 10)
-        # cv_scores = np.zeros((len(lambdas),))
-        # for ilambda, lambda_ in enumerate(lambdas):
-        #     model = LogisticRegression(penalty='l1', solver='liblinear', C=lambda_)
-        #     scores = cross_val_score(model, X, y, cv=kf, scoring='accuracy')
-        #     cv_scores[ilambda] = np.mean(scores)
-        # optimal_lambda = lambdas[np.argmax(cv_scores)]
-        # # print('Optimal lambda for session %d: %0.4f' % (ises, optimal_lambda))
-        # optimal_lambda = np.clip(optimal_lambda, 0.03, 166)
-        optimal_lambda = 1
+        optimal_lambda = find_optimal_lambda(X,y,model_name='LOGR',kfold=kfold)
 
         # Loop through each spatial bin
         for ibin, bincenter in enumerate(bincenters):
             
             # Define the X and y variables
             X = np.stack((ses.runPSTH[idx,ibin], ses.pupilPSTH[idx,ibin], ses.videomePSTH[idx,ibin], ses.lickPSTH[idx,ibin]), axis=1)
+            idx_notnan = np.all((np.all(~np.isnan(X),axis=0),
+                        np.all(~np.isinf(X),axis=0),
+                        np.any(X>0,axis=0)),axis=0)
+            X = X[:,idx_notnan]
             X = zscore(X, axis=0)
-            X = X[:,np.all(~np.isnan(X),axis=0)]
-            X = X[:,np.all(~np.isinf(X),axis=0)]
+            # X = X[:,np.all(~np.isnan(X),axis=0)]
+            # X = X[:,np.all(~np.isinf(X),axis=0)]
+            # X = zscore(X, axis=0)
+            # X = X[:,np.all(~np.isnan(X),axis=0)]
+            # X = X[:,np.all(~np.isinf(X),axis=0)]
 
-            # Define the k-fold cross-validation object
-            kf = KFold(n_splits=kfold, shuffle=True, random_state=42)
-            
-            # Initialize an array to store the decoding performance for each fold
-            fold_performance = np.zeros((kfold,))
-            fold_performance_shuffle = np.zeros((kfold,))
-            
-            # Loop through each fold
-            for ifold, (train_index, test_index) in enumerate(kf.split(X)):
-                # Split the data into training and testing sets
-                X_train, X_test = X[train_index], X[test_index]
-                y_train, y_test = y[train_index], y[test_index]
-                
-                # Train a logistic regression model on the training data with regularization
-                model = LogisticRegression(penalty='l1',solver='liblinear',C=optimal_lambda)
-                model.fit(X_train, y_train)
-                
-                # Make predictions on the test data
-                y_pred = model.predict(X_test)
-                
-                # Calculate the decoding performance for this fold
-                fold_performance[ifold] = accuracy_score(y_test, y_pred)
-                
-                # Shuffle the labels and calculate the decoding performance for this fold
-                np.random.shuffle(y_train)
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-                fold_performance_shuffle[ifold] = accuracy_score(y_test, y_pred)
-            
             # Calculate the average decoding performance across folds
-            performance[ises,ibin] = np.mean(fold_performance - fold_performance_shuffle)
+            performance[ises,ibin] = my_classifier_wrapper(X,y,model_name='LOGR',kfold=kfold,lam=optimal_lambda,norm_out=True)
 
 #%% Show the decoding performance
 fig,ax = plt.subplots(1,1,figsize=(4,3))
@@ -377,7 +363,6 @@ plt.savefig(os.path.join(savedir, 'Spatial', 'LogisticDecodingPerformance_LickRe
 
 
 #%% 
-
 
 
 
@@ -413,7 +398,7 @@ fig = plot_psycurve(sessions)
 
 #%% Load behavior of DM protocols:
 protocol                = ['DM']
-sessions,nsessions      = filter_sessions(protocol,load_behaviordata=False,has_pupil=False)
+sessions,nSessions      = filter_sessions(protocol,load_behaviordata=False,has_pupil=False)
 sessiondata             = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 nanimals                = len(np.unique(sessiondata['animal_id']))
 

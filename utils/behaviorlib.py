@@ -208,7 +208,8 @@ def calc_runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
     trialdata   = ses.trialdata
     ntrials     = len(ses.trialdata)
-    runPSTH     = np.empty(shape=(ntrials, len(bincenters)))
+    # runPSTH     = np.empty(shape=(ntrials, len(bincenters)))
+    runPSTH     = np.full((ntrials, len(bincenters)),np.nan)
 
     for itrial in range(ntrials):
         idx = np.logical_and(itrial-1 <= ses.behaviordata['trialNumber'], ses.behaviordata['trialNumber'] <= itrial+2)
@@ -235,7 +236,8 @@ def calc_lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
     trialdata   = ses.trialdata
     ntrials     = len(ses.trialdata)
-    lickPSTH    = np.empty(shape=(ntrials, len(bincenters)))
+# lickPSTH    = np.empty(shape=(ntrials, len(bincenters)))
+    lickPSTH   = np.full((ntrials, len(bincenters)),np.nan)
 
     for itrial in range(ntrials-1):
         idx = np.logical_and(itrial-1 <= ses.behaviordata['trialNumber'], ses.behaviordata['trialNumber'] <= itrial+2)
@@ -262,7 +264,8 @@ def calc_videomePSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
     trialdata   = ses.trialdata
     ntrials     = len(ses.trialdata)
-    videomePSTH   = np.empty(shape=(ntrials, len(bincenters)))
+    # videomePSTH   = np.empty(shape=(ntrials, len(bincenters)))
+    videomePSTH   = np.full((ntrials, len(bincenters)),np.nan)
 
     if 'motionenergy' in ses.videodata:
         for itrial in range(ntrials):
@@ -286,7 +289,7 @@ def calc_pupilPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
     trialdata   = ses.trialdata
     ntrials     = len(ses.trialdata)
-    pupilPSTH   = np.empty(shape=(ntrials, len(bincenters)))
+    pupilPSTH   = np.full((ntrials, len(bincenters)),np.nan)
 
     if 'pupil_area' in ses.videodata:
         for itrial in range(ntrials):

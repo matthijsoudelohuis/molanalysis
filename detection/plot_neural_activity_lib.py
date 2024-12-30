@@ -190,9 +190,8 @@ def plot_mean_activity_example_neurons(data,sbins,ses,example_cell_ids):
             elif uvar=='hitmiss':
 
                 C               = 2
-                noise_trials        = ses.trialdata['stimcat']=='N'
+                noise_trials    = ses.trialdata['stimcat']=='N'
 
-                # unoise          = np.unique(ses.trialdata['signal'][noise_trials].to_numpy())
                 usignals        = np.unique(ses.trialdata['signal'].to_numpy())
                 
                 plotdata        = np.empty((C,S))
@@ -216,13 +215,17 @@ def plot_mean_activity_example_neurons(data,sbins,ses,example_cell_ids):
                 
                 plotdata        = np.empty((C,S))
 
-                edges = np.nanquantile(ses.runPSTH,np.linspace(0,1,C+1),axis=None)
-                centers = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
+                edges           = np.nanquantile(ses.runPSTH,np.linspace(0,1,C+1),axis=None)
+                centers         = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
+                temp            = copy.deepcopy(data[uN,:,:])
+
+                usignals        = np.unique(ses.trialdata['signal'].to_numpy())
+                for isig,usig in enumerate(usignals):
+                    temp[ses.trialdata['signal']==usig,:] -= np.nanmean(temp[ses.trialdata['signal']==usig,:],axis=0,keepdims=True)
 
                 for ibin,(low,high) in enumerate(zip(edges[:-1],edges[1:])):
                     # print(low,high)
                     idx         = np.logical_and(ses.runPSTH>=low,ses.runPSTH<=high)
-                    temp        = copy.deepcopy(data[uN,:,:])
                     # Compute the mean along axis=0 for elements where idx is True
                     masked_data = np.where(idx, temp, np.nan)  # Replace False with NaN
                     plotdata[ibin,:] = np.nanmean(masked_data, axis=0)  # Compute the mean ignoring NaN
@@ -236,11 +239,12 @@ def plot_mean_activity_example_neurons(data,sbins,ses,example_cell_ids):
             for iC in range(C):
                 ax.plot(sbins, plotdata[iC,:], color=plotcolors[iC], label=plotlabels[iC],linewidth=2)
             if iN==0:
-                ax.legend(loc='upper left',fontsize=6)
+                ax.legend(loc='upper left',fontsize=6,frameon=False,title=uvar)
 
             if iN==N-1:
                 ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
                 ax.set_xticks([-75,-50,-25,0,25,50,75])
+                ax.set_xticklabels([-75,-50,-25,0,25,50,75])
             else:
                 ax.set_xticklabels([])
             ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
