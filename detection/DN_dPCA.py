@@ -6,8 +6,9 @@ Author: Matthijs Oude Lohuis, Champalimaud Research
 This script contains a series of functions that analyze activity in visual VR detection task. 
 """
 
+#%% IMPORT LIBS
 import os
-os.chdir('D:\\Python\\molanalysis\\')
+os.chdir('c:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 
@@ -27,26 +28,27 @@ import matplotlib.pyplot as plt
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 from detection.plot_neural_activity_lib import *
+from loaddata.get_data_folder import get_local_drive
 
 #%% ###############################################################
 
 protocol            = 'DN'
 
-session_list = np.array([['LPE12385', '2024_06_16']])
+session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE11998', '2024_04_23']])
+session_list = np.array([['LPE11997', '2024_04_16']])
 # session_list = np.array([['LPE10884', '2023_12_14']])
 # session_list = np.array([['LPE10884', '2023_12_14']])
 # session_list        = np.array([['LPE12013','2024_04_25']])
 
 sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
-                         load_calciumdata=True,calciumversion='dF') #Load specified list of sessions
+                         load_calciumdata=True,calciumversion='deconv') #Load specified list of sessions
 # sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE12385'],
 #                            load_behaviordata=True,load_calciumdata=True,calciumversion='dF') #load sessions that meet criteria:
 # sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE12013'],
 #                            load_behaviordata=True,load_calciumdata=True,calciumversion='dF') #load sessions that meet criteria:
 
-
-savedir = 'D:\\OneDrive\\PostDoc\\Figures\\Detection\\dPCA\\'
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\dPCA\\')
 
 #%% ### Show for all sessions which region of the psychometric curve the noise spans #############
 sessions = noise_to_psy(sessions,filter_engaged=True)
@@ -68,13 +70,13 @@ for i in range(nSessions):
 ## Parameters for spatial binning
 s_pre       = -80  #pre cm
 s_post      = 80   #post cm
-binsize     = 5     #spatial binning in cm
+binsize     = 10     #spatial binning in cm
 
 for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
                                        sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=binsize,method='binmean')
 
-## Compute average response in stimulus response zone:
+#%% Compute average response in stimulus response zone:
 for i in range(nSessions):
     sessions[i].respmat             = compute_respmat_space(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['stimStart'],
                                     sessions[i].zpos_F,sessions[i].trialnum_F,s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
@@ -163,15 +165,29 @@ for i in range(nSessions):
 #%% dPCA on session tensor:
 ises        = 0 #selected session to plot this for
 
-sessions[ises].stensor[np.isnan(sessions[ises].stensor)] = 0
+# sessions[ises].stensor[np.isnan(sessions[ises].stensor)] = 0
+
+data = copy.deepcopy(sessions[ises].stensor)
+data[np.isnan(data)] = 0
+
+idx_N = sessions[ises].celldata['roi_name']=='V1'
+idx_N = sessions[ises].celldata['roi_name']=='PM'
+
+idx_N  = np.all((sessions[ises].celldata['roi_name']=='PM',
+                 sessions[ises].celldata['noise_level']<20),axis=0)
+data = data[idx_N,:,:]
 
 # number of neurons, time-points and stimuli
-[N,t,S]     = np.shape(sessions[ises].stensor) #get dimensions of tensor
+[N,t,S]     = np.shape(data) #get dimensions of tensor
 
 # stimtypes   = sorted(sessions[ises].trialdata['stimcat'].unique()) # Catch, Noise and Max trials if correct
 C = 2
 stimtypes   = ['C','M']
 stimlabels  = ['catch','max']
+
+C = 2
+stimtypes   = ['C','N']
+stimlabels  = ['catch','noise']
 
 C = 3
 stimtypes   = ['C','N','M']
@@ -179,7 +195,7 @@ stimlabels  = ['catch','noise','max']
 
 D = 2
 dectypes    = [0,1]
-stimlabels  = ['no lick','lick']
+declabels  = ['no lick','lick']
 
 c_ind      = np.array([np.array(sessions[ises].trialdata['stimcat']) == stim for stim in stimtypes])
 
@@ -191,13 +207,16 @@ for iC in range(C):
         n_trials[iC,iD] = np.sum(np.logical_and(c_ind[iC,:],d_ind[iD,:]))
 
 n_min_trials = np.min(n_trials).astype('int')
+n_min_trials = 50
 
 trialR = np.empty((n_min_trials,N,C,D,S))
 
 for iC in range(C):
     for iD in range(D):
-        idx = np.random.choice(np.argwhere(np.logical_and(c_ind[iC,:],d_ind[iD,:])).squeeze(), size=n_min_trials, replace=False)  
-        trialR[:,:,iC,iD,:] = sessions[ises].stensor[:,idx,:].transpose((1,0,2))
+        # idx = np.random.choice(np.argwhere(np.logical_and(c_ind[iC,:],d_ind[iD,:])).squeeze(), size=n_min_trials, replace=False)  
+        idx = np.random.choice(np.argwhere(np.logical_and(c_ind[iC,:],d_ind[iD,:])).squeeze(), size=n_min_trials, replace=True)  
+        trialR[:,:,iC,iD,:] = data[:,idx,:].transpose((1,0,2))
+        # trialR[:,:,iC,iD,:] = data[:,idx,:]
 
 print(np.shape(trialR))
 
@@ -206,52 +225,76 @@ R = np.mean(trialR,0)
 
 # center data
 R -= np.mean(R.reshape((N,-1)),1)[:,None,None,None]
+# center trialR data:
+# trialR -= np.mean(trialR.reshape((n_min_trials,N,-1)),1)[:,None,None,None]
 
 #%% 
-regval = 0.05
+regval = 0.003
+regval = 0.001
+ncomponents = 3
 
-dpca = dPCA.dPCA(labels='sdt',regularizer=regval)
+dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents)
+# dpca = dPCA.dPCA(labels='sdt',regularizer='auto',n_components=ncomponents)
+# dpca = dPCA.dPCA(labels='tsd',regularizer=regval)
 
 dpca.protect = ['t']
 
 Z = dpca.fit_transform(R,trialR)
 
+#%%
+
+# for regval in [0,0.001,0.01,0.05,0.1,0.2,0.5,1,2,5,10,20,50,100]:
+#     ncomponents = 3
+#     dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents)
+#     Z = dpca.fit_transform(R,trialR)
+#     values = dpca.explained_variance_ratio_.values()
+#     print(regval)
+
+#     print(np.sum(list(values)))
+
 #%% Plot:
 
-plt.figure(figsize=(16,7))
-plt.subplot(141)
+linecolors_c = ['grey','green','blue']
+linestyles_d = ['-','--',':']
 
-for c in range(C):
-    for d in range(D):
-        plt.plot(sbins,Z['t'][0,c,d])
+# plt.figure(figsize=(16,4))
+fig,axes = plt.subplots(ncomponents,4,figsize=(16,ncomponents*4)) 
 
-plt.title('1st time component')
-    
-plt.subplot(142)
+labels = [stimlabels[i]+'-'+declabels[j] for i in range(C) for j in range(D)]
 
-for c in range(C):
-    for d in range(D):
-        plt.plot(sbins,Z['s'][0,c,d])
+for icomponent in range(ncomponents):
+    ax = axes[icomponent,0]
+    for c in range(C):
+        for d in range(D):
+            ax.plot(sbins,Z['t'][icomponent,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
 
-plt.title('1st stimulus component')
+            # ax.plot(sbins,Z[labels[icomponent]][0,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
+    ax.legend(labels,frameon=False)
+    # ax.set_title(labels[icomponent])
+    ax.set_title('Dim %d - Time component\nEV: %.5f' % (icomponent,dpca.explained_variance_ratio_['t'][icomponent]))
 
-plt.subplot(143)
+    ax = axes[icomponent,1]
+    for c in range(C):
+        for d in range(D):
+            ax.plot(sbins,Z['st'][icomponent,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
+    # ax.set_title('Dim %d - Stimulus component' % icomponent)
+    ax.set_title('Dim %d - Stimulus component\nEV: %.5f' % (icomponent,dpca.explained_variance_ratio_['st'][icomponent]))
 
-for c in range(C):
-    for d in range(D):
-        plt.plot(sbins,Z['d'][0,c,d])
-    
-plt.title('1st decision component')
+    ax = axes[icomponent,2]
+    for c in range(C):
+        for d in range(D):
+            ax.plot(sbins,Z['dt'][icomponent,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
+    # ax.set_title('Dim %d - Decision component' % icomponent)
+    ax.set_title('Dim %d - Decision component\nEV: %.5f' % (icomponent,dpca.explained_variance_ratio_['dt'][icomponent]))
 
-plt.subplot(144)
+    ax = axes[icomponent,3]
+    for c in range(C):
+        for d in range(D):
+            ax.plot(sbins,Z['sdt'][icomponent,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
+    # ax.set_title('Dim %d - Mixing component' % icomponent)
+    ax.set_title('Dim %d - Mixing component\nEV: %.5f' % (icomponent,dpca.explained_variance_ratio_['sdt'][icomponent]))
 
-for c in range(C):
-    for d in range(D):
-        plt.plot(sbins,Z['sd'][0,c,d])
-    
-plt.title('1st mixing component')
-plt.show()
-
+plt.tight_layout()
 
 
 

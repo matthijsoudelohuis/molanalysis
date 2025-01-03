@@ -94,10 +94,10 @@ def my_classifier_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtrac
 
         performance_shuffle[ifold] = accuracy_score(y_test, y_pred)
 
-    # Calculate the average decoding performance across folds
-    performance_avg = np.mean(performance)
     if subtract_shuffle: # subtract the shuffling performance from the average perf
-        performance_avg = np.mean(performance_avg - performance_shuffle)
+        performance_avg = np.mean(performance - performance_shuffle)
+    else: # Calculate the average decoding performance across folds
+        performance_avg = np.mean(performance)
     if norm_out: # normalize to maximal range of performance (between shuffle and 1)
         performance_avg = performance_avg / (1-np.mean(performance_shuffle))
     
