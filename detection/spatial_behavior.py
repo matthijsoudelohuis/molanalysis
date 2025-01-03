@@ -12,17 +12,18 @@ import os
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
-os.chdir('e:\\Python\\molanalysis\\')
-from scipy.signal import medfilt
 from tqdm import tqdm
+from scipy.signal import medfilt
+from scipy.stats import zscore
 
+os.chdir('e:\\Python\\molanalysis\\')
 from loaddata.get_data_folder import get_local_drive
 from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 from utils.psth import compute_tensor_space,compute_respmat_space
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 from utils.plot_lib import *
-
+from utils.decode_lib import *
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\')
 
 
@@ -85,25 +86,19 @@ nSessions           = len(sessions)
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
 #%% #################### Define the stimulus window ############################
-s_min       = -10   #cm, start of stimulus window
-s_max       = 10
+s_min       = -5   #cm, start of stimulus window
+s_max       = 15
 sbinsize    = 5
 
 #%% #################### Compute spatial runspeed ####################################
 for ises,ses in enumerate(sessions): # running across the trial:
-    sessions[ises].behaviordata['runspeed'] = medfilt(sessions[ises].behaviordata['runspeed'], kernel_size=51)
-    [sessions[ises].runPSTH,bincenters]     = calc_runPSTH(sessions[ises],binsize=sbinsize)
-    sessions[ises].trialdata['runspeed_stim'] = np.mean(sessions[ises].runPSTH[:,(bincenters>=s_min) & (bincenters<=s_max)],axis=1)
-
-#%% #################### Compute spatial pupil size and video ME  ####################################
-for ises,ses in enumerate(sessions): # licking rate across the trial:
-    [sessions[ises].pupilPSTH,bincenters]     = calc_pupilPSTH(sessions[ises],binsize=sbinsize)
-    [sessions[ises].videomePSTH,bincenters]   = calc_videomePSTH(sessions[ises],binsize=sbinsize)
-
-#%% #################### Compute spatial lick rate ####################################
-for ises,ses in enumerate(sessions): # licking rate across the trial:
-    [sessions[ises].lickPSTH,bincenters]     = calc_lickPSTH(sessions[ises],binsize=sbinsize)
-    sessions[ises].trialdata['lickrate_stim'] = np.mean(sessions[ises].lickPSTH[:,(bincenters>=s_min) & (bincenters<=s_max)],axis=1)
+    sessions[ises].behaviordata['runspeed']     = medfilt(sessions[ises].behaviordata['runspeed'], kernel_size=51)
+    [sessions[ises].runPSTH,bincenters]         = calc_runPSTH(sessions[ises],binsize=sbinsize)
+    sessions[ises].trialdata['runspeed_stim']   = np.mean(sessions[ises].runPSTH[:,(bincenters>=s_min) & (bincenters<=s_max)],axis=1)
+    [sessions[ises].pupilPSTH,bincenters]       = calc_pupilPSTH(sessions[ises],binsize=sbinsize)
+    [sessions[ises].videomePSTH,bincenters]     = calc_videomePSTH(sessions[ises],binsize=sbinsize)
+    [sessions[ises].lickPSTH,bincenters]        = calc_lickPSTH(sessions[ises],binsize=sbinsize)
+    sessions[ises].trialdata['lickrate_stim']   = np.mean(sessions[ises].lickPSTH[:,(bincenters>=s_min) & (bincenters<=s_max)],axis=1)
 
 #%% Show histograms of running speed during the stimulus window:
 speedres    = 2.5 #cm/s bins
@@ -286,13 +281,6 @@ plt.savefig(os.path.join(savedir, 'Spatial', 'RunSpeed_Space_Heatmap_Average.png
 
 #%% Decoding of choice from behavioral variables:
 
-from sklearn.model_selection import KFold
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import cross_val_score
-from scipy.stats import zscore
-from utils.decode_lib import *
-
 # Define the variables to use for decoding
 variables = ['runspeed', 'pupil_area', 'videoME', 'lick_rate']
 
@@ -304,8 +292,8 @@ performance = np.full((nSessions,len(bincenters)), np.nan)
 
 # Loop through each session
 for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across sessions'):
-    idx = np.all((ses.trialdata['engaged']==1,ses.trialdata['stimcat']=='N'), axis=0)
-    # idx = np.all((ses.trialdata['engaged']==1,np.isin(ses.trialdata['stimcat']==['M','N'])), axis=0)
+    #Correct setting: stimulus trials during engaged part of the session:
+    idx = np.all((ses.trialdata['engaged']==1,np.isin(ses.trialdata['stimcat'],['M','N'])), axis=0)
     
     if np.sum(idx) > 50:
         # Get the lickresponse data for this session
@@ -313,32 +301,31 @@ for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across session
 
         X = np.stack((ses.runPSTH[idx,:], ses.pupilPSTH[idx,:], ses.videomePSTH[idx,:], ses.lickPSTH[idx,:]), axis=2)
         #take the mean during the response window to determine optimal lambda
-        X = np.nanmean(X[:, (bincenters>=25) & (bincenters<=45), :], axis=1)
-        idx_notnan = np.all((np.all(~np.isnan(X),axis=0),
-                             np.all(~np.isinf(X),axis=0),
-                             np.any(X>0,axis=0)),axis=0)
-        X = X[:,idx_notnan]
-        X = zscore(X, axis=0)
-        # X = X[:,np.all(~np.isnan(X),axis=0)]
-        # X = X[:,np.all(~np.isinf(X),axis=0)]
+        with np.errstate(invalid='ignore'):
+            X = np.nanmean(X[:, (bincenters>=25) & (bincenters<=45), :], axis=1)
+        # X = zscore(X, axis=0)
+        X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
+        # idx_notnan = np.all(np.all((~np.isnan(X),~np.isinf(X),~(X==0)),axis=0),axis=0)
+        # X[:, ~idx_notnan] = 0
+        # X[np.isnan(X)] = 0
+        
         optimal_lambda = find_optimal_lambda(X,y,model_name='LOGR',kfold=kfold)
 
         # Loop through each spatial bin
         for ibin, bincenter in enumerate(bincenters):
-            
+            y = ses.trialdata['lickResponse'][idx].to_numpy()
+
             # Define the X and y variables
             X = np.stack((ses.runPSTH[idx,ibin], ses.pupilPSTH[idx,ibin], ses.videomePSTH[idx,ibin], ses.lickPSTH[idx,ibin]), axis=1)
-            idx_notnan = np.all((np.all(~np.isnan(X),axis=0),
-                        np.all(~np.isinf(X),axis=0),
-                        np.any(X>0,axis=0)),axis=0)
-            X = X[:,idx_notnan]
-            X = zscore(X, axis=0)
-            # X = X[:,np.all(~np.isnan(X),axis=0)]
-            # X = X[:,np.all(~np.isinf(X),axis=0)]
+            
+            X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
             # X = zscore(X, axis=0)
-            # X = X[:,np.all(~np.isnan(X),axis=0)]
-            # X = X[:,np.all(~np.isinf(X),axis=0)]
+        
+            # idx_notnan = np.all(np.all((~np.isnan(X),~np.isinf(X),~(X==0)),axis=0),axis=0)
+            # X[:, ~idx_notnan] = 0
+            # X[np.isnan(X)] = 0
 
             # Calculate the average decoding performance across folds
             performance[ises,ibin] = my_classifier_wrapper(X,y,model_name='LOGR',kfold=kfold,lam=optimal_lambda,norm_out=True)
@@ -349,17 +336,16 @@ for i,ses in enumerate(sessions):
     if np.any(performance[i,:]):
         ax.plot(bincenters,performance[i,:],color='grey',alpha=0.5,linewidth=1)
 shaded_error(bincenters,performance,error='sem',ax=ax,color='b')
-ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
-ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
-ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
-ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
-
+add_stim_resp_win(ax)
 ax.set_xlabel('Position relative to stim (cm)')
 ax.set_ylabel('Decoding Performance \n (accuracy - shuffle)')
 ax.set_title('Decoding Performance')
-ax.set_xlim([-80,60])
+ax.set_xlim([-60,60])
+ax.set_ylim([-0.1,1])
 plt.tight_layout()
-plt.savefig(os.path.join(savedir, 'Spatial', 'LogisticDecodingPerformance_LickResponse.png'), format='png')
+# plt.savefig(os.path.join(savedir, 'Spatial', 'LogisticDecodingPerformance_LickResponse.png'), format='png')
+# plt.savefig(os.path.join(savedir, 'Spatial', 'LogisticDecodingPerformance_LickResponse_engaged.png'), format='png')
+plt.savefig(os.path.join(savedir, 'Spatial', 'LogisticDecodingPerformance_LickResponse_engaged_stimonly.png'), format='png')
 
 
 #%% 
@@ -377,10 +363,11 @@ plt.savefig(os.path.join(savedir, 'Spatial', 'LogisticDecodingPerformance_LickRe
 #%% 
 # fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
 # sessions[sesidx].lickPSTH[-1,:] = 0
+sesidx = 0
 fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
-fig.savefig(os.path.join(savedir,'Performance','LickRate_Psy_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'Performance','LickRate_Psy_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-### running across the trial:
+#%% running across the trial:
 [sessions[sesidx].runPSTH,bincenters] = calc_runPSTH(sessions[sesidx],binsize=2.5)
 fig = plot_run_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].runPSTH,bincenters,
                                 plot_mean=True,plot_trials=True)

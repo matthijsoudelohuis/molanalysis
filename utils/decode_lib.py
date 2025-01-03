@@ -46,6 +46,8 @@ def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
     return optimal_lambda
 
 def my_classifier_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_shuffle=True,norm_out=False): 
+    if model_name == 'LogisticRegression':
+        model_name = 'LOGR'
     assert len(Xfull.shape)==2, 'Xfull must be a matrix of samples by features'
     assert len(Yfull.shape)==1, 'Yfull must be a vector'
     assert Xfull.shape[0]==Yfull.shape[0], 'Xfull and Yfull must have the same number of samples'
@@ -102,3 +104,23 @@ def my_classifier_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtrac
         performance_avg = performance_avg / (1-np.mean(performance_shuffle))
     
     return performance_avg
+
+def prep_Xpredictor(X,y):
+    X           = zscore(X, axis=0,nan_policy='omit')
+    idx_nan     = ~np.all(np.isnan(X),axis=1)
+    X           = X[idx_nan,:]
+    y           = y[idx_nan]
+    X[:,np.all(np.isnan(X),axis=0)] = 0
+    X           = np.nan_to_num(X,nan=np.nanmean(X,axis=0,keepdims=True))
+    y           = np.nan_to_num(y,nan=np.nanmean(y,axis=0,keepdims=True))
+    return X,y
+
+# def prep_Xpredictor(X,y):
+#     X           = X[:,~np.all(np.isnan(X),axis=0)] #
+#     idx_nan     = ~np.all(np.isnan(X),axis=1)
+#     X           = X[idx_nan,:]
+#     y           = y[idx_nan]
+#     X           = np.nan_to_num(X,nan=np.nanmean(X,axis=0,keepdims=True))
+#     X           = zscore(X, axis=0)
+#     X           = np.nan_to_num(X,nan=np.nanmean(X,axis=0,keepdims=True))
+#     return X,y

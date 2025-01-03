@@ -161,10 +161,8 @@ def plot_neuron_spacetime_alignment(ses,cell_id,sbins,tbins):
         tmax = np.nanmax(ses.tensor[iN,:,:])
         ylim = my_ceil(np.nanmax([smax,tmax]),-1)
         ax.set_ylim(0,ylim)
-        ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
-        ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
-        ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
-        ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
+        add_stim_resp_win(ax)
+
     # plt.text(3, ylim-3, 'Stim',fontsize=10)
     # plt.text(rewzonestart+3, ylim-3, 'Rew',fontsize=10)
     # plt.tight_layout()
@@ -258,7 +256,7 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding respons
         X = X[idx_nan,:]
         y = y[idx_nan]
         X[np.isnan(X)] = np.nanmean(X, axis=None)
-        X = zscore(X, axis=1)
+        X = zscore(X, axis=0)
         X[np.isnan(X)] = np.nanmean(X, axis=None)
 
         optimal_lambda = find_optimal_lambda(X,y,model_name='LogisticRegression',kfold=5)
@@ -273,7 +271,7 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding respons
             X = X[idx_nan,:]
             y = y[idx_nan]
             X[np.isnan(X)] = np.nanmean(X, axis=None)
-            X = zscore(X, axis=1)
+            X = zscore(X, axis=0)
             X[np.isnan(X)] = np.nanmean(X, axis=None)
 
             # Calculate the average decoding performance across folds
@@ -290,7 +288,7 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding respons
             X = X[idx_nan,:]
             y = y[idx_nan]
             X[np.isnan(X)] = np.nanmean(X, axis=None)
-            X = zscore(X, axis=1)
+            X = zscore(X, axis=0)
             X[np.isnan(X)] = np.nanmean(X, axis=None)
 
             # Calculate the average decoding performance across folds

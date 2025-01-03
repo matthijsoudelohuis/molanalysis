@@ -49,3 +49,10 @@ def get_sig_asterisks(pvalue):
             return asterisks
     # Default return if p-value is greater than 1
     return ""
+
+
+def add_stim_resp_win(ax):
+    ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
+    ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
+    ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
+    ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
