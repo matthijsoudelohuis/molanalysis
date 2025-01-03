@@ -5,7 +5,7 @@ dataset with labeled projection neurons. The visual stimuli are natural images.
 Matthijs Oude Lohuis, 2023, Champalimaud Center
 """
 
-# %% # Imports
+#%% Imports
 # Import general libs
 import os
 import numpy as np

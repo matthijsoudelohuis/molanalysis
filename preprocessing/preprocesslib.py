@@ -16,11 +16,13 @@ import pandas as pd
 import numpy as np
 from natsort import natsorted
 from datetime import datetime
-from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
-from utils.twoplib import get_meta
-import scipy.stats as st
-from loaddata.get_data_folder import get_data_folder
+import scipy
 from scipy.stats import zscore
+from scipy.ndimage import maximum_filter1d, minimum_filter1d, gaussian_filter
+import scipy.stats as st
+
+from utils.twoplib import get_meta
+from loaddata.get_data_folder import get_data_folder
 from labeling.tdTom_labeling_cellpose import proc_labeling_plane
 
 """
@@ -256,6 +258,28 @@ def proc_IM(rawdatadir,sessiondata):
     
     trialdata['session_id']     = sessiondata['session_id'][0]
     sessiondata['ntrials']      = len(trialdata) #add number of trials
+
+    return sessiondata,trialdata
+
+def proc_MV(rawdatadir,sessiondata):
+    sesfolder       = os.path.join(rawdatadir,sessiondata['animal_id'][0],sessiondata['sessiondate'][0],sessiondata['protocol'][0],'Behavior')
+    sesfolder       = Path(sesfolder)
+    
+    filenames       = os.listdir(sesfolder)
+    
+    trialdata_file  = list(filter(lambda a: 'trialdata' in a, filenames)) #find the trialdata file
+    trialdata       = pd.read_csv(os.path.join(sesfolder,trialdata_file[0]),skiprows=0)
+    
+    trialdata['session_id']     = sessiondata['session_id'][0]
+    sessiondata['ntrials']      = len(trialdata) #add number of trials
+
+    assert trialdata['ismei'].dtype == 'int64'
+    assert len(np.unique(trialdata['ismei'][trialdata['ismei']!=0])) >= 10
+    assert trialdata['mei_cellid'].dtype == 'object'
+    assert len(np.unique(trialdata['mei_cellid'])) >= 10
+
+    trialdata['ismei']          = trialdata['ismei'].astype('int64')
+    trialdata['mei_cellid']     = trialdata['mei_cellid']
 
     return sessiondata,trialdata
 
@@ -742,8 +766,8 @@ def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
             celldata_plane['radius'][k] = stat[k]['radius']
             celldata_plane['npix_soma'][k] = stat[k]['npix_soma']
             celldata_plane['npix'][k] = stat[k]['npix']
-            celldata_plane['xloc'][k] = stat[k]['med'][0]
-            celldata_plane['yloc'][k] = stat[k]['med'][1]
+            celldata_plane['xloc'][k] = stat[k]['med'][0] / 512 * 600
+            celldata_plane['yloc'][k] = stat[k]['med'][1] / 512 * 600
         
         celldata_plane['redcell']           = redcell[:,0]
         celldata_plane['frac_of_ROI_red']   = redcell[:,1]
@@ -888,6 +912,10 @@ def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
         #store cell_ids in celldata:
         celldata_plane['cell_id']         = cell_ids
 
+        if os.path.exists(os.path.join(plane_folder, 'Fmatch.mat')):
+            celldata_plane = proc_roimatchpub(os.path.join(plane_folder, 'Fmatch.mat'),
+                                              sessiondata,celldata_plane)
+            
         #Filter out neurons with mean fluorescence below threshold:
         meanF_thresh                                    = 25
         iscell[celldata_plane['meanF']<meanF_thresh,0]  = 0
@@ -1159,3 +1187,47 @@ def trim_session_bounds(sessiondata,data):
     data = data[data['ts']>sessiondata['tStart'][0]].reset_index(drop=True)
     data = data[data['ts']<sessiondata['tEnd'][0]].reset_index(drop=True)
     return data
+
+def proc_roimatchpub(matfname,sessiondata,celldata_plane):
+
+    # rawdatadir_mei      = "M:\\RawData\\"
+    # animal_id_mei       = 'LPE12385' #If empty than all animals in folder will be processed
+    # sessiondate_mei     = '2024_06_16'
+
+    # matfname = os.path.join(rawdatadir_mei,animal_id_mei,sessiondate_mei,'suite2p','plane0','Fmatch.mat')
+
+    data            = scipy.io.loadmat(matfname)
+    mapping         = data['roiMatchData']['allSessionMapping'][0][0]
+    nMatchingCells  = np.shape(mapping)[0]
+
+    orig_Fall       = str(data['roiMatchData']['allRois'][0][0][0][0][0])
+    tempfname       = orig_Fall.replace('Fall.mat','iscell.npy')
+    iscell_ref      = np.load(tempfname)
+    ncells_orig     = np.shape(iscell_ref)[0]
+
+    _,_,animal_id_ref,sessiondate_ref,_,iplane_ref,_ = orig_Fall.split('\\')
+    iplane_ref              = int(iplane_ref.split('plane')[1])
+    old_cell_ids            = np.array([animal_id_ref + '_' + sessiondate_ref + '_' + '%s' % iplane_ref + '_' + '%04.0f' % k for k in range(0,ncells_orig)])
+
+    new_cell_ids            = np.array([sessiondata['session_id'][0] + '_' + '%s' % celldata_plane['plane_idx'][0] + '_' + '%04.0f' % k for k in range(0,len(celldata_plane))])
+    #filter only iscell cells
+    old_cell_ids_iscell     = old_cell_ids[iscell_ref[:,0]==1]
+    new_cell_ids_iscell     = new_cell_ids[celldata_plane['iscell']==1]
+    #now get the cell ids for those that are matched
+    old_cell_ids_both       = old_cell_ids_iscell[mapping[:,0]]
+    new_cell_ids_both       = new_cell_ids_iscell[mapping[:,1]]
+    #make a 2D array with columns having the cell ids of the ref and mei session:
+    cell_id_mapping         = np.column_stack((old_cell_ids_both,new_cell_ids_both))
+    # cell_id_mapping       = np.column_stack((old_cell_ids_iscell[mapping[:,0]],new_cell_ids_iscell[mapping[:,1]]))
+
+    _,comm1,comm2 = np.intersect1d(celldata_plane['cell_id'],cell_id_mapping[:,1],return_indices=True)
+    # finding the common values in celldata_plane['cell_id'] and cell_id_mapping[:,1]
+    # comm1 are the indices out of all new cell_ids that are in the list of matched neurons
+    # comm2 are the indices in the list of matching cell_ids
+
+    celldata_plane['ref_cell_id'] = '' #add the ref cell id to the dataframe
+    celldata_plane.loc[comm1,'ref_cell_id'] = old_cell_ids_both[comm2]
+    
+    assert (celldata_plane['ref_cell_id'] != '').sum() == nMatchingCells, 'problematic assignment of ref_cell_id'
+    
+    return celldata_plane
