@@ -1001,12 +1001,18 @@ def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
  #     # ####### ####### #       ####### #     # #        #####  #     #  #####   #####  
 """
 
+# np.unique(protocol_tif_nframes)
+# np.argwhere(protocol_tif_nframes==7)
+# triggerdata       = pd.read_csv(os.path.join(sesfolder,sessiondata['protocol'][0],'Behavior',triggerdata_file[0]),skiprows=1).to_numpy()
+
+# pos = 1310
+# plt.plot(protocol_tif_nframes[pos-2:pos+4])
+# plt.plot(np.diff(triggerdata[:,1])[pos-2:pos+4])
+
 def align_timestamps(sessiondata, ops, triggerdata):
     # get idx of frames belonging to this protocol:
     protocol_tifs           = list(filter(lambda x: sessiondata['protocol'][0] in x, ops['filelist']))
-    # if sessiondata['session_id'][0] == 'LPE11622_2024_03_07' and sessiondata['protocol'][0] == 'SP4':
-        # protocol_tifs = protocol_tifs[306:]
-
+    
     protocol_tif_idx        = np.array([i for i, x in enumerate(ops['filelist']) if x in protocol_tifs])
     #get the number of frames for each of the files belonging to this protocol:
     protocol_tif_nframes    = ops['frames_per_file'][protocol_tif_idx]
@@ -1020,12 +1026,27 @@ def align_timestamps(sessiondata, ops, triggerdata):
     
     protocol_nframes = sum(protocol_frame_idx).astype('int') #the number of frames acquired in this protocol
 
+    if sessiondata['session_id'][0] == 'LPE12013_2024_04_29': #insert two extra triggers that were aberrant
+        pos = 782
+        nframes = protocol_tif_nframes[pos]
+        triggerdata = np.insert(triggerdata,[pos+1],values=[pos+1,triggerdata[pos,1]+nframes/ops['fs']],axis=0)
+        
+        pos = 1038
+        nframes = protocol_tif_nframes[pos]
+        triggerdata = np.insert(triggerdata,[pos+1],values=[pos+1,triggerdata[pos,1]+nframes/ops['fs']],axis=0)
+        
+        triggerdata[795,1] = triggerdata[795,1] + 0.05
+    elif sessiondata['session_id'][0] == 'LPE11998_2024_04_29': #insert two extra triggers that were aberrant
+        pos = 1310
+        nframes = protocol_tif_nframes[pos]
+        triggerdata = np.insert(triggerdata,[pos+1],values=[pos+1,triggerdata[pos,1]+nframes/ops['fs']],axis=0)
+        
     ## Get trigger information:
     nTriggers = np.shape(triggerdata)[0]
     nTiffFiles = len(protocol_tif_idx)
     if nTriggers-1 == nTiffFiles:
         triggerdata = triggerdata[1:,:]
-        if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") > datetime(2024, 1, 15):
+        if datetime.strptime(sessiondata['sessiondate'][0],"%Y_%m_%d") > datetime(2024, 1, 16):
             print('First trigger missed, problematic with trigger at right VDAQ channel after Feb 2024')
     elif nTriggers-2 == nTiffFiles:
         triggerdata = triggerdata[2:,:]
@@ -1055,8 +1076,8 @@ def align_timestamps(sessiondata, ops, triggerdata):
     reconstr    = timestamps[idx]
     target      = triggerdata[:,1]
     diffvec     = reconstr[0:len(target)] - target
-    # h           = np.diff(timestamps[:,0])
     h           = np.diff(timestamps)
+
     if any(h<0) or any(h>1) or any(diffvec>0) or any(diffvec<-1):
         print('Problem with aligning trigger timestamps to imaging frames')
     
