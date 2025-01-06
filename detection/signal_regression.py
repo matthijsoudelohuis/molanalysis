@@ -52,8 +52,9 @@ calciumversion      = 'deconv'
 session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
 session_list = np.array([['LPE12013', '2024_04_25']])
-# session_list = np.array([['LPE11998', '2024_04_23']])
-# session_list = np.array([['LPE10884', '2023_12_14']])
+session_list = np.array([['LPE11622', '2024_02_22']])
+# session_list = np.array([['LPE10884', '2023_12_15']])
+# session_list = np.array([['LPE10884', '2024_01_16']])
 # session_list = np.array([['LPE10884', '2023_12_14']])
 # session_list        = np.array([['LPE12013','2024_04_25']])
 # session_list = np.array([['LPE09829', '2023_03_29'],
@@ -63,22 +64,22 @@ session_list = np.array([['LPE12013', '2024_04_25']])
 
 sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
-# sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE12385'],
+sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE11998'],min_cells=100,
+                           load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
+# sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE10884'],
 #                            load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
-# sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE12013'],
-#                            load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
 
 
-#%% ### Show for all sessions which region of the psychometric curve the noise spans #############
-sessions = noise_to_psy(sessions,filter_engaged=True)
+# #%% ### Show for all sessions which region of the psychometric curve the noise spans #############
+# sessions = noise_to_psy(sessions,filter_engaged=True)
 
-idx_inclthr = np.empty(nSessions).astype('int')
-for ises,ses in enumerate(sessions):
-    idx_inclthr[ises] = int(np.logical_and(np.any(sessions[ises].trialdata['signal_psy']<=0),np.any(sessions[ises].trialdata['signal_psy']>=0)))
-    ses.sessiondata['incl_thr'] = idx_inclthr[ises]
+# idx_inclthr = np.empty(nSessions).astype('int')
+# for ises,ses in enumerate(sessions):
+#     idx_inclthr[ises] = int(np.logical_and(np.any(sessions[ises].trialdata['signal_psy']<=0),np.any(sessions[ises].trialdata['signal_psy']>=0)))
+#     ses.sessiondata['incl_thr'] = idx_inclthr[ises]
 
-sessions = [ses for ises,ses in enumerate(sessions) if ses.sessiondata['incl_thr'][0]]
-nSessions = len(sessions)
+# sessions = [ses for ises,ses in enumerate(sessions) if ses.sessiondata['incl_thr'][0]]
+# nSessions = len(sessions)
 
 #%% 
 for i in range(nSessions):
@@ -113,7 +114,7 @@ for i in range(nSessions):
 
 
 #%% #################### Compute activity for each stimulus type for one session ##################
-ises        = 0 #selected session to plot this for
+ises        = 6 #selected session to plot this for
 [N,K,S]     = np.shape(sessions[ises].stensor) #get dimensions of tensor
 
 stimtypes   = sorted(sessions[ises].trialdata['stimcat'].unique()) # Catch, Noise and Max trials if correct
@@ -154,8 +155,9 @@ for iN in np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))
     # plt.savefig(os.path.join(savedir,'SingleNeuron','ActivityInCorridor_perStim_' + sessions[ises].celldata['cell_id'][iN] + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Show example neurons that are correlated either to the stimulus signal, lickresponse or to running speed:
-ises = 1
-for iN in range(900,1100):
+ises = 0
+# for iN in range(900,1100):
+for iN in range(0,100):
     plot_snake_neuron_sortnoise(sessions[ises].stensor[iN,:,:],sbins,sessions[ises])
     plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
 
@@ -198,7 +200,7 @@ for iarea,area in enumerate(areas):
 
 #%% ############################### Plot neuron-average per stim per area #################################
 
-ises = 0 #selected session to plot this for
+ises = 6 #selected session to plot this for
 
 labeled     = ['unl','lab']
 nlabels     = 2
@@ -257,7 +259,7 @@ for ilab,label in enumerate(labeled):
         # ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
         # ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
         # ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
-
+        ax.set_ylim([-0.1,0.75])
         if ilab == 0 and iarea == 0:
             ax.legend(frameon=False,fontsize=6)
         ax.set_xlim([-60,60])
@@ -270,7 +272,7 @@ for ilab,label in enumerate(labeled):
             ax.set_yticks([0,0.25,0.5])
 plt.tight_layout()
 
-# plt.savefig(os.path.join(savedir,'ActivityInCorridor_neuronAverage_arealabels_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'ActivityInCorridor_neuronAverage_arealabels_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'ActivityInCorridor_deconv_neuronAverage_perStim_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% ################## Number of responsive neurons per stimulus #################################
@@ -291,6 +293,7 @@ binidx_stim     = (sbins>=0) & (sbins<20)
 for n in range(N):
     print(f"\rComputing significant response for neuron {n+1} / {N}",end='\r')
     idx_T = np.isin(sessions[sesidx].trialdata['stimcat'],['N','M'])
+    # idx_T = np.isin(sessions[sesidx].trialdata['stimcat'],['N'])
     b = np.nanmean(sessions[sesidx].stensor[np.ix_(np.array([n]),idx_T,binidx_base)],axis=2)
     r = np.nanmean(sessions[sesidx].stensor[np.ix_(np.array([n]),idx_T,binidx_stim)],axis=2)
 
@@ -401,7 +404,7 @@ def pca_scatter_stimresp(respmat,ses,colorversion='stimresp'):
     return fig
 
 #%% 
-sesidx = 0
+sesidx = 3
 #For all areas:
 fig = pca_scatter_stimresp(sessions[sesidx].respmat,sessions[sesidx],colorversion='stimresp')
 plt.suptitle('stimresp',fontsize=14)
@@ -416,6 +419,8 @@ plt.suptitle('signal',fontsize=14)
 # plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_signal_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% 
+sesidx = 3
+
 #For each area:
 for iarea,area in enumerate(areas):
     # idx         = sessions[sesidx].celldata['roi_name'] == area
@@ -530,7 +535,7 @@ for iSvar in range(NS):
 
 
 
-############################## Trial-concatenated PCA ########################################
+#%% ############################# Trial-concatenated PCA ########################################
 
 def pca_line_stimresp(data,trialdata,spatbins):
     [N,K,S]         = np.shape(data) #get dimensions of tensor
@@ -616,7 +621,7 @@ for iarea,area in enumerate(areas):
     # plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_Left_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
-##### PCA on different stimuli, conditioned on the other corridor stimulus:
+#%% #### PCA on different stimuli, conditioned on the other corridor stimulus:
 
 
 ################################################ LDA ##################################################
