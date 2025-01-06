@@ -37,7 +37,8 @@ from utils.plotting_style import * #get all the fixed color schemes
 from matplotlib.lines import Line2D
 from utils.behaviorlib import * # get support functions for beh analysis 
 from detection.plot_neural_activity_lib import *
-
+from detection.example_cells import get_example_cells
+from utils.plot_lib import * # get support functions for plotting
 plt.rcParams['svg.fonttype'] = 'none'
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\')
@@ -131,7 +132,7 @@ areas   = sessions[ises].celldata['roi_name'].unique()
 for iarea,area in enumerate(areas):
     idx         = sessions[ises].celldata['roi_name'] == area
     areasnake   = snakeplots[idx,:,:]
-    plot_snake_area(snakeplots[idx,:,:],sbins,stimtypes=stimlabels,sort='stimresp')
+    plot_snake_area(snakeplots[idx,:,:],sbins,stimtypes=stimlabels,sort='stimwin')
     plt.suptitle(area,fontsize=16,y=0.96)
     plt.tight_layout()
     # plt.savefig(os.path.join(savedir,'ActivityInCorridor_perStim_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
@@ -143,24 +144,14 @@ for iN in range(1000,1200):
     plot_snake_neuron_stimtypes(sessions[ises].stensor[iN,:,:],sbins,sessions[ises].trialdata)
     plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
 
+#%% 
 ises = 0
-example_cell_ids = ['LPE12385_2024_06_15_0_0075',
-'LPE12385_2024_06_15_0_0126',
-'LPE12385_2024_06_15_0_0105', # reduction upon stimulus zone
-'LPE12385_2024_06_15_0_0114', # noise trial specific response
-'LPE12385_2024_06_15_0_0031', # noise trial specific response
-'LPE12385_2024_06_15_0_0158',
-'LPE12385_2024_06_15_1_0001',
-'LPE12385_2024_06_15_0_0046',
-'LPE12385_2024_06_15_2_0248', #non stationary activity (drift?)
-'LPE12385_2024_06_15_2_0499',
-'LPE12385_2024_06_15_6_0089',#non stationary activity (drift?)
-'LPE12385_2024_06_15_2_0353'] #variable responsiveness
+example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
 
 for iN in np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))[0]:
     plot_snake_neuron_stimtypes(sessions[ises].stensor[iN,:,:],sbins,sessions[ises].trialdata)
     plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
-    plt.savefig(os.path.join(savedir,'SingleNeuron','ActivityInCorridor_perStim_' + sessions[ises].celldata['cell_id'][iN] + '.png'), format = 'png',bbox_inches='tight')
+    # plt.savefig(os.path.join(savedir,'SingleNeuron','ActivityInCorridor_perStim_' + sessions[ises].celldata['cell_id'][iN] + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Show example neurons that are correlated either to the stimulus signal, lickresponse or to running speed:
 ises = 1
@@ -168,28 +159,11 @@ for iN in range(900,1100):
     plot_snake_neuron_sortnoise(sessions[ises].stensor[iN,:,:],sbins,sessions[ises])
     plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
 
-ises = 0
-example_cell_ids = ['LPE12385_2024_06_15_0_0098', #hit specific activity?
-'LPE12385_2024_06_15_1_0075'] #some structure
-
-ises = 1
-example_cell_ids = ['LPE12385_2024_06_16_0_0166', #runspeed specific activity?
-                    'LPE12385_2024_06_16_0_0151', #runspeed specific activity?
-                    'LPE12385_2024_06_16_0_0070', #signal correlation
-                    'LPE12385_2024_06_16_0_0075', #runspeed specific activity
-                    'LPE12385_2024_06_16_0_0124', #signal correlation
-                    'LPE12385_2024_06_16_0_0109', #signal correlation
-                    'LPE12385_2024_06_16_0_0177', #signal correlation
-                    'LPE12385_2024_06_16_0_0136', #signal correlation and lick response
-                    'LPE12385_2024_06_16_0_0195', #runspeed specific activity?
-                    'LPE12385_2024_06_16_2_0301', #runspeed and signal
-                    'LPE12385_2024_06_16_2_0209', #lick response
-                    'LPE12385_2024_06_16_0_0071'] #some structure
-
+#%% 
 for iN in np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))[0]:
     plot_snake_neuron_sortnoise(sessions[ises].stensor[iN,:,:],sbins,sessions[ises])
     plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
-    plt.savefig(os.path.join(savedir,'SingleNeuron','ActivityInCorridor_sortNoise_' + sessions[ises].celldata['cell_id'][iN] + '.png'), format = 'png',bbox_inches='tight')
+    # plt.savefig(os.path.join(savedir,'SingleNeuron','ActivityInCorridor_sortNoise_' + sessions[ises].celldata['cell_id'][iN] + '.png'), format = 'png',bbox_inches='tight')
 
 
 #%% ############################ Snakeplot for sessions combined ##################################
@@ -211,16 +185,16 @@ for ises in range(nSessions):
         # trialidx = np.logical_and(trialidx,sessions[ises].trialdata['lickResponse']==1)
         snakeplots[idx,:,iTT] = np.nanmean(sessions[ises].stensor[:,trialidx,:],axis=1)
 
-#Plot for all loaded sessions together:
+#%% Plot for all loaded sessions together:
 areas   = celldata['roi_name'].unique()
 for iarea,area in enumerate(areas):
     idx         = celldata['roi_name'] == area
     areasnake   = snakeplots[idx,:,:]
-    plot_snake_area(snakeplots[idx,:,:],sbins,stimtypes=stimlabels)
+    plot_snake_area(snakeplots[idx,:,:],sbins,stimtypes=stimlabels,sort='stimwin')
     plt.suptitle(area,fontsize=16,y=0.96)
     # plt.tight_layout()
     # plt.savefig(os.path.join(savedir,'ActivityInCorridor_perStim_' + area + '_' + '.svg'), format = 'svg')
-    plt.savefig(os.path.join(savedir,'ActivityInCorridor_perStim_' + area + '.png'), format = 'png',bbox_inches='tight')
+    # plt.savefig(os.path.join(savedir,'ActivityInCorridor_perStim_' + area + '.png'), format = 'png',bbox_inches='tight')
 
 #%% ############################### Plot neuron-average per stim per area #################################
 
@@ -278,11 +252,11 @@ for ilab,label in enumerate(labeled):
         #         # plt.plot(sbins,r2_cv[idx,iarea],color=clrs[ilab],linewidth=1)
         #         ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
         
-        
-        ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
-        ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
-        ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
-        ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
+        add_stim_resp_win(ax)
+        # ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
+        # ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
+        # ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
+        # ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
 
         if ilab == 0 and iarea == 0:
             ax.legend(frameon=False,fontsize=6)
@@ -296,7 +270,7 @@ for ilab,label in enumerate(labeled):
             ax.set_yticks([0,0.25,0.5])
 plt.tight_layout()
 
-plt.savefig(os.path.join(savedir,'ActivityInCorridor_neuronAverage_arealabels_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'ActivityInCorridor_neuronAverage_arealabels_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'ActivityInCorridor_deconv_neuronAverage_perStim_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% ################## Number of responsive neurons per stimulus #################################
@@ -308,33 +282,31 @@ sesidx          = 0 #selected session to plot this for
 stimtypes       = sorted(sessions[sesidx].trialdata['stimRight'].unique()) # stim ['A','B','C','D']
 resptypes       = sorted(sessions[sesidx].trialdata['lickResponse'].unique()) # licking resp [0,1]
 
-D               = len(stimtypes)
-sigmat          = np.empty((N,D))
-
+sigmat          = np.empty((N))
+thr_p           = 0.001
 binidx_base     = (sbins>=-75) & (sbins<-25)
 binidx_stim     = (sbins>=0) & (sbins<20)
 # binidx_stim     = (sbins>=-50) & (sbins<-25)
 
 for n in range(N):
     print(f"\rComputing significant response for neuron {n+1} / {N}",end='\r')
-    for s,stimtype in enumerate(stimtypes):
-        b = np.nanmean(sessions[sesidx].stensor[np.ix_(np.array([n]),sessions[sesidx].trialdata['stimRight'] == stimtype,binidx_base)],axis=2)
-        r = np.nanmean(sessions[sesidx].stensor[np.ix_(np.array([n]),sessions[sesidx].trialdata['stimRight'] == stimtype,binidx_stim)],axis=2)
+    idx_T = np.isin(sessions[sesidx].trialdata['stimcat'],['N','M'])
+    b = np.nanmean(sessions[sesidx].stensor[np.ix_(np.array([n]),idx_T,binidx_base)],axis=2)
+    r = np.nanmean(sessions[sesidx].stensor[np.ix_(np.array([n]),idx_T,binidx_stim)],axis=2)
 
-        # stat,sigmat[n,s] = stats.ttest_ind(b.flatten(), r.flatten(),nan_policy='omit')
-        stat,sigmat[n,s] = stats.ttest_rel(b.flatten(), r.flatten(),nan_policy='omit')
+    # stat,sigmat[n,s] = stats.ttest_ind(b.flatten(), r.flatten(),nan_policy='omit')
+    stat,sigmat[n] = stats.ttest_rel(b.flatten(), r.flatten(),nan_policy='omit')
 
-df = pd.concat([sessions[sesidx].celldata, pd.DataFrame(data=sigmat<0.01,columns=stimtypes)], axis=1)
+df = pd.concat([sessions[sesidx].celldata, pd.DataFrame(data=sigmat<thr_p,columns=['sig'])], axis=1) 
+# df['sig'] = sigmat<0.01
 
 ## Plot number of responsive neurons per stimulus per area:
-fig,axes = plt.subplots(2,2,figsize=(8,8),sharey=True, sharex=True)
-sns.barplot(x='roi_name', y='G', data=df, estimator=lambda x: sum(x==1)*100.0/len(x),ax=axes[0,0]).set(title='A')
-# sns.barplot(x='roi_name', y='B', data=df, estimator=lambda y: sum(y==1)*100.0/len(y),ax=axes[0,1]).set(title='B')
-# sns.barplot(x='roi_name', y='C', data=df, estimator=lambda y: sum(y==1)*100.0/len(y),ax=axes[1,0]).set(title='C')
-# sns.barplot(x='roi_name', y='D', data=df, estimator=lambda y: sum(y==1)*100.0/len(y),ax=axes[1,1]).set(title='D')
 
+fig,axes = plt.subplots(1,1,figsize=(4,4),sharey=True, sharex=True)
+ax = axes
+sns.barplot(x='roi_name', y='sig', data=df, estimator=lambda x: sum(x==1)*100.0/len(x),ax=ax)
 ## Plot number of responsive neurons per stimulus across areas:
-sns.barplot(x=stimtypes,y=np.sum(sigmat<0.01,axis=0) / N)
+# sns.barplot(x=stimtypes,y=np.sum(sigmat<0.01,axis=0) / N)
 plt.title('Frac per stim all areas')
 plt.xlabel('Stimulus')
 
@@ -433,15 +405,15 @@ sesidx = 0
 #For all areas:
 fig = pca_scatter_stimresp(sessions[sesidx].respmat,sessions[sesidx],colorversion='stimresp')
 plt.suptitle('stimresp',fontsize=14)
-plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_stimResp_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_stimResp_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 fig = pca_scatter_stimresp(sessions[sesidx].respmat,sessions[sesidx],colorversion='runspeed')
 plt.suptitle('runspeed',fontsize=14)
-plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_runspeed_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_runspeed_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 fig = pca_scatter_stimresp(sessions[sesidx].respmat,sessions[sesidx],colorversion='signal')
 plt.suptitle('signal',fontsize=14)
-plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_signal_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_signal_allAreas_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% 
 #For each area:

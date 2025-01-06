@@ -22,9 +22,11 @@ import copy
 def plot_snake_area(data,sbins,stimtypes=['C','N','M'],sort='peakloc'):
     if sort=='peakloc': #Sort the neurons based on location of peak response:
         sortidx     = np.argsort(-np.nanargmax(np.nanmean(data,axis=2),axis=1))
-    elif sort=='stimresp': #Sort the neurons based on peak response:
+    elif sort=='stimwin': #Sort the neurons based on peak response in the stim window:
         sortidx     = np.argsort(np.nanmean(np.nanmean(data[:,(sbins>=0) & (sbins<=20),:],axis=2),axis=1))
-    
+    elif sort=='respwin': #Sort the neurons based on peak response
+        sortidx     = np.argsort(np.nanmean(np.nanmean(data[:,(sbins>=25) & (sbins<=45),:],axis=2),axis=1))
+
     data        = data[sortidx,:,:]
     Narea       = np.shape(data)[0]
     X, Y        = np.meshgrid(sbins, range(Narea)) #Construct X Y positions of the heatmaps:
