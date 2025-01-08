@@ -8,8 +8,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.linear_model import LinearRegression
 import copy
+
+from utils.plot_lib import *
+from utils.plotting_style import * #get all the fixed color schemes
 # from sklearn import preprocessing
-# from utils.plotting_style import * #get all the fixed color schemes
 # from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 # from scipy.signal import medfilt
 # from scipy.stats import zscore
@@ -53,6 +55,120 @@ def plot_snake_area(data,sbins,stimtypes=['C','N','M'],sort='peakloc'):
     
     return fig
 
+######################## Function to plot snakestyle heatmaps per stim per area #####################
+
+def plot_snake_allareas(data,sbins,arealabels,trialtypes=['C','N','M'],sort='peakloc'):
+    uareas      = np.unique(arealabels)
+    uareas      = sort_areas(uareas)
+    nareas      = len(uareas)
+    ntrialtypes = len(trialtypes)
+    datalim     = my_ceil(np.percentile(data,99),1)
+    fig, axes = plt.subplots(nrows=nareas,ncols=ntrialtypes,figsize=(ntrialtypes*2.5,nareas*2.5))
+    for iarea,area in enumerate(uareas):
+        idx_N       = arealabels==area
+        Ncells      = np.sum(idx_N)
+        X, Y        = np.meshgrid(sbins, range(Ncells)) #Construct X Y positions of the heatmaps:
+
+        temp        = data[idx_N,:,:]
+        if sort=='peakloc': #Sort the neurons based on location of peak response:
+            sortidx     = np.argsort(-np.nanargmax(np.nanmean(temp,axis=2),axis=1))
+        elif sort=='stimwin': #Sort the neurons based on peak response in the stim window:
+            sortidx     = np.argsort(np.nanmean(np.nanmean(temp[:,(sbins>=0) & (sbins<=20),:],axis=2),axis=1))
+        elif sort=='respwin': #Sort the neurons based on peak response
+            sortidx     = np.argsort(np.nanmean(np.nanmean(temp[:,(sbins>=25) & (sbins<=45),:],axis=2),axis=1))
+            
+        temp        = temp[sortidx,:,:]
+
+        for iTT in range(len(trialtypes)):
+            ax = axes[iarea,iTT]
+           
+
+            c = ax.pcolormesh(X,Y,temp[:,:,iTT], cmap = 'bwr',
+                            vmin=-datalim,vmax=datalim)
+            # c = plt.pcolormesh(X,Y,data[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.25)
+            if iarea==0:
+                ax.set_title(trialtypes[iTT],fontsize=10)
+            if iTT==0:
+                # ax.set_ylabel('%s \n nNeurons' % area,fontsize=10)
+                ax.set_ylabel('%s' % area,fontsize=10)
+                ax.set_yticks([0,Ncells])
+            else:
+                ax.set_yticks([])
+            if iarea==nareas-1:
+                ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
+                ax.set_xticks([-50,-25,0,25,50])
+            else:
+                ax.set_xticks([])
+            ax.set_xlim([-80,60])
+            add_stim_resp_win(ax)
+            ax.set_ylim([0,Ncells])
+    
+    fig.subplots_adjust(right=0.9)
+    cbar_ax = fig.add_axes([0.94, 0.73, 0.03, 0.1])
+    cbar = fig.colorbar(c, cax=cbar_ax,ticks=[-datalim,0,datalim])
+    cbar.ax.tick_params(labelsize=8)
+    cbar.ax.set_ylabel('Activity (z)',labelpad=-60)
+    
+   # plt.tight_layout()
+    
+    return fig
+
+######################## Function to plot snakestyle heatmaps per stim per animal #####################
+
+def plot_snake_allanimals(data,sbins,animallabels,trialtypes=['C','N','M'],sort='peakloc'):
+    uanimals        = np.unique(animallabels)
+    nanimals        = len(uanimals)
+    ntrialtypes     = len(trialtypes)
+    datalim         = my_ceil(np.percentile(data,99),1)
+
+    fig, axes   = plt.subplots(nrows=nanimals,ncols=ntrialtypes,figsize=(ntrialtypes*2.5,nanimals*2.5))
+    for ianimal,uanimal in enumerate(uanimals):
+        idx_N       = animallabels==uanimal
+        Ncells      = np.sum(idx_N)
+        X, Y        = np.meshgrid(sbins, range(Ncells)) #Construct X Y positions of the heatmaps:
+
+        temp        = data[idx_N,:,:]
+        if sort=='peakloc': #Sort the neurons based on location of peak response:
+            sortidx     = np.argsort(-np.nanargmax(np.nanmean(temp,axis=2),axis=1))
+        elif sort=='stimwin': #Sort the neurons based on peak response in the stim window:
+            sortidx     = np.argsort(np.nanmean(np.nanmean(temp[:,(sbins>=0) & (sbins<=20),:],axis=2),axis=1))
+        elif sort=='respwin': #Sort the neurons based on peak response
+            sortidx     = np.argsort(np.nanmean(np.nanmean(temp[:,(sbins>=25) & (sbins<=45),:],axis=2),axis=1))
+            
+        temp        = temp[sortidx,:,:]
+
+        for iTT in range(len(trialtypes)):
+            ax = axes[ianimal,iTT]
+            c = ax.pcolormesh(X,Y,temp[:,:,iTT], cmap = 'bwr',
+                            vmin=-datalim,vmax=datalim)
+            # c = plt.pcolormesh(X,Y,data[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.25)
+            # c = plt.pcolormesh(X,Y,data[:,:,iTT], cmap = 'viridis',vmin=-0.25,vmax=1.5)
+            if ianimal==0:
+                ax.set_title(trialtypes[iTT],fontsize=10)
+            if iTT==0:
+                # ax.set_ylabel('%s \n nNeurons' % area,fontsize=10)
+                ax.set_ylabel('%s' % uanimal,fontsize=10)
+                ax.set_yticks([0,Ncells])
+            else:
+                ax.set_yticks([])
+            if ianimal==nanimals-1:
+                ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
+                ax.set_xticks([-50,-25,0,25,50])
+            else:
+                ax.set_xticks([])
+            ax.set_xlim([-80,60])
+            add_stim_resp_win(ax)
+            ax.set_ylim([0,Ncells])
+    
+    fig.subplots_adjust(right=0.9)
+    cbar_ax = fig.add_axes([0.94, 0.73, 0.03, 0.1])
+    cbar = fig.colorbar(c, cax=cbar_ax,ticks=[-datalim,0,datalim])
+    cbar.ax.tick_params(labelsize=8)
+    cbar.ax.set_ylabel('Activity (z)',labelpad=-50)
+    
+   # plt.tight_layout()
+    
+    return fig
 
 ##################### Function to plot activity across trials for individual neurons #####################
 

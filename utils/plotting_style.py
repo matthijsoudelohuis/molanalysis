@@ -21,6 +21,11 @@ def get_clr_areas(areas):
                     'RSP' : sns.xkcd_rgb['orangered']}
     return itemgetter(*areas)(palette)
 
+def sort_areas(areas):
+    areas_order = ['V1', 'PM', 'AL', 'RSP']
+    areas = [x for x in areas_order if x in areas]
+    return areas
+
 def get_clr_area_pairs(areapairs):
     palette       = {'V1-V1'  : sns.xkcd_rgb['seaweed'],
                     'PM-V1' : sns.xkcd_rgb['peacock blue'],
