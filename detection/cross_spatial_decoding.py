@@ -29,7 +29,7 @@ from utils.psth import compute_tensor,compute_respmat,compute_tensor_space,compu
 from loaddata.get_data_folder import get_local_drive
 from utils.plot_lib import *
 from utils.behaviorlib import * # get support functions for beh analysis 
-from utils.decode_lib import * # get support functions for decoding
+from utils.regress_lib import * # get support functions for decoding
 
 plt.rcParams['svg.fonttype'] = 'none'
 
@@ -102,8 +102,8 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding respons
         X = np.nanmean(ses.stensor[np.ix_(idx_N,idx_T,((sbins>-5) & (sbins<20)).astype(bool))],axis=2)
         X = X.T
 
-        #PREP X
-        # ...
+        #PREP X,y
+        X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
         lam = find_optimal_lambda(X,y,model_name='LogisticRegression',kfold=5)
 
@@ -221,7 +221,7 @@ fig.colorbar(im, ax=ax,shrink=0.5,label='Dec. Perf.')
 
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'CrossSpatial_DecodingPerformance_NoiseVsCatch.png'), format='png')
-plt.savefig(os.path.join(savedir, 'CrossSpatial_DecodingPerformance_MaxVsCatch_V1.png'), format='png')
+plt.savefig(os.path.join(savedir, 'CrossSpatial_DecodingPerformance_MaxVsCatch_V1_%dsessions.png' % nSessions), format='png')
 
 #%% Decoding performance across space or across time:
 
@@ -246,8 +246,8 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding respons
         X = np.nanmean(ses.stensor[np.ix_(idx_N,idx_T,((sbins>20) & (sbins<45)).astype(bool))],axis=2)
         X = X.T
 
-        #PREP X
-        # ...
+        #PREP X,y
+        X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
         lam = find_optimal_lambda(X,y,model_name='LogisticRegression',kfold=5)
 

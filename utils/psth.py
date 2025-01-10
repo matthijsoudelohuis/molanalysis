@@ -9,6 +9,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 import numpy as np
 import pandas as pd
 from scipy.stats import binned_statistic
+from scipy import stats
 from scipy.interpolate import CubicSpline
 from tqdm.auto import tqdm
 
@@ -335,3 +336,25 @@ def construct_behav_matrix_ts_F(ses, nvideoPCs=30):
 
     return S, Slabels
 
+def calc_stimresponsive_neurons(sessions,sbins,thr_p=0.001):
+    binidx_base     = (sbins>=-70) & (sbins<-10)
+    binidx_stim     = (sbins>=-5) & (sbins<20)
+
+    for ises,ses in tqdm(enumerate(sessions),total=len(sessions),desc='Testing significant responsiveness to stim'):
+        [Nses,K,S]      = np.shape(sessions[ises].stensor) #get dimensions of tensor
+
+        idx_N           = np.isin(sessions[ises].trialdata['stimcat'],['N'])
+        idx_M           = np.isin(sessions[ises].trialdata['stimcat'],['M'])
+
+        b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_base)],axis=2)
+        r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_stim)],axis=2)
+        stat,sigmat_N = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
+
+        b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_M,binidx_base)],axis=2)
+        r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_M,binidx_stim)],axis=2)
+        stat,sigmat_M = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
+
+        ses.celldata['sig_N'] = sigmat_N < thr_p
+        ses.celldata['sig_M'] = sigmat_N < thr_p
+
+    return sessions

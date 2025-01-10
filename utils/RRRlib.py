@@ -4,26 +4,14 @@ Champalimaud 2023
 
 """
 
-import pandas as pd
-# import seaborn as sns
-# import matplotlib.pyplot as plt
-# import numpy.matlib
-# from sklearn.cross_decomposition import CCA
-# from mpl_toolkits.axes_grid1 import make_axes_locatable
-# from sklearn.decomposition import PCA
-
-# from sklearn.model_selection import KFold
-# from scipy.stats import zscore
-
-# from loaddata.session_info import load_sessions
-# from utils.psth import compute_tensor
-
 import scipy as sp
 import numpy as np
 from scipy import linalg
 from tqdm import tqdm
 from scipy.optimize import minimize
 from utils.psth import construct_behav_matrix_ts_F
+from sklearn.decomposition import PCA
+from sklearn.decomposition import FastICA as ICA
 
 def EV(Y,Y_hat):
     e = Y - Y_hat
@@ -80,7 +68,6 @@ def chunk(A, n_chunks=10):
     A_chunks = sp.split(A, n_chunks)
     return A_chunks
 
-from sklearn.decomposition import PCA
 def pca_rank_est(A, th=0.99):
     """ estimate rank by explained variance on PCA """
     pca = PCA(n_components=A.shape[1])
@@ -88,7 +75,6 @@ def pca_rank_est(A, th=0.99):
     var_exp = sp.cumsum(pca.explained_variance_ratio_) < th
     return 1 + np.sum(var_exp)
 
-from sklearn.decomposition import FastICA as ICA
 def ica_orth(A, r=None):
     if r is None:
         r = pca_rank_est(A)

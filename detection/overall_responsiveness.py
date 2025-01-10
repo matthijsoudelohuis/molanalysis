@@ -15,7 +15,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy import stats
 from scipy.stats import zscore
-from utils.psth import compute_tensor,compute_respmat,compute_tensor_space,compute_respmat_space
 from sklearn import preprocessing
 from sklearn import linear_model
 from sklearn.preprocessing import StandardScaler
@@ -24,6 +23,7 @@ from tqdm import tqdm
 #import personal modules
 from loaddata.session_info import filter_sessions,load_sessions
 from loaddata.get_data_folder import get_local_drive
+from utils.psth import *
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 from utils.plot_lib import * # get support functions for plotting
@@ -116,49 +116,9 @@ fig.savefig(os.path.join(savedir,'SpatialActivity','ActivityInCorridor_perAnimal
 
 
 #%% ################## Number of responsive neurons per stimulus #################################
-N               = len(celldata) #get number of cells total
 
-thr_p           = 0.001
-binidx_base     = (sbins>=-70) & (sbins<-10)
-binidx_stim     = (sbins>=-5) & (sbins<20)
-
-celldata['sig_N'] = False
-celldata['sig_M'] = False
-
-for ises,ses in tqdm(enumerate(sessions),total=len(sessions),desc='Testing significant responsiveness to stim'):
-    idx_N_ses       = celldata['session_id']==ses.sessiondata['session_id'][0]
-
-    [Nses,K,S]      = np.shape(sessions[ises].stensor) #get dimensions of tensor
-
-    idx_N           = np.isin(sessions[ises].trialdata['stimcat'],['N'])
-    idx_M           = np.isin(sessions[ises].trialdata['stimcat'],['M'])
-
-    b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_base)],axis=2)
-    r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_stim)],axis=2)
-    stat,sigmat_N = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
-
-    b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_M,binidx_base)],axis=2)
-    r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_M,binidx_stim)],axis=2)
-    stat,sigmat_M = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
-
-    ses.celldata['sig_N'] = sigmat_N < thr_p
-    ses.celldata['sig_M'] = sigmat_N < thr_p
-    # sigmat_N        = np.empty((Nses))
-    # sigmat_M        = np.empty((Nses))
-
-    # for n in range(Nses):
-    #     print(f"\rComputing significant response for neuron {n+1} / {N}",end='\r')
-
-        # b = np.nanmean(sessions[ises].stensor[np.ix_(np.array([n]),idx_N,binidx_base)],axis=2)
-        # r = np.nanmean(sessions[ises].stensor[np.ix_(np.array([n]),idx_N,binidx_stim)],axis=2)
-        # stat,sigmat_N[n] = stats.ttest_rel(b.flatten(), r.flatten(),nan_policy='omit')
-
-        # b = np.nanmean(sessions[ises].stensor[np.ix_(np.array([n]),idx_M,binidx_base)],axis=2)
-        # r = np.nanmean(sessions[ises].stensor[np.ix_(np.array([n]),idx_M,binidx_stim)],axis=2)
-        # stat,sigmat_M[n] = stats.ttest_rel(b.flatten(), r.flatten(),nan_policy='omit')
-
-    celldata.loc[idx_N_ses,'sig_N'] = sigmat_N<thr_p
-    celldata.loc[idx_N_ses,'sig_M'] = sigmat_M<thr_p
+sessions        = calc_stimresponsive_neurons(sessions,sbins)
+celldata        = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 #%% Plot number of responsive neurons per stimulus per area:
 

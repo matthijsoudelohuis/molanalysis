@@ -23,7 +23,7 @@ from utils.psth import compute_tensor_space,compute_respmat_space
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 from utils.plot_lib import *
-from utils.decode_lib import *
+from utils.regress_lib import *
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\')
 
 

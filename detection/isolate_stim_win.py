@@ -23,7 +23,7 @@ from utils.psth import compute_tensor_space,compute_respmat_space
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 from utils.plot_lib import *
-from utils.decode_lib import *
+from utils.regress_lib import *
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\')
 
 
@@ -134,7 +134,7 @@ for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across session
 
         # Loop through each spatial bin
         for ibin, bincenter in enumerate(sbins):
-            
+            y = ses.trialdata['lickResponse'][idx].to_numpy()
             # Define the X and y variables
             X = np.stack((ses.runPSTH[idx,ibin], ses.pupilPSTH[idx,ibin], ses.videomePSTH[idx,ibin], ses.lickPSTH[idx,ibin]), axis=1)
             # X = np.stack((ses.runPSTH[idx,ibin], ses.lickPSTH[idx,ibin]), axis=1)
@@ -178,10 +178,11 @@ plt.savefig(os.path.join(savedir, 'Spatial', 'DecPerformance_Stim_Resp_averageSe
 #%% Show the decoding performance per session 
 # Identifies the difference in neural stimulus coding and behavioral readout of choice
 # fig,axes = plt.subplots(1,2,figsize=(5,3))
-nRows = int(np.ceil(nSessions/4))
-fig,axes = plt.subplots(nRows,4,figsize=(12,nRows*2.5),sharex=True,sharey=True)
+nperrow  = 6
+nRows = int(np.ceil(nSessions/nperrow))
+fig,axes = plt.subplots(nRows,nperrow,figsize=(15,nRows*2.5),sharex=True,sharey=True)
 for i,ses in enumerate(sessions):
-    ax = axes[i//4,i%4]
+    ax = axes[i//nperrow,i%nperrow]
     ax.plot(sbins,dec_perf_stim[i,:],alpha=0.5,linewidth=1.5,color='b')
     ax.plot(sbins,dec_perf_choice[i,:],alpha=0.5,linewidth=1.5,color='g')
     # shaded_error(sbins,sperf,error='sem',ax=ax,color='grey')

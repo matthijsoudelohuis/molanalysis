@@ -24,7 +24,7 @@ from loaddata.get_data_folder import get_local_drive
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.plot_lib import *
 from utils.behaviorlib import * # get support functions for beh analysis 
-from utils.decode_lib import * # get support functions for decoding
+from utils.regress_lib import * # get support functions for decoding
 
 plt.rcParams['svg.fonttype'] = 'none'
 
