@@ -21,7 +21,6 @@ from sklearn.model_selection import cross_val_score
 from scipy.signal import medfilt
 from scipy.stats import zscore
 
-
 from loaddata.session_info import filter_sessions,load_sessions
 from loaddata.get_data_folder import get_local_drive
 import seaborn as sns
@@ -52,11 +51,11 @@ session_list = np.array([['LPE11997', '2024_04_16'],
 # session_list        = np.array([['LPE12013','2024_04_25']])
 # session_list        = np.array([['LPE12013','2024_04_26']])
 
-# sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
-#                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
+sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
+                         load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
-sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
-                         load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
+# sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
+#                          load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\Encoding\\')
 

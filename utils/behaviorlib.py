@@ -17,7 +17,7 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import curve_fit
 from scipy.stats import binned_statistic
-from utils.plot_lib import my_ceil, my_floor
+from utils.plot_lib import *
 from utils.plotting_style import * # get all the fixed color schemes
 
 # def filter_engaged(sessions):
@@ -341,6 +341,7 @@ def plot_lick_corridor_outcome(trialdata,lickPSTH,bincenters):
 
     return fig
 
+
 def plot_lick_corridor_psy(trialdata,lickPSTH,bincenters,version='signal',hitonly=False):
     # Plot licking rate as a function of trial type:
 
@@ -403,6 +404,33 @@ def plot_lick_corridor_psy(trialdata,lickPSTH,bincenters,version='signal',hitonl
 
     plt.text(5, 1.6, 'Stim',fontsize=11)
     plt.text(27, 1.6, 'Reward',fontsize=11)
+    plt.tight_layout()
+    return fig
+
+def plot_lick_corridor_raster(trialdata,lickPSTH,bincenters,version='trialNumber',filter_engaged=False):
+    # Plot licking as a rasterplot:
+
+    if filter_engaged:
+        idx = trialdata['engaged']==1
+        trialdata = trialdata[idx]
+        lickPSTH = lickPSTH[idx,:]
+
+
+    X,Y = np.meshgrid(bincenters,np.arange(lickPSTH.shape[0]))
+    
+    sortidx = np.argsort(trialdata[version])
+    lickPSTH = lickPSTH[sortidx,:]
+   
+    fig, ax = plt.subplots(figsize=(4,3.5))
+    ax.pcolormesh(X,Y,lickPSTH,vmin=0,vmax=1,cmap='Greys')
+    add_stim_resp_win(ax)
+
+    ax.set_ylim(0,lickPSTH.shape[0])
+    ax.set_xlim(bincenters[0],bincenters[-1])
+    ax.set_xlabel('Position rel. to stimulus onset (cm)')
+    ax.set_ylabel('Trials (%s sorted)' % version)
+    ax.set_yticks([0,lickPSTH.shape[0]])
+    ax.set_title(trialdata['session_id'].iloc[0])
     plt.tight_layout()
     return fig
 

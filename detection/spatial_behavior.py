@@ -140,7 +140,7 @@ for i, text in enumerate(leg.get_texts()):
     text.set_color(clrs_animals[i])
 plt.tight_layout()
 #Save figure:
-fig.savefig(os.path.join(savedir, 'Spatial', 'RunSpeed_Hist_AllSessions.png'), format='png')
+fig.savefig(os.path.join(savedir, 'Spatial', 'RunSpeed_Hist_AllSessions_%dsessions' % nSessions + '.png'), format='png')
 
 #%% Distribution of running speed during the stimulus window:
 tres      = 0.1 #cm/s bins
@@ -183,7 +183,7 @@ for i, text in enumerate(leg.get_texts()):
     text.set_color(clrs_animals[i])
 plt.tight_layout()
 #Save figure:
-fig.savefig(os.path.join(savedir, 'Spatial', 'StimDur_Hist_AllSessions.png'), format='png')
+fig.savefig(os.path.join(savedir, 'Spatial', 'StimDur_Hist_AllSessions_%dsessions' % nSessions + '.png'), format='png')
 
 
 #%% Show 2D histogram of running speed for hist and misses:
@@ -358,12 +358,72 @@ plt.savefig(os.path.join(savedir, 'Spatial', 'LogisticDecodingPerformance_LickRe
 
 
 
+#%% Remove non DN sessions:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(sessiondata['protocol'].isin(['DN']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+
+#%% Show licking across the tunnel and show distribution across trials: 
+# Distribution of licking during the stimulus window:
+lrres       = 1  #licks/cm bins
+lr_min      = 0    #lowest lick rate bin
+lr_max      = 30    #highest lick rate bin
+
+lrbinedges    = np.arange(lr_min-lrres/2,lr_max+lrres+lrres/2,lrres)
+lrbincenters  = (lrbinedges[1:]+lrbinedges[:-1])/2
+nlrbins       = len(lrbincenters)
+
+u_animals     = np.unique(sessiondata['animal_id'])
+clrs_animals  = get_clr_animal_id(u_animals)
+lrstimdata    = np.empty((nSessions,nlrbins)) #init array for hist data
+
+for ises,ses in enumerate(sessions):
+    idx = ses.trialdata['engaged']==1
+    lrstimdata[ises,:] = np.histogram(sessions[ises].trialdata['lickrate_stim'][idx]/0.04,
+                                      bins=lrbinedges,density=True)[0]
+    lrstimdata[ises,:] = np.cumsum(lrstimdata[ises,:])/np.sum(lrstimdata[ises,:])
+
+fig, ax = plt.subplots(figsize=(4,3))
+handles = [] #Just for the labels, not shown:
+for ianimal, animal in enumerate(u_animals):
+    sesidx = np.where(sessiondata['animal_id']==animal)[0]
+    handles.append(ax.plot(lrbincenters, np.nanmean(lrstimdata[sesidx,:],axis=0), label=animal,
+            color=clrs_animals[ianimal], linewidth=0)[0])
+
+#Plot histogram for each session:
+for ises, ses in enumerate(sessions):
+    ax.plot(lrbincenters, lrstimdata[ises,:], label=ses.sessiondata['animal_id'][0],
+            linewidth=0.4,color=clrs_animals[np.where(u_animals==ses.sessiondata['animal_id'][0])[0][0]])
+ax.plot(lrbincenters, np.median(lrstimdata,axis=0),
+            linewidth=1.5,color='k')
+
+#Figure make up:
+ax.set_ylabel('Cumulative fraction of trials')
+ax.set_xlabel('#licks in stimulus window (-5 to +15 cm)')
+leg = ax.legend(handles,u_animals,frameon=False,fontsize=7,loc='lower right',title='Animal')
+for i, text in enumerate(leg.get_texts()):
+    text.set_color(clrs_animals[i])
+plt.ylim([0,1])
+plt.tight_layout()
+
+#Save figure:
+fig.savefig(os.path.join(savedir, 'Spatial', 'Lickrate_Hist_DNSessions_%dsessions' % nSessions + '.png'), format='png')
+
+
+#%% 
+for ises in range(nSessions):
+    [sessions[ises].lickPSTH,bincenters] = calc_lickPSTH(sessions[ises],binsize=5)
+    fig = plot_lick_corridor_raster(sessions[ises].trialdata,sessions[ises].lickPSTH/0.04,bincenters,version='trialNumber',filter_engaged=False)
+    fig.savefig(os.path.join(savedir,'Spatial','LickRaster','LickRaster_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
 #%% 
 # fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
 # sessions[sesidx].lickPSTH[-1,:] = 0
 sesidx = 0
+[sessions[sesidx].lickPSTH,bincenters] = calc_lickPSTH(sessions[sesidx],binsize=5)
 fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
 # fig.savefig(os.path.join(savedir,'Performance','LickRate_Psy_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
@@ -380,6 +440,19 @@ fig.savefig(os.path.join(savedir,'Performance','RunSpeed_Psy_%s' % sessions[sesi
 
 fig = plot_psycurve([sessions[sesidx]])
 fig = plot_psycurve(sessions)
+
+
+
+
+
+
+
+
+
+
+
+
+#%% 
 
 
 

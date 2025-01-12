@@ -64,8 +64,8 @@ session_list = np.array([['LPE11622', '2024_02_22']])
 
 sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
-sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE11998'],min_cells=100,
-                           load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
+# sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE11998'],min_cells=100,
+                        #    load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
 # sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE10884'],
 #                            load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
 
@@ -96,12 +96,10 @@ for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
                                        sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=binsize,method='binmean')
 
-## Compute average response in stimulus response zone:
-for i in range(nSessions):
+    # Compute average response in stimulus response zone:
     sessions[i].respmat             = compute_respmat_space(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['stimStart'],
                                     sessions[i].zpos_F,sessions[i].trialnum_F,s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
 
-for i in range(nSessions):
     temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[i].behaviordata['runspeed']),1)))
     sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
                                     sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
@@ -114,7 +112,7 @@ for i in range(nSessions):
 
 
 #%% #################### Compute activity for each stimulus type for one session ##################
-ises        = 6 #selected session to plot this for
+ises        = 0 #selected session to plot this for
 [N,K,S]     = np.shape(sessions[ises].stensor) #get dimensions of tensor
 
 stimtypes   = sorted(sessions[ises].trialdata['stimcat'].unique()) # Catch, Noise and Max trials if correct

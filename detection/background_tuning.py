@@ -25,7 +25,7 @@ from utils.plotting_style import * #get all the fixed color schemes
 from utils.plot_lib import * # get support functions for plotting
 plt.rcParams['svg.fonttype'] = 'none'
 
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\')
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\BackgroundCorridor\\')
 
 #%% ###############################################################
 
