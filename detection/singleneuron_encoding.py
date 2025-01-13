@@ -44,6 +44,7 @@ calciumversion      = 'deconv'
 session_list = np.array([['LPE11622', '2024_02_21']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
 session_list = np.array([['LPE11997', '2024_04_16'],
+                         ['LPE11622', '2024_02_21'],
                          ['LPE11998', '2024_04_30'],
                          ['LPE12013','2024_04_25']])
 # session_list = np.array([['LPE10884', '2023_12_14']])
@@ -51,11 +52,11 @@ session_list = np.array([['LPE11997', '2024_04_16'],
 # session_list        = np.array([['LPE12013','2024_04_25']])
 # session_list        = np.array([['LPE12013','2024_04_26']])
 
-sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
-                         load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
+# sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
+#                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
-# sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
-#                          load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
+sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
+                         load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\Encoding\\')
 
@@ -90,6 +91,9 @@ for ises,ses in enumerate(sessions): # running across the trial:
 
 #%% 
 sessions = calc_stimresponsive_neurons(sessions,sbins)
+
+#%% Get signal as relative to psychometric curve for all sessions:
+sessions = noise_to_psy(sessions,filter_engaged=True)
 
 #%% #################### Compute encoding of variables in single neurons  ####################################
 
@@ -178,9 +182,17 @@ ax.set_xscale('log')
 #%%
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-N           = len(celldata)
-weights     = np.full((N,nspatbins,nvars),np.nan)
-r2_cv       = np.full((N,nspatbins),np.nan)
+modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
+modelname       = 'Ridge'
+scoring_type    = 'r2_score'
+lam             = 0.05
+version          ='v20'
+N               = len(celldata)
+modelvars       = get_predictors_from_modelversion(version)
+nvars           = len(modelvars)
+
+weights         = np.full((N,nspatbins,nvars),np.nan)
+r2_cv           = np.full((N,nspatbins),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
     idx_N_ses = np.isin(celldata['session_id'],ses.sessiondata['session_id'][0])
@@ -196,7 +208,7 @@ for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across ses
     # idx_T = ses.trialdata['engaged']==1
     idx_T = np.ones(len(ses.trialdata),dtype=bool)
 
-    r2_cv[idx_N_ses,:], weights[idx_N_ses,:,:], _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,modelname=modelname,optimal_lambda=None,kfold=5,scoring_type = 'r2',crossval=True)
+    r2_cv[idx_N_ses,:], weights[idx_N_ses,:,:], _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,scoring_type=scoring_type,crossval=True)
     # g, h, _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,modelname=modelname,optimal_lambda=None,kfold=5,scoring_type = 'r2',crossval=True)
 
 
@@ -244,7 +256,7 @@ for ilab,label in enumerate(labeled):
         if np.sum(idx) > 0:
             # ax.plot(sbins,np.nanmean(r2_cv[idx,:],axis=0),color='k',linewidth=2)
             # plt.plot(sbins,r2_cv[idx,iarea],color=clrs_vars[ivar],linewidth=1)
-            for ivar,var in enumerate(variables):
+            for ivar,var in enumerate(modelvars):
                 ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
                 # ax.plot(sbins,np.nanmean(weights[idx,:,ivar],axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
         add_stim_resp_win(ax)
@@ -260,7 +272,7 @@ for ilab,label in enumerate(labeled):
             ax.legend(frameon=False,fontsize=6)
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'EncodingWeights_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
-plt.savefig(os.path.join(savedir, 'EncodingWeights_Areas_Labels_%dsessions.png') % nSessions, format='png')
+# plt.savefig(os.path.join(savedir, 'EncodingWeights_Areas_Labels_%dsessions.png') % nSessions, format='png')
 
 #%% Show correlation between encoding weights per area: 
 idx_respwin = (sbins>=-5) & (sbins<=20)
@@ -298,9 +310,16 @@ fig.savefig(os.path.join(savedir, 'EncodingWeights_corrheatmap_%dsessions.png') 
 #%%%%%%%%%%%%%%
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-N           = len(celldata)
-weights     = np.full((N,nvars),np.nan)
-r2_cv       = np.full(N,np.nan)
+modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
+scoring_type    = 'r2_score'
+lam             = 0.05
+version          ='v14'
+N               = len(celldata)
+modelvars       = get_predictors_from_modelversion(version)
+nvars           = len(modelvars)
+
+weights         = np.full((N,nvars),np.nan)
+r2_cv           = np.full(N,np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
     idx_N_ses = np.isin(celldata['session_id'],ses.sessiondata['session_id'][0])
@@ -316,8 +335,8 @@ for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across ses
     # idx_T = ses.trialdata['engaged']==1
     idx_T = np.ones(len(ses.trialdata),dtype=bool)
 
-    r2_cv[idx_N_ses], weights[idx_N_ses,:], _ =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,modelname='Lasso',optimal_lambda=None,kfold=5,scoring_type = 'r2',
-                              crossval=True,subtr_shuffle=False)
+    r2_cv[idx_N_ses], weights[idx_N_ses,:], _, _ =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,
+                                                scoring_type =scoring_type,crossval=True,subtr_shuffle=False)
     
     # r2_cv[idx_N_ses], weights[idx_N_ses,:], _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,modelname=modelname,optimal_lambda=None,kfold=5,scoring_type = 'r2',crossval=True)
     # g, h, _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,modelname=modelname,optimal_lambda=None,kfold=5,scoring_type = 'r2',crossval=True)
@@ -326,23 +345,23 @@ for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across ses
 for iarea, area in enumerate(areas):
     # data = weights[np.ix_(ses.celldata['roi_name']==area,idx_respwin,np.ones(nvars).astype(bool))].mean(axis=1).T
     data = weights[celldata['roi_name']==area,:].T
-    fig = sns.pairplot(pd.DataFrame(data.T,columns=variables),diag_kind="hist",height=1.5,plot_kws={"s": 3, "alpha": 0.5, "color": "k"})
+    fig = sns.pairplot(pd.DataFrame(data.T,columns=modelvars),diag_kind="hist",height=1.5,plot_kws={"s": 3, "alpha": 0.5, "color": "k"})
     plt.suptitle(area)
     fig.tight_layout()
     # plt.savefig(os.path.join(savedir, 'EncodingWeights_pairplot_%s_%s.png') % (area,sessions[ises].sessiondata['session_id'][0]), format='png')
-    plt.savefig(os.path.join(savedir, 'EncodingWeights_StimWin_pairplot_%s_%dsessions.png') % (area,nSessions), format='png')
+    plt.savefig(os.path.join(savedir, 'EncodingWeights_StimWin_pairplot_%s_model%s_%dsessions.png') % (area,version,nSessions), format='png')
 
 #%% Show correlation between encoding weights per area: 
 fig,axes = plt.subplots(2,2,figsize=(7,6))
 for iarea, area in enumerate(areas):
     ax = axes[iarea//2,iarea%2]
     data = weights[celldata['roi_name']==area,:].T
-    df = pd.DataFrame(data.T,columns=variables)
-    sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap="vlag",xticklabels=variables,yticklabels=variables,ax=ax)
+    df = pd.DataFrame(data.T,columns=modelvars)
+    sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap="vlag",xticklabels=modelvars,yticklabels=modelvars,ax=ax)
     ax.set_title(area)
 fig.tight_layout()
 # fig.savefig(os.path.join(savedir, 'EncodingWeights_corrheatmap_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format='png')
-fig.savefig(os.path.join(savedir, 'EncodingWeights_StimWin_corrheatmap_%dsessions.png') % nSessions, format='png')
+fig.savefig(os.path.join(savedir, 'EncodingWeights_StimWin_corrheatmap_model%s_%dsessions.png') % (version,nSessions), format='png')
 
 
 # #%% 
@@ -363,83 +382,84 @@ fig.savefig(os.path.join(savedir, 'EncodingWeights_StimWin_corrheatmap_%dsession
 
 #%% COMPARE LINEAR TO POISSON REGRESSION
 
-# LINEAR LASSO WINS!!!!
-ses = sessions[0]
-
-idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])[nexcell])
-
-idx_T = np.all((ses.trialdata['engaged']==1,
-        ~np.isnan(ses.respmat[0,:])), axis=0)
-
-y = ses.respmat[np.ix_(idx_N,idx_T)].T
-y = y / np.nanmax(y)
-
-X = np.stack((
-              ses.trialdata['signal'][idx_T].to_numpy(),
-              ses.trialdata['lickResponse'][idx_T].to_numpy(),
-              ses.respmat_runspeed[0,idx_T],
-              ses.trialdata['trialNumber'][idx_T]
-              ), axis=1)
-
-# X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
-
-X           = zscore(X, axis=0,nan_policy='omit')
-idx_nan     = ~np.all(np.isnan(X),axis=1)
-X           = X[idx_nan,:]
-y           = y[idx_nan]
-X[:,np.all(np.isnan(X),axis=0)] = 0
-X           = np.nan_to_num(X,nan=np.nanmean(X,axis=0,keepdims=True))
-y           = np.nan_to_num(y,nan=np.nanmean(y,axis=0,keepdims=True))
-
 from sklearn.linear_model import PoissonRegressor
 from sklearn.metrics import mean_squared_error
 
+# LASSO AND POISSON PERFORM EQUALLY ON MSE, RIDGE WINS
+# LASSO WINS ON R2
+ses = sessions[28]
+# nexcell = 50
+# idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])[nexcell])
+
+# idx_N = np.zeros(len(ses.celldata),dtype=bool) # Responsive cell
+# idx_N[np.where(np.logical_or(ses.celldata['sig_N'],ses.celldata['sig_M']))[0][nexcell]] = True
+
+idx_T = np.ones(len(ses.trialdata),dtype=bool)
+
+modelvars   = get_predictors_from_modelversion(version='v8')
+
+y           = ses.respmat[np.ix_(idx_N,idx_T)].T
+
+X,allvars   = get_predictors(ses)               # get all predictors
+X           = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
+X           = X[idx_T,:]                     #get only trials of interest
+
+X,y         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+modelnames = ['Lasso','Ridge','PoissonRegressor']
 scoring_type = 'neg_mean_squared_error'
-# Find the optimal regularization strength (lambda) for Lasso
-lambdas = np.logspace(-6, 0, 20)
-cv_scores_lasso = np.zeros((len(lambdas),))
-for ilambda, lambda_ in enumerate(lambdas):
-    model = Lasso(alpha=lambda_)
-    scores = cross_val_score(model, X, y, cv=kfold, scoring=scoring_type)
-    cv_scores_lasso[ilambda] = np.median(scores)
-optimal_lambda = lambdas[np.argmax(cv_scores_lasso)]
-print('Optimal lambda for Lasso: %0.4f' % optimal_lambda)
 
-# Evaluate Lasso with optimal regularization value
-lasso_model = Lasso(alpha=optimal_lambda)
-lasso_cv_scores = cross_val_score(lasso_model, X, y, cv=kfold, scoring=scoring_type)
-average_lasso_cv_error = -np.mean(lasso_cv_scores)
-print('Average cross-validated error for Lasso: %0.4f' % average_lasso_cv_error)
+# excells = np.where(np.logical_or(ses.celldata['sig_N'],ses.celldata['sig_M']))[0]
+excells = np.random.choice(np.where(np.logical_or(ses.celldata['sig_N'],ses.celldata['sig_M']))[0],size=100,replace=False)
+errordata = np.zeros((len(excells),len(modelnames)))
+print('Average cross-validated error for:\n')
 
-# Find the optimal regularization strength (lambda) for Lasso
-lambdas = np.logspace(-6, 0, 20)
-cv_scores_lasso = np.zeros((len(lambdas),))
-for ilambda, lambda_ in enumerate(lambdas):
-    model = PoissonRegressor(alpha=lambda_)
-    scores = cross_val_score(model, X, y.ravel(), cv=kfold, scoring=scoring_type)
-    cv_scores_lasso[ilambda] = np.median(scores)
-optimal_lambda = lambdas[np.argmax(cv_scores_lasso)]
-print('Optimal lambda for Lasso: %0.4f' % optimal_lambda)
+for iN, excell in enumerate(excells):
 
-# Evaluate Poisson Regression
-poisson_model = PoissonRegressor()
-poisson_cv_scores = cross_val_score(poisson_model, X, y.ravel(), cv=kfold, scoring=scoring_type)
-average_poisson_cv_error = -np.mean(poisson_cv_scores)
-print('Average cross-validated error for Poisson Regression: %0.4f' % average_poisson_cv_error)
+    idx_N = np.zeros(len(ses.celldata),dtype=bool) # Responsive cell
+    idx_N[excell] = True
 
-# Compare the errors
-if average_lasso_cv_error < average_poisson_cv_error:
-    print('Lasso Regression performs better.')
-else:
-    print('Poisson Regression performs better.')
+    y       = ses.respmat[np.ix_(idx_N,idx_T)].T
+    y       = (y - np.min(y)) / (np.max(y) - np.min(y))
+
+    for imodel, modelname in enumerate(modelnames):
+        # Find the optimal regularization strength (lambda) for Lasso
+        lambdas = np.logspace(-6, 1, 20)
+        cv_scores_lasso = np.zeros((len(lambdas),))
+        for ilambda, lambda_ in enumerate(lambdas):
+            model = getattr(sklearn.linear_model,modelname)(alpha=lambda_)
+            scores = cross_val_score(model, X, y.ravel(), cv=kfold, scoring=scoring_type)
+            cv_scores_lasso[ilambda] = np.median(scores)
+        optimal_lambda = lambdas[np.argmax(cv_scores_lasso)]
+        model = getattr(sklearn.linear_model,modelname)(alpha=lambda_)
+
+        # Evaluate Lasso with optimal regularization value
+        # lasso_model = Lasso(alpha=optimal_lambda)
+        cv_scores = cross_val_score(model, X, y.ravel(), cv=kfold, scoring=scoring_type)
+        average_error = -np.mean(cv_scores)
+        errordata[iN,imodel] = average_error
+        # print('%s Regression: %0.4f' % (modelname,average_error))
+
+df = pd.DataFrame(errordata,columns=modelnames)
+sns.barplot(data=df,errorbar='ci')
+
+# Find which model wins
+winning_model = modelnames[np.argmin(errordata.mean(axis=0))]
+print('Winning model: %s' % winning_model)
+
 
 #%% 
 # Find the optimal regularization strength (lambda)
+modelname = 'Lasso'
+# modelname = 'Ridge'
+
 lambdas = np.logspace(-6, 0, 20)
 cv_scores = np.zeros((len(lambdas),))
 for ilambda, lambda_ in enumerate(lambdas):
+    model = getattr(sklearn.linear_model,modelname)(alpha=lambda_)
+
     # model = LinearRegression(solver='liblinear', C=lambda_)
-    model = Lasso(alpha=lambda_)
+    # model = Lasso(alpha=lambda_)
     # model = ElasticNet(alpha=lambda_,l1_ratio=0.9)
     # model = Ridge(alpha=lambda_)
     scores = cross_val_score(model, X, y, cv=kfold, scoring='r2')
@@ -448,7 +468,9 @@ optimal_lambda = lambdas[np.argmax(cv_scores)]
 print('Optimal lambda for session %d: %0.4f' % (ises, optimal_lambda))
 
 # model = Ridge(alpha=optimal_lambda)
-model = Lasso(alpha=optimal_lambda)
+# model = Lasso(alpha=optimal_lambda)
+model = getattr(sklearn.linear_model,modelname)(alpha=optimal_lambda)
+
 # model = ElasticNet(alpha=optimal_lambda,l1_ratio=0.9)
 
 print(np.nanmean(cross_val_score(model, X, y, cv=kfold, scoring='r2')))
@@ -461,10 +483,88 @@ fig,ax = plt.subplots(1,1,figsize=(3,3))
 plt.plot(lambdas,cv_scores)
 ax.set_xscale('log')
 
-
 #%% 
 
-# OLD versION:
+
+
+
+#%% COMPARE MODEL VERSIONS
+versions    = np.array(['v1','v2','v3','v4','v5','v6','v7','v8','v9','v10','v11','v12','v13','v14','v15']) 
+# versions    = np.array(['v15','v16']) 
+# versions    = np.array(['v1','v7','v8','v9']) 
+
+
+#%% 
+nspatbins   = len(sbins)
+kfold       = 5 # Define the number of folds for cross-validation
+modelname   = 'Lasso' # Linear regression with Lasso (L1) regularization
+modelname   = 'Ridge' # Linear regression with Ridge (L2) regularization
+scoring_type = 'r2_score'
+# scoring_type = 'mean_squared_error'
+lam         = 0.01 #for responsive neurons
+# lam         = 0.05 #for all cells
+# lam         = None #optimization of optimal lambda
+
+#%%
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+N           = len(celldata)
+r2_cv       = np.full((N,len(versions)),np.nan)
+for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
+    idx_N_ses = np.isin(celldata['session_id'],ses.sessiondata['session_id'][0])
+    #Neuron selection
+    # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])[0]) #just one example cell
+    # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])) #a few example cells
+    idx_N = np.logical_or(ses.celldata['sig_N'],ses.celldata['sig_M']) # Responsive cells
+    # idx_N = np.ones(len(ses.celldata),dtype=bool) # All cells
+    
+    #Trial selection
+    # idx_T = ses.trialdata['engaged']==1
+    idx_T = np.ones(len(ses.trialdata),dtype=bool)
+    
+    for iver,version in enumerate(versions):
+        r2_cv[idx_N_ses,iver], _, _, modelvars =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,
+                                                scoring_type = scoring_type, crossval=True,subtr_shuffle=False)
+                               
+                # r2_cv[idx_N_ses,iver], _, _, modelvars =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,version=version,modelname='Lasso',optimal_lambda=None,kfold=5,scoring_type = 'r2',
+                                # crossval=True,subtr_shuffle=False)
+
+
+#%% Plot the decoding performance for the different model versions
+clr_palette = sns.color_palette('husl',n_colors=len(versions))
+fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.5,3))
+# sns.lineplot(data=r2_cv,palette=sns.color_palette('husl',n_colors=len(versions)))
+sns.barplot(data=r2_cv,palette=clr_palette,ax=ax)
+ax.set_xlabel('Model version')
+ax.set_xticks(np.arange(len(versions)),versions.tolist())
+for i,patch in enumerate(ax.patches):
+    ax.text(patch.get_x() + patch.get_width()/2,0.005,
+            '{:.3f}'.format(np.nanmean(r2_cv[:,i])),ha='center',va='center',fontsize=8)
+ax.set_ylabel('Encoding performance \n(%s)' % scoring_type)
+ax.set_title('Encoding performance for different model versions')
+# ax.set_position([ax.get_position().x0,ax.get_position().y0,ax.get_position().width,ax.get_position().height])
+# fig.tight_layout()
+# fig.savefig(os.path.join(savedir, 'EncodingPerformance_ModelVersions_%dsessions.png') % (nSessions), format='png')
+# fig.savefig(os.path.join(savedir, 'EncodingPerformance_ResponsiveCells_ModelVersions_%dsessions.png') % (nSessions), format='png')
+
+# from utils.regress_lib import get_predictors_from_modelversion
+fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.7,3))
+# Make a legend where for each version is displayed which model variables are included in the model
+legend_str = []
+for iver,version in enumerate(versions):
+    # for ivar,var in enumerate(variables):
+    plt.plot(0,0,color=clr_palette[iver],label=version) #,sns.barplot(data=r2_cv,palette=sns.color_palette('husl',n_colors=len(versions)),ax=ax)
+
+    modelvars   = get_predictors_from_modelversion(version)
+    modelvars_str = ',\n'.join(modelvars)
+    legend_str.append('%s: %s' % (version,modelvars_str))
+ax.axis('off')
+ax.legend(legend_str,loc='upper right',bbox_to_anchor=(0, 0.5),ncol=np.ceil(len(versions)/3),fontsize=9,frameon=False)
+plt.tight_layout()
+# fig.savefig(os.path.join(savedir, 'Legend_ModelVersions.png'), format='png')
+
+
+#%% OLD versION:
 
 
 # crossval = True

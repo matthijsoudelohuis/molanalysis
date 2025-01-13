@@ -18,7 +18,6 @@ import logging
 from utils.filter_lib import my_highpass_filter
 logger = logging.getLogger(__name__)
 
-
 class Session():
 
     def __init__(self, protocol='', animal_id='', session_id='', verbose=1):
