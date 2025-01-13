@@ -18,7 +18,8 @@ def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
     assert len(X.shape)==2, 'X must be a matrix of samples by features'
     assert len(y.shape)==1, 'y must be a vector'
     assert X.shape[0]==y.shape[0], 'X and y must have the same number of samples'
-    assert model_name in ['LOGR','SVM','LDA'], 'regularization not supported for model %s' % model_name
+    # assert model_name in ['LOGR','SVM','LDA'], 'regularization not supported for model %s' % model_name
+    assert model_name in ['LOGR','SVM','LDA','Ridge','Lasso','LinearRegression'], 'regularization not supported for model %s' % model_name
 
     # Define the k-fold cross-validation object
     kf = KFold(n_splits=kfold, shuffle=True, random_state=0)
@@ -33,12 +34,21 @@ def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
         
         if model_name == 'LOGR':
             model = LOGR(penalty='l1', solver='liblinear', C=lambda_)
+            score_fun = 'accuracy'
         elif model_name == 'SVM':
             model = SVM.SVC(kernel='linear', C=lambda_)
+            score_fun = 'accuracy'
         elif model_name == 'LDA':
             model = LDA(n_components=1,solver='eigen', shrinkage=np.clip(lambda_,0,1))
+            score_fun = 'accuracy'
+        elif model_name in ['Ridge', 'Lasso']:
+            model = getattr(sklearn.linear_model,model_name)(alpha=lambda_)
+            score_fun = 'r2'
+        elif model_name in ['ElasticNet']:
+            model = getattr(sklearn.linear_model,model_name)(alpha=lambda_,l1_ratio=0.9)
+            score_fun = 'r2'
 
-        scores = cross_val_score(model, X, y, cv=kf, scoring='accuracy')
+        scores = cross_val_score(model, X, y, cv=kf, scoring=score_fun)
         cv_scores[ilambda] = np.mean(scores)
     optimal_lambda = lambdas[np.argmax(cv_scores)]
     # print('Optimal lambda for session %d: %0.4f' % (ises, optimal_lambda))
@@ -47,13 +57,14 @@ def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
     # optimal_lambda = 1
     return optimal_lambda
 
-def my_classifier_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_shuffle=True,norm_out=False): 
+def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_shuffle=True,
+                          scoring_type=None,norm_out=False):
     if model_name == 'LogisticRegression':
         model_name = 'LOGR'
     assert len(Xfull.shape)==2, 'Xfull must be a matrix of samples by features'
     assert len(Yfull.shape)==1, 'Yfull must be a vector'
     assert Xfull.shape[0]==Yfull.shape[0], 'Xfull and Yfull must have the same number of samples'
-    assert model_name in ['LOGR','SVM','LDA','GBC']
+    assert model_name in ['LOGR','SVM','LDA','Ridge','Lasso','LinearRegression'], 'regularization not supported for model %s' % model_name
     assert lam is None or lam > 0
     
     if lam is None and model_name in ['LOGR','SVM','LDA']:
@@ -61,20 +72,29 @@ def my_classifier_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtrac
 
     if model_name == 'LOGR':
         model = LOGR(penalty='l1', solver='liblinear', C=lam)
-    elif model_name == 'LDA':
-        # model = LDA(n_components=1,solver='svd')
-        model = LDA(n_components=1,solver='eigen', shrinkage=lam)
-    elif model_name == 'GBC': #Gradient Boosting Classifier
-        model = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1,max_depth=10, random_state=0,max_features='sqrt')
     elif model_name == 'SVM':
         model = SVM.SVC(kernel='linear', C=lam)
+    elif model_name == 'LDA':
+        model = LDA(n_components=1,solver='eigen', shrinkage=np.clip(lam,0,1))
+    elif model_name == 'GBC': #Gradient Boosting Classifier
+        model = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1,max_depth=10, random_state=0,max_features='sqrt')
+    elif model_name in ['Ridge', 'Lasso']:
+        model = getattr(sklearn.linear_model,model_name)(alpha=lam)
+    elif model_name in ['ElasticNet']:
+        model = getattr(sklearn.linear_model,model_name)(alpha=lam,l1_ratio=0.9)
+
+    if scoring_type is None:
+        scoring_type = 'accuracy_score' if model_name in ['LOGR','SVM','LDA','GBC'] else 'r2_score'
+    score_fun           = getattr(sklearn.metrics,scoring_type)
 
     # Define the number of folds for cross-validation
     kf = KFold(n_splits=kfold, shuffle=True, random_state=0)
 
     # Initialize an array to store the decoding performance
-    performance = np.full((kfold,), np.nan)
+    performance         = np.full((kfold,), np.nan)
     performance_shuffle = np.full((kfold,), np.nan)
+    weights             = np.full((kfold,np.shape(Xfull)[1]), np.nan)
+    projs               = np.full((np.shape(Xfull)[0]), np.nan)
 
     # Loop through each fold
     for ifold, (train_index, test_index) in enumerate(kf.split(Xfull)):
@@ -85,18 +105,21 @@ def my_classifier_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtrac
         # Train a classification model on the training data with regularization
         model.fit(X_train, y_train)
 
+        weights[ifold,:] = model.coef_
+
         # Make predictions on the test data
         y_pred = model.predict(X_test)
 
         # Calculate the decoding performance for this fold
-        performance[ifold] = accuracy_score(y_test, y_pred)
+        performance[ifold] = score_fun(y_test, y_pred)
 
         # Shuffle the labels and calculate the decoding performance for this fold
         np.random.shuffle(y_train)
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
+        projs[test_index] = y_pred
 
-        performance_shuffle[ifold] = accuracy_score(y_test, y_pred)
+        performance_shuffle[ifold] = score_fun(y_test, y_pred)
 
     if subtract_shuffle: # subtract the shuffling performance from the average perf
         performance_avg = np.mean(performance - performance_shuffle)
@@ -104,8 +127,9 @@ def my_classifier_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtrac
         performance_avg = np.mean(performance)
     if norm_out: # normalize to maximal range of performance (between shuffle and 1)
         performance_avg = performance_avg / (1-np.mean(performance_shuffle))
-    
-    return performance_avg
+    weights = np.nanmean(weights, axis=0) #average across folds
+
+    return performance_avg,weights,projs
 
 def prep_Xpredictor(X,y):
     X           = zscore(X, axis=0,nan_policy='omit')
@@ -209,14 +233,6 @@ def get_predictors_from_modelversion(version='v1'):
             'v15': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun','nlicks'],
 
             'v20': ['trialnumber','signal_psy_noise','stimcat_M','runbin','signalxrunbin','reward']
-            # 'v21': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun','lickresponse_noise'],
-            # 'v22': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun','signal_psyxhit'],
-            # 'v23': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun','signal_maxxhit'],
-            # 'v24': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun','reward'],
-            # 'v25': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun','nlicks']
-    #             varnames    = np.append(varnames, ['signalxrun'])
-    # X           = np.c_[X, np.atleast_2d(-ses.respmat_runspeed.flatten() * ses.trialdata['signal'].to_numpy()).T]
-    # varnames    = np.append(varnames, ['signalxruninv'])
 
             }
 
@@ -433,15 +449,6 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
         X           = X[idx_T,:]                     #get only trials of interest
     
         X,y         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
-
-
-        # # Define the X predictors
-        # X = np.stack((ses.trialdata['signal'][idx_T].to_numpy(),
-        #     ses.trialdata['lickResponse'][idx_T].to_numpy(),
-        #     ses.runPSTH[idx_T,ibin],
-        #     ses.trialdata['trialNumber'][idx_T]), axis=1)
-
-        # X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
         if crossval:
             # Define the k-fold cross-validation object
