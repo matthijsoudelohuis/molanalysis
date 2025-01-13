@@ -244,7 +244,7 @@ for ilab,label in enumerate(labeled):
         #     ax.legend(frameon=False,fontsize=6)
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'EncodingModel_cvR2_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
-plt.savefig(os.path.join(savedir, 'EncodingModel_cvR2_Areas_Labels_%dsessions.png') % nSessions, format='png')
+plt.savefig(os.path.join(savedir, 'EncodingModel_%s_cvR2_Areas_Labels_%dsessions.png') % (version,nSessions), format='png')
 
 #%% Show the encoding weights across areas:
 fig,axes    = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2),sharey=True,sharex=True)
@@ -253,12 +253,12 @@ for ilab,label in enumerate(labeled):
         ax = axes[ilab,iarea]
         # idx = np.all((ses.celldata['roi_name']==area, ses.celldata['labeled']==label), axis=0)
         idx = np.all((celldata['roi_name']==area, celldata['labeled']==label), axis=0)
-        if np.sum(idx) > 0:
+        if np.sum(idx) > 5:
             # ax.plot(sbins,np.nanmean(r2_cv[idx,:],axis=0),color='k',linewidth=2)
             # plt.plot(sbins,r2_cv[idx,iarea],color=clrs_vars[ivar],linewidth=1)
             for ivar,var in enumerate(modelvars):
-                ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
-                # ax.plot(sbins,np.nanmean(weights[idx,:,ivar],axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
+                # ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
+                ax.plot(sbins,np.nanmean(weights[idx,:,ivar],axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
         add_stim_resp_win(ax)
         ax.axhline(0,color='k',linestyle='--',linewidth=1)
         ax.set_xlim([-80,60])
@@ -272,14 +272,14 @@ for ilab,label in enumerate(labeled):
             ax.legend(frameon=False,fontsize=6)
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'EncodingWeights_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
-# plt.savefig(os.path.join(savedir, 'EncodingWeights_Areas_Labels_%dsessions.png') % nSessions, format='png')
+plt.savefig(os.path.join(savedir, 'EncodingWeights_%s_Areas_Labels_%dsessions.png') %  (version,nSessions), format='png')
 
 #%% Show correlation between encoding weights per area: 
 idx_respwin = (sbins>=-5) & (sbins<=20)
 for iarea, area in enumerate(areas):
     # data = weights[np.ix_(ses.celldata['roi_name']==area,idx_respwin,np.ones(nvars).astype(bool))].mean(axis=1).T
     data = weights[np.ix_(celldata['roi_name']==area,idx_respwin,np.ones(nvars).astype(bool))].mean(axis=1).T
-    fig = sns.pairplot(pd.DataFrame(data.T,columns=variables),diag_kind="hist",height=1.5,plot_kws={"s": 3, "alpha": 0.5, "color": "k"})
+    fig = sns.pairplot(pd.DataFrame(data.T,columns=modelvars),diag_kind="hist",height=1.5,plot_kws={"s": 3, "alpha": 0.5, "color": "k"})
     plt.suptitle(area)
     fig.tight_layout()
     # plt.savefig(os.path.join(savedir, 'EncodingWeights_pairplot_%s_%s.png') % (area,sessions[ises].sessiondata['session_id'][0]), format='png')
@@ -292,13 +292,13 @@ for iarea, area in enumerate(areas):
     ax = axes[iarea//2,iarea%2]
     # data = weights[np.ix_(ses.celldata['roi_name']==area,idx_respwin,np.ones(nvars).astype(bool))].mean(axis=1).T
     data = weights[np.ix_(celldata['roi_name']==area,idx_respwin,np.ones(nvars).astype(bool))].mean(axis=1).T
-    df = pd.DataFrame(data.T,columns=variables)
+    df = pd.DataFrame(data.T,columns=modelvars)
     # sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap="vlag",xticklabels=variables,yticklabels=variables,ax=ax)
-    sns.heatmap(df.corr(),vmin=-0.5,vmax=0.5,cmap="vlag",xticklabels=variables,yticklabels=variables,ax=ax)
+    sns.heatmap(df.corr(),vmin=-0.5,vmax=0.5,cmap="vlag",xticklabels=modelvars,yticklabels=modelvars,ax=ax)
     ax.set_title(area)
 fig.tight_layout()
 # fig.savefig(os.path.join(savedir, 'EncodingWeights_corrheatmap_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format='png')
-fig.savefig(os.path.join(savedir, 'EncodingWeights_corrheatmap_%dsessions.png') % nSessions, format='png')
+fig.savefig(os.path.join(savedir, 'EncodingWeights_%s_corrheatmap_%dsessions.png') % (version,nSessions), format='png')
 
 #%%%%                
 
