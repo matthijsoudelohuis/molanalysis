@@ -603,8 +603,8 @@ plt.tight_layout()
 
 #%% Decoding variables from V1 activity across space:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
-for ses in sessions:
-    ses.trialdata['trial_id'] = np.array([ses.sessiondata['session_id'][0] + '_' + '%04.0f' % k for k in range(0,len(ses.trialdata))])
+# for ses in sessions:
+#     ses.trialdata['trial_id'] = np.array([ses.sessiondata['session_id'][0] + '_' + '%04.0f' % k for k in range(0,len(ses.trialdata))])
 
 trialdata = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
 

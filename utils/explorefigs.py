@@ -19,40 +19,44 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_rand_trials(Session, ntrials=80):
-    trialsel = [np.random.randint(low=5, high=len(Session.trialdata)-100)]
+def get_rand_trials(ses, ntrials=80):
+    trialsel = [np.random.randint(low=5, high=len(ses.trialdata)-100)]
     trialsel.append(trialsel[0]+ntrials)
     return trialsel
 
 
-def plot_excerpt(Session, trialsel=None, neuronsel=None, plot_neural=True, plot_behavioral=True, neural_version='traces'):
+def plot_excerpt(ses, trialsel=None, neuronsel=None, plot_neural=True, plot_behavioral=True, neural_version='traces'):
     if trialsel is None:
-        trialsel = get_rand_trials(Session)
+        trialsel = get_rand_trials(ses)
     logger.info('Plotting trials %d to %d' % (trialsel[0], trialsel[1]))
-    example_tstart = Session.trialdata['tOffset'][trialsel[0]-1]
-    example_tstop = Session.trialdata['tOnset'][trialsel[1]-1]
-
+    if ses.sessiondata['protocol'][0] in ['GR','GN','IM']:
+        tstart  = ses.trialdata['tOffset'][trialsel[0]-1]
+        tstop   = ses.trialdata['tOnset'][trialsel[1]-1]
+    elif ses.sessiondata['protocol'][0] == 'DN':
+        tstart  = ses.trialdata['tStart'][trialsel[0]-1]
+        tstop   = ses.trialdata['tEnd'][trialsel[1]-1]
+        
     fig, ax = plt.subplots(figsize=[9, 12])
     counter = 0
     if plot_neural:
         if neural_version == 'traces':
             counter = plot_neural_traces(
-                Session, ax, trialsel=trialsel, neuronsel=neuronsel, counter=counter)
+                ses, ax, tstart,tstop, neuronsel=neuronsel, counter=counter)
         elif neural_version == 'raster':
             counter = plot_neural_raster(
-                Session, ax, trialsel=trialsel, neuronsel=neuronsel, counter=counter)
+                ses, ax, tstart,tstop, neuronsel=neuronsel, counter=counter)
         counter -= 1
 
     if plot_behavioral:
         counter = plot_behavioral_traces(
-            Session, ax, trialsel=trialsel, counter=counter)
+            ses, ax, tstart,tstop, counter=counter)
 
-    plot_stimuli(Session, trialsel, ax)
+    plot_stimuli(ses, trialsel, ax)
 
     pos = ax.get_position()
     ax.set_position([pos.x0, pos.y0, pos.width * 0.9, pos.height])
 
-    ax.set_xlim([example_tstart-10, example_tstop])
+    ax.set_xlim([tstart-10, tstop])
     ax.set_ylim([counter-1, 1])
 
     ax.add_artist(AnchoredSizeBar(ax.transData, 10,
@@ -72,16 +76,16 @@ def plot_norm_trace(x, y, offset=0, clr='k'):
     return handle
 
 
-def plot_stimuli(Session, trialsel, ax):
+def plot_stimuli(ses, trialsel, ax):
 
     # Add stimuli:
-    if Session.protocol == 'GR':
-        oris = np.unique(Session.trialdata['Orientation'])
+    if ses.protocol == 'GR':
+        oris = np.unique(ses.trialdata['Orientation'])
         rgba_color = plt.get_cmap('hsv', lut=16)(np.linspace(0, 1, len(oris)))
 
         for i in np.arange(trialsel[0], trialsel[1]):
-            ax.add_patch(plt.Rectangle([Session.trialdata['tOnset'][i], -1000], 1, 2000, alpha=0.1, linewidth=0,
-                                       facecolor=rgba_color[np.where(oris == Session.trialdata['Orientation'][i])]))
+            ax.add_patch(plt.Rectangle([ses.trialdata['tOnset'][i], -1000], 1, 2000, alpha=0.1, linewidth=0,
+                                       facecolor=rgba_color[np.where(oris == ses.trialdata['Orientation'][i])]))
 
         handles = []
         for i, ori in enumerate(oris):
@@ -89,17 +93,15 @@ def plot_stimuli(Session, trialsel, ax):
                 [0, 0], 1, 1000, alpha=0.3, linewidth=0, facecolor=rgba_color[i])))
         ax.legend(handles, oris, loc='center right',
                   bbox_to_anchor=(1.25, 0.5))
-    elif Session.protocol == 'GN':
-        print('Need to copy from analyze_GN')
-
-        oris = np.sort(np.unique(Session.trialdata['centerOrientation']))
-        speeds = np.sort(np.unique(Session.trialdata['centerSpeed']))
+    elif ses.protocol == 'GN':
+        oris = np.sort(np.unique(ses.trialdata['centerOrientation']))
+        speeds = np.sort(np.unique(ses.trialdata['centerSpeed']))
         clrs, oo = get_clr_gratingnoise_stimuli(oris, speeds)
 
         for i in np.arange(trialsel[0], trialsel[1]):
-            iO = np.where(oris == Session.trialdata['centerOrientation'][i])
-            iS = np.where(speeds == Session.trialdata['centerSpeed'][i])
-            ax.add_patch(plt.Rectangle([Session.trialdata['tOnset'][i], -1000], 1, 1000, alpha=0.3, linewidth=0,
+            iO = np.where(oris == ses.trialdata['centerOrientation'][i])
+            iS = np.where(speeds == ses.trialdata['centerSpeed'][i])
+            ax.add_patch(plt.Rectangle([ses.trialdata['tOnset'][i], -1000], 1, 1000, alpha=0.3, linewidth=0,
                                        facecolor=clrs[iO, iS, :].flatten()))
 
         for iO, ori in enumerate(oris):
@@ -107,30 +109,38 @@ def plot_stimuli(Session, trialsel, ax):
                 ax.add_patch(plt.Rectangle(
                     [0, 0], 1, 3, alpha=0.3, linewidth=0, facecolor=clrs[iO, iS, :].flatten()))
 
-    elif Session.protocol == 'IM':
+    elif ses.protocol == 'IM':
         # rgba_color  = plt.get_cmap('prism',lut=np.diff(trialsel)[0])(np.linspace(0, 1, np.diff(trialsel)[0]))
         rgba_color = sns.color_palette("Set2", np.diff(trialsel)[0])
 
         for i, k in enumerate(np.arange(trialsel[0], trialsel[1])):
-            ax.add_patch(plt.Rectangle([Session.trialdata['tOnset'][k], -1000],
-                                       Session.trialdata['tOffset'][k] -
-                                       Session.trialdata['tOnset'][k],
+            ax.add_patch(plt.Rectangle([ses.trialdata['tOnset'][k], -1000],
+                                       ses.trialdata['tOffset'][k] -
+                                       ses.trialdata['tOnset'][k],
                                        2000, alpha=0.3, linewidth=0,
                                        # facecolor=rgba_color[i,:]))
                                        facecolor=rgba_color[i]))
-        # handles= []
-        # for i,ori in enumerate(oris):
-            # handles.append(ax.add_patch(plt.Rectangle([0,0],1,ncells,alpha=0.3,linewidth=0,facecolor=rgba_color[i])))
+            
+    elif ses.protocol == 'DN':
+        stimcats = np.unique(ses.trialdata['stimcat'])
+        rgba_color = sns.color_palette("Set2", len(stimcats))
+
+        for i, k in enumerate(np.arange(trialsel[0], trialsel[1])):
+            ax.add_patch(plt.Rectangle([ses.trialdata['tStimStart'][k], -1000],
+                                       ses.trialdata['tStimEnd'][k] -
+                                       ses.trialdata['tStimStart'][k],
+                                       2000, alpha=0.3, linewidth=0,
+                                       # facecolor=rgba_color[i,:]))
+                                       facecolor=rgba_color[np.where(stimcats == ses.trialdata['stimcat'][i])[0][0]]))
+
+        
     return
 
 
-def plot_behavioral_traces(Session, ax, trialsel=None, nvideoPCs=8, counter=0):
-
-    example_tstart = Session.trialdata['tOnset'][trialsel[0]-1]
-    example_tstop = Session.trialdata['tOnset'][trialsel[1]-1]
-
-    ts_V = Session.videodata['ts']
-    idx_V = np.logical_and(ts_V > example_tstart, ts_V < example_tstop)
+def plot_behavioral_traces(ses, ax, tstart,tstop, nvideoPCs=8, counter=0):
+    
+    ts_V = ses.videodata['ts']
+    idx_V = np.logical_and(ts_V > tstart, ts_V < tstop)
     handles = []
     labels = []
 
@@ -138,75 +148,72 @@ def plot_behavioral_traces(Session, ax, trialsel=None, nvideoPCs=8, counter=0):
     clrs = sns.color_palette("crest", nvideoPCs)
 
     for iPC in range(nvideoPCs):
-        motionenergy = Session.videodata['videoPC_%d' % iPC][idx_V]
+        motionenergy = ses.videodata['videoPC_%d' % iPC][idx_V]
         handles.append(plot_norm_trace(
             ts_V[idx_V], motionenergy, counter, clr=clrs[iPC]))
         # labels.append('videoPC%d' %iPC)
         counter -= 1
 
-    ax.text(example_tstart, counter+nvideoPCs/2, 'video PCs',
+    ax.text(tstart, counter+nvideoPCs/2, 'video PCs',
             fontsize=9, color='black', horizontalalignment='right')
 
-    # motionenergy = Session.videodata['motionenergy'][idx_V]
+    # motionenergy = ses.videodata['motionenergy'][idx_V]
     # handles.append(plot_norm_trace(
     #     ts_V[idx_V], motionenergy, counter, clr='maroon'))
     # # labels.append('Motion Energy')
-    # ax.text(example_tstart, counter, 'video ME', fontsize=9,
+    # ax.text(tstart, counter, 'video ME', fontsize=9,
     #         color='black', horizontalalignment='right')
     # counter -= 1
 
-    pupil_area = Session.videodata['pupil_area'][idx_V]
+    pupil_area = ses.videodata['pupil_area'][idx_V]
     handles.append(plot_norm_trace(
         ts_V[idx_V], pupil_area, counter, clr='purple'))
     # labels.append('Pupil Size')
-    ax.text(example_tstart, counter, 'Pupil Size', fontsize=9,
+    ax.text(tstart, counter, 'Pupil Size', fontsize=9,
             color='black', horizontalalignment='right')
     counter -= 1
 
-    pupil_area = Session.videodata['pupil_xpos'][idx_V]
+    pupil_area = ses.videodata['pupil_xpos'][idx_V]
     handles.append(plot_norm_trace(
         ts_V[idx_V], pupil_area, counter, clr='indigo'))
     # labels.append('Pupil X-pos')
-    ax.text(example_tstart, counter, 'Pupil X-pos', fontsize=9,
+    ax.text(tstart, counter, 'Pupil X-pos', fontsize=9,
             color='black', horizontalalignment='right')
     counter -= 1
 
-    pupil_area = Session.videodata['pupil_ypos'][idx_V]
+    pupil_area = ses.videodata['pupil_ypos'][idx_V]
     handles.append(plot_norm_trace(
         ts_V[idx_V], pupil_area, counter, clr='plum'))
     # labels.append('Pupil Y-pos')
-    ax.text(example_tstart, counter, 'Pupil Y-pos', fontsize=9,
+    ax.text(tstart, counter, 'Pupil Y-pos', fontsize=9,
             color='black', horizontalalignment='right')
     counter -= 1
 
-    ts_B = Session.behaviordata['ts']
-    idx_B = np.logical_and(ts_B > example_tstart, ts_B < example_tstop)
+    ts_B = ses.behaviordata['ts']
+    idx_B = np.logical_and(ts_B > tstart, ts_B < tstop)
 
-    runspeed = Session.behaviordata['runspeed'][idx_B]
+    runspeed = ses.behaviordata['runspeed'][idx_B]
 
     handles.append(plot_norm_trace(
         ts_B[idx_B], runspeed, counter, clr='saddlebrown'))
     # labels.append('Running Speed')
-    ax.text(example_tstart, counter, 'Running Speed', fontsize=9,
+    ax.text(tstart, counter, 'Running Speed', fontsize=9,
             color='black', horizontalalignment='right')
     counter -= 1
 
     return counter
 
 
-def plot_neural_traces(Session, ax, trialsel, neuronsel=None, counter=0, nexcells=8):
+def plot_neural_traces(ses, ax, tstart, tstop , neuronsel=None, counter=0, nexcells=8):
 
-    example_tstart  = Session.trialdata['tOffset'][trialsel[0]-1]
-    example_tstop   = Session.trialdata['tOnset'][trialsel[1]-1]
-
-    scaleddata      = np.array(Session.calciumdata)
+    scaleddata      = np.array(ses.calciumdata)
     min_max_scaler  = preprocessing.MinMaxScaler()
     scaleddata      = min_max_scaler.fit_transform(scaleddata)
     scaleddata      = scaleddata[np.logical_and(
-        Session.ts_F > example_tstart, Session.ts_F < example_tstop)]
+        ses.ts_F > tstart, ses.ts_F < tstop)]
 
-    areas           = np.unique(Session.celldata['roi_name'])
-    labeled         = np.unique(Session.celldata['redcell'])
+    areas           = np.unique(ses.celldata['roi_name'])
+    labeled         = np.unique(ses.celldata['redcell'])
     labeltext       = ['unlabeled', 'labeled',]
 
     if neuronsel is None:
@@ -214,8 +221,8 @@ def plot_neural_traces(Session, ax, trialsel, neuronsel=None, counter=0, nexcell
 
         for iarea, area in enumerate(areas):
             for ilabel, label in enumerate(labeled):
-                idx             = np.where(np.logical_and(Session.celldata['roi_name'] == area, 
-                                            Session.celldata['redcell'] == label))[0]
+                idx             = np.where(np.logical_and(ses.celldata['roi_name'] == area, 
+                                            ses.celldata['redcell'] == label))[0]
                 temp_excells    = np.min((len(idx), nexcells))
                 excerpt_var     = np.var(scaleddata, axis=0)
                 example_cells    = np.append(example_cells, idx[np.argsort(-excerpt_var[idx])[:temp_excells]])
@@ -225,8 +232,8 @@ def plot_neural_traces(Session, ax, trialsel, neuronsel=None, counter=0, nexcell
     clrs = get_clr_labeled()
     for iarea, area in enumerate(areas):
         for ilabel, label in enumerate(labeled):
-            example_cells_area_label = example_cells[np.logical_and(Session.celldata['roi_name'][example_cells] == area,
-                                                                    Session.celldata['redcell'][example_cells] == label)]
+            example_cells_area_label = example_cells[np.logical_and(ses.celldata['roi_name'][example_cells] == area,
+                                                                    ses.celldata['redcell'][example_cells] == label)]
 
             excerpt = scaleddata[:, example_cells_area_label.astype(int)]
 
@@ -234,37 +241,37 @@ def plot_neural_traces(Session, ax, trialsel, neuronsel=None, counter=0, nexcell
 
             for i in range(ncells):
                 counter -= 1
-                ax.plot(Session.ts_F[np.logical_and(Session.ts_F > example_tstart, Session.ts_F < example_tstop)],
+                ax.plot(ses.ts_F[np.logical_and(ses.ts_F > tstart, ses.ts_F < tstop)],
                         excerpt[:, i]+counter, linewidth=0.5, color=clrs[ilabel])
 
-            ax.text(example_tstart, counter+ncells/2, area + ' - ' +
+            ax.text(tstart, counter+ncells/2, area + ' - ' +
                     labeltext[ilabel], fontsize=9, color='black', horizontalalignment='right')
 
     return counter
 
 
-def plot_neural_raster(Session, ax, trialsel, neuronsel=None, counter=0):
-
-    example_tstart = Session.trialdata['tOffset'][trialsel[0]-1]
-    example_tstop = Session.trialdata['tOnset'][trialsel[1]-1]
-
-    areas = np.unique(Session.celldata['roi_name'])
-    labeled = np.unique(Session.celldata['redcell'])
-    labeltext = ['unlabeled', 'labeled',]
+def plot_neural_raster(ses, ax, tstart, tstop, neuronsel=None, counter=0):
+    neuronsel   = np.array(neuronsel)
+    areas       = np.unique(ses.celldata['roi_name'][neuronsel])
+    labeled     = np.unique(ses.celldata['redcell'][neuronsel])
+    labeltext   = ['unlabeled', 'labeled',]
 
     clrs = get_clr_labeled()
     for iarea, area in enumerate(areas):
         for ilabel, label in enumerate(labeled):
 
-            idx = np.where(np.logical_and(
-                Session.celldata['roi_name'] == area, Session.celldata['redcell'] == label))[0]
+            idx = np.where(np.all((neuronsel,
+                ses.celldata['roi_name'] == area, 
+                ses.celldata['redcell'] == label), axis=0))[0]
+            # idx = np.where(np.logical_and(
+                # ses.celldata['roi_name'] == area, ses.celldata['redcell'] == label))[0]
             ncells = len(idx)
 
             if ncells>0:
                 shrinkfactor = np.sqrt(ncells)
 
-                excerpt = np.array(Session.calciumdata.loc[np.logical_and(
-                    Session.ts_F > example_tstart, Session.ts_F < example_tstop)])
+                excerpt = np.array(ses.calciumdata.loc[np.logical_and(
+                    ses.ts_F > tstart, ses.ts_F < tstop)])
                 excerpt = excerpt[:, idx]
 
                 datamat = zscore(excerpt.T, axis=1)
@@ -281,11 +288,11 @@ def plot_neural_raster(Session, ax, trialsel, neuronsel=None, counter=0):
                 # ax.imshow(spks[isort, xmin:xmax], cmap="gray_r", vmin=0, vmax=1.2, aspect="auto")
                 rasterclrs = ["gray_r", "Reds"]
                 ax.imshow(X_embedding, vmin=0, vmax=1.5, cmap=rasterclrs[ilabel], aspect="auto",
-                        extent=[example_tstart, example_tstop, counter-ncells/shrinkfactor, counter])
+                        extent=[tstart, tstop, counter-ncells/shrinkfactor, counter])
 
                 counter -= np.ceil(ncells/shrinkfactor)
 
-                ax.text(example_tstart, counter+ncells/shrinkfactor/2, area + ' - ' + labeltext[ilabel],
+                ax.text(tstart, counter+ncells/shrinkfactor/2, area + ' - ' + labeltext[ilabel],
                         fontsize=9, color='black', horizontalalignment='right')
 
     return counter
@@ -345,7 +352,7 @@ def plot_tuned_response(calciumdata, trialdata, t_axis, example_cells):
 def plot_PCA_gratings(ses,size='runspeed',cellfilter=None,apply_zscore=True,plotgainaxis=False):
     """
     The plot_PCA_gratings function is used to visualize the first two principal components of a population of neurons' responses to grating stimuli. It takes in three inputs:
-    ses: a Session object containing the responses to be analyzed.
+    ses: a ses object containing the responses to be analyzed.
     size (optional): a string specifying the size of the scatter plot markers. Default is 'runspeed'.
     cellfilter (optional): a boolean array specifying which cells to include in the analysis. Default is None.
     apply_zscore (optional): a boolean specifying whether to apply a zscore to each neuron's responses. Default is True.

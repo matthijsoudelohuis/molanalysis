@@ -17,6 +17,9 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import curve_fit
 from scipy.stats import binned_statistic
+from sklearn.metrics import r2_score
+
+#personal libs:
 from utils.plot_lib import *
 from utils.plotting_style import * # get all the fixed color schemes
 
@@ -101,7 +104,7 @@ def plot_psycurve(sessions,filter_engaged=False):
         x = psydata.keys().to_numpy()
         y = psydata.to_numpy()
        
-        params = fit_psycurve(trialdata,printoutput=True)
+        params,r2 = fit_psycurve(trialdata,printoutput=True)
 
         ## Plot the results
         fig, ax = plt.subplots(figsize=(3,3))
@@ -131,11 +134,11 @@ def plot_all_psycurve(sessions,filter_engaged=False):
         if filter_engaged:
             trialdata = trialdata[trialdata['engaged']==1]
 
-        params[ises,:] = fit_psycurve(trialdata,printoutput=False)
+        params[ises,:],r2 = fit_psycurve(trialdata,printoutput=False)
 
         ax.plot(x_highres, psychometric_function(x_highres, *params[ises,:]), label='fit', color='grey',linewidth=0.25)
         ax.set_xlabel('Stimulus (% signal)')
-    params[ises,:] = fit_psycurve(trialdata,printoutput=False)
+    params[ises,:],r2 = fit_psycurve(trialdata,printoutput=False)
 
     ax.plot(x_highres, psychometric_function(x_highres, *np.median(params,axis=0)), label='fit', 
             color='black',linewidth=2)
@@ -164,6 +167,12 @@ def fit_psycurve(trialdata,printoutput=False):
     # params, covariance      = curve_fit(psychometric_function, x, y, p0=initial_guess,bounds=bounds)
     params, covariance      = curve_fit(psychometric_function, X, Y, p0=initial_guess,bounds=bounds)
     
+    # Predict Y values using the fitted parameters
+    Y_pred = psychometric_function(X, *params)
+
+    # Compute R² score
+    r2 = r2_score(Y, Y_pred)
+
     if printoutput: 
         # Print the fitted parameters
         print("Fitted Parameters:")
@@ -172,7 +181,7 @@ def fit_psycurve(trialdata,printoutput=False):
         print("lapse_rate:", '%2.2f' % params[2])
         print("guess_rate:", '%2.2f' % params[3])
     
-    return params
+    return params,r2
 
 
 def noise_to_psy(sessions,filter_engaged=True):
@@ -182,12 +191,16 @@ def noise_to_psy(sessions,filter_engaged=True):
         if filter_engaged:
             trialdata = trialdata[trialdata['engaged']==1]
 
-        params = fit_psycurve(trialdata,printoutput=False)
+        params,r2 = fit_psycurve(trialdata,printoutput=False)
 
         idx = ses.trialdata['stimcat']=='N'
         ses.trialdata['signal_psy'] = pd.Series(dtype='float')
 
         ses.trialdata.loc[idx,'signal_psy'] = (ses.trialdata.loc[idx,'signal'] - params[0]) / params[1]
+        ses.sessiondata[['mu', 'sigma', 'lapse_rate', 'guess_rate']] = params
+        ses.sessiondata['noise_zmin'] = np.nanmin(ses.trialdata['signal_psy'])
+        ses.sessiondata['noise_zmax'] = np.nanmax(ses.trialdata['signal_psy'])
+        ses.sessiondata['psy_r2'] = r2
 
     return sessions
 
@@ -405,6 +418,39 @@ def plot_lick_corridor_psy(trialdata,lickPSTH,bincenters,version='signal',hitonl
     plt.text(5, 1.6, 'Stim',fontsize=11)
     plt.text(27, 1.6, 'Reward',fontsize=11)
     plt.tight_layout()
+    return fig
+
+
+def plot_videoME_corridor_outcome(trialdata,videomePSTH,bincenters):
+    ### Plot licking rate as a function of trial type:
+
+    fig, ax = plt.subplots()
+
+    ttypes = pd.unique(trialdata['trialOutcome'])
+    # ttypes = ['CR', 'MISS', 'HIT','FA']
+    colors = get_clr_outcome(ttypes)
+
+    for i,ttype in enumerate(ttypes):
+        idx = trialdata['trialOutcome']==ttype
+        data_mean = np.nanmean(videomePSTH[idx,:],axis=0)
+        data_error = np.nanstd(videomePSTH[idx,:],axis=0) / math.sqrt(sum(idx))
+        ax.plot(bincenters,data_mean,label=ttype,color=colors[i],linewidth=2)
+        ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
+
+    rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
+    rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
+
+    ax.legend()
+    # ax.set_ylim(0,1.5)
+    ax.set_xlim(bincenters[0],bincenters[-1])
+    ax.set_xlabel('Position rel. to stimulus onset (cm)')
+    ax.set_ylabel('Video ME (a.u.)')
+    add_stim_resp_win(ax)
+
+    plt.text(5, np.nanmean(videomePSTH,axis=None)*1.05, 'Stim',fontsize=11)
+    plt.text(27, np.nanmean(videomePSTH,axis=None)*1.05, 'Reward',fontsize=11)
+    plt.tight_layout()
+
     return fig
 
 def plot_lick_corridor_raster(trialdata,lickPSTH,bincenters,version='trialNumber',filter_engaged=False):

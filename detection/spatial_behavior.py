@@ -91,7 +91,7 @@ s_max       = 15
 sbinsize    = 5
 
 #%% #################### Compute spatial runspeed ####################################
-for ises,ses in enumerate(sessions): # running across the trial:
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Computing spatial PSTHs'): # running across the trial:
     sessions[ises].behaviordata['runspeed']     = medfilt(sessions[ises].behaviordata['runspeed'], kernel_size=51)
     [sessions[ises].runPSTH,bincenters]         = calc_runPSTH(sessions[ises],binsize=sbinsize)
     sessions[ises].trialdata['runspeed_stim']   = np.mean(sessions[ises].runPSTH[:,(bincenters>=s_min) & (bincenters<=s_max)],axis=1)
@@ -274,7 +274,30 @@ for ihit, hit in enumerate(['Miss','Hit','Diff']):
 plt.tight_layout()
 plt.savefig(os.path.join(savedir, 'Spatial', 'RunSpeed_Space_Heatmap_Average.png'), format='png')
 
+#%% Running and licking are negatively correlated
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+for ises,ses in enumerate(sessions):
+    ax.scatter(sessions[ises].runPSTH.flatten(),sessions[ises].lickPSTH.flatten(),s=2,alpha=0.2)
+ax.set_xlabel('Running speed (cm/s)')
+ax.set_ylabel('Lick rate (Hz)')
+fig.savefig(os.path.join(savedir,'BehaviorData','RunSpeed_vs_LickRate.png'), format = 'png')
+
+#%% VideoME as a function of spatial position in the corridor:
+sesidx = 7
+### licking across the trial:
+# [sessions[sesidx].lickPSTH,bincenters] = calc_lickPSTH(sessions[sesidx],binsize=5)
+
+# fig = plot_lick_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].lickPSTH,bincenters)
+# sessions[sesidx].lickPSTH[-1,:] = 0
+# fig = plot_lick_corridor_psy(sessions[sesidx].trialdata,sessions[sesidx].videomePSTH,bincenters)
+# fig.savefig(os.path.join(savedir,'Performance','LickRate_Max_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+fig = plot_videoME_corridor_outcome(sessions[sesidx].trialdata,sessions[sesidx].videomePSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Performance','VideoME_Outcome_%s' % sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
 #%% 
+
+
+
 
 
 

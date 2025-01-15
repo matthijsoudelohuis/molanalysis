@@ -345,6 +345,7 @@ def calc_stimresponsive_neurons(sessions,sbins,thr_p=0.001):
 
         idx_N           = np.isin(sessions[ises].trialdata['stimcat'],['N'])
         idx_M           = np.isin(sessions[ises].trialdata['stimcat'],['M'])
+        idx_MN          = np.isin(sessions[ises].trialdata['stimcat'],['N','M'])
 
         b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_base)],axis=2)
         r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_stim)],axis=2)
@@ -354,7 +355,12 @@ def calc_stimresponsive_neurons(sessions,sbins,thr_p=0.001):
         r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_M,binidx_stim)],axis=2)
         stat,sigmat_M = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
 
+        b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_MN,binidx_base)],axis=2)
+        r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_MN,binidx_stim)],axis=2)
+        stat,sigmat_MN = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
+
         ses.celldata['sig_N'] = sigmat_N < thr_p
-        ses.celldata['sig_M'] = sigmat_N < thr_p
+        ses.celldata['sig_M'] = sigmat_M < thr_p
+        ses.celldata['sig_MN'] = sigmat_MN < thr_p
 
     return sessions

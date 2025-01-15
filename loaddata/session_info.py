@@ -48,6 +48,7 @@ def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumd
 
 def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     load_videodata=False, calciumversion='dF',only_animal_id=None,
+                    only_session_id=None,
                     min_cells=None, min_lab_cells_V1=None, min_lab_cells_PM=None, 
                     filter_areas=None,min_trials=None, session_rf=None,
                     any_of_areas=None,only_all_areas=None,has_pupil=False):
@@ -111,9 +112,13 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                 # go through specified conditions that have to be met for the session to be included:
                 sesflag = True
 
-                # SELECT BASED ON # TRIALS
+                # SELECT BASED ON ANIMAL ID
                 if only_animal_id is not None:
                     sesflag = sesflag and animal_id in only_animal_id
+
+                # SELECT BASED ON SESSION ID
+                if only_session_id is not None:
+                    sesflag = sesflag and session_id in only_session_id
 
                 # SELECT BASED ON # TRIALS
                 if min_trials is not None:
@@ -129,20 +134,25 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                 if sesflag and min_lab_cells_PM is not None:
                     sesflag = sesflag and hasattr(ses, 'celldata') and np.sum(np.logical_and(ses.celldata['roi_name']=='PM',ses.celldata['redcell']==1)) >= min_lab_cells_V1
 
+                # SELECT BASED ON RF
                 if sesflag and session_rf is not None:
                     sesflag = sesflag and hasattr(
                         ses, 'celldata') and 'rf_r2_F' in ses.celldata
 
+                # SELECT BASED ON WHETHER SESSION HAS DATA IN A PARTICULAR AREA:
                 if sesflag and any_of_areas is not None:
                     sesflag = sesflag and hasattr(ses, 'celldata') and np.any(np.isin(any_of_areas,np.unique(ses.celldata['roi_name'])))
 
+                # SELECT BASED ON WHETHER SESSION HAS DATA IN ALL SPECIFIED AREAS:
                 if sesflag and only_all_areas is not None:
                     sesflag = sesflag and hasattr(ses, 'celldata') and np.all(np.isin(only_all_areas,np.unique(ses.celldata['roi_name'])))
                     # sesflag = sesflag and hasattr(ses, 'celldata') and np.all(np.isin(np.unique(ses.celldata['roi_name']),only_all_areas))
                 
+                # FILTER DATA TO ONLY LOAD DATA FROM SPECIFIED AREAS
                 if sesflag and filter_areas is not None and hasattr(ses, 'celldata'):
                     ses.cellfilter = np.isin(ses.celldata['roi_name'],filter_areas)
                 
+                # SELECT BASED ON WHETHER SESSION HAS PUPIL DATA MEASUREMENTS
                 if sesflag and has_pupil:
                     ses.load_data(load_videodata=True)
                     sesflag = sesflag and hasattr(ses, 'videodata') and 'pupil_area' in ses.videodata and np.any(ses.videodata['pupil_area'])

@@ -23,6 +23,7 @@ from tqdm import tqdm
 #import personal modules
 from loaddata.session_info import filter_sessions,load_sessions
 from loaddata.get_data_folder import get_local_drive
+from utils.explorefigs import plot_excerpt
 from utils.psth import *
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
@@ -38,7 +39,7 @@ protocol            = 'DN'
 calciumversion      = 'deconv'
 # calciumversion      = 'dF'
 
-sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE11998'],min_cells=100,
+sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE12013'],min_cells=100,load_videodata=True,
                            load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
 
 sessions,nSessions = filter_sessions(protocol,min_cells=100,
@@ -50,6 +51,23 @@ sessions,nSessions = filter_sessions(protocol,min_cells=100,
 #%% Z-score calcium data:
 for i in range(nSessions):
     sessions[i].calciumdata = sessions[i].calciumdata.apply(zscore,axis=0)
+
+
+#%%  Show raster or traces plot for some example session:
+ises = 1
+
+fig = plot_excerpt(sessions[ises],trialsel=[100,150],plot_neural=True,plot_behavioral=True,neural_version='traces')
+fig.savefig(os.path.join(savedir,'ExampleTraces','ExTraces_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
+
+#%%  Show raster or traces plot for some example session:
+ises = 1
+trialsel = [162,188]
+neuronsel = np.all((sessions[ises].celldata['redcell'] == 0,
+                    np.isin(sessions[ises].celldata['roi_name'],['V1','PM'])),axis=0)
+neuronsel = np.isin(sessions[ises].celldata['roi_name'],['V1','PM'])
+
+fig = plot_excerpt(sessions[ises],trialsel=trialsel,neuronsel=neuronsel,plot_neural=True,plot_behavioral=True,neural_version='raster')
+fig.savefig(os.path.join(savedir,'ExampleTraces','ExRaster_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
 
 #%% ############################### Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
@@ -69,6 +87,17 @@ for i in range(nSessions):
     # temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[i].behaviordata['runspeed']),1)))
     # sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
     #                                 sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
+
+# #%% ### Show for all sessions which region of the psychometric curve the noise spans #############
+# sessions = noise_to_psy(sessions,filter_engaged=True)
+
+# idx_inclthr = np.empty(nSessions).astype('int')
+# for ises,ses in enumerate(sessions):
+#     idx_inclthr[ises] = int(np.logical_and(np.any(sessions[ises].trialdata['signal_psy']<=0),np.any(sessions[ises].trialdata['signal_psy']>=0)))
+#     ses.sessiondata['incl_thr'] = idx_inclthr[ises]
+
+# sessions = [ses for ses in sessions if ses.sessiondata['incl_thr'][0]]
+# nSessions = len(sessions)
 
 #%% #################### Compute activity for each stimulus type for all session ##################
 sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
@@ -154,6 +183,26 @@ plt.tight_layout()
 
 fig.savefig(os.path.join(savedir,'SpatialActivity','FracResponsive_perStim_%d' % nanimals + '.png'), format = 'png',bbox_inches='tight')
 
+#%% Plot number of responsive neurons per stimulus per area:
+
+areas = ['V1','PM','AL','RSP']
+clr_areas = get_clr_areas(areas)
+
+frac_MN = celldata.groupby(['roi_name','session_id'])['sig_MN'].sum() / celldata.groupby(['roi_name','session_id'])['sig_MN'].count()
+frac_MN = frac_MN.reset_index()
+
+
+fig,ax = plt.subplots(1,1,figsize=(2.5,3),sharey=True, sharex=True)
+sns.stripplot(x='roi_name', y='sig_MN', data=frac_MN, order=areas,hue_order=areas,
+              color='k',s=2,ax=ax)
+sns.pointplot(x='roi_name', y='sig_MN', data=frac_MN, order=areas,hue_order=areas,
+              errorbar=('ci', 95),palette=clr_areas,ax=ax,capsize=.0,estimator=np.mean)
+ax.set_title('Either Stimulus')
+ax.set_xlabel('Area')
+ax.set_ylabel('% responsive')
+
+# fig.savefig(os.path.join(savedir,'SpatialActivity','FracResponsive_perStim_%d' % nanimals + '.png'), format = 'png',bbox_inches='tight')
+
 
 #%% Plot number of responsive neurons per stimulus per area for labeled and unlabeled:
 
@@ -214,10 +263,12 @@ nareas      = len(areas)
 lickresp    = [0,1]
 nlickresp   = len(lickresp)
 
+zmin        = -3
+zmax        = 3
 nbins_noise = 5
 Z           = nbins_noise + 2
 
-edges       = np.linspace(-2,2,nbins_noise+1)
+edges       = np.linspace(zmin,zmax,nbins_noise+1)
 centers     = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
 plotcenters = np.hstack((centers[0]-2*np.mean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
 

@@ -25,13 +25,15 @@ from utils.psth import compute_tensor,compute_respmat
 protocols            = ['GR','GN','IM']
 protocols            = ['DN']
 
-sessions,nsessions            = filter_sessions(protocols)
+sessions,nsessions            = filter_sessions(protocols,min_cells=1)
 
 # session_list        = np.array([['LPE10885','2023_10_23']])
 # session_list        = np.array([['LPE11086','2024_01_05']])
 # sessions,nsessions  = load_sessions(protocol = 'GR',session_list=session_list)
 
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Labeling\\'
+savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Labeling\\DN\\'
+
 #%% #### reset threshold if necessary:
 threshold = 0.5
 for ses in sessions:
@@ -106,9 +108,8 @@ celldata['cell_id'][idx]
 idx = np.where((celldata['frac_of_ROI_red']>0.9) & (celldata['frac_red_in_ROI']<0.5))[0]
 celldata['cell_id'][idx] 
 
-#%% Find some cells that have full tdtomato within, but only little of the suite2p ROI:
-idx = np.where((celldata['frac_of_ROI_red']<0.4) & (celldata['frac_red_in_ROI']>0.9))[0]
-celldata['cell_id'][idx] 
+celldata['frac_of_ROI_red'][celldata['cell_id']=='LPE11997_2024_04_10_0_0279']
+celldata['frac_red_in_ROI'][celldata['cell_id']=='LPE11997_2024_04_10_0_0192']
 
 #%% ####### Show scatter of chan2prob from suite2p and frac red in ROI #######################
 fig, ax = plt.subplots(figsize=(3.5,3))
@@ -124,20 +125,27 @@ plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Scatter_Overlap_Chan2Prob_%dcells_%dsessions' % (len(celldata),nsessions) + '.png'), format = 'png')
 
 #%% Find some cells that should be labeled according to the metric of suite2p, but not through cellpose:
-idx = np.where((celldata['frac_red_in_ROI']<0.5) & (celldata['chan2_prob']>0.7) 
+idx = np.where((celldata['frac_red_in_ROI']<0.5) & (celldata['chan2_prob']>0.8) 
                & (celldata['chan2_prob']<1) & (celldata['skew']>3) & 
+               (celldata['session_id'] != 'LPE10884_2023_12_14') & 
+               (celldata['session_id'] != 'LPE10884_2023_12_15') & 
+               (celldata['session_id'] != 'LPE10884_2023_12_16') & 
+               (celldata['session_id'] != 'LPE10884_2023_12_17') & 
+               (celldata['session_id'] != 'LPE10884_2024_01_16') & 
+               (celldata['session_id'] != 'LPE10884_2024_01_17') & 
                (celldata['session_id'] != 'LPE10885_2023_10_12') & 
                (celldata['session_id'] != 'LPE10883_2023_10_23') & 
                (celldata['session_id'] != 'LPE10919_2023_11_06'))[0]
 # idx = np.logical_and(celldata['frac_red_in_ROI']<0.5,celldata['chan2_prob']>0.8)
 g = celldata['cell_id'][idx] 
 g[:25]
-g[45:75]
+g[125:150]
 
 idx = celldata['cell_id']=='LPE11998_2024_05_10_1_0132'
 idx = celldata['cell_id']=='LPE11086_2024_01_10_2_0094'
 idx = celldata['cell_id']=='LPE12013_2024_05_07_0_0177'
 idx = celldata['cell_id']=='LPE11495_2024_02_27_5_0028'
+idx = celldata['cell_id']=='LPE11622_2024_02_22_5_0118'
 celldata['chan2_prob'][idx] 
 celldata['frac_red_in_ROI'][idx]
 
@@ -146,6 +154,7 @@ celldata['frac_red_in_ROI'][1341]
 
 #%% Get the colors and names of the areas:
 areas = celldata['roi_name'].unique()
+areas = sort_areas(areas)
 clrs_areas = get_clr_areas(areas)
 
 #%% Get information about labeled cells per session per area: 
@@ -161,8 +170,8 @@ sesdata['frac_labeled']     = sesdata['nlabeled'] / sesdata['ncells']
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
-sns.barplot(data=sesdata,x='roi_name',y='nredcells',palette=clrs_areas,ax=ax,errorbar='se')
-sns.stripplot(data=sesdata,x='roi_name',y='nredcells',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2)
+sns.barplot(data=sesdata,x='roi_name',y='nredcells',palette=clrs_areas,ax=ax,errorbar='se',order=areas)
+sns.stripplot(data=sesdata,x='roi_name',y='nredcells',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2,order=areas)
 plt.title('# cellpose cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
@@ -171,8 +180,8 @@ plt.savefig(os.path.join(savedir,'nCellpose_area_%dsessions' % len(sesdata) + '.
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
-sns.barplot(data=sesdata,x='roi_name',y='ncells',palette=clrs_areas,ax=ax,errorbar='se')
-sns.stripplot(data=sesdata,x='roi_name',y='ncells',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2)
+sns.barplot(data=sesdata,x='roi_name',y='ncells',palette=clrs_areas,ax=ax,errorbar='se',order=areas)
+sns.stripplot(data=sesdata,x='roi_name',y='ncells',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2,order=areas)
 plt.title('# suite2p cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
@@ -181,8 +190,8 @@ plt.savefig(os.path.join(savedir,'nSuite2p_area_%dsessions' % len(sesdata) + '.p
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
-sns.barplot(data=sesdata,x='roi_name',y='frac_responsive',palette=clrs_areas,ax=ax,errorbar='se')
-sns.stripplot(data=sesdata,x='roi_name',y='frac_responsive',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2)
+sns.barplot(data=sesdata,x='roi_name',y='frac_responsive',palette=clrs_areas,ax=ax,errorbar='se',order=areas)
+sns.stripplot(data=sesdata,x='roi_name',y='frac_responsive',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2,order=areas)
 plt.title('# Frac. responsive cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
@@ -191,8 +200,8 @@ plt.savefig(os.path.join(savedir,'Frac_responsive_area_%dsessions' % len(sesdata
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
-sns.barplot(data=sesdata,x='roi_name',y='frac_labeled',palette=clrs_areas,ax=ax,errorbar='se')
-sns.stripplot(data=sesdata,x='roi_name',y='frac_labeled',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2)
+sns.barplot(data=sesdata,x='roi_name',y='frac_labeled',palette=clrs_areas,ax=ax,errorbar='se',order=areas)
+sns.stripplot(data=sesdata,x='roi_name',y='frac_labeled',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2,order=areas)
 plt.title('# Frac. labeled cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
@@ -201,8 +210,8 @@ plt.savefig(os.path.join(savedir,'Frac_labeled_area_%dsessions' % len(sesdata) +
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
-sns.barplot(data=sesdata,x='roi_name',y='nlabeled',palette=clrs_areas,ax=ax,errorbar='se')
-sns.stripplot(data=sesdata,x='roi_name',y='nlabeled',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2)
+sns.barplot(data=sesdata,x='roi_name',y='nlabeled',palette=clrs_areas,ax=ax,errorbar='se',order=areas)
+sns.stripplot(data=sesdata,x='roi_name',y='nlabeled',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2,order=areas)
 plt.title('# Labeled cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
@@ -223,8 +232,8 @@ planedata['frac_responsive']  = celldata.groupby(["session_id","plane_idx"])['re
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
-sns.barplot(data=planedata,x='roi_name',y='frac_labeled',palette=clrs_areas,ax=ax,errorbar='se')
-sns.stripplot(data=planedata,x='roi_name',y='frac_labeled',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2)
+sns.barplot(data=planedata,x='roi_name',y='frac_labeled',palette=clrs_areas,ax=ax,errorbar='se',order=areas)
+sns.stripplot(data=planedata,x='roi_name',y='frac_labeled',color='k',ax=ax,size=3,alpha=0.5,jitter=0.2,order=areas)
 plt.ylabel('Fraction labeled in plane')
 plt.xlabel(r'Area')
 plt.tight_layout()
@@ -250,25 +259,25 @@ plt.savefig(os.path.join(savedir,'Frac_labeled_enzymes_%dplanes' % len(planedata
 
 #%% Scatter plot as a function of depth:
 fig, ax = plt.subplots(figsize=(5,4))
-sns.scatterplot(data=planedata,x='depth',y='frac_labeled',hue='roi_name',palette=clrs_areas,ax=ax,s=14)
+sns.scatterplot(data=planedata,x='depth',y='frac_labeled',hue='roi_name',palette=clrs_areas,ax=ax,s=14,hue_order=areas)
 plt.ylabel('Fraction labeled in plane')
 plt.xlabel(r'Cortical depth ($\mu$m)')
 plt.xlim([50,500])
 plt.tight_layout()
 sns.lineplot(x=planedata['depth'].round(-2),y=planedata['frac_labeled'],
-             hue=planedata['roi_name'],palette=clrs_areas,ax=ax)
+             hue=planedata['roi_name'],palette=clrs_areas,ax=ax,hue_order=areas)
 plt.legend(ax.get_legend_handles_labels()[0][:4],areas, loc='best')
 plt.savefig(os.path.join(savedir,'Frac_labeled_depth_area_%dplanes' % len(planedata) + '.png'), format = 'png')
 
 #%% Number of red cellpose cells as a function of depth (not per se suite2p calcium trace detected):
 fig, ax = plt.subplots(figsize=(5,4))
-sns.scatterplot(data=planedata,x='depth',y='nredcells',hue='roi_name',palette=clrs_areas,ax=ax,s=14)
+sns.scatterplot(data=planedata,x='depth',y='nredcells',hue='roi_name',palette=clrs_areas,ax=ax,s=14,hue_order=areas)
 plt.ylabel('Number labeled in plane')
 plt.xlabel(r'Cortical depth ($\mu$m)')
 plt.xlim([50,500])
 plt.tight_layout()
 sns.lineplot(x=planedata['depth'].round(-2),y=planedata['nredcells'],
-             hue=planedata['roi_name'],palette=clrs_areas,ax=ax)
+             hue=planedata['roi_name'],palette=clrs_areas,ax=ax,hue_order=areas)
 plt.legend(ax.get_legend_handles_labels()[0][:4],areas, loc='best')
 plt.savefig(os.path.join(savedir,'Frac_cellpose_depth_area_%dplanes' % len(planedata) + '.png'), format = 'png')
 

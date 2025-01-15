@@ -117,14 +117,16 @@ print(sessiondata['stim'].value_counts())
 
 filter_engaged = True
 params = np.empty((nsessions,4))
+r2_ses = np.empty((nsessions))
 for ises,ses in enumerate(sessions):
     trialdata = ses.trialdata
     if filter_engaged:
         trialdata = trialdata[trialdata['engaged']==1]
-    params[ises,:] = fit_psycurve(trialdata,printoutput=False)
+    params[ises,:],r2_ses[ises] = fit_psycurve(trialdata,printoutput=False)
 
 sessiondata[['mu', 'sigma', 'lapse_rate', 'guess_rate']] = params
 
+#%%
 fig,ax = plt.subplots(1,1,figsize=(3,3))
 sns.stripplot(data=sessiondata,x='stim',y='mu',hue='stim',palette='tab10',ax=ax,
               legend=False,order=np.sort(sessiondata['stim'].unique()))
@@ -142,3 +144,45 @@ ax.set_yticks([0,10,20,30])
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Performance','Threshold_per_stim_%danimals' % nanimals + '.png'), format = 'png')
 
+#%% 
+df = pd.DataFrame(params,columns=['mu','sigma','lapse_rate','guess_rate'])
+df['r2'] = r2_ses
+for i,ses in enumerate(sessions):
+    df.loc[i,'session_id'] = ses.sessiondata['session_id'][0]
+    df.loc[i,'animal_id'] = ses.sessiondata['animal_id'][0]
+
+#%% 
+fig,axes = plt.subplots(2,3,figsize=(8,6),sharex=True)
+for i,param in enumerate(df.columns[:5]):
+    ax = axes[i//3,i%3]
+    if i==4:
+        sns.stripplot(data=df,y=param,ax=ax,hue='animal_id',palette='tab10',legend=True)
+    else:
+        sns.stripplot(data=df,y=param,ax=ax,hue='animal_id',palette='tab10',legend=False)
+
+    # sns.stripplot(data=df,x=param,y='animal_id',ax=axes[i],palette='tab10',order=np.sort(sessiondata['animal_id'].unique()),hue='animal_id',legend=False)
+    ax.set_xlabel('')
+    ax.set_title(param)
+    # axes[i].set_xticks([])
+    if i==4:
+        ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.,frameon=False,fontsize=8)
+plt.tight_layout()
+plt.savefig(os.path.join(savedir,'Performance','Params_per_session_%danimals' % nanimals + '.png'), format = 'png')
+
+# fig,axes = plt.subplots(1,4,figsize=(12,3),sharex=True)
+# sns.stripplot(data=df,y=param,ax=axes[i],hue='animal_id',legend=False)
+
+
+#%% Correlations between psy fit parameters:
+fig, ax = plt.subplots(figsize=(5, 5))
+sns.heatmap(df.corr(), ax=ax, 
+            cmap='coolwarm', 
+            annot=True, 
+            linewidths=0.5, 
+            square=True,
+            cbar_kws={'shrink': 0.5})
+plt.xticks(rotation=45)
+plt.yticks(rotation=0)
+plt.tight_layout()
+plt.title('Correlation between psy fit parameters')
+plt.savefig(os.path.join(savedir,'Performance','Corrmat_params_%danimals' % nanimals + '.png'), format = 'png')

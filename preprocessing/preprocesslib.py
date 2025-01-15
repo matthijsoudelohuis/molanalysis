@@ -176,6 +176,7 @@ def proc_GR(rawdatadir,sessiondata):
 
     trialdata['session_id']     = sessiondata['session_id'][0]
     sessiondata['ntrials']      = len(trialdata) #add number of trials
+    trialdata['trial_id']       = np.array([sessiondata['session_id'][0] + '_' + '%04.0f' % k for k in range(0,len(trialdata))])
 
     return sessiondata,trialdata
 
@@ -233,7 +234,8 @@ def proc_GN(rawdatadir,sessiondata):
 
     trialdata['session_id']     = sessiondata['session_id'][0]
     sessiondata['ntrials']      = len(trialdata) #add number of trials
-    
+    trialdata['trial_id']       = np.array([sessiondata['session_id'][0] + '_' + '%04.0f' % k for k in range(0,len(trialdata))])
+
     return sessiondata,trialdata
 
 """
@@ -258,6 +260,7 @@ def proc_IM(rawdatadir,sessiondata):
     
     trialdata['session_id']     = sessiondata['session_id'][0]
     sessiondata['ntrials']      = len(trialdata) #add number of trials
+    trialdata['trial_id']       = np.array([sessiondata['session_id'][0] + '_' + '%04.0f' % k for k in range(0,len(trialdata))])
 
     return sessiondata,trialdata
 
@@ -280,6 +283,7 @@ def proc_MV(rawdatadir,sessiondata):
 
     trialdata['ismei']          = trialdata['ismei'].astype('int64')
     trialdata['mei_cellid']     = trialdata['mei_cellid']
+    trialdata['trial_id']       = np.array([sessiondata['session_id'][0] + '_' + '%04.0f' % k for k in range(0,len(trialdata))])
 
     return sessiondata,trialdata
 
@@ -524,6 +528,7 @@ def proc_task(rawdatadir,sessiondata):
     behaviordata['session_id']  = sessiondata['session_id'][0] #Store unique session_id
     trialdata['session_id']     = sessiondata['session_id'][0]
     sessiondata['ntrials']      = len(trialdata) #add number of trials
+    trialdata['trial_id']       = np.array([sessiondata['session_id'][0] + '_' + '%04.0f' % k for k in range(0,len(trialdata))])
 
     return sessiondata, trialdata, behaviordata
 
