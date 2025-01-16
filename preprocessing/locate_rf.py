@@ -205,6 +205,7 @@ def locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'],
     sessiondata['animal_id']    = animal_id
     sessiondata['sessiondate']  = sessiondate
     sessiondata['fs']           = 5.317
+    sessiondata['session_id']   = animal_id + '_' + sessiondate
 
     suite2p_folder  = os.path.join(sesfolder,"suite2p")
     rf_folder       = os.path.join(sesfolder,'RF','Behavior')
