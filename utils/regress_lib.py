@@ -292,6 +292,7 @@ def enc_model_stimwin_wrapper(ses,idx_N,idx_T,version='v1',modelname='Lasso',opt
     N_idx       = np.sum(idx_N)
     weights     = np.full((N,V),np.nan)
     error       = np.full((N),np.nan)
+    error_var   = np.full((N,V),np.nan)
     y_hat       = np.full((N,K),np.nan)
 
     y           = ses.respmat[np.ix_(idx_N,idx_T)].T
@@ -304,12 +305,12 @@ def enc_model_stimwin_wrapper(ses,idx_N,idx_T,version='v1',modelname='Lasso',opt
 
     if optimal_lambda is None:
         # Find the optimal regularization strength (lambda)
-        lambdas = np.logspace(-6, 0, 10)
+        lambdas = np.logspace(-4, 4, 20)
         cv_scores = np.zeros((len(lambdas),))
         for ilambda, lambda_ in enumerate(lambdas):
             model = getattr(sklearn.linear_model,modelname)(alpha=lambda_)
             # model = ElasticNet(alpha=lambda_,l1_ratio=0.9)
-            scores = cross_val_score(model, X, y, cv=kfold, scoring=scoring_type)
+            scores = cross_val_score(model, X, y, cv=kfold, scoring=scoring_type.replace('_score',''))
             cv_scores[ilambda] = np.mean(scores)
         optimal_lambda = lambdas[np.argmax(cv_scores)]
 
@@ -324,6 +325,7 @@ def enc_model_stimwin_wrapper(ses,idx_N,idx_T,version='v1',modelname='Lasso',opt
         
         # Initialize an array to store the decoding performance for each fold
         fold_error             = np.zeros((kfold,N_idx))
+        fold_error_var         = np.zeros((kfold,N_idx,V))
         # fold_r2_shuffle     = np.zeros((kfold,N))
         fold_weights        = np.zeros((kfold,N_idx,V))
 
@@ -342,6 +344,12 @@ def enc_model_stimwin_wrapper(ses,idx_N,idx_T,version='v1',modelname='Lasso',opt
             fold_weights[ifold,:,:]     = model.coef_
             y_hat[np.ix_(idx_N,test_index)] = y_pred.T
             
+            for ivar in range(V):
+                X_test_var              = copy.deepcopy(X_test)
+                X_test_var[:,ivar] = 0
+                y_pred                  = model.predict(X_test_var)
+                fold_error_var[ifold,:,ivar] = fold_error[ifold,:] - score_fun(y_test, y_pred, multioutput='raw_values')
+
             if subtr_shuffle:
                 print('Shuffling labels not yet implemented')
                 # # Shuffle the labels and calculate the decoding performance for this fold
@@ -352,6 +360,7 @@ def enc_model_stimwin_wrapper(ses,idx_N,idx_T,version='v1',modelname='Lasso',opt
     
         # Calculate the average decoding performance across folds
         error[idx_N] = np.nanmean(fold_error, axis=0)
+        error_var[idx_N,:] = np.nanmean(fold_error_var, axis=0)
         weights[idx_N,:] = np.nanmean(fold_weights, axis=0)
 
     else:   
@@ -362,7 +371,7 @@ def enc_model_stimwin_wrapper(ses,idx_N,idx_T,version='v1',modelname='Lasso',opt
         y_hat[np.ix_(idx_N,idx_T)] = y_pred.T
         weights[idx_N,:] = model.coef_
     
-    return error, weights, y_hat, modelvars
+    return error, weights, y_hat, error_var
 
 
 
@@ -422,12 +431,12 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
         X,y         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
         # Find the optimal regularization strength (lambda)
-        lambdas = np.logspace(-6, 0, 20)
+        lambdas = np.logspace(-4, 4, 20)
         cv_scores = np.zeros((len(lambdas),))
         for ilambda, lambda_ in enumerate(lambdas):
             model = getattr(sklearn.linear_model,modelname)(alpha=lambda_)
             # model = ElasticNet(alpha=lambda_,l1_ratio=0.9)
-            scores = cross_val_score(model, X, y, cv=kfold, scoring=scoring_type)
+            scores = cross_val_score(model, X, y, cv=kfold, scoring=scoring_type.replace('_score',''))
             cv_scores[ilambda] = np.median(scores)
         optimal_lambda = lambdas[np.argmax(cv_scores)]
 
@@ -443,6 +452,7 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
     N_idx       = np.sum(idx_N)
     weights     = np.full((N,S,V),np.nan)
     error       = np.full((N,S),np.nan)
+    error_var   = np.full((N,S,V),np.nan)
     y_hat       = np.full((N,S,K),np.nan)
 
     for ibin, bincenter in enumerate(sbins):    # Loop over each spatial bin
@@ -462,6 +472,7 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
             fold_error             = np.zeros((kfold,N_idx))
             # fold_r2_shuffle     = np.zeros((kfold,N))
             fold_weights        = np.zeros((kfold,N_idx,V))
+            fold_error_var      = np.zeros((kfold,N_idx,V))
 
             # Loop through each fold
             for ifold, (train_index, test_index) in enumerate(kf.split(X)):
@@ -479,6 +490,14 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
                 fold_weights[ifold,:,:]     = model.coef_
                 y_hat[np.ix_(idx_N,[ibin],test_index)] = y_pred.T[:,np.newaxis,:]
                 
+                for ivar in range(V):
+                    X_test_var              = copy.deepcopy(X_test)
+                    # X_test_var[:,np.arange(V) != ivar] = 0
+                    X_test_var[:,ivar] = 0
+                    y_pred                  = model.predict(X_test_var)
+                    # fold_error_var[ifold,:,ivar] = score_fun(y_test, y_pred, multioutput='raw_values')
+                    fold_error_var[ifold,:,ivar] = fold_error[ifold,:] - score_fun(y_test, y_pred, multioutput='raw_values')
+
                 if subtr_shuffle:
                     print('Shuffling labels not yet implemented')
                     # # Shuffle the labels and calculate the decoding performance for this fold
@@ -488,8 +507,9 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
                     # fold_r2_shuffle[ifold] = accuracy_score(y_test, y_pred)
         
             # Calculate the average decoding performance across folds
-            error[idx_N,ibin] = np.nanmean(fold_error, axis=0)
-            weights[idx_N,ibin,:] = np.nanmean(fold_weights, axis=0)
+            error[idx_N,ibin]       = np.nanmean(fold_error, axis=0)
+            error_var[idx_N,ibin,:] = np.nanmean(fold_error_var, axis=0)
+            weights[idx_N,ibin,:]   = np.nanmean(fold_weights, axis=0)
 
         else:   
             # Without cross-validation
@@ -499,4 +519,4 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
             y_hat[np.ix_(idx_N,[ibin],idx_T)] = y_pred.T[:,np.newaxis,:]
             weights[idx_N,ibin,:] = model.coef_
     
-    return error, weights, y_hat
+    return error, weights, y_hat, error_var

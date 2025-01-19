@@ -101,8 +101,8 @@ ises = 0
 example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
 
 # get some responsive cells: 
-idx = np.nanmean(sessions[ises].respmat,axis=1)>1
-example_cell_ids = (sessions[ises].celldata['cell_id'][idx]).to_numpy()
+idx                 = np.nanmean(sessions[ises].respmat,axis=1)>1
+example_cell_ids    = (sessions[ises].celldata['cell_id'][idx]).to_numpy()
 
 #%% Show example neurons that are correlated either to the stimulus signal, lickresponse or to running speed:
 ises = 0
@@ -127,22 +127,27 @@ fig.savefig(os.path.join(savedir,'ExampleNeuronActivity_' + sessions[ises].sessi
 
 #%% 
 nspatbins   = len(sbins)
-variables   = ['signal','lickresponse','runspeed','trialnumber']
-nvars       = len(variables)
+# variables   = ['signal','lickresponse','runspeed','trialnumber']
+# nvars       = len(variables)
+version          ='v20'
+modelvars       = get_predictors_from_modelversion(version)
+nvars           = len(modelvars)
+
 kfold       = 5 # Define the number of folds for cross-validation
-modelname   = 'Lasso' # Linear regression with Lasso (L1) regularization
+# modelname   = 'Lasso' # Linear regression with Lasso (L1) regularization
+modelname   = 'Ridge' # Linear regression with Lasso (L1) regularization
 
 
 #%% Show cross-validation results (as a function of lambda)
-ises = 0
+ises = 27
 ses = sessions[ises]
 
 #Neuron selection
 # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])[0]) #just one example cell
 # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])) #a few example cells
 # idx_N = np.isin(ses.celldata['roi_name'],'V1') # #V1 cells:
-# idx_N = np.logical_or(ses.celldata['sig_N'],ses.celldata['sig_M']) # Responsive cells
-idx_N = np.ones(len(ses.celldata),dtype=bool) # All cells
+idx_N = ses.celldata['sig_MN']==1 # Responsive cells
+# idx_N = np.ones(len(ses.celldata),dtype=bool) # All cells
 
 #Trial selection
 # idx_T = ses.trialdata['engaged']==1
@@ -150,22 +155,29 @@ idx_T = np.ones(len(ses.trialdata),dtype=bool)
 
 y = ses.respmat[np.ix_(idx_N,idx_T)].T
 
-X = np.stack((
-              ses.trialdata['signal'][idx_T].to_numpy(),
-              ses.trialdata['lickResponse'][idx_T].to_numpy(),
-              ses.respmat_runspeed[0,idx_T],
-              ses.trialdata['trialNumber'][idx_T]
-              ), axis=1)
+X,allvars   = get_predictors(ses)               # get all predictors
+X           = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
+X           = X[idx_T,:]                     #get only trials of interest
 
-X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+X,y         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+# X = np.stack((
+#               ses.trialdata['signal'][idx_T].to_numpy(),
+#               ses.trialdata['lickResponse'][idx_T].to_numpy(),
+#               ses.respmat_runspeed[0,idx_T],
+#               ses.trialdata['trialNumber'][idx_T]
+#               ), axis=1)
+
+# X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
 # Find the optimal regularization strength (lambda)
-lambdas = np.logspace(-6, 0, 20)
+lambdas = np.logspace(-4, 4, 20)
 cv_scores = np.zeros((len(lambdas),))
 for ilambda, lambda_ in enumerate(lambdas):
     model = getattr(sklearn.linear_model,modelname)(alpha=lambda_)
     # model = ElasticNet(alpha=lambda_,l1_ratio=0.9)
     scores = cross_val_score(model, X, y, cv=kfold, scoring='r2')
+    # cv_scores[ilambda] = np.mean(scores)
     cv_scores[ilambda] = np.median(scores)
 optimal_lambda = lambdas[np.argmax(cv_scores)]
 print('Optimal lambda for session %d: %0.4f' % (ises, optimal_lambda))
@@ -177,15 +189,18 @@ print(np.nanmean(cross_val_score(model, X, y, cv=kfold, scoring='r2')))
 fig,ax = plt.subplots(1,1,figsize=(3,3))
 plt.plot(lambdas,cv_scores)
 ax.set_xscale('log')
-
+ax.set_xlabel('Lambda')
+ax.set_ylabel('CV R2')
+fig.savefig(os.path.join(savedir,'Lambda_vs_CrossValR2_%s.png' % (sessions[ises].sessiondata['session_id'][0])), format = 'png',bbox_inches='tight')
 
 #%%
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
+# modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
 modelname       = 'Ridge'
 scoring_type    = 'r2_score'
 lam             = 0.05
+lam             = None
 version          ='v20'
 N               = len(celldata)
 modelvars       = get_predictors_from_modelversion(version)
@@ -193,6 +208,7 @@ nvars           = len(modelvars)
 
 weights         = np.full((N,nspatbins,nvars),np.nan)
 r2_cv           = np.full((N,nspatbins),np.nan)
+r2_cv_var       = np.full((N,nspatbins,nvars),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
     idx_N_ses = np.isin(celldata['session_id'],ses.sessiondata['session_id'][0])
@@ -208,8 +224,7 @@ for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across ses
     # idx_T = ses.trialdata['engaged']==1
     idx_T = np.ones(len(ses.trialdata),dtype=bool)
 
-    r2_cv[idx_N_ses,:], weights[idx_N_ses,:,:], _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,scoring_type=scoring_type,crossval=True)
-    # g, h, _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,modelname=modelname,optimal_lambda=None,kfold=5,scoring_type = 'r2',crossval=True)
+    r2_cv[idx_N_ses,:], weights[idx_N_ses,:,:], _, r2_cv_var[idx_N_ses,:,:] = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,scoring_type=scoring_type,crossval=True)
 
 
 #%% Some variables that determine coloring and labeling for plots
@@ -218,6 +233,9 @@ nlabels     = 2
 areas       = ['V1','PM','AL','RSP']	
 nareas      = len(areas)
 clrs_vars   = sns.color_palette('inferno', nvars)
+clrs_vars   = sns.color_palette('tab10', nvars)
+clrs_areas  = get_clr_areas(areas)
+clrs_labeled= get_clr_labeled()
 
 #%% Show the crossvalidated performance across areas:
 fig,axes    = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2),sharey=True,sharex=True)
@@ -226,7 +244,7 @@ for ilab,label in enumerate(labeled):
         ax = axes[ilab,iarea]
         idx = np.all((ses.celldata['roi_name']==area, ses.celldata['labeled']==label), axis=0)
         idx = np.all((celldata['roi_name']==area, celldata['labeled']==label), axis=0)
-        if np.sum(idx) > 0:
+        if np.sum(idx) > 5:
             ax.plot(sbins,np.nanmean(r2_cv[idx,:],axis=0),color='k',linewidth=2)
             # plt.plot(sbins,r2_cv[idx,iarea],color=clrs_vars[ivar],linewidth=1)
             # for ivar,var in enumerate(variables):
@@ -246,6 +264,7 @@ plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'EncodingModel_cvR2_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
 plt.savefig(os.path.join(savedir, 'EncodingModel_%s_cvR2_Areas_Labels_%dsessions.png') % (version,nSessions), format='png')
 
+
 #%% Show the encoding weights across areas:
 fig,axes    = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2),sharey=True,sharex=True)
 for ilab,label in enumerate(labeled):
@@ -257,8 +276,8 @@ for ilab,label in enumerate(labeled):
             # ax.plot(sbins,np.nanmean(r2_cv[idx,:],axis=0),color='k',linewidth=2)
             # plt.plot(sbins,r2_cv[idx,iarea],color=clrs_vars[ivar],linewidth=1)
             for ivar,var in enumerate(modelvars):
-                # ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
-                ax.plot(sbins,np.nanmean(weights[idx,:,ivar],axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
+                ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
+                # ax.plot(sbins,np.nanmean(weights[idx,:,ivar],axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
         add_stim_resp_win(ax)
         ax.axhline(0,color='k',linestyle='--',linewidth=1)
         ax.set_xlim([-80,60])
@@ -273,6 +292,35 @@ for ilab,label in enumerate(labeled):
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'EncodingWeights_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
 plt.savefig(os.path.join(savedir, 'EncodingWeights_%s_Areas_Labels_%dsessions.png') %  (version,nSessions), format='png')
+
+
+#%% Show the encoding cvR2 per variable across areas:
+fig,axes    = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2),sharey=True,sharex=True)
+for ilab,label in enumerate(labeled):
+    for iarea, area in enumerate(areas):
+        ax = axes[ilab,iarea]
+        # idx = np.all((ses.celldata['roi_name']==area, ses.celldata['labeled']==label), axis=0)
+        idx = np.all((celldata['roi_name']==area, celldata['labeled']==label), axis=0)
+        if np.sum(idx) > 5:
+            # ax.plot(sbins,np.nanmean(r2_cv[idx,:],axis=0),color='k',linewidth=2)
+            # plt.plot(sbins,r2_cv[idx,iarea],color=clrs_vars[ivar],linewidth=1)
+            for ivar,var in enumerate(modelvars):
+                # ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
+                ax.plot(sbins,np.nanmean(r2_cv_var[idx,:,ivar],axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
+        add_stim_resp_win(ax)
+        ax.axhline(0,color='k',linestyle='--',linewidth=1)
+        ax.set_xlim([-80,60])
+        if ilab == 0:
+            ax.set_title(area)
+        if ilab == 1 and iarea == 1:
+            ax.set_xlabel('Position relative to stim (cm)')
+        if iarea==0 and ilab == 0:
+            ax.set_ylabel(u'\u0394 R2 (cv)\n(with - without variable)')
+        if iarea==0 and ilab == 0:
+            ax.legend(frameon=False,fontsize=6)
+plt.tight_layout()
+# plt.savefig(os.path.join(savedir, 'EncodingWeights_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
+plt.savefig(os.path.join(savedir, 'EncodingModel_cvR2_perVar_%s_Areas_Labels_%dsessions.png') %  (version,nSessions), format='png')
 
 #%% Show correlation between encoding weights per area: 
 idx_respwin = (sbins>=-5) & (sbins<=20)
@@ -313,6 +361,7 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
 scoring_type    = 'r2_score'
 lam             = 0.05
+lam             = None
 version          ='v14'
 N               = len(celldata)
 modelvars       = get_predictors_from_modelversion(version)
@@ -320,26 +369,69 @@ nvars           = len(modelvars)
 
 weights         = np.full((N,nvars),np.nan)
 r2_cv           = np.full(N,np.nan)
+r2_cv_var       = np.full((N,nvars),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
     idx_N_ses = np.isin(celldata['session_id'],ses.sessiondata['session_id'][0])
     
     #Neuron selection
     # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])[0]) #just one example cell
-    idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])) #a few example cells
+    # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])) #a few example cells
     # idx_N = np.isin(ses.celldata['roi_name'],'V1') # #V1 cells:
-    idx_N = np.logical_or(ses.celldata['sig_N'],ses.celldata['sig_M']) # Responsive cells
+    # idx_N = np.logical_or(ses.celldata['sig_MN']) # Responsive cells
     idx_N = np.ones(len(ses.celldata),dtype=bool) # All cells
 
     #Trial selection
     # idx_T = ses.trialdata['engaged']==1
     idx_T = np.ones(len(ses.trialdata),dtype=bool)
 
-    r2_cv[idx_N_ses], weights[idx_N_ses,:], _, _ =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,
+    r2_cv[idx_N_ses], weights[idx_N_ses,:], _, r2_cv_var[idx_N_ses,:] =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,
                                                 scoring_type =scoring_type,crossval=True,subtr_shuffle=False)
     
     # r2_cv[idx_N_ses], weights[idx_N_ses,:], _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,modelname=modelname,optimal_lambda=None,kfold=5,scoring_type = 'r2',crossval=True)
     # g, h, _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,modelname=modelname,optimal_lambda=None,kfold=5,scoring_type = 'r2',crossval=True)
+
+
+#%% 
+
+
+#%% Plot the encoding performance for the model for the different areas: 
+df = pd.DataFrame(data={'r2':r2_cv,'area':celldata['roi_name']})
+
+fig,axes = plt.subplots(1,1,figsize=(3,3))
+ax = axes
+# sns.boxplot(x='area',y='r2',data=df,ax=axes,palette=clrs_areas,order=areas,showfliers=False)
+sns.violinplot(x='area',y='r2',data=df,ax=ax,palette=clrs_areas,order=areas,
+               bw=0.4,width=1.3)
+# sns.violinplot(x='area',y='r2',data=df,ax=ax,palette=clrs_areas,order=areas,showfliers=False,scale='width')
+ax.set_ylim([-0.2,1])
+fig.savefig(os.path.join(savedir,'EncodingModel_StimWin_OverallR2_model%s_%dsessions.png') % (version,nSessions), format='png',bbox_inches='tight')
+
+#%% Plot the encoding performance for the model for the different areas: 
+df = pd.DataFrame(data=r2_cv_var,columns=modelvars)
+df['area']      = celldata['roi_name']
+df['labeled']   = celldata['labeled']
+
+fig,axes    = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2.2),sharey=True,sharex=True)
+
+for ilab,label in enumerate(labeled):
+    for iarea, area in enumerate(areas):
+        ax = axes[ilab,iarea]
+        # sns.violinplot(df[df['area']==area],ax=ax,palette=clrs_vars,order=modelvars,showfliers=False)
+        sns.barplot(data=df[(df['area']==area) & (df['labeled']==label)], ax=ax, palette=clrs_vars, order=modelvars, estimator='mean', errorbar='ci')
+        ax.set_xticks([])
+        ax.set_title(area + ' - ' + label,fontsize=12,color=clrs_areas[iarea])
+        # if iarea == 3:
+            # ax.legend(frameon=False,fontsize=6,loc='upper right')
+        if iarea == 3 and ilab == 0:
+            # Manually create legend handles
+            handles = [plt.Line2D([0], [0], color=clrs_vars[i], lw=4) for i in range(len(modelvars))]
+            ax.legend(handles, modelvars, frameon=False, fontsize=8, loc='upper right')
+        if iarea == 0:
+            ax.set_ylabel('R2')
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'EncodingModel_StimWin_R2_perVar_model%s_%dsessions.png') % (version,nSessions), format='png')
+
 
 #%% Show correlation between encoding weights per area: 
 for iarea, area in enumerate(areas):
@@ -357,17 +449,38 @@ for iarea, area in enumerate(areas):
     ax = axes[iarea//2,iarea%2]
     data = weights[celldata['roi_name']==area,:].T
     df = pd.DataFrame(data.T,columns=modelvars)
-    sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap="vlag",xticklabels=modelvars,yticklabels=modelvars,ax=ax)
+    # sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap="vlag",xticklabels=modelvars,yticklabels=modelvars,ax=ax)
+    sns.heatmap(df.corr(),vmin=-0.5,vmax=0.5,cmap="vlag",xticklabels=modelvars,yticklabels=modelvars,ax=ax)
     ax.set_title(area)
 fig.tight_layout()
 # fig.savefig(os.path.join(savedir, 'EncodingWeights_corrheatmap_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format='png')
 fig.savefig(os.path.join(savedir, 'EncodingWeights_StimWin_corrheatmap_model%s_%dsessions.png') % (version,nSessions), format='png')
 
 
-# #%% 
-# fig,ax = plt.subplots(1,1,figsize=(4,3))
-# sns.heatmap(df.loc[:,~df.columns.isin(['roi_name'])].corr(),vmin=-1,vmax=1,cmap="vlag",ax=ax)
-# plt.savefig(os.path.join(savedir, 'EncodingWeights_corrheatmap_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format='png')
+#%% 
+modelvars       = get_predictors_from_modelversion(version)
+nvars           = len(modelvars)
+
+corrmat         = np.full((nSessions,nvars,nvars),np.nan)
+
+for ises,ses in enumerate(sessions):
+
+    idx_T = np.ones(len(ses.trialdata),dtype=bool)
+    y = ses.respmat[:,idx_T].T
+    X,allvars   = get_predictors(ses)               # get all predictors
+    X           = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
+    X           = X[idx_T,:]                     #get only trials of interest
+
+    X,y         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+    df = pd.DataFrame(data=X,columns=modelvars)
+    corrmat[ises,:,:] = df.corr().values
+
+
+fig,ax = plt.subplots(1,1,figsize=(5,4))
+sns.heatmap(np.nanmean(corrmat,axis=0),vmin=-1,vmax=1,cmap="vlag",ax=ax,annot=True,xticklabels=modelvars,yticklabels=modelvars)
+plt.title('Predictor correlations - Model %s' % (version))
+plt.savefig(os.path.join(savedir, 'EncodingMOdel_Predictors_corrheatmap_%dsessions.png') % (nSessions), format='png',bbox_inches='tight')
 
 
 #%% 
@@ -394,7 +507,7 @@ ses = sessions[28]
 # idx_N = np.zeros(len(ses.celldata),dtype=bool) # Responsive cell
 # idx_N[np.where(np.logical_or(ses.celldata['sig_N'],ses.celldata['sig_M']))[0][nexcell]] = True
 
-idx_T = np.ones(len(ses.trialdata),dtype=bool)
+idx_T       = np.ones(len(ses.trialdata),dtype=bool)
 
 modelvars   = get_predictors_from_modelversion(version='v8')
 
@@ -495,14 +608,14 @@ versions    = np.array(['v1','v2','v3','v4','v5','v6','v7','v8','v9','v10','v11'
 
 
 #%% 
-nspatbins   = len(sbins)
 kfold       = 5 # Define the number of folds for cross-validation
 modelname   = 'Lasso' # Linear regression with Lasso (L1) regularization
-modelname   = 'Ridge' # Linear regression with Ridge (L2) regularization
+# modelname   = 'Ridge' # Linear regression with Ridge (L2) regularization
 scoring_type = 'r2_score'
 # scoring_type = 'mean_squared_error'
-lam         = 0.01 #for responsive neurons
-# lam         = 0.05 #for all cells
+# lam         = 0.01 #for responsive neurons
+lam         = 0.05 #Lasso, for all cells
+# lam         = 200 #Ridge for all cells
 # lam         = None #optimization of optimal lambda
 
 #%%
@@ -523,7 +636,7 @@ for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across ses
     idx_T = np.ones(len(ses.trialdata),dtype=bool)
     
     for iver,version in enumerate(versions):
-        r2_cv[idx_N_ses,iver], _, _, modelvars =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,
+        r2_cv[idx_N_ses,iver], _, _, _ =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=kfold,
                                                 scoring_type = scoring_type, crossval=True,subtr_shuffle=False)
                                
                 # r2_cv[idx_N_ses,iver], _, _, modelvars =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,version=version,modelname='Lasso',optimal_lambda=None,kfold=5,scoring_type = 'r2',
@@ -542,9 +655,10 @@ for i,patch in enumerate(ax.patches):
             '{:.3f}'.format(np.nanmean(r2_cv[:,i])),ha='center',va='center',fontsize=8)
 ax.set_ylabel('Encoding performance \n(%s)' % scoring_type)
 ax.set_title('Encoding performance for different model versions')
+plt.tight_layout()
 # ax.set_position([ax.get_position().x0,ax.get_position().y0,ax.get_position().width,ax.get_position().height])
 # fig.tight_layout()
-# fig.savefig(os.path.join(savedir, 'EncodingPerformance_ModelVersions_%dsessions.png') % (nSessions), format='png')
+fig.savefig(os.path.join(savedir, 'EncodingPerformance_ModelVersions_%dsessions.png') % (nSessions), format='png')
 # fig.savefig(os.path.join(savedir, 'EncodingPerformance_ResponsiveCells_ModelVersions_%dsessions.png') % (nSessions), format='png')
 
 # from utils.regress_lib import get_predictors_from_modelversion
@@ -561,7 +675,7 @@ for iver,version in enumerate(versions):
 ax.axis('off')
 ax.legend(legend_str,loc='upper right',bbox_to_anchor=(0, 0.5),ncol=np.ceil(len(versions)/3),fontsize=9,frameon=False)
 plt.tight_layout()
-# fig.savefig(os.path.join(savedir, 'Legend_ModelVersions.png'), format='png')
+fig.savefig(os.path.join(savedir, 'Legend_ModelVersions.png'), format='png',bbox_inches='tight')
 
 
 #%% OLD versION:

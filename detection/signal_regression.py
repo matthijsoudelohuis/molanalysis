@@ -692,7 +692,7 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 trialdata = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
 
-modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
+model_name_cont       = 'Lasso' # Linear regression with Lasso (L1) regularization
 # model_name_cont  = 'Ridge'
 model_name_disc  = 'LogisticRegression'
 # model_name_disc  = 'LDA'
