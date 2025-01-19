@@ -8,7 +8,7 @@ This script contains a series of functions that analyze activity in visual VR de
 
 #%% Import packages
 import os
-os.chdir('c:\\Python\\molanalysis\\')
+os.chdir('e:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -41,6 +41,7 @@ from detection.plot_neural_activity_lib import *
 from detection.example_cells import get_example_cells
 from utils.plot_lib import * # get support functions for plotting
 from utils.regress_lib import * # get support functions for regression
+from utils.dimreduc_lib import * # get support functions for dimensionality reduction
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\MultiAreaRegression\\')
 
@@ -52,8 +53,8 @@ calciumversion      = 'deconv'
 
 session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
-# session_list = np.array([['LPE12013', '2024_04_25']])
-session_list = np.array([['LPE11997', '2024_04_16']])
+session_list = np.array([['LPE12013', '2024_04_25']])
+# session_list = np.array([['LPE11997', '2024_04_16']])
 # session_list = np.array([['LPE11998', '2024_04_30']])
 # session_list = np.array([['LPE11622', '2024_02_22']])
 # session_list = np.array([['LPE10884', '2023_12_15']])
@@ -67,7 +68,7 @@ sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,
 #                            load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
 
 # #%% ### Show for all sessions which region of the psychometric curve the noise spans #############
-# sessions = noise_to_psy(sessions,filter_engaged=True)
+sessions = noise_to_psy(sessions,filter_engaged=True)
 
 # idx_inclthr = np.empty(nSessions).astype('int')
 # for ises,ses in enumerate(sessions):
@@ -126,6 +127,7 @@ labeled     = ['unl','lab']
 nlabels     = 2
 areas       = ['V1','PM','AL','RSP']
 nareas      = len(areas)
+clrs_areas  = get_clr_areas(areas)
 
 clrs_vars = sns.color_palette('inferno', 3)
 
@@ -300,21 +302,195 @@ for iarea,area in enumerate(areas):
     
     fig = pca_scatter_stimresp(respmat,sessions[sesidx],colorversion='stimresp')
     plt.suptitle(area + ' stimresp',fontsize=14)
-    plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_stimResp_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+    # plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_stimResp_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
     fig = pca_scatter_stimresp(respmat,sessions[sesidx],colorversion='runspeed')
     plt.suptitle(area + ' runspeed',fontsize=14)
-    plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_runspeed_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+    # plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_runspeed_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
     fig = pca_scatter_stimresp(respmat,sessions[sesidx],colorversion='signal')
     plt.suptitle(area + ' signal',fontsize=14)
-    plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_signal_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+    # plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_signal_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
     # pca_scatter_stimresp(respmat,sessions[sesidx])
     # plt.suptitle(area,fontsize=14)
     # plt.savefig(os.path.join(savedir,'PCA','PCA_Scatter_stimResponse_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% ###############################################################
+
+
+#%% ############################################# Regression ##################################################
+### In combination with PCA unsupervised display of noise around center for each condition #################
+idx_T       = np.ones(len(sessions[sesidx].trialdata),dtype=bool)
+idx_T       =sessions[sesidx].trialdata['engaged']==1
+idx_T   = sessions[sesidx].trialdata['stimcat']=='N'
+area        = 'V1'
+# idx_N       = np.where(sessions[sesidx].celldata['roi_name']==area)[0]
+idx_N       = np.all((sessions[sesidx].celldata['roi_name']==area, 
+                  sessions[sesidx].celldata['sig_MN']==1), axis=0)
+
+A1          = sessions[sesidx].respmat[np.ix_(idx_N,idx_T)].T
+
+S           = sessions[sesidx].trialdata['signal']
+
+slabels     = ['Signal']
+S           = S[idx_T].to_numpy()
+A1,S        = prep_Xpredictor(A1,S)
+
+# Define neural data parameters
+N1,K        = np.shape(A1)
+
+#Define coloring for signal strength:
+cmap = plt.get_cmap('viridis')
+cmap = plt.get_cmap('plasma')
+
+# Get unique sorted values
+unique_sorted_values = np.sort(np.unique(S))
+# Create a mapping from value to ordinal index
+value_to_ordinal = {value: index for index, value in enumerate(unique_sorted_values)}
+# Convert the array to ordinal values
+ordinal_array = np.array([value_to_ordinal[value] for value in S])
+
+
+projections = [(0, 1), (1, 2), (0, 2)]
+
+# PCA:
+pca         = PCA(n_components=3) #construct PCA object with specified number of components
+Xp          = pca.fit_transform(A1) #fit pca to response matrix (n_samples by n_features)
+pca_weights = pca.components_
+#dimensionality is now reduced from N by K to ncomp by K
+
+# Regression:
+
+# modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
+model_name      = 'Ridge'
+scoring_type    = 'r2_score'
+lam             = None
+kfold           = 5
+
+weights         = np.full((N1),np.nan)
+# error_cv        = np.full((nSessions),np.nan)
+
+if lam is None:
+    lam = find_optimal_lambda(A1,S,model_name=model_name,kfold=kfold)
+
+model           = getattr(sklearn.linear_model,model_name)(alpha=lam)
+scoring_type    = 'accuracy_score' if model_name in ['LOGR','SVM','LDA','GBC'] else 'r2_score'
+score_fun       = getattr(sklearn.metrics,scoring_type)
+
+# Train a classification model on the training data with regularization
+model.fit(A1, S)
+reg_weights     = model.coef_
+
+# Make predictions on the test data
+S_pred      = model.predict(A1)
+performance = score_fun(S, S_pred)
+
+#Variance along PC1:
+var_proj = np.var(np.dot(A1, pca_weights[0])) # compute variance of projected data
+var_tot = np.var(A1, axis=0).sum() # compute total variance of original data
+EV_pop = var_proj / var_tot # compute proportion of variance explained 
+print('Variance along PC1: %.3f' % EV_pop)
+
+#Variance along regression dimension:
+reg_vec = unit_vector(reg_weights)
+var_proj = np.var(np.dot(A1, reg_vec)) # compute variance of projected data
+EV_pop = var_proj / var_tot # compute proportion of variance explained 
+print('Variance along regression dimension: %.3f' % EV_pop)
+
+#%% Make plot true and predicted stimulus strength:
+# Make colormaps, convert the stimulus array to ordinal values
+ordinal_array_S = np.array([value_to_ordinal[value] for value in S])
+# Convert the predicted stimulus array to ordinal values
+S_pred_2 = np.array([min(S, key=lambda x:abs(x-value)) for value in S_pred])
+ordinal_array_S_pred = np.array([value_to_ordinal[value] for value in S_pred_2])
+
+fig, axes   = plt.subplots(1, 1, figsize=[3,3])
+ax          = axes
+
+ax.scatter(S, S_pred, c=ordinal_array_S, vmin=np.percentile(ordinal_array_S,1), vmax=np.percentile(ordinal_array_S,99), 
+           s=20, edgecolors='w', linewidths=0.5, cmap=cmap)
+
+# ax.scatter(S, S_pred, c=ordinal_array_S_pred, vmin=np.percentile(ordinal_array_S_pred,1), vmax=np.percentile(ordinal_array_S_pred,99), 
+        #    s=20, edgecolors='w', linewidths=0.5, cmap=cmap)
+ax.set_xticks(unique_sorted_values[::2])
+ax.set_yticks(unique_sorted_values[::2])
+ax.set_xlabel('True signal')
+ax.set_ylabel('Predicted signal')
+ax.set_title('Signal Regression %s, R2: %.3f\n(no crossvalidation)' % (area,performance),fontsize=11)
+plt.tight_layout()
+# fig.savefig(os.path.join(savedir,'RegressionValidation','Regression_Scatter_SignalAll_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RegressionValidation','Regression_Scatter_SignalNoise_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+#%% Make plot of the difference between crossvalidated and non-cv weights and predictions
+performance_cv,reg_weights_cv,S_pred_cv,_ = my_decoder_wrapper(A1,S,model_name=model_name,kfold=kfold,lam=lam,
+                                                    scoring_type=scoring_type,norm_out=False,subtract_shuffle=False) 
+
+fig, axes   = plt.subplots(1, 2, figsize=[4,2.5])
+ax = axes[0]
+ax.scatter(S_pred, S_pred_cv,s=10,c='k',edgecolors='w', linewidths=0.5)
+ax.set_title('Predicted signal \n(with and wo CV)',fontsize=9)
+ax.set_xlabel('no CV')
+ax.set_ylabel('CV')
+ax.set_xlim(np.percentile(S_pred,[0,100]))
+ax.set_ylim(np.percentile(S_pred,[0,100]))
+ax.plot([0, 1], [0, 1], transform=ax.transAxes)
+
+ax          = axes[1]
+ax.scatter(reg_weights,reg_weights_cv,s=10,c='k',edgecolors='w', linewidths=0.5)
+ax.set_xlabel('no CV')
+ax.set_title('Weights\n(with and wo CV)',fontsize=9)
+ax.set_xlim(np.percentile(reg_weights,[0,100]))
+ax.set_ylim(np.percentile(reg_weights,[0,100]))
+ax.plot([0, 1], [0, 1], transform=ax.transAxes)
+
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'RegressionValidation','Regression_SignalNoise_Weights_CV_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+
+#%% 
+slabels     = ['Signal', 'Predicted Signal']
+fig, axes = plt.subplots(2, len(projections), figsize=[len(projections)*2.5, 5])
+
+for i in range(2):
+    if i==0:
+        ordinal_array = ordinal_array_S
+    elif i==1:
+        ordinal_array = ordinal_array_S_pred
+    for iproj, proj in enumerate(projections):
+        ax = axes[i, iproj]
+        x = Xp[:,proj[0]]                          #get all data points for this ori along first PC or projection pairs
+        y = Xp[:,proj[1]]                          #get all data points for this ori along first PC or projection pairs
+        
+        sc = ax.scatter(x, y, c=ordinal_array, vmin=np.percentile(ordinal_array,1), vmax=np.percentile(ordinal_array,99), s=20, 
+                        marker='o',edgecolors='w',linewidths=0.5,cmap=cmap)
+        
+        if i==1:
+            # Plot the regression line
+            vec = np.array([reg_weights @ pca_weights[proj[0]], reg_weights @ pca_weights[proj[1]]])
+            # ax.arrow([0, vec[0]], [0, vec[1]], color='k', linewidth=2)
+            ax.arrow(0,0, vec[0], vec[1], color='k', linewidth=1,width=0.4)
+
+        # if iproj==0:
+        ax.set_ylabel('PC {}'.format(proj[1]+1))
+        if i==1:
+            ax.set_xlabel('PC {}'.format(proj[0]+1))
+
+        if iproj==1:
+            ax.set_title(slabels[i],fontsize=12)
+sns.despine(fig=fig, top=True, right=True)
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'RegressionValidation','PCA_Regression_Dimension_SignalNoise_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'RegressionValidation','PCA_Regression_Dimension_SignalAll_' + area + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+# plt.savefig(os.path.join(savedir,'PCA' + str(proj) + '_perStim_color' + slabels[iSvar] + '.png'), format = 'png')
+
+#%% 
+
+
+
+
+
 
 
 #%% ################## PCA unsupervised display of noise around center for each condition #################
@@ -334,7 +510,6 @@ slabels     = ['Signal','Licking','Running']
 S           = S[idx_T,:]
 S           = zscore(S,axis=0,nan_policy='omit')
 A1,S        = prep_Xpredictor(A1,S)
-
 
 df = pd.DataFrame(data=S, columns=slabels)
 fig, ax = plt.subplots(figsize=(4,4))         # Sample figsize in inches
@@ -380,97 +555,6 @@ plt.tight_layout()
 # plt.savefig(os.path.join(savedir,'PCA' + str(proj) + '_perStim_color' + slabels[iSvar] + '.png'), format = 'png')
 
 
-
-#%% ############################# Trial-concatenated PCA ########################################
-
-def pca_line_stimresp(data,trialdata,spatbins):
-    [N,K,S]         = np.shape(data) #get dimensions of tensor
-
-    # collapse to 2d: N x K*T (neurons by timebins of different trials concatenated)
-    X               = np.reshape(data,(N,-1))
-    
-    #Impute missing nan data, otherwise problems with PCA
-    imp_mean        = SimpleImputer(missing_values=np.nan, strategy='mean')
-    #apply imputation, replacing nan with mean of that neurons' activity
-    X               = imp_mean.fit_transform(X.T).T 
-
-    X               = zscore(X,axis=1) #score each neurons activity (along rows)
-
-    pca             = PCA(n_components=15) #construct PCA
-    Xp              = pca.fit_transform(X.T).T #PCA function assumes (samples x features)
-
-    Xp              = np.reshape(Xp,(15,K,S)) #reshape back to trials
-
-    #Get indices of trialtypes and responses:
-    stimtypes       = sorted(trialdata['stimcat'].unique()) # stim ['A','B','C','D']
-    resptypes       = sorted(trialdata['lickResponse'].unique()) # licking resp [0,1]
-
-    s_type_ind      = [np.argwhere(np.array(trialdata['stimcat']) == stimtype)[:, 0] for stimtype in stimtypes]
-    r_type_ind      = [np.argwhere(np.array(trialdata['lickResponse']) == resptype)[:, 0] for resptype in resptypes]
-
-    #For line make-up:
-    pal             = sns.color_palette('husl', 4)
-    sty             = [':','-']
-    patchcols       = ["cyan","green"]
-
-    nPlotPCs        = 5 #how many subplots to create for diff PC projections
-
-    fig, axes = plt.subplots(nPlotPCs, 1, figsize=[8, 7], sharey='row', sharex='row')
-    projections = np.arange(nPlotPCs)
-    for ax, proj in zip(axes, projections):
-        for s in range(len(stimtypes)):
-            for r in range(len(resptypes)):
-                #Take the average PC projection across all indexed trials:
-                y   = np.mean(Xp[proj, np.intersect1d(s_type_ind[s],r_type_ind[r]),:],axis=0)
-                ax.plot(spatbins,y,c=pal[s],linestyle=sty[r])
-                if proj == nPlotPCs-1:
-                    ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
-                ax.set_ylabel('PC {}'.format(proj + 1))
-        
-        ax.set_xticks(np.linspace(-50,50,5))
-        ax.add_patch(matplotlib.patches.Rectangle((0,ax.get_xlim()[0]),20,np.diff(ax.get_xlim())[0], 
-                    fill = True, alpha=0.2,
-                    color = patchcols[0], linewidth = 0))
-        ax.add_patch(matplotlib.patches.Rectangle((25,ax.get_xlim()[0]),20,np.diff(ax.get_xlim())[0], 
-                    fill = True, alpha=0.2,
-                    color = patchcols[1], linewidth = 0))
-
-    sns.despine(fig=fig, top=True, right=True)
-
-    custom_lines = [Line2D([0], [0], color=pal[k], lw=4) for
-                    k in range(len(stimtypes))]
-    labels = stimtypes
-    ax.legend(custom_lines, labels,title='Stim',
-            frameon=False, loc='center left', bbox_to_anchor=(1, 0.5))
-    plt.tight_layout(rect=[0,0,0.9,1])
-
-
-ises            = 1 #selected session to plot this for
-[N,K,S]         = np.shape(sessions[ises].stensor) #get dimensions of tensor
-
-#For all areas:
-binsubidx   = (sbins>-60) & (sbins<=60)
-binsub      = sbins[binsubidx]
-data        = sessions[ises].stensor[:,:,binsubidx]
-pca_line_stimresp(data,sessions[ises].trialdata,binsub)
-# plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_allAreas_' + sessions[0].sessiondata['session_id'][0] + '.svg'), format = 'svg')
-plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_allAreas_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-#For each area:
-for iarea,area in enumerate(areas):
-    idx         = sessions[ises].celldata['roi_name'] == area
-    data        = sessions[ises].stensor[np.ix_(idx,range(K),binsubidx)]
-    pca_line_stimresp(data,sessions[ises].trialdata,binsub)
-    plt.suptitle(area,fontsize=14)
-    # plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.svg'), format = 'svg')
-    plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
-    # plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_Left_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-
-#%% #### PCA on different stimuli, conditioned on the other corridor stimulus:
-
-
-#%% ############################################# Regression ##################################################
 
 
 #%% ################## Regression display of noise around center for each condition #################
@@ -519,6 +603,7 @@ area            = 'V1'
 for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding across sessions'):
     # idx_ses = np.where(celldata['session_id']==ses.sessiondata['session_id'][0])
     idx_T = np.isin(ses.trialdata['stimcat'],['N'])
+    # idx_T = np.isin(ses.trialdata['stimcat'],['N','M'])
     assert np.sum(idx_T) > 50, 'Not enough trials in session %d' % ses.sessiondata['session_id'][0]
     idx_N = ses.celldata['roi_name']==area
     idx_N = np.ones(len(ses.celldata)).astype(bool)
@@ -562,7 +647,6 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding across 
             error_cv[iS,ibin,ises],weights[iS,ibin,idx_N_ses],_ = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,
                                                         scoring_type=scoring_type,norm_out=False,subtract_shuffle=False) 
 
-
 #%% 
 
 #%% Show the decoding performance per session 
@@ -601,7 +685,7 @@ plt.tight_layout()
 
 
 
-#%% Decoding variables from V1 activity across space:
+#%% Decoding variables from neural activity across areas during stimulus presentation
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 # for ses in sessions:
 #     ses.trialdata['trial_id'] = np.array([ses.sessiondata['session_id'][0] + '_' + '%04.0f' % k for k in range(0,len(ses.trialdata))])
@@ -612,10 +696,10 @@ modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
 # model_name_cont  = 'Ridge'
 model_name_disc  = 'LogisticRegression'
 # model_name_disc  = 'LDA'
-scoring_type    = 'r2_score'
+# scoring_type    = 'r2_score'
 kfold           = 5
 lam             = None
-lam             = 0.05
+# lam             = 0.05
 
 slabels         = ['Signal','Hit/Miss','Running']
 NS              = len(slabels)
@@ -628,76 +712,127 @@ nareas          = len(areas)
 weights         = np.full((NS,N),np.nan)
 error_cv        = np.full((NS,nareas,nSessions),np.nan)
 projs           = np.full((NS,nareas,K),np.nan)
+ev              = np.full((NS,nareas,nSessions),np.nan)
+ev_pc1          = np.full((NS,nareas,nSessions),np.nan)
 
 # Loop through each session
 for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding across sessions'):
     # idx_ses = np.where(celldata['session_id']==ses.sessiondata['session_id'][0])
-    idx_T = np.isin(ses.trialdata['stimcat'],['N'])
-    idx_T_ses = np.isin(trialdata['trial_id'],ses.trialdata['trial_id'][idx_T])
+    idx_T       = np.isin(ses.trialdata['stimcat'],['N'])
+    # idx_T       = np.isin(ses.trialdata['stimcat'],['N','M'])
+    idx_T       = ses.trialdata['engaged']==1
+    idx_T_ses   = np.isin(trialdata['trial_id'],ses.trialdata['trial_id'][idx_T])
 
     assert np.sum(idx_T) > 50, 'Not enough trials in session %d' % ses.sessiondata['session_id'][0]
     for iarea,area in enumerate(areas):
         idx_N = ses.celldata['roi_name']==area
         # idx_N = np.all((ses.celldata['roi_name']==area,
-                        # np.logical_or(ses.celldata['sig_N']==1,ses.celldata['sig_M']==1)),axis=0)
+                        # ses.celldata['sig_MN']==1),axis=0)
         # idx_N = np.ones(len(ses.celldata)).astype(bool)
         # idx_N_ses = celldata['cell_id'] in ses.celldata['cell_id'][idx_N]
         idx_N_ses = np.isin(celldata['cell_id'],ses.celldata['cell_id'][idx_N])
 
-        A1      = sessions[ises].respmat[np.ix_(idx_N,idx_T)].T
-
         for iS in range(NS):
-            S       = np.column_stack((sessions[ises].trialdata['signal'],
-                        sessions[ises].trialdata['lickResponse'],
-                    sessions[ises].respmat_runspeed.flatten()))
-            S       = S[idx_T,:]
+            X      = ses.respmat[np.ix_(idx_N,idx_T)].T
 
-            A1,S        = prep_Xpredictor(A1,S)
-            y           = S[:,iS]
+            S       = np.column_stack((ses.trialdata['signal'],
+                        ses.trialdata['lickResponse'],
+                    ses.respmat_runspeed.flatten()))
+            S       = S[idx_T,:] # Only use selected trials
+            y       = S[:,iS] # Only use selected variable
+
+            X,y        = prep_Xpredictor(X,y)
             datatype = 'disc' if np.all(np.isin(y,[0,1])) else 'cont'
             if datatype=='disc':
                 y           = y.astype(int)
                 model_name = model_name_disc
             else:
-                y           = zscore(y,axis=0,nan_policy='omit')
+                # y           = zscore(y,axis=0,nan_policy='omit')
                 model_name = model_name_cont
                 
-            # X = ses.stensor[np.ix_(idx_N,idx_T,np.ones(len(sbins)).astype(bool))]
-            # X = np.nanmean(ses.stensor[np.ix_(idx_N,idx_T,((sbins>-5) & (sbins<20)).astype(bool))],axis=2)
-            X = ses.respmat[np.ix_(idx_N,idx_T)]
-            X = X.T # Transpose to K x N (samples x features)
-
-            X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
-
             if lam is None:
                 lam = find_optimal_lambda(X,y,model_name=model_name,kfold=kfold)
 
-            error_cv[iS,iarea,ises],weights[iS,idx_N_ses],projs[iS,iarea,idx_T_ses] = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,
-                                                        scoring_type=scoring_type,norm_out=False,subtract_shuffle=False) 
+            error_cv[iS,iarea,ises],weights[iS,idx_N_ses],projs[iS,iarea,idx_T_ses],ev[iS,iarea,ises] = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,
+                                                        norm_out=False,subtract_shuffle=False) 
+                                                        # scoring_type=scoring_type,norm_out=False,subtract_shuffle=False) 
+            # print(projs[iS,iarea,idx_T_ses][:3])
+            # print(np.dot(X, weights[iS,idx_N_ses])[:3])
+            # projs[iS,iarea,idx_T_ses] = np.dot(X, weights[iS,idx_N_ses])
+
+            pca = PCA(n_components=1)
+            pca.fit(X)
+            ev_pc1[iS,iarea,ises] = var_along_dim(X,pca.components_[0]) #or alternatively: pca.explained_variance_ratio_[0]
 
 
-#%% 
-def unit_vector(vector):
-    """ Returns the unit vector of the vector.  """
-    return vector / np.linalg.norm(vector)
+#%% Show decoder performance for each variable in each area:
+fig,axes = plt.subplots(1,1,figsize=(3,4))         # Sample figsize in inches
+ax = axes
+for iarea,area in enumerate(areas):
+    for iS in range(NS):
+        ax.scatter(x=iarea,y=error_cv[iS,iarea,:],marker='o',color=clrs_vars[iS],label=slabels[iS],s=25)
+    if iarea == 0:
+        ax.legend(frameon=False,fontsize=8,loc='lower left')
+    # ax.set_title(area)
+    ax.set_xticks(range(nareas),areas)
+    # ax.set_ylim([0,np.max(ev_pc1)*1.1])
+    ax.set_ylabel('Decoding performance\n(cross-validated R2 / Accuracy)')
+    ax.set_xlabel('Area')
+    ax.set_xlim([-0.5,nareas-0.5])
+    ax.set_ylim([0,1])
+    
+plt.tight_layout()
+fig.savefig(os.path.join(savedir, 'DecodingPerformance_Areas_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format = 'png')
 
-def angle_between(v1, v2):
-    """ Returns the angle in degrees between vectors 'v1' and 'v2'::
-    """
-    v1_u = unit_vector(v1)
-    v2_u = unit_vector(v2)
-    angle_rad = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-    return np.rad2deg(angle_rad)
 
-def angles_between(v):
-    """ Returns the angle in degrees between each of the columns in vector array v:
-    """
-    angles = np.full((v.shape[1],v.shape[1]), np.nan)
-    for i in range(v.shape[1]):
-        for j in range(i+1,v.shape[1]):
-            angles[i,j] = angle_between(v[:,i],v[:,j])
-            angles[j,i] = angles[i,j]
-    return angles
+#%% Show variance explained for each variable in each area:
+fig,axes = plt.subplots(1,1,figsize=(3,4))         # Sample figsize in inches
+ax = axes
+for iarea,area in enumerate(areas):
+    ax.scatter(x=iarea,y=ev_pc1[iS,iarea,:],label='PC1',c='k',s=25)
+    for iS in range(NS):
+        ax.scatter(x=iarea,y=ev[iS,iarea,:],marker='o',color=clrs_vars[iS],label=slabels[iS],s=25)
+    if iarea == 0:
+        ax.legend(frameon=False,fontsize=7)
+    # ax.set_title(area)
+    ax.set_xticks(range(nareas),areas)
+    ax.set_ylim([0,np.max(ev_pc1)*1.1])
+    ax.set_ylabel('Variance explained')
+    ax.set_xlabel('Area')
+    
+plt.tight_layout()
+fig.savefig(os.path.join(savedir, 'VarianceExplained_Areas_%ssessions.png') % (sessions[ises].sessiondata['session_id'][0]), format = 'png')
+
+#%% Plot the projected data as a function of a combination of variables for different areas:
+dimcombs = [(0, 1), (1, 2), (0, 2)]
+dimcombs = [(0, 2), (0, 1), (2, 1)]
+fig,axes = plt.subplots(nareas,len(dimcombs),figsize=(2*len(dimcombs),2*nareas))  # Sample figsize in inches         # Sample figsize in inches
+for iarea,area in enumerate(areas):
+    for idc,dimcomb in enumerate(dimcombs):
+        ax = axes[iarea,idc]
+        ax.scatter(projs[dimcomb[0],iarea,:],projs[dimcomb[1],iarea,:],c='k',s=10,alpha=0.3)
+        ax.set_title(area,color=clrs_areas[iarea])
+        if iarea==nareas-1: 
+            ax.set_xlabel(slabels[dimcomb[0]])
+        ax.set_ylabel(slabels[dimcomb[1]])
+        # ax.set_xlim([-1,1])
+        # ax.set_ylim([-1,1])
+plt.suptitle('Correlations of trial-projected data between variables')
+plt.tight_layout()
+# fig.savefig(os.path.join(savedir, 'Scatter_ProjectedData_LinearNotLogOdds_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format = 'png')
+fig.savefig(os.path.join(savedir, 'Scatter_ProjectedData_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format = 'png')
+
+#%% Correlations between projected data across variables per area:
+fig,axes = plt.subplots(2,2,figsize=(6,5))         # Sample figsize in inches
+for i,area in enumerate(areas):
+    ax = axes[i//2,i%2]
+    # df = pd.DataFrame(weights.T,columns=slabels)
+    df = pd.DataFrame(projs[:,i,:].T,columns=slabels)
+    sns.heatmap(df.corr(),vmin=-0.5,vmax=0.5,cmap="vlag",ax=ax,annot=True)
+    ax.set_title(area,color=clrs_areas[i])
+plt.suptitle('Correlation between projected data for each area')
+plt.tight_layout()
+fig.savefig(os.path.join(savedir, 'CorrProjs_DecVars_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format = 'png')
 
 #%% Angle between weights of decoded variables for each area
 fig,axes = plt.subplots(2,2,figsize=(6,5))         # Sample figsize in inches
@@ -707,16 +842,16 @@ for i,area in enumerate(areas):
     v = weights[:,celldata['roi_name']==area].T
     # v = np.abs(weights[:,celldata['roi_name']==area].T)
     
-    sns.heatmap(angles_between(v),xticklabels=slabels,yticklabels=slabels,vmin=0,vmax=110,
-                cmap="vlag",fmt="3.1f",ax=ax,annot=True)
+    sns.heatmap(angles_between(v),xticklabels=slabels,yticklabels=slabels,vmin=0,vmax=100,
+                cmap="RdYlGn_r",fmt="3.1f",ax=ax,annot=True)
     ax.set_title(area)
+# plt.suptitle('Angle between weights of decoded variables for each area')
+plt.suptitle('Angle between |weights| of decoded variables for each area')
 plt.tight_layout()
 # sns.heatmap(df.corr(),vmin=-0.5,vmax=0.5,cmap="vlag",ax=ax,annot=True)
 fig.savefig(os.path.join(savedir, 'AngleBetweenWeights_DecVars_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format = 'png')
 
-
 #%% 
-
 # df = pd.DataFrame(weights.T,columns=slabels)
 df = pd.DataFrame(np.abs(weights).T,columns=slabels)
 df['area'] = celldata['roi_name']
@@ -725,33 +860,21 @@ for i,area in enumerate(areas):
     ax = axes[i//2,i%2]
     sns.heatmap(df.loc[df['area']==area,slabels].corr(),vmin=-0.5,vmax=0.5,cmap="vlag",ax=ax,annot=True)
     ax.set_title(area)
+plt.suptitle('Correlation between absolute dec. weights for each area')
 plt.tight_layout()
 fig.savefig(os.path.join(savedir, 'CorrWeights_DecVars_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format = 'png')
 
-#%% 
-
-fig,axes = plt.subplots(1,3,figsize=(9,2.5))         # Sample figsize in inches
+#%% Correlation of trial-projected data between areas per variable
+fig,axes = plt.subplots(1,3,figsize=(9,2.7))         # Sample figsize in inches
 for iS,slabel in enumerate(slabels):
     ax = axes[iS]
-
-    # df = pd.DataFrame(weights.T,columns=slabels)
     df = pd.DataFrame(projs[iS,:,:].T,columns=areas)
 
-    sns.heatmap(df.corr(),vmin=-0.5,vmax=0.5,cmap="vlag",ax=ax,annot=False)
+    sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap="vlag",ax=ax,annot=True)
     ax.set_title(slabel)
 plt.suptitle('Correlations of trial-projected data between areas') 
 plt.tight_layout()
 fig.savefig(os.path.join(savedir, 'CorrProjectedData_Areas_%ssessions.png') % (sessions[ises].sessiondata['session_id'][0]), format = 'png')
-
-#%% Plot signal dimension in PCA space
-fig,axes = plt.subplots(1,3,figsize=(9,2.5))         # Sample figsize in inches
-for iS,slabel in enumerate(slabels):
-    ax = axes[iS]
-
-
-NEED TO FINISH THIS.... 
-
-
 
 #%% 
 
@@ -932,3 +1055,89 @@ plt.savefig(os.path.join(savedir,'LDA_proj_deconv_corr_interarea_' + sessions[0]
 
 
 # %%
+
+
+# #%% ############################# Trial-concatenated PCA ########################################
+
+# def pca_line_stimresp(data,trialdata,spatbins):
+#     [N,K,S]         = np.shape(data) #get dimensions of tensor
+
+#     # collapse to 2d: N x K*T (neurons by timebins of different trials concatenated)
+#     X               = np.reshape(data,(N,-1))
+    
+#     #Impute missing nan data, otherwise problems with PCA
+#     imp_mean        = SimpleImputer(missing_values=np.nan, strategy='mean')
+#     #apply imputation, replacing nan with mean of that neurons' activity
+#     X               = imp_mean.fit_transform(X.T).T 
+
+#     X               = zscore(X,axis=1) #score each neurons activity (along rows)
+
+#     pca             = PCA(n_components=15) #construct PCA
+#     Xp              = pca.fit_transform(X.T).T #PCA function assumes (samples x features)
+
+#     Xp              = np.reshape(Xp,(15,K,S)) #reshape back to trials
+
+#     #Get indices of trialtypes and responses:
+#     stimtypes       = sorted(trialdata['stimcat'].unique()) # stim ['A','B','C','D']
+#     resptypes       = sorted(trialdata['lickResponse'].unique()) # licking resp [0,1]
+
+#     s_type_ind      = [np.argwhere(np.array(trialdata['stimcat']) == stimtype)[:, 0] for stimtype in stimtypes]
+#     r_type_ind      = [np.argwhere(np.array(trialdata['lickResponse']) == resptype)[:, 0] for resptype in resptypes]
+
+#     #For line make-up:
+#     pal             = sns.color_palette('husl', 4)
+#     sty             = [':','-']
+#     patchcols       = ["cyan","green"]
+
+#     nPlotPCs        = 5 #how many subplots to create for diff PC projections
+
+#     fig, axes = plt.subplots(nPlotPCs, 1, figsize=[8, 7], sharey='row', sharex='row')
+#     projections = np.arange(nPlotPCs)
+#     for ax, proj in zip(axes, projections):
+#         for s in range(len(stimtypes)):
+#             for r in range(len(resptypes)):
+#                 #Take the average PC projection across all indexed trials:
+#                 y   = np.mean(Xp[proj, np.intersect1d(s_type_ind[s],r_type_ind[r]),:],axis=0)
+#                 ax.plot(spatbins,y,c=pal[s],linestyle=sty[r])
+#                 if proj == nPlotPCs-1:
+#                     ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
+#                 ax.set_ylabel('PC {}'.format(proj + 1))
+        
+#         ax.set_xticks(np.linspace(-50,50,5))
+#         ax.add_patch(matplotlib.patches.Rectangle((0,ax.get_xlim()[0]),20,np.diff(ax.get_xlim())[0], 
+#                     fill = True, alpha=0.2,
+#                     color = patchcols[0], linewidth = 0))
+#         ax.add_patch(matplotlib.patches.Rectangle((25,ax.get_xlim()[0]),20,np.diff(ax.get_xlim())[0], 
+#                     fill = True, alpha=0.2,
+#                     color = patchcols[1], linewidth = 0))
+
+#     sns.despine(fig=fig, top=True, right=True)
+
+#     custom_lines = [Line2D([0], [0], color=pal[k], lw=4) for
+#                     k in range(len(stimtypes))]
+#     labels = stimtypes
+#     ax.legend(custom_lines, labels,title='Stim',
+#             frameon=False, loc='center left', bbox_to_anchor=(1, 0.5))
+#     plt.tight_layout(rect=[0,0,0.9,1])
+
+
+# ises            = 1 #selected session to plot this for
+# [N,K,S]         = np.shape(sessions[ises].stensor) #get dimensions of tensor
+
+# #For all areas:
+# binsubidx   = (sbins>-60) & (sbins<=60)
+# binsub      = sbins[binsubidx]
+# data        = sessions[ises].stensor[:,:,binsubidx]
+# pca_line_stimresp(data,sessions[ises].trialdata,binsub)
+# # plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_allAreas_' + sessions[0].sessiondata['session_id'][0] + '.svg'), format = 'svg')
+# plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_allAreas_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+# #For each area:
+# for iarea,area in enumerate(areas):
+#     idx         = sessions[ises].celldata['roi_name'] == area
+#     data        = sessions[ises].stensor[np.ix_(idx,range(K),binsubidx)]
+#     pca_line_stimresp(data,sessions[ises].trialdata,binsub)
+#     plt.suptitle(area,fontsize=14)
+#     # plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.svg'), format = 'svg')
+#     plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+#     # plt.savefig(os.path.join(savedir,'PCA_Line_stimResponse_Left_' + area + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')

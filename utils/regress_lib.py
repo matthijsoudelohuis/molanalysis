@@ -12,6 +12,8 @@ from sklearn import svm as SVM
 from sklearn.metrics import accuracy_score, r2_score, explained_variance_score
 from sklearn.model_selection import cross_val_score
 
+from utils.dimreduc_lib import *
+
 def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
     if model_name == 'LogisticRegression':
         model_name = 'LOGR'
@@ -28,7 +30,7 @@ def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
     fold_performance = np.zeros((kfold,))
 
     # Find the optimal regularization strength (lambda)
-    lambdas = np.logspace(-4, 4, 10)
+    lambdas = np.logspace(-4, 4, 20)
     cv_scores = np.zeros((len(lambdas),))
     for ilambda, lambda_ in enumerate(lambdas):
         
@@ -67,7 +69,7 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
     assert model_name in ['LOGR','SVM','LDA','Ridge','Lasso','LinearRegression'], 'regularization not supported for model %s' % model_name
     assert lam is None or lam > 0
     
-    if lam is None and model_name in ['LOGR','SVM','LDA']:
+    if lam is None:
         lam = find_optimal_lambda(Xfull,Yfull,model_name=model_name,kfold=kfold)
 
     if model_name == 'LOGR':
@@ -112,12 +114,12 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
 
         # Calculate the decoding performance for this fold
         performance[ifold] = score_fun(y_test, y_pred)
+        projs[test_index] = y_pred
 
         # Shuffle the labels and calculate the decoding performance for this fold
         np.random.shuffle(y_train)
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
-        projs[test_index] = y_pred
 
         performance_shuffle[ifold] = score_fun(y_test, y_pred)
 
@@ -129,7 +131,9 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
         performance_avg = performance_avg / (1-np.mean(performance_shuffle))
     weights = np.nanmean(weights, axis=0) #average across folds
 
-    return performance_avg,weights,projs
+    ev = var_along_dim(Xfull,weights)
+
+    return performance_avg,weights,projs,ev
 
 def prep_Xpredictor(X,y):
     X           = zscore(X, axis=0,nan_policy='omit')
