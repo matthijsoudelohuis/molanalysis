@@ -28,8 +28,8 @@ date_filter         = []
 # date_filter         = ['2024_05_01']
 # animal_ids          = ['LPE10884'] #If empty than all animals in folder will be processed
 # date_filter         = ['2024_01_12']
-animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
-date_filter         = ['2024_02_26']
+# animal_ids          = ['LPE11622'] #If empty than all animals in folder will be processed
+# date_filter         = ['2024_02_26']
 
 # protocols           = ['GR','SP','GN','RF']
 # protocols           = ['GR','GN']

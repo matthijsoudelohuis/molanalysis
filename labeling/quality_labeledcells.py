@@ -176,7 +176,7 @@ plt.title('# cellpose cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'nCellpose_area_%dsessions' % len(sesdata) + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'nCellpose_area_%dsessions' % len(sesdata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
@@ -186,7 +186,7 @@ plt.title('# suite2p cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'nSuite2p_area_%dsessions' % len(sesdata) + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'nSuite2p_area_%dsessions' % len(sesdata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
@@ -196,7 +196,7 @@ plt.title('# Frac. responsive cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'Frac_responsive_area_%dsessions' % len(sesdata) + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Frac_responsive_area_%dsessions' % len(sesdata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
@@ -206,7 +206,7 @@ plt.title('# Frac. labeled cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'Frac_labeled_area_%dsessions' % len(sesdata) + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Frac_labeled_area_%dsessions' % len(sesdata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Bar plot of number of labeled cells per area:
 fig, ax = plt.subplots(figsize=(3,2.5))
@@ -216,7 +216,7 @@ plt.title('# Labeled cells per session')
 plt.ylabel('')
 plt.xlabel(r'Area')
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'nLabeled_area_%dsessions' % len(sesdata) + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'nLabeled_area_%dsessions' % len(sesdata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% ### Get the number of labeled cells, cre / flp, depth, area etc. for each plane :
 planedata = pd.DataFrame()
@@ -237,25 +237,25 @@ sns.stripplot(data=planedata,x='roi_name',y='frac_labeled',color='k',ax=ax,size=
 plt.ylabel('Fraction labeled in plane')
 plt.xlabel(r'Area')
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'Frac_labeled_area_%dplanes' % len(planedata) + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Frac_labeled_area_%dplanes' % len(planedata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Bar plot of difference between cre and flp:
 enzymes = ['cre','flp']
 clrs_enzymes = get_clr_recombinase(enzymes)
 enzymelabels = ['retroAAV-pgk-Cre + \n AAV5-CAG-Flex-tdTomato','retroAAV-EF1a-Flpo + \n AAV1-Ef1a-fDIO-tdTomato']
 
-fig, ax = plt.subplots(figsize=(4,3))
+fig, ax = plt.subplots(figsize=(3,3))
 sns.barplot(data=planedata,x='recombinase',y='frac_labeled',palette=clrs_enzymes,ax=ax,errorbar='se')
-plt.ylabel('Fraction labeled in plane')
+plt.ylabel('Frac. labeled\n (per plane)')
 plt.xlabel(r'Recombinase')
 ax.set_xticks([0,1])
-ax.set_xticklabels(['\n\nCre','\n\nFlp'], fontsize=11)
+ax.set_xticklabels(['\n\nCre','\n\nFlp'], fontsize=8)
 ax.set_xticks([0.01,1.01],  minor=True)
 ax.set_xticklabels(enzymelabels,fontsize=6, minor=True)
 
 # ax.set_xticklabels(enzymelabels,fontsize=6)
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'Frac_labeled_enzymes_%dplanes' % len(planedata) + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Frac_labeled_enzymes_%dplanes' % len(planedata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Scatter plot as a function of depth:
 fig, ax = plt.subplots(figsize=(5,4))
@@ -266,8 +266,20 @@ plt.xlim([50,500])
 plt.tight_layout()
 sns.lineplot(x=planedata['depth'].round(-2),y=planedata['frac_labeled'],
              hue=planedata['roi_name'],palette=clrs_areas,ax=ax,hue_order=areas)
-plt.legend(ax.get_legend_handles_labels()[0][:4],areas, loc='best')
-plt.savefig(os.path.join(savedir,'Frac_labeled_depth_area_%dplanes' % len(planedata) + '.png'), format = 'png')
+plt.legend(ax.get_legend_handles_labels()[0][:4],areas, loc='best',frameon=False)
+plt.savefig(os.path.join(savedir,'Frac_labeled_depth_area_%dplanes' % len(planedata) + '.png'), format = 'png',bbox_inches='tight')
+
+#%% Number of labeled cells as a function of depth:
+fig, ax = plt.subplots(figsize=(5,4))
+sns.scatterplot(data=planedata,x='depth',y='nlabeled',hue='roi_name',palette=clrs_areas,ax=ax,s=14,hue_order=areas)
+plt.ylabel('Number labeled cells')
+plt.xlabel(r'Cortical depth ($\mu$m)')
+plt.xlim([50,500])
+plt.tight_layout()
+sns.lineplot(x=planedata['depth'].round(-2),y=planedata['nlabeled'],
+             hue=planedata['roi_name'],palette=clrs_areas,ax=ax,hue_order=areas)
+plt.legend(ax.get_legend_handles_labels()[0][:4],areas, loc='best',frameon=False)
+plt.savefig(os.path.join(savedir,'NLabeled_depth_area_%dplanes' % len(planedata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Number of red cellpose cells as a function of depth (not per se suite2p calcium trace detected):
 fig, ax = plt.subplots(figsize=(5,4))
@@ -279,7 +291,7 @@ plt.tight_layout()
 sns.lineplot(x=planedata['depth'].round(-2),y=planedata['nredcells'],
              hue=planedata['roi_name'],palette=clrs_areas,ax=ax,hue_order=areas)
 plt.legend(ax.get_legend_handles_labels()[0][:4],areas, loc='best')
-plt.savefig(os.path.join(savedir,'Frac_cellpose_depth_area_%dplanes' % len(planedata) + '.png'), format = 'png')
+plt.savefig(os.path.join(savedir,'Ncellpose_depth_area_%dplanes' % len(planedata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Select only cells nearby labeled cells to ensure fair comparison of quality metrics:
 

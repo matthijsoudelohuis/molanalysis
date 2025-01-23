@@ -336,7 +336,7 @@ def hist_corr_areas_labeling(sessions,corr_type='trace_corr',filternear=True,min
 
                             if corr_type == 'trace_corr':
                                 n = len(sessions[ises].ts_F)
-                            elif corr_type in ['noise_corr','sig_corr']:
+                            elif corr_type in ['noise_corr','sig_corr','resp_corr','corr_shuffle']:
                                 n = np.shape(sessions[ises].respmat)[1]
 
                             sigcorrdata = corrdata.copy()
@@ -461,7 +461,7 @@ def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
 ######  ### #     #    #     # ####### #     # #     #    #####  #     #    #    
 
 def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='F',
-                    rotate_prefori=False,deltaori=None,noise_thr=1,onlysameplane=False,
+                    rotate_prefori=False,deltaori=None,noise_thr=100,onlysameplane=False,
                     binresolution=5,tuned_thr=0,absolute=False,normalize=False,dsi_thr=0,
                     filtersign=None,corr_thr=0.05):
     """

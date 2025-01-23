@@ -144,15 +144,15 @@ corr_thr            = 0.025 #thr in percentile of total corr for significant pos
 bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
 bin_angle_surr_count,binsangle] = bin_corr_deltaxy(sessions,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                        method='mean',filtersign=None,corr_type=corr_type,binresolution=5,noise_thr=20)
+                        method='mean',filtersign=None,corr_type=corr_type,binresolution=5,noise_thr=100)
 
 [_,bin_2d_posf,_,bin_dist_posf,_,_,bin_angle_cent_posf,_,bin_angle_surr_posf,_,_] = bin_corr_deltaxy(sessions,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                        method='frac',filtersign='pos',corr_type=corr_type,binresolution=5,noise_thr=20,corr_thr=corr_thr)
+                        method='frac',filtersign='pos',corr_type=corr_type,binresolution=5,noise_thr=100,corr_thr=corr_thr)
 
 [_,bin_2d_negf,_,bin_dist_negf,_,_,bin_angle_cent_negf,_,bin_angle_surr_negf,_,_] = bin_corr_deltaxy(sessions,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                        method='frac',filtersign='neg',corr_type=corr_type,binresolution=5,noise_thr=20,corr_thr=corr_thr)
+                        method='frac',filtersign='neg',corr_type=corr_type,binresolution=5,noise_thr=100,corr_thr=corr_thr)
 
 fig = plot_mean_frac_corr_areas(bins2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
                         binsdRF,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,areapairs,layerpairs,projpairs)

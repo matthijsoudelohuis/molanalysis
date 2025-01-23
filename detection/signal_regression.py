@@ -48,8 +48,8 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\
 #%% ###############################################################
 
 protocol            = 'DN'
-calciumversion      = 'deconv'
-# calciumversion      = 'dF'
+# calciumversion      = 'deconv'
+calciumversion      = 'dF'
 
 session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
@@ -322,8 +322,9 @@ for iarea,area in enumerate(areas):
 #%% ############################################# Regression ##################################################
 ### In combination with PCA unsupervised display of noise around center for each condition #################
 idx_T       = np.ones(len(sessions[sesidx].trialdata),dtype=bool)
-idx_T       =sessions[sesidx].trialdata['engaged']==1
-idx_T   = sessions[sesidx].trialdata['stimcat']=='N'
+# idx_T       = sessions[sesidx].trialdata['engaged']==1
+# idx_T       = sessions[sesidx].trialdata['stimcat']=='N'
+
 area        = 'V1'
 # idx_N       = np.where(sessions[sesidx].celldata['roi_name']==area)[0]
 idx_N       = np.all((sessions[sesidx].celldata['roi_name']==area, 
@@ -426,7 +427,7 @@ fig.savefig(os.path.join(savedir,'RegressionValidation','Regression_Scatter_Sign
 performance_cv,reg_weights_cv,S_pred_cv,_ = my_decoder_wrapper(A1,S,model_name=model_name,kfold=kfold,lam=lam,
                                                     scoring_type=scoring_type,norm_out=False,subtract_shuffle=False) 
 
-fig, axes   = plt.subplots(1, 2, figsize=[4,2.5])
+fig, axes   = plt.subplots(1, 2, figsize=[5,2.5])
 ax = axes[0]
 ax.scatter(S_pred, S_pred_cv,s=10,c='k',edgecolors='w', linewidths=0.5)
 ax.set_title('Predicted signal \n(with and wo CV)',fontsize=9)
@@ -434,6 +435,8 @@ ax.set_xlabel('no CV')
 ax.set_ylabel('CV')
 ax.set_xlim(np.percentile(S_pred,[0,100]))
 ax.set_ylim(np.percentile(S_pred,[0,100]))
+ax.set_xticks(np.round(np.percentile(S,[0,50,100]),0))
+ax.set_yticks(np.round(np.percentile(S,[0,50,100]),0))
 ax.plot([0, 1], [0, 1], transform=ax.transAxes)
 
 ax          = axes[1]
@@ -442,6 +445,8 @@ ax.set_xlabel('no CV')
 ax.set_title('Weights\n(with and wo CV)',fontsize=9)
 ax.set_xlim(np.percentile(reg_weights,[0,100]))
 ax.set_ylim(np.percentile(reg_weights,[0,100]))
+ax.set_xticks(np.round(np.percentile(reg_weights,[0,50,100]),1))
+ax.set_yticks(np.round(np.percentile(reg_weights,[0,50,100]),1))
 ax.plot([0, 1], [0, 1], transform=ax.transAxes)
 
 plt.tight_layout()

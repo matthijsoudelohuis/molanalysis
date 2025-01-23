@@ -94,8 +94,8 @@ def filter_2d_projpair(ses,projpair):
         return np.full(np.shape(ses.distmat_xy),True)
     proj1,proj2 = projpair.split('-')
     assert 'labeled' in ses.celldata, "Error: 'labeled' is not in ses.celldata. Please run the function filter_sessions() with the argument has_pupil=True"
-    assert np.isin([proj1,proj2],ses.celldata['labeled'].unique()).all(), \
-        f"Error: one of {proj1} or {proj2} is not in ses.celldata['labeled']. Unique labels are {ses.celldata['labeled'].unique()}"
+    # assert np.isin([proj1,proj2],ses.celldata['labeled'].unique()).all(), \
+        # f"Error: one of {proj1} or {proj2} is not in ses.celldata['labeled']. Unique labels are {ses.celldata['labeled'].unique()}"
     return np.outer(ses.celldata['labeled']==proj1, ses.celldata['labeled']==proj2)
 
 
