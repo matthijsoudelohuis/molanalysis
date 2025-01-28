@@ -26,6 +26,7 @@ from dPCA import dPCA
 import seaborn as sns
 import matplotlib.pyplot as plt
 from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the support functions for plotting
 from utils.behaviorlib import * # get support functions for beh analysis 
 from detection.plot_neural_activity_lib import *
 from loaddata.get_data_folder import get_local_drive
@@ -36,9 +37,13 @@ protocol            = 'DN'
 
 session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
-session_list = np.array([['LPE11622', '2024_02_21']])
-# session_list    = np.array([['LPE10884', '2023_12_14']])
+# session_list = np.array([['LPE11622', '2024_02_21']])
+session_list    = np.array([['LPE10884', '2023_12_14']])
 # session_list    = np.array([['LPE12013','2024_04_25']])
+session_list = np.array([['LPE11997', '2024_04_16'],
+                         ['LPE11622', '2024_02_21'],
+                         ['LPE11998', '2024_04_30'],
+                         ['LPE12013','2024_04_25']])
 
 sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion='deconv') #Load specified list of sessions
@@ -56,41 +61,49 @@ for i in range(nSessions):
 #%% ############################## Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning
-s_pre       = -80  #pre cm
-s_post      = 60   #post cm
-binsize     = 10     #spatial binning in cm
+s_pre       = -60  #pre cm
+s_post      = 70   #post cm
+binsize     = 5     #spatial binning in cm
 
 for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
                                        sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=binsize,method='binmean')
 
-#%% Compute average response in stimulus response zone:
-for i in range(nSessions):
+    #Compute average response in stimulus response zone:
     sessions[i].respmat             = compute_respmat_space(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['stimStart'],
                                     sessions[i].zpos_F,sessions[i].trialnum_F,s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
-
-for i in range(nSessions):
     temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[i].behaviordata['runspeed']),1)))
     sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
                                     sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
+
+
+#%% 
+sessions = calc_stimresponsive_neurons(sessions,sbins)
+
 
 #%% dPCA on session tensor:
 ises        = 0 #selected session to plot this for
 
 # sessions[ises].stensor[np.isnan(sessions[ises].stensor)] = 0
 area = 'AL'
-# area = 'RSP'
-# area = 'V1'
-area = 'PM'
+area = 'RSP'
+area = 'V1'
+# area = 'PM'
+idx_N = sessions[ises].celldata['roi_name']==area
+# idx_N =np.ones(len(sessions[ises].celldata['roi_name'])).astype(bool)
 
 data = copy.deepcopy(sessions[ises].stensor)
 data[np.isnan(data)] = 0
 
-idx_N = sessions[ises].celldata['roi_name']==area
+# idx_T = sessions[ises].trialdata['engaged']==1
+idx_T = np.ones(len(sessions[ises].trialdata['engaged'])).astype(bool)
+
+trialdata = sessions[ises].trialdata[idx_T]
 
 # idx_N  = np.all((sessions[ises].celldata['roi_name']=='PM',
 #                  sessions[ises].celldata['noise_level']<20),axis=0)
-data = data[idx_N,:,:]
+# data = data[idx_N,:,:]
+data = data[np.ix_(idx_N,idx_T,np.arange(len(sbins)))]
 
 # number of neurons, time-points and stimuli
 [N,t,S]     = np.shape(data) #get dimensions of tensor
@@ -112,9 +125,9 @@ D = 2
 dectypes    = [0,1]
 declabels  = ['no lick','lick']
 
-c_ind      = np.array([np.array(sessions[ises].trialdata['stimcat']) == stim for stim in stimtypes])
+c_ind      = np.array([np.array(trialdata['stimcat']) == stim for stim in stimtypes])
 
-d_ind      = np.array([np.array(sessions[ises].trialdata['lickResponse']) == dec for dec in dectypes])
+d_ind      = np.array([np.array(trialdata['lickResponse']) == dec for dec in dectypes])
 
 n_trials = np.empty((C,D))
 for iC in range(C):
@@ -123,6 +136,7 @@ for iC in range(C):
 
 n_min_trials = np.min(n_trials).astype('int')
 n_min_trials = 50
+# n_min_trials = np.max(n_trials).astype('int')
 
 trialR = np.empty((n_min_trials,N,C,D,S))
 
@@ -151,20 +165,20 @@ regval = 0.003
 # regval = 1.5556809555781208e-05
 ncomponents = 3
 
-
 # dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents)
-dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents,join={'s' : ['s','st'],
+dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents,join={'s' : ['s','t','st'],
                                                                                 'd' : ['d','dt'],
                                                                                 'sd' : ['sd','sdt']})
 # dpca = dPCA.dPCA(labels='tsd',regularizer=regval)
 
-dpca.protect = ['t']
+# dpca.protect = ['t']
 
 Z = dpca.fit_transform(R,trialR)
+W = dpca.D
 
 #%%
 
-significance_masks = dpca.significance_analysis(R,  trialR, n_shuffles=10, n_splits=10, n_consecutive=10,axis=True)
+# significance_masks = dpca.significance_analysis(R,  trialR, n_shuffles=10, n_splits=10, n_consecutive=10,axis=True)
 
 
 #%% Plot:
@@ -172,53 +186,288 @@ significance_masks = dpca.significance_analysis(R,  trialR, n_shuffles=10, n_spl
 linecolors_c = ['grey','green','blue']
 linestyles_d = ['--','-',':']
 
-# plt.figure(figsize=(16,4))
-fig,axes = plt.subplots(ncomponents,4,figsize=(12,ncomponents*3)) 
+margs = Z.keys()
+nmargs = len(margs)
+marglabels = itemgetter(*margs)({'t'  : 'Time',
+                    's' : 'Stimulus',
+                    'd' : 'Decision',
+                    'sd' : 'Stim x Dec'})
 
-labels = [stimlabels[i]+'-'+declabels[j] for i in range(C) for j in range(D)]
+# plt.figure(figsize=(16,4))
+fig,axes = plt.subplots(ncomponents,nmargs,figsize=(nmargs*3,ncomponents*2.5),sharex=True,sharey=True) 
+
+linelabels = [stimlabels[i]+'-'+declabels[j] for i in range(C) for j in range(D)]
 
 for icomponent in range(ncomponents):
-    ax = axes[icomponent,0]
-    for c in range(C):
-        for d in range(D):
-            ax.plot(sbins,Z['t'][icomponent,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
-            # ax.plot(sbins,Z[labels[icomponent]][0,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
-    if icomponent == 0: 
-        ax.legend(labels,frameon=False,fontsize=8)
-    # ax.set_title(labels[icomponent])
-    ax.set_title('Dim %d - Time component\nEV: %.5f' % (icomponent,dpca.explained_variance_ratio_['t'][icomponent]))
+    for imarg,marg in enumerate(margs):
+        ax = axes[icomponent,imarg]
 
-    ax = axes[icomponent,1]
-    for c in range(C):
-        for d in range(D):
-            ax.plot(sbins,Z['s'][icomponent,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
-    # ax.plot(sbins[significance_masks['st'][icomponent,:]],np.max(Z['st'][icomponent,:,:])*np.ones(significance_masks['st'][icomponent,:].sum()),color='k',linewidth=2,alpha=1)
-    # ax.set_title('Dim %d - Stimulus component' % icomponent)
-    ax.set_title('Dim %d - Stimulus component\nEV: %.5f' % (icomponent,dpca.explained_variance_ratio_['s'][icomponent]))
-
-    ax = axes[icomponent,2]
-    for c in range(C):
-        for d in range(D):
-            ax.plot(sbins,Z['d'][icomponent,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
-    # ax.plot(sbins[significance_masks['dt'][icomponent,:]],np.max(Z['dt'][icomponent,:,:])*np.ones(significance_masks['dt'][icomponent,:].sum()),color='k',linewidth=2,alpha=1)
-    # ax.set_title('Dim %d - Decision component' % icomponent)
-    ax.set_title('Dim %d - Decision component\nEV: %.5f' % (icomponent,dpca.explained_variance_ratio_['d'][icomponent]))
-
-    ax = axes[icomponent,3]
-    for c in range(C):
-        for d in range(D):
-            ax.plot(sbins,Z['sd'][icomponent,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
-    # ax.plot(sbins[significance_masks['sdt'][icomponent,:]],np.max(Z['sdt'][icomponent,:,:])*np.ones(significance_masks['sdt'][icomponent,:].sum()),color='k',linewidth=2,alpha=1)
-    # ax.set_title('Dim %d - Mixing component' % icomponent)
-    ax.set_title('Dim %d - Mixing component\nEV: %.5f' % (icomponent,dpca.explained_variance_ratio_['sd'][icomponent]))
+        for c in range(C):
+            for d in range(D):
+                ax.plot(sbins,Z[marg][icomponent,c,d],color=linecolors_c[c],linestyle=linestyles_d[d])
+        if icomponent == 0: 
+            ax.set_title('%s' % marglabels[imarg],fontsize=12)
+        if imarg == 0:
+            ax.set_ylabel('Component %d' % (icomponent+1),fontsize=12)
+        ax.text(0.97,0.93,'EV: %.3f' % dpca.explained_variance_ratio_[marg][icomponent],ha='right',va='top',transform=ax.transAxes,fontsize=10)
+        # ax.plot(sbins[significance_masks['st'][icomponent,:]],np.max(Z['st'][icomponent,:,:])*np.ones(significance_masks['st'][icomponent,:].sum()),color='k',linewidth=2,alpha=1)
+        # ax.set_title('Dim %d - %s component\nEV: %.5f' % (icomponent,marglabels[imarg],dpca.explained_variance_ratio_[marg][icomponent]))
+        
+        ax.set_xticks([-50,-25,0,25,50])
+        if icomponent == ncomponents-1:
+            ax.set_xlabel('Pos. from stimulus (cm)',fontsize=12)
+        if icomponent == 0 and imarg == 0:
+            ax.legend(linelabels,frameon=False,fontsize=8)
 
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'dPCA_%s_%s_trialtypes_%s.png' % (sessions[ises].sessiondata['session_id'][0],area,''.join(stimtypes))), format = 'png')
-
-#%%
+# fig.savefig(os.path.join(savedir,'dPCA_%s_%s_trialtypes_%s.png' % (sessions[ises].sessiondata['session_id'][0],area,''.join(stimtypes))), format = 'png')
 
 #%% 
-sessions = calc_stimresponsive_neurons(sessions,sbins)
+
+def dpca_wrapper(ses,idx_N,idx_T,regval=None,ncomponents=3,n_sub_trials=50):
+
+    trialdata = ses.trialdata[idx_T]
+
+    data = copy.deepcopy(ses.stensor)
+    data[np.isnan(data)] = 0
+    data = data[np.ix_(idx_N,idx_T,np.arange(len(sbins)))]
+
+    # number of neurons, time-points and stimuli
+    [N,t,S]     = np.shape(data) #get dimensions of tensor
+
+    # C = 2
+    # stimtypes   = ['C','M']
+    # stimlabels  = ['catch','max']
+
+    C = 3
+    stimtypes   = ['C','N','M']
+    stimlabels  = ['catch','noise','max']
+
+    D = 2
+    dectypes    = [0,1]
+    declabels  = ['no lick','lick']
+
+    c_ind      = np.array([np.array(trialdata['stimcat']) == stim for stim in stimtypes])
+    d_ind      = np.array([np.array(trialdata['lickResponse']) == dec for dec in dectypes])
+
+    n_trials = np.empty((C,D))
+    for iC in range(C):
+        for iD in range(D):
+            n_trials[iC,iD] = np.sum(np.logical_and(c_ind[iC,:],d_ind[iD,:]))
+
+    # n_min_trials = np.min(n_trials).astype('int')
+    n_min_trials = np.max((n_sub_trials,np.min(n_trials).astype('int'))).astype('int')
+
+    trialR = np.empty((n_min_trials,N,C,D,S))
+    for iC in range(C):
+        for iD in range(D):
+            # idx = np.random.choice(np.argwhere(np.logical_and(c_ind[iC,:],d_ind[iD,:])).squeeze(), size=n_min_trials, replace=False)  
+            idx = np.random.choice(np.argwhere(np.logical_and(c_ind[iC,:],d_ind[iD,:])).squeeze(), size=n_min_trials, replace=True)  
+            trialR[:,:,iC,iD,:] = data[:,idx,:].transpose((1,0,2))
+
+    # print(np.shape(trialR))
+
+    # trial-average data
+    R = np.nanmean(trialR,0)
+    # center data
+    R -= np.mean(R.reshape((N,-1)),1)[:,None,None,None]
+    # center trialR data:
+    # trialR -= np.mean(trialR.reshape((n_min_trials,N,-1)),2)[:,:,None,None,None]
+
+
+    # dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents,join={'s' : ['s','st'],
+                                                                                # 'd' : ['d','dt'],
+                                                                                # 'sd' : ['sd','sdt']})
+    
+    dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents,join={'s' : ['s','t','st'],
+                                                                                'd' : ['d','dt'],
+                                                                                'sd' : ['sd','sdt']})
+    dpca.protect = ['t']
+
+    Z = dpca.fit_transform(R,trialR)
+    W = dpca.D
+
+    return dpca, Z, W, R, trialR
+
+
+
+#%% Plot stimulus x decision development across space in 2D per area:
+
+ises            = 1
+regval          = 0.003
+# regval          = 0.05
+ncomponents     = 2
+
+areas = ['V1','PM','AL','RSP']
+nareas = len(areas)
+
+pal1 = sns.color_palette("gray", as_cmap=True)
+pal2 = sns.color_palette("Blues", as_cmap=True)
+pal3 = sns.color_palette("Reds", as_cmap=True)
+
+legendcolors = ['gray','blue','red']
+
+cmaps           = [pal1,pal2,pal3]
+linestyles_d    = ['--','-']
+colorspeed      = np.arange(0,1,1/len(sbins))
+
+from scipy.stats import norm
+colorspeed      = norm.cdf(sbins, loc=10, scale=25) #add color gradient to the line that has strongest gradient around stimulus
+
+C = 3
+stimtypes   = ['C','N','M']
+stimlabels  = ['catch','noise','max']
+
+D = 2
+dectypes    = [0,1]
+declabels  = ['no lick','lick']
+
+
+# idx_N = sessions[ises].celldata['roi_name']==area
+idx_N =np.ones(len(sessions[ises].celldata['roi_name'])).astype(bool)
+idx_T = sessions[ises].trialdata['engaged']==1
+dpca, Z, W, R, trialR = dpca_wrapper(sessions[ises],idx_N,idx_T,regval=regval,ncomponents=ncomponents,
+                                     n_sub_trials=50)
+
+
+fig,axes = plt.subplots(ncomponents,nareas,figsize=(nareas*3,ncomponents*2.5),sharex=False,sharey=False) 
+# fig,axes = plt.subplots(ncomponents,nareas,figsize=(nareas*3,ncomponents*2.5),sharex=True,sharey='row') 
+for iarea,area in enumerate(areas):
+
+    idx_N = sessions[ises].celldata['roi_name']==area
+    # idx_N =np.ones(len(sessions[ises].celldata['roi_name'])).astype(bool)
+
+    X = R[idx_N,:,:,:]
+    Z = {}
+    for key in list(dpca.marginalizations.keys()):
+        W = dpca.D[key][idx_N,:].T
+        Z[key] = np.dot(W, X.reshape((X.shape[0],-1))).reshape((dpca.D[key].shape[1],) + X.shape[1:])
+
+
+    for icomponent in range(ncomponents):
+        ax = axes[icomponent,iarea]
+        for c in range(C):
+            for d in range(D):
+                lines = colored_line(Z['d'][icomponent,c,d], Z['s'][icomponent,c,d],c=colorspeed,
+                                      ax=ax, linewidth=2, cmap=cmaps[c], **{'linestyle':linestyles_d[d]})
+                                                #  c=pal3(np.arange(0,1,1/len(Z['s'][icomponent,c,d]))), ax=ax, linewidth=10, cmap="plasma")
+        ax.set_ylim([np.nanmin(Z['s'])*1.2,np.nanmax(Z['s'])*1.2])
+        ax.set_xlim([np.nanmin(Z['d'])*1.2,np.nanmax(Z['d'])*1.2])
+
+        if icomponent == ncomponents-1:
+            ax.set_xlabel('Decision',fontsize=12)
+        if iarea == 0:
+            ax.set_ylabel('Stimulus',fontsize=12)
+        if icomponent == 0:
+            ax.set_title('%s' % area,fontsize=12)
+        handles = []
+        for c in range(C):
+            for d in range(D):
+                h, = ax.plot(0,0,c=legendcolors[c], **{'linestyle':linestyles_d[d]})
+                handles.append(h)
+                                    
+        if icomponent == 0 and iarea == 0:
+            fig.legend(handles,linelabels,frameon=False,fontsize=10,loc='upper right',bbox_to_anchor=(1.05, 0.8))
+        # fig.subplots_adjust(wspace=1)
+plt.suptitle('dPCA - %s' % (sessions[ises].sessiondata['session_id'][0]), fontsize=13, color='k', fontweight='bold')
+fig.savefig(os.path.join(savedir,'dPCA_2D_SD_%s_%s.png' % (sessions[ises].sessiondata['session_id'][0],''.join(stimtypes))), 
+            format = 'png',bbox_inches='tight')
+
+#%% Plot stimulus x decision development across space in 2D per area and for labeled:
+
+ises            = 1
+regval          = 0.003
+# regval          = 0.05
+ncomponents     = 2
+
+areas = ['V1','PM','AL','RSP']
+nareas = len(areas)
+
+labeled = ['unl','lab']
+nlabeled = len(labeled)
+
+pal1 = sns.color_palette("gray", as_cmap=True)
+pal2 = sns.color_palette("Blues", as_cmap=True)
+pal3 = sns.color_palette("Reds", as_cmap=True)
+
+legendcolors = ['gray','blue','red']
+
+cmaps           = [pal1,pal2,pal3]
+linestyles_d    = ['--','-']
+colorspeed      = np.arange(0,1,1/len(sbins))
+
+from scipy.stats import norm
+colorspeed      = norm.cdf(sbins, loc=10, scale=20) #add color gradient to the line that has strongest gradient around stimulus
+
+fig,axes = plt.subplots(nlabeled,nareas,figsize=(nareas*3,nlabeled*2.5),sharex=False,sharey=False) 
+# fig,axes = plt.subplots(ncomponents,nareas,figsize=(nareas*3,ncomponents*2.5),sharex=True,sharey='row') 
+
+# idx_N = sessions[ises].celldata['roi_name']==area
+idx_N_ses   = np.ones(len(sessions[ises].celldata['roi_name'])).astype(bool)
+# idx_N_ses  = sessions[ises].celldata['sig_MN']==1
+idx_T   = sessions[ises].trialdata['engaged']==1
+# idx_T   = np.ones(len(sessions[ises].trialdata['engaged'])).astype(bool)
+dpca, Z, W, R, trialR = dpca_wrapper(sessions[ises],idx_N_ses,idx_T,regval=regval,ncomponents=ncomponents,n_sub_trials=50)
+
+icomponent = 0 
+for iarea,area in enumerate(areas):
+    for ilab,label in enumerate(labeled):
+        ax = axes[ilab,iarea]
+        
+        idx_N = np.all((sessions[ises].celldata['roi_name']==area,
+                               sessions[ises].celldata['labeled']==label),axis=0)
+        idx_N = idx_N[idx_N_ses]
+        if np.sum(idx_N) > 5: 
+            X = R[idx_N,:,:,:]
+            Z = {}
+            for key in list(dpca.marginalizations.keys()):
+                W = dpca.D[key][idx_N,:].T
+                Z[key] = np.dot(W, X.reshape((X.shape[0],-1))).reshape((dpca.D[key].shape[1],) + X.shape[1:])
+
+            # dpca, Z, W, R, trialR = dpca_wrapper(sessions[ises],idx_N,idx_T,regval=regval,ncomponents=ncomponents,n_sub_trials=50)
+
+            for c in range(C):
+                for d in range(D):
+                    lines = colored_line(Z['d'][icomponent,c,d], Z['s'][icomponent,c,d],c=colorspeed,
+                                        ax=ax, linewidth=2, cmap=cmaps[c], **{'linestyle':linestyles_d[d]})
+
+            ax.set_ylim([np.nanmin(Z['s'])*1.2,np.nanmax(Z['s'])*1.2])
+            ax.set_xlim([np.nanmin(Z['d'])*1.2,np.nanmax(Z['d'])*1.2])
+
+            if ilab == ncomponents-1:
+                ax.set_xlabel('Decision',fontsize=12)
+            if iarea == 0:
+                ax.set_ylabel('Stimulus',fontsize=12)
+            # if ilab == 0:
+            ax.set_title('%s - %s' % (area,label),fontsize=12)
+handles = []
+for c in range(C):
+    for d in range(D):
+        h, = ax.plot(0,0,c=legendcolors[c], **{'linestyle':linestyles_d[d]})
+        handles.append(h)
+# plt.tight_layout()                         
+# if ilab == 0 and iarea == 0:
+fig.legend(handles,linelabels,frameon=False,fontsize=10,loc='upper right',bbox_to_anchor=(1.05, 0.8))
+        # fig.subplots_adjust(wspace=1)
+plt.suptitle('dPCA - %s' % (sessions[ises].sessiondata['session_id'][0]), fontsize=13, color='k', fontweight='bold')
+fig.savefig(os.path.join(savedir,'dPCA_2D_SD_AreaLabels_%s_%s.png' % (sessions[ises].sessiondata['session_id'][0],''.join(stimtypes))), 
+            format = 'png',bbox_inches='tight')
+
+#%% 
+idim = 0
+marg = 'd'
+W = dpca.D[marg][:,idim][:,None]
+
+fig = plot_stim_dec_spatial_proj(sessions[ises].stensor, sessions[ises].celldata,sessions[ises].trialdata, W, sbins,filter_engaged=True)
+plt.suptitle('dPCA - %s' % (sessions[ises].sessiondata['session_id'][0]), fontsize=13, color='k', fontweight='bold')
+fig.savefig(os.path.join(savedir,'SpatialProj','dPCA_ProjAct_AreaLabels_%s_%s%d.png' % (sessions[ises].sessiondata['session_id'][0],marg,idim)),
+            format = 'png',bbox_inches='tight')
+
+
+#%% 
+
+
+
 
 #%% dPCA on session tensor:
 ises        = 0 #selected session to plot this for
@@ -270,8 +519,6 @@ R = np.nanmean(trialR,0)
 
 # center data
 R -= np.mean(R.reshape((N,-1)),1)[:,None,None,None]
-# center trialR data:
-trialR -= np.mean(trialR.reshape((n_min_trials,N,-1)),2)[:,:,None,None,None]
 
 #%% 
 regval = 'auto'
@@ -280,7 +527,7 @@ regval = 0.0035
 ncomponents = 3
 # dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents)
 # dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents)
-dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents,join={'s' : ['s','st'],
+dpca = dPCA.dPCA(labels='sdt',regularizer=regval,n_components=ncomponents,join={'s' : ['s','t','st'],
                                                                                 'd' : ['d','dt'],
                                                                                 'sd' : ['sd','sdt']})
 # dpca = dPCA.dPCA(labels='tsd',regularizer=regval)
@@ -297,23 +544,27 @@ clrs_areas = get_clr_areas(areas)
 area_idx_N = np.array(sessions[ises].celldata['roi_name'][idx_N])
 
 #%% 
-histedges = np.arange(-0.05,0.05,0.0025)
-fig,axes = plt.subplots(ncomponents,nmargs,figsize=(nmargs*3,ncomponents*2.5),sharex=True)
-for icomponent in range(ncomponents):
-    for imarg,marg in enumerate(margs):
-        ax = axes[icomponent,imarg]
-        for iarea,area in enumerate(areas):
-            idx = area_idx_N == area
-            ax.plot(histedges[:-1],np.histogram(dpca.D[marg][idx,icomponent],histedges,density=True)[0],color=clrs_areas[iarea],label=area)
-            # ax.plot(dpca.D[marg][icomponent,idx],label=area)
-        if imarg == 0 and icomponent == 0:
-            ax.legend(frameon=False,fontsize=8)
-        ax.set_title('%s (Dim %d)' % (marg,icomponent+1))
-        ax.set_xlim(histedges[0],histedges[-1])
-        # ax.set_ylim(0,1.5)
-        ax.set_xlabel('Weight')
-fig.tight_layout()
-fig.savefig(os.path.join(savedir,'dPCA_WeightHist_%s_trialtypes_%s.png' % (sessions[ises].sessiondata['session_id'][0],''.join(stimtypes))), format = 'png')
+# histedges = np.arange(-0.04,0.04,0.002)
+# fig,axes = plt.subplots(ncomponents,nmargs,figsize=(nmargs*3,ncomponents*2.5),sharex=False)
+# for icomponent in range(ncomponents):
+#     for imarg,marg in enumerate(margs):
+#         ax = axes[icomponent,imarg]
+#         for iarea,area in enumerate(areas):
+#             for ilab,label in enumerate(labeled):
+#                 idx = np.all((sessions[ises].celldata['roi_name']==area,
+#                                sessions[ises].celldata['labeled']==label),axis=0)
+                
+#             # idx = area_idx_N == area
+#                 ax.plot(histedges[:-1],np.histogram(dpca.D[marg][idx,icomponent],histedges,density=True)[0],color=clrs_areas[iarea],label=area)
+#             # ax.plot(dpca.D[marg][icomponent,idx],label=area)
+#         if imarg == 0 and icomponent == 0:
+#             ax.legend(frameon=False,fontsize=8)
+#         ax.set_title('%s (Dim %d)' % (marg,icomponent+1))
+#         ax.set_xlim(histedges[0],histedges[-1])
+#         # ax.set_ylim(0,1.5)
+#         ax.set_xlabel('Weight')
+# fig.tight_layout()
+# fig.savefig(os.path.join(savedir,'dPCA_WeightHist_%s_trialtypes_%s.png' % (sessions[ises].sessiondata['session_id'][0],''.join(stimtypes))), format = 'png')
 
 #%% 
 dim = 0
@@ -321,10 +572,12 @@ df = pd.DataFrame()
 df['stim'] = dpca.D['s'][:,dim]
 df['choice'] = dpca.D['d'][:,dim]
 df['stim x choice'] = dpca.D['sd'][:,dim]
-df['area'] = sessions[ises].celldata['roi_name'][idx_N]
-
-# sns.pairplot(df,hue='area',diag_kind="hist",height=2.5,plot_kws={"s": 3, "alpha": 0.5, "color": "k"},hue_order=areas,palette=clrs_areas)
-fig = sns.pairplot(df,hue='area',diag_kind="kde",height=2.5,plot_kws={"s": 4, "alpha": 0.5},hue_order=areas,palette=clrs_areas)
+df['arealabel'] = sessions[ises].celldata['arealabel'][idx_N]
+# fig = sns.pairplot(df,hue='area',diag_kind="kde",height=2.5,plot_kws={"s": 4, "alpha": 0.5},hue_order=areas,palette=clrs_areas)
+arealabels = np.unique(sessions[ises].celldata['arealabel'][idx_N])
+clrs_arealabels = get_clr_area_labeled(arealabels)
+fig = sns.pairplot(df,hue='arealabel',diag_kind="kde",height=2.5,plot_kws={"s": 4, "alpha": 0.8},
+                   hue_order=arealabels,palette=clrs_arealabels,diag_kws=dict(common_norm=False,fill=False,linewidth=1))
 plt.suptitle('dPCA weights_dim%d_%s' % (dim+1,sessions[ises].sessiondata['session_id'][0]),fontsize=14)
 
 fig.tight_layout()

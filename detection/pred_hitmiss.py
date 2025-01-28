@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 import sklearn
 from sklearn.linear_model import LinearRegression,Lasso,Ridge,ElasticNet
+from sklearn.linear_model import LogisticRegression as LOGR
 from sklearn import svm as SVM
 # from sklearn.metrics import accuracy_score, r2_score, explained_variance_score
 from sklearn.model_selection import cross_val_score
@@ -32,7 +33,7 @@ from detection.plot_neural_activity_lib import *
 from detection.example_cells import get_example_cells
 from utils.regress_lib import *
 
-plt.rcParams['svg.fonttype'] = 'none'
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\PredHitMiss\\')
 
 #%% ###############################################################
 
@@ -47,18 +48,15 @@ session_list = np.array([['LPE11997', '2024_04_16'],
                          ['LPE11622', '2024_02_21'],
                          ['LPE11998', '2024_04_30'],
                          ['LPE12013','2024_04_25']])
-# session_list = np.array([['LPE10884', '2023_12_14']])
-# session_list = np.array([['LPE10884', '2023_12_14']])
+
 # session_list        = np.array([['LPE12013','2024_04_25']])
 # session_list        = np.array([['LPE12013','2024_04_26']])
 
-# sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
-#                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
+sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
+                         load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
-sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
-                         load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
-
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\Encoding\\')
+# sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
+                        #  load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
 
 #%% Z-score the calciumdata: 
 for i in range(nSessions):
@@ -95,301 +93,190 @@ sessions = calc_stimresponsive_neurons(sessions,sbins)
 #%% Get signal as relative to psychometric curve for all sessions:
 sessions = noise_to_psy(sessions,filter_engaged=True)
 
-#%% #################### Compute encoding of variables in single neurons  ####################################
-
-ises = 0
-example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
-
-# get some responsive cells: 
-idx                 = np.nanmean(sessions[ises].respmat,axis=1)>1
-example_cell_ids    = (sessions[ises].celldata['cell_id'][idx]).to_numpy()
-
-#%% Show example neurons that are correlated either to the stimulus signal, lickresponse or to running speed:
-ises = 0
-# for iN in range(0,100):
-for iN in np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))[0]:
-    plot_snake_neuron_sortnoise(sessions[ises].stensor[iN,:,:],sbins,sessions[ises])
-    plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
-
-
-#%%
-# example_cell_ids = np.random.choice(sessions[0].celldata['cell_id'],size=8,replace=False)
-# example_cell_ids = ['LPE12385_2024_06_15_0_0126',
-# 'LPE12385_2024_06_15_0_0075']
-
-fig = plot_mean_activity_example_neurons(sessions[ises].stensor,sbins,sessions[ises],example_cell_ids)
-fig.savefig(os.path.join(savedir,'ExampleNeuronActivity_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
+#%% 
 
 
 
-
-# for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across sessions'):
 
 #%% 
 nspatbins   = len(sbins)
 # variables   = ['signal','lickresponse','runspeed','trialnumber']
 # nvars       = len(variables)
-version          ='v20'
-modelvars       = get_enc_predictors_from_modelversion(version)
+version          ='v6'
+modelvars       = get_dec_predictors_from_modelversion(version)
 nvars           = len(modelvars)
 
 kfold       = 5 # Define the number of folds for cross-validation
 # modelname   = 'Lasso' # Linear regression with Lasso (L1) regularization
-modelname   = 'Ridge' # Linear regression with Lasso (L1) regularization
+modelname   = 'LogisticRegression' # Logistic regression with Lasso (L1) regularization
 
 
 #%% Show cross-validation results (as a function of lambda)
-ises = 27
+ises = 1
 ses = sessions[ises]
 
-#Neuron selection
-# idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])[0]) #just one example cell
-# idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])) #a few example cells
-# idx_N = np.isin(ses.celldata['roi_name'],'V1') # #V1 cells:
-idx_N = ses.celldata['sig_MN']==1 # Responsive cells
-# idx_N = np.ones(len(ses.celldata),dtype=bool) # All cells
-
 #Trial selection
-# idx_T = ses.trialdata['engaged']==1
-idx_T = np.ones(len(ses.trialdata),dtype=bool)
+idx_T = ses.trialdata['engaged']==1
+# idx_T = np.ones(len(ses.trialdata),dtype=bool)
 
-y = ses.respmat[np.ix_(idx_N,idx_T)].T
 
-X,allvars   = get_enc_predictors(ses)               # get all predictors
-X           = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
-X           = X[idx_T,:]                     #get only trials of interest
+y        = ses.trialdata['lickResponse'].to_numpy()
+# y        = ses.trialdata['rewardGiven'].to_numpy()
 
-X,y,idx_nan         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+# y[ses.trialdata['stimcat'] != 'N'] = 0
 
-# X = np.stack((
-#               ses.trialdata['signal'][idx_T].to_numpy(),
-#               ses.trialdata['lickResponse'][idx_T].to_numpy(),
-#               ses.respmat_runspeed[0,idx_T],
-#               ses.trialdata['trialNumber'][idx_T]
-#               ), axis=1)
+X,allvars       = get_dec_predictors(ses)               # get all predictors
+X               = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
+X               = X[idx_T,:]                     #get only trials of interest
+y               = y[idx_T]
+X,y,idx_nan     = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
-# X,y,idx_nan = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+lam = find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False)
 
 # Find the optimal regularization strength (lambda)
 lambdas = np.logspace(-4, 4, 20)
 cv_scores = np.zeros((len(lambdas),))
 for ilambda, lambda_ in enumerate(lambdas):
-    model = getattr(sklearn.linear_model,modelname)(alpha=lambda_)
-    # model = ElasticNet(alpha=lambda_,l1_ratio=0.9)
-    scores = cross_val_score(model, X, y, cv=kfold, scoring='r2')
+    model = LOGR(penalty='l1', solver='liblinear', C=lambda_) # LOGR(C=optimal_lambda)
+
+    scores = cross_val_score(model, X, y, cv=kfold, scoring='accuracy')
     # cv_scores[ilambda] = np.mean(scores)
     cv_scores[ilambda] = np.median(scores)
 optimal_lambda = lambdas[np.argmax(cv_scores)]
 print('Optimal lambda for session %d: %0.4f' % (ises, optimal_lambda))
 
-model = getattr(sklearn.linear_model,modelname)(alpha=optimal_lambda)
+model = LOGR(penalty='l1', solver='liblinear', C=optimal_lambda) 
 
-print(np.nanmean(cross_val_score(model, X, y, cv=kfold, scoring='r2')))
+# print(np.nanmean(cross_val_score(model, X, y, cv=kfold, scoring='r2')))
 
 fig,ax = plt.subplots(1,1,figsize=(3,3))
 plt.plot(lambdas,cv_scores)
 ax.set_xscale('log')
 ax.set_xlabel('Lambda')
 ax.set_ylabel('CV R2')
-fig.savefig(os.path.join(savedir,'Lambda_vs_CrossValR2_%s.png' % (sessions[ises].sessiondata['session_id'][0])), format = 'png',bbox_inches='tight')
+# fig.savefig(os.path.join(savedir,'Lambda_vs_CrossValR2_%s.png' % (sessions[ises].sessiondata['session_id'][0])), format = 'png',bbox_inches='tight')
 
 #%%
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-# modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
-modelname       = 'Ridge'
+modelname       = 'LOGR' # Linear regression with Lasso (L1) regularization
+scoring_type    = 'accuracy_score'
+scoring_type    = 'balanced_accuracy_score'
 scoring_type    = 'r2_score'
+# kfold       = 5 # Define the number of folds for cross-validation
 lam             = 0.05
 lam             = None
-version          ='v20'
-N               = len(celldata)
-modelvars       = get_enc_predictors_from_modelversion(version)
-nvars           = len(modelvars)
 
-weights         = np.full((N,nspatbins,nvars),np.nan)
-r2_cv           = np.full((N,nspatbins),np.nan)
-r2_cv_var       = np.full((N,nspatbins,nvars),np.nan)
+#%% COMPARE MODEL VERSIONS
+versions    = np.array(['v1','v2','v3','v4','v5','v6','v7','v8','v9','v10','v11','v12','v13','v14','v15']) 
+versions    = np.array(['v1','v2','v3','v4','v5','v6','v7','v8','v9']) 
+versions    = np.array(['v%d' % i for i in range(1,22)])
+versions    = np.array(['v%d' % i for i in [6,28,29,30,31]])
+versions    = np.array(['v%d' % i for i in range(23,32)])
+versions    = np.array(['v%d' % i for i in range(1,32)])
+
+#%% Run cross-validation for the different model versions
+error_cv       = np.full((nSessions,len(versions)),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
-    idx_N_ses = np.isin(celldata['session_id'],ses.sessiondata['session_id'][0])
-    
-    #Neuron selection
-    # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])[0]) #just one example cell
-    # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])) #a few example cells
-    # idx_N = np.isin(ses.celldata['roi_name'],'V1') # #V1 cells:
-    # idx_N = np.logical_or(ses.celldata['sig_N'],ses.celldata['sig_M']) # Responsive cells
-    idx_N = np.ones(len(ses.celldata),dtype=bool) # All cells
+    idx_T = ses.trialdata['engaged']==1
+    y_all        = ses.trialdata['rewardGiven'].to_numpy()
+    X_all,allvars       = get_dec_predictors(ses)               # get all predictors
+    for iver,version in enumerate(versions):
+        modelvars       = get_dec_predictors_from_modelversion(version,nneuraldims=10)
+        nvars           = len(modelvars)
+        X               = X_all[:,np.isin(allvars,modelvars)] #get only predictors of interest
+        X               = X[idx_T,:]                     #get only trials of interest
+        y               = y_all[idx_T]
+        X,y,idx_nan     = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+        error_cv[ises,iver],_,_,_ = my_decoder_wrapper(X,y,model_name=modelname,kfold=kfold,lam=lam,subtract_shuffle=True,
+                          scoring_type=scoring_type,norm_out=True)
 
-    #Trial selection
-    # idx_T = ses.trialdata['engaged']==1
-    idx_T = np.ones(len(ses.trialdata),dtype=bool)
-
-    r2_cv[idx_N_ses,:], weights[idx_N_ses,:,:], _, r2_cv_var[idx_N_ses,:,:] = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,scoring_type=scoring_type,crossval=True)
-
-
-#%% Some variables that determine coloring and labeling for plots
-labeled     = ['unl','lab']
-nlabels     = 2
-areas       = ['V1','PM','AL','RSP']	
-nareas      = len(areas)
-clrs_vars   = sns.color_palette('inferno', nvars)
-clrs_vars   = sns.color_palette('tab10', nvars)
-clrs_areas  = get_clr_areas(areas)
-clrs_labeled= get_clr_labeled()
-
-#%% Show the crossvalidated performance across areas:
-fig,axes    = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2),sharey=True,sharex=True)
-for ilab,label in enumerate(labeled):
-    for iarea, area in enumerate(areas):
-        ax = axes[ilab,iarea]
-        idx = np.all((ses.celldata['roi_name']==area, ses.celldata['labeled']==label), axis=0)
-        idx = np.all((celldata['roi_name']==area, celldata['labeled']==label), axis=0)
-        if np.sum(idx) > 5:
-            ax.plot(sbins,np.nanmean(r2_cv[idx,:],axis=0),color='k',linewidth=2)
-            # plt.plot(sbins,r2_cv[idx,iarea],color=clrs_vars[ivar],linewidth=1)
-            # for ivar,var in enumerate(variables):
-                # ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
-        add_stim_resp_win(ax)
-        ax.axhline(0,color='k',linestyle='--',linewidth=1)
-        ax.set_xlim([-80,60])
-        if ilab == 0:
-            ax.set_title(area)
-        if ilab == 1 and iarea == 1:
-            ax.set_xlabel('Position relative to stim (cm)')
-        if iarea==0:
-            ax.set_ylabel('cvR2')
-        # if iarea==0 and ilab == 0:
-        #     ax.legend(frameon=False,fontsize=6)
+#%% Plot the decoding performance for the different model versions
+clr_palette = sns.color_palette('husl',n_colors=len(versions))
+fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.7,3))
+# sns.lineplot(data=r2_cv,palette=sns.color_palette('husl',n_colors=len(versions)))
+sns.barplot(data=error_cv,palette=clr_palette,ax=ax)
+ax.set_xlabel('Model version')
+ax.set_xticks(np.arange(len(versions)),versions.tolist())
+# ax.set_xticks(np.arange(len(versions)),[get_dec_modelname(version) for version in versions],fontsize=8,rotation=45)
+for i,patch in enumerate(ax.patches):
+    ax.text(patch.get_x() + patch.get_width()/2,0.02,
+            '{:.3f}'.format(np.nanmean(error_cv[:,i])),ha='center',va='center',fontsize=8)
+ax.set_ylabel('Decoding performance \n(%s)\n(shuffle-subtracted)' % scoring_type)
+ax.set_title('Decoding performance for different model versions')
 plt.tight_layout()
-# plt.savefig(os.path.join(savedir, 'EncodingModel_cvR2_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
-plt.savefig(os.path.join(savedir, 'EncodingModel_%s_cvR2_Areas_Labels_%dsessions.png') % (version,nSessions), format='png')
+# ax.set_position([ax.get_position().x0,ax.get_position().y0,ax.get_position().width,ax.get_position().height])
+# fig.tight_layout()
+# fig.savefig(os.path.join(savedir, 'DecodingPerformance_ModelVersions_%dsessions.png') % (nSessions), format='png')
 
-
-#%% Show the encoding weights across areas:
-fig,axes    = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2),sharey=True,sharex=True)
-for ilab,label in enumerate(labeled):
-    for iarea, area in enumerate(areas):
-        ax = axes[ilab,iarea]
-        # idx = np.all((ses.celldata['roi_name']==area, ses.celldata['labeled']==label), axis=0)
-        idx = np.all((celldata['roi_name']==area, celldata['labeled']==label), axis=0)
-        if np.sum(idx) > 5:
-            # ax.plot(sbins,np.nanmean(r2_cv[idx,:],axis=0),color='k',linewidth=2)
-            # plt.plot(sbins,r2_cv[idx,iarea],color=clrs_vars[ivar],linewidth=1)
-            for ivar,var in enumerate(modelvars):
-                ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
-                # ax.plot(sbins,np.nanmean(weights[idx,:,ivar],axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
-        add_stim_resp_win(ax)
-        ax.axhline(0,color='k',linestyle='--',linewidth=1)
-        ax.set_xlim([-80,60])
-        if ilab == 0:
-            ax.set_title(area)
-        if ilab == 1 and iarea == 1:
-            ax.set_xlabel('Position relative to stim (cm)')
-        if iarea==0:
-            ax.set_ylabel('|weights|')
-        if iarea==0 and ilab == 0:
-            ax.legend(frameon=False,fontsize=6)
+#%% Make a legend where for each version is displayed which model variables are included in the model
+fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.1,2))
+legend_str = []
+for iver,version in enumerate(versions):
+    plt.plot(0,0,color=clr_palette[iver],label=version) #,sns.barplot(data=r2_cv,palette=sns.color_palette('husl',n_colors=len(versions)),ax=ax)
+    legend_str.append('%s: %s' % (version,get_dec_modelname(version)))
+ax.axis('off')
+ax.legend(legend_str,loc='upper right',bbox_to_anchor=(0, 0.9),ncol=np.ceil(len(versions)/8),fontsize=12,frameon=False)
 plt.tight_layout()
-# plt.savefig(os.path.join(savedir, 'EncodingWeights_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
-plt.savefig(os.path.join(savedir, 'EncodingWeights_%s_Areas_Labels_%dsessions.png') %  (version,nSessions), format='png')
+fig.savefig(os.path.join(savedir, 'Legend_ModelName_Versions.png'), format='png',bbox_inches='tight')
 
+#%% 
+fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.7,3))
+# Make a legend where for each version is displayed which model variables are included in the model
+legend_str = []
+for iver,version in enumerate(versions):
+    # for ivar,var in enumerate(variables):
+    plt.plot(0,0,color=clr_palette[iver],label=version) #,sns.barplot(data=r2_cv,palette=sns.color_palette('husl',n_colors=len(versions)),ax=ax)
 
-#%% Show the encoding cvR2 per variable across areas:
-fig,axes    = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2),sharey=True,sharex=True)
-for ilab,label in enumerate(labeled):
-    for iarea, area in enumerate(areas):
-        ax = axes[ilab,iarea]
-        # idx = np.all((ses.celldata['roi_name']==area, ses.celldata['labeled']==label), axis=0)
-        idx = np.all((celldata['roi_name']==area, celldata['labeled']==label), axis=0)
-        if np.sum(idx) > 5:
-            # ax.plot(sbins,np.nanmean(r2_cv[idx,:],axis=0),color='k',linewidth=2)
-            # plt.plot(sbins,r2_cv[idx,iarea],color=clrs_vars[ivar],linewidth=1)
-            for ivar,var in enumerate(modelvars):
-                # ax.plot(sbins,np.nanmean(np.abs(weights[idx,:,ivar]),axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
-                ax.plot(sbins,np.nanmean(r2_cv_var[idx,:,ivar],axis=0),color=clrs_vars[ivar],linewidth=2,label=var)
-        add_stim_resp_win(ax)
-        ax.axhline(0,color='k',linestyle='--',linewidth=1)
-        ax.set_xlim([-80,60])
-        if ilab == 0:
-            ax.set_title(area)
-        if ilab == 1 and iarea == 1:
-            ax.set_xlabel('Position relative to stim (cm)')
-        if iarea==0 and ilab == 0:
-            ax.set_ylabel(u'\u0394 R2 (cv)\n(with - without variable)')
-        if iarea==0 and ilab == 0:
-            ax.legend(frameon=False,fontsize=6)
+    modelvars   = get_dec_predictors_from_modelversion(version)
+    modelvars_str = ',\n'.join(modelvars)
+    legend_str.append('%s: %s' % (version,modelvars_str))
+ax.axis('off')
+ax.legend(legend_str,loc='upper right',bbox_to_anchor=(0, 0.5),ncol=np.ceil(len(versions)/3),fontsize=9,frameon=False)
 plt.tight_layout()
-# plt.savefig(os.path.join(savedir, 'EncodingWeights_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
-plt.savefig(os.path.join(savedir, 'EncodingModel_cvR2_perVar_%s_Areas_Labels_%dsessions.png') %  (version,nSessions), format='png')
-
-#%% Show correlation between encoding weights per area: 
-idx_respwin = (sbins>=-5) & (sbins<=20)
-for iarea, area in enumerate(areas):
-    # data = weights[np.ix_(ses.celldata['roi_name']==area,idx_respwin,np.ones(nvars).astype(bool))].mean(axis=1).T
-    data = weights[np.ix_(celldata['roi_name']==area,idx_respwin,np.ones(nvars).astype(bool))].mean(axis=1).T
-    fig = sns.pairplot(pd.DataFrame(data.T,columns=modelvars),diag_kind="hist",height=1.5,plot_kws={"s": 3, "alpha": 0.5, "color": "k"})
-    plt.suptitle(area)
-    fig.tight_layout()
-    # plt.savefig(os.path.join(savedir, 'EncodingWeights_pairplot_%s_%s.png') % (area,sessions[ises].sessiondata['session_id'][0]), format='png')
-    plt.savefig(os.path.join(savedir, 'EncodingWeights_pairplot_%s_%dsessions.png') % (area,nSessions), format='png')
-
-#%% Show correlation between encoding weights per area: 
-idx_respwin = (sbins>=-5) & (sbins<=20)
-fig,axes = plt.subplots(2,2,figsize=(7,6))
-for iarea, area in enumerate(areas):
-    ax = axes[iarea//2,iarea%2]
-    # data = weights[np.ix_(ses.celldata['roi_name']==area,idx_respwin,np.ones(nvars).astype(bool))].mean(axis=1).T
-    data = weights[np.ix_(celldata['roi_name']==area,idx_respwin,np.ones(nvars).astype(bool))].mean(axis=1).T
-    df = pd.DataFrame(data.T,columns=modelvars)
-    # sns.heatmap(df.corr(),vmin=-1,vmax=1,cmap="vlag",xticklabels=variables,yticklabels=variables,ax=ax)
-    sns.heatmap(df.corr(),vmin=-0.5,vmax=0.5,cmap="vlag",xticklabels=modelvars,yticklabels=modelvars,ax=ax)
-    ax.set_title(area)
-fig.tight_layout()
-# fig.savefig(os.path.join(savedir, 'EncodingWeights_corrheatmap_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format='png')
-fig.savefig(os.path.join(savedir, 'EncodingWeights_%s_corrheatmap_%dsessions.png') % (version,nSessions), format='png')
-
-#%%%%                
+# fig.savefig(os.path.join(savedir, 'Legend_ModelVersions.png'), format='png',bbox_inches='tight')
 
 
-
-
-
-
-#%%%%%%%%%%%%%%
-celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
-
-modelname       = 'Lasso' # Linear regression with Lasso (L1) regularization
+#%% COMPARE MODEL VERSIONS
+versions    = np.array(['v6','v31']) 
 scoring_type    = 'r2_score'
-lam             = 0.05
-lam             = None
-version          ='v14'
-N               = len(celldata)
-modelvars       = get_enc_predictors_from_modelversion(version)
-nvars           = len(modelvars)
+scoring_type    = 'accuracy_score'
 
-weights         = np.full((N,nvars),np.nan)
-r2_cv           = np.full(N,np.nan)
-r2_cv_var       = np.full((N,nvars),np.nan)
+#%% Run cross-validation for the different model versions
+error_cv       = np.full((nSessions,len(versions)),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
-    idx_N_ses = np.isin(celldata['session_id'],ses.sessiondata['session_id'][0])
-    
-    #Neuron selection
-    # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])[0]) #just one example cell
-    # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])) #a few example cells
-    # idx_N = np.isin(ses.celldata['roi_name'],'V1') # #V1 cells:
-    # idx_N = np.logical_or(ses.celldata['sig_MN']) # Responsive cells
-    idx_N = np.ones(len(ses.celldata),dtype=bool) # All cells
+    idx_T = ses.trialdata['engaged']==1
+    y_all        = ses.trialdata['rewardGiven'].to_numpy()
+    X_all,allvars       = get_dec_predictors(ses)               # get all predictors
+    for iver,version in enumerate(versions):
+        modelvars       = get_dec_predictors_from_modelversion(version,nneuraldims=10)
+        nvars           = len(modelvars)
+        X               = X_all[:,np.isin(allvars,modelvars)] #get only predictors of interest
+        X               = X[idx_T,:]                     #get only trials of interest
+        y               = y_all[idx_T]
+        X,y,idx_nan     = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+        error_cv[ises,iver],_,_,_ = my_decoder_wrapper(X,y,model_name=modelname,kfold=kfold,lam=lam,subtract_shuffle=False,
+                          scoring_type=scoring_type,norm_out=False)
 
-    #Trial selection
-    # idx_T = ses.trialdata['engaged']==1
-    idx_T = np.ones(len(ses.trialdata),dtype=bool)
+#%% Plot
 
-    r2_cv[idx_N_ses], weights[idx_N_ses,:], _, r2_cv_var[idx_N_ses,:] =  enc_model_stimwin_wrapper(ses,idx_N,idx_T,version=version,modelname=modelname,optimal_lambda=lam,kfold=5,
-                                                scoring_type =scoring_type,crossval=True,subtr_shuffle=False)
-    
-    # r2_cv[idx_N_ses], weights[idx_N_ses,:], _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,modelname=modelname,optimal_lambda=None,kfold=5,scoring_type = 'r2',crossval=True)
-    # g, h, _ = enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,modelname=modelname,optimal_lambda=None,kfold=5,scoring_type = 'r2',crossval=True)
+fig,ax = plt.subplots(1,1,figsize=(4,4))
+sns.scatterplot(x=error_cv[:,0],y=error_cv[:,1],ax=ax)
+ax.plot([0,1],[0,1],color='k',lw=0.5)
+ax.set_xlim([0,1])
+ax.set_ylim([0,1])
+ax.set_xlabel('External signal (%s)' % scoring_type)
+ax.set_ylabel('Internal signal (%s)\n(V1, PM, AL, RSP)' % scoring_type)
+ax.set_title('Comparison of model versions')
+plt.tight_layout()
+# fig.savefig(os.path.join(savedir, 'ErrorRateComparison_v6v31_%dsessions.png') % (nSessions), format='png',bbox_inches='tight')
+
+
+
+
+
 
 
 #%% 
@@ -458,7 +345,7 @@ fig.savefig(os.path.join(savedir, 'EncodingWeights_StimWin_corrheatmap_model%s_%
 
 
 #%% 
-modelvars       = get_enc_predictors_from_modelversion(version)
+modelvars       = get_predictors_from_modelversion(version)
 nvars           = len(modelvars)
 
 corrmat         = np.full((nSessions,nvars,nvars),np.nan)
@@ -471,7 +358,7 @@ for ises,ses in enumerate(sessions):
     X           = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
     X           = X[idx_T,:]                     #get only trials of interest
 
-    X,y,idx_nan         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+    X,y         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
     df = pd.DataFrame(data=X,columns=modelvars)
     corrmat[ises,:,:] = df.corr().values
@@ -498,8 +385,6 @@ plt.savefig(os.path.join(savedir, 'EncodingMOdel_Predictors_corrheatmap_%dsessio
 from sklearn.linear_model import PoissonRegressor
 from sklearn.metrics import mean_squared_error
 
-# LASSO AND POISSON PERFORM EQUALLY ON MSE, RIDGE WINS
-# LASSO WINS ON R2
 ses = sessions[28]
 # nexcell = 50
 # idx_N = np.isin(ses.celldata['cell_id'],get_example_cells(ses.sessiondata['session_id'][0])[nexcell])
@@ -509,7 +394,7 @@ ses = sessions[28]
 
 idx_T       = np.ones(len(ses.trialdata),dtype=bool)
 
-modelvars   = get_enc_predictors_from_modelversion(version='v8')
+modelvars   = get_predictors_from_modelversion(version='v8')
 
 y           = ses.respmat[np.ix_(idx_N,idx_T)].T
 
@@ -517,7 +402,7 @@ X,allvars   = get_enc_predictors(ses)               # get all predictors
 X           = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
 X           = X[idx_T,:]                     #get only trials of interest
 
-X,y,idx_nan         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+X,y         = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
 modelnames = ['Lasso','Ridge','PoissonRegressor']
 scoring_type = 'neg_mean_squared_error'
@@ -661,7 +546,6 @@ plt.tight_layout()
 fig.savefig(os.path.join(savedir, 'EncodingPerformance_ModelVersions_%dsessions.png') % (nSessions), format='png')
 # fig.savefig(os.path.join(savedir, 'EncodingPerformance_ResponsiveCells_ModelVersions_%dsessions.png') % (nSessions), format='png')
 
-# from utils.regress_lib import get_enc_predictors_from_modelversion
 fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.7,3))
 # Make a legend where for each version is displayed which model variables are included in the model
 legend_str = []
@@ -669,7 +553,7 @@ for iver,version in enumerate(versions):
     # for ivar,var in enumerate(variables):
     plt.plot(0,0,color=clr_palette[iver],label=version) #,sns.barplot(data=r2_cv,palette=sns.color_palette('husl',n_colors=len(versions)),ax=ax)
 
-    modelvars   = get_enc_predictors_from_modelversion(version)
+    modelvars   = get_predictors_from_modelversion(version)
     modelvars_str = ',\n'.join(modelvars)
     legend_str.append('%s: %s' % (version,modelvars_str))
 ax.axis('off')
@@ -693,7 +577,7 @@ fig.savefig(os.path.join(savedir, 'Legend_ModelVersions.png'), format='png',bbox
 #             ses.runPSTH[idx_T,ibin],
 #             ses.trialdata['trialNumber'][idx_T]), axis=1)
 
-#         X,y,idx_nan = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+#         X,y = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
 #         # Train a linear regression model on the training data with regularization
 #         model = Lasso(alpha=optimal_lambda)

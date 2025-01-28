@@ -11,6 +11,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn import svm as SVM
 from sklearn.metrics import accuracy_score, r2_score, explained_variance_score
 from sklearn.model_selection import cross_val_score
+from sklearn.decomposition import PCA
 
 from utils.dimreduc_lib import *
 
@@ -143,7 +144,7 @@ def prep_Xpredictor(X,y):
     X[:,np.all(np.isnan(X),axis=0)] = 0
     X           = np.nan_to_num(X,nan=np.nanmean(X,axis=0,keepdims=True))
     y           = np.nan_to_num(y,nan=np.nanmean(y,axis=0,keepdims=True))
-    return X,y
+    return X,y,idx_nan
 
 # def prep_Xpredictor(X,y):
 #     X           = X[:,~np.all(np.isnan(X),axis=0)] #
@@ -155,7 +156,7 @@ def prep_Xpredictor(X,y):
 #     X           = np.nan_to_num(X,nan=np.nanmean(X,axis=0,keepdims=True))
 #     return X,y
 
-def get_predictors(ses,ibin=0):
+def get_enc_predictors(ses,ibin=0):
     X           = np.empty([len(ses.trialdata), 0])
     varnames    = np.array([], dtype=object)
     X           = np.c_[X, np.atleast_2d(ses.trialdata['trialNumber'].to_numpy()).T]
@@ -215,10 +216,10 @@ def get_predictors(ses,ibin=0):
     varnames    = np.append(varnames, ['reward'])
     X           = np.c_[X, np.atleast_2d(ses.trialdata['nLicks'].to_numpy()).T]
     varnames    = np.append(varnames, ['nlicks'])
-
+    
     return X,varnames
 
-def get_predictors_from_modelversion(version='v1'):
+def get_enc_predictors_from_modelversion(version='v1'):
     modelvars_dict = {
             'v1': ['trialnumber'],
             'v2': ['trialnumber','signal_raw'],
@@ -235,9 +236,7 @@ def get_predictors_from_modelversion(version='v1'):
             'v13': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun','signal_maxxhit'],
             'v14': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun','reward'],
             'v15': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun','nlicks'],
-
             'v20': ['trialnumber','signal_psy_noise','stimcat_M','runbin','signalxrunbin','reward']
-
             }
 
 
@@ -284,7 +283,7 @@ def enc_model_stimwin_wrapper(ses,idx_N,idx_T,version='v1',modelname='Lasso',opt
     assert np.sum(idx_T) > 50, 'Not enough trials in session %d' % ses.sessiondata['session_id'][0]
     assert np.sum(idx_N) > 1, 'Not enough neurons in session %d' % ses.sessiondata['session_id'][0]
 
-    modelvars   = get_predictors_from_modelversion(version)
+    modelvars   = get_enc_predictors_from_modelversion(version)
 
     V           = len(modelvars)
     K           = len(ses.trialdata)
@@ -297,7 +296,7 @@ def enc_model_stimwin_wrapper(ses,idx_N,idx_T,version='v1',modelname='Lasso',opt
 
     y           = ses.respmat[np.ix_(idx_N,idx_T)].T
 
-    X,allvars   = get_predictors(ses)               # get all predictors
+    X,allvars   = get_enc_predictors(ses)               # get all predictors
     X           = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
     X           = X[idx_T,:]                     #get only trials of interest
    
@@ -375,7 +374,6 @@ def enc_model_stimwin_wrapper(ses,idx_N,idx_T,version='v1',modelname='Lasso',opt
 
 
 
-
 def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Lasso',optimal_lambda=None,kfold=5,scoring_type = 'r2',
                               crossval=True,subtr_shuffle=False):
     """
@@ -419,12 +417,12 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
     assert np.sum(idx_T) > 50, 'Not enough trials in session %d' % ses.sessiondata['session_id'][0]
     assert np.sum(idx_N) > 1, 'Not enough neurons in session %d' % ses.sessiondata['session_id'][0]
 
-    modelvars   = get_predictors_from_modelversion(version)
+    modelvars   = get_enc_predictors_from_modelversion(version)
     
     if optimal_lambda is None:
         y           = ses.respmat[np.ix_(idx_N,idx_T)].T
 
-        X,allvars   = get_predictors(ses)               # get all predictors
+        X,allvars   = get_enc_predictors(ses)               # get all predictors
         X           = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
         X           = X[idx_T,:]                     #get only trials of interest
 
@@ -458,7 +456,7 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
     for ibin, bincenter in enumerate(sbins):    # Loop over each spatial bin
         y = ses.stensor[np.ix_(idx_N,idx_T,[ibin])].squeeze().T # Get the neural response data for this bin
 
-        X,allvars   = get_predictors(ses,ibin)               # get all predictors
+        X,allvars   = get_enc_predictors(ses,ibin)               # get all predictors
         X           = X[:,np.isin(allvars,modelvars)] #get only predictors of interest
         X           = X[idx_T,:]                     #get only trials of interest
     
@@ -520,3 +518,220 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
             weights[idx_N,ibin,:] = model.coef_
     
     return error, weights, y_hat, error_var
+
+
+
+
+def get_dec_predictors(ses,ibin=0,nneuraldims=10):
+    X           = np.empty([len(ses.trialdata), 0])
+    varnames    = np.array([], dtype=object)
+    X           = np.c_[X, np.atleast_2d(ses.trialdata['trialNumber'].to_numpy()).T]
+    varnames    = np.append(varnames, ['trialnumber'])
+    X           = np.c_[X, np.atleast_2d(ses.trialdata['signal'].to_numpy()).T]
+    varnames    = np.append(varnames, ['signal_raw'])
+    temp        = copy.deepcopy(ses.trialdata['signal_psy'].to_numpy())
+    temp[ses.trialdata['signal'] == 0] = -3
+    temp[ses.trialdata['signal'] == 100] = 10
+    X           = np.c_[X, np.atleast_2d(temp).T]
+    varnames    = np.append(varnames, ['signal_psy'])
+    temp        = copy.deepcopy(ses.trialdata['signal_psy'].to_numpy())
+    temp[ses.trialdata['signal'] == 0] = -3
+    temp[ses.trialdata['signal'] == 100] = -3
+    X           = np.c_[X, np.atleast_2d(temp).T]
+    varnames    = np.append(varnames, ['signal_psy_noise'])
+    X           = np.c_[X, np.atleast_2d((ses.trialdata['stimcat'] == 'M').to_numpy()).T]
+    varnames    = np.append(varnames, ['stimcat_M'])
+    X           = np.c_[X, np.atleast_2d((ses.trialdata['stimcat'] == 'N').to_numpy()).T]
+    varnames    = np.append(varnames, ['stimcat_N'])
+    # X           = np.c_[X, np.atleast_2d(ses.trialdata['lickResponse'].to_numpy()).T]
+    # varnames    = np.append(varnames, ['lickresponse'])
+    # temp        = ses.trialdata['lickResponse'].to_numpy() * 2 - 1
+    # temp[ses.trialdata['stimcat'] != 'N'] = 0
+    # X           = np.c_[X, np.atleast_2d(temp).T]
+    # varnames    = np.append(varnames, ['lickresponse_noise'])
+    # temp        = ses.trialdata['lickResponse'].to_numpy() * 2 - 1
+    # temp[ses.trialdata['stimcat'] != 'N'] = 0
+    # temp[ses.trialdata['engaged'] != 1] = 0
+    # X           = np.c_[X, np.atleast_2d(temp).T]
+    # varnames    = np.append(varnames, ['lickresponse_noise_eng'])
+    # temp        = ses.trialdata['lickResponse'].to_numpy() * 2 - 1
+    # temp[ses.trialdata['engaged'] != 1] = 0
+    # X           = np.c_[X, np.atleast_2d(temp).T]
+    # varnames    = np.append(varnames, ['lickresponse_eng'])
+    X           = np.c_[X, np.atleast_2d(ses.respmat_runspeed).T]
+    varnames    = np.append(varnames, ['runspeed'])
+    X           = np.c_[X, np.atleast_2d(ses.runPSTH[:,ibin]).T]
+    varnames    = np.append(varnames, ['runbin'])
+    X           = np.c_[X, np.atleast_2d(ses.trialdata['engaged'].to_numpy()).T]
+    varnames    = np.append(varnames, ['engaged'])
+    X           = np.c_[X, np.atleast_2d(np.random.normal(0,1,len(ses.trialdata))).T]
+    varnames    = np.append(varnames, ['random'])
+    X           = np.c_[X, np.atleast_2d(ses.respmat_runspeed.flatten() * ses.trialdata['signal'].to_numpy()).T]
+    varnames    = np.append(varnames, ['signalxrun'])
+    X           = np.c_[X, np.atleast_2d(-ses.respmat_runspeed.flatten() * ses.trialdata['signal'].to_numpy()).T]
+    varnames    = np.append(varnames, ['signalxruninv'])
+    X           = np.c_[X, np.atleast_2d(ses.runPSTH[:,ibin].flatten() * ses.trialdata['signal'].to_numpy()).T]
+    varnames    = np.append(varnames, ['signalxrunbin'])
+    X           = np.c_[X, np.atleast_2d(-ses.runPSTH[:,ibin].flatten() * ses.trialdata['signal'].to_numpy()).T]
+    varnames    = np.append(varnames, ['signalxrunbininv'])
+    X           = np.c_[X, np.atleast_2d(ses.trialdata['lickResponse'].to_numpy() * ses.trialdata['signal_psy'].to_numpy()).T]
+    varnames    = np.append(varnames, ['signal_psyxhit'])
+    X           = np.c_[X, np.atleast_2d(ses.trialdata['lickResponse'].to_numpy() * ses.trialdata['stimcat'] == 'M').T]
+    varnames    = np.append(varnames, ['signal_maxxhit'])
+    X           = np.c_[X, np.atleast_2d(ses.trialdata['rewardGiven'].to_numpy()).T]
+    varnames    = np.append(varnames, ['reward'])
+    X           = np.c_[X, np.atleast_2d(ses.trialdata['nLicks'].to_numpy()).T]
+    varnames    = np.append(varnames, ['nlicks'])
+
+    #Add individual cells neural data:
+    idx_N       = np.ones(len(ses.celldata), dtype=bool)
+    X           = np.c_[X, ses.respmat[idx_N,:].T]
+    # varnames    = np.append(varnames, ses.celldata['cell_id'][idx_N])
+    varnames    = np.append(varnames, np.repeat('allcells',len(ses.celldata['cell_id'][idx_N])))
+    
+    areas = ['V1', 'PM', 'AL', 'RSP']
+    for iarea,area in enumerate(areas):
+        idx_N       = ses.celldata['roi_name']==area
+        X           = np.c_[X, ses.respmat[idx_N,:].T]
+        varnames    = np.append(varnames, np.repeat(area,len(ses.celldata['cell_id'][idx_N])))
+
+    # Add first nPCs from all neurons, or individual areas:
+    idx_N       = np.ones(len(ses.celldata), dtype=bool)
+    pcadata     = ses.respmat[idx_N,:].T
+    pcadata[np.isnan(pcadata)] = 0
+    X           = np.c_[X, PCA(n_components=nneuraldims).fit_transform(pcadata)]
+    varnames    = np.append(varnames, ['PC{}_all'.format(i) for i in np.arange(nneuraldims)])
+    
+    areas = ['V1', 'PM', 'AL', 'RSP']
+    for iarea,area in enumerate(areas):
+        idx_N = ses.celldata['roi_name']==area
+        pcadata     = ses.respmat[idx_N,:].T
+        pcadata[np.isnan(pcadata)] = 0
+        X           = np.c_[X, PCA(n_components=nneuraldims).fit_transform(pcadata)]
+        varnames    = np.append(varnames, ['PC{}_{}'.format(i,area) for i in np.arange(nneuraldims)])
+
+    for iarea,area in enumerate(areas):
+        idx_N           = ses.celldata['roi_name']==area
+        idx_T           = np.ones(len(ses.trialdata), dtype=bool)
+        weights,proj    = get_signal_dim(ses,idx_T,idx_N)
+
+        X               = np.c_[X, proj]
+        varnames        = np.append(varnames, 'SS_signal_{}'.format(area))
+
+    for iarea,area in enumerate(areas):
+        idx_N           = ses.celldata['roi_name']==area
+        idx_T           = np.isin(ses.trialdata['stimcat'],['C','M'])
+        weights,proj    = get_signal_dim(ses,idx_T,idx_N)
+
+        X               = np.c_[X, proj]
+        varnames        = np.append(varnames, 'SS_signal_max_{}'.format(area))
+
+    for iarea,area in enumerate(areas):
+        idx_N           = ses.celldata['roi_name']==area
+        idx_T           = ses.trialdata['stimcat'] == 'N'
+        weights,proj    = get_signal_dim(ses,idx_T,idx_N)
+
+        X               = np.c_[X, proj]
+        varnames        = np.append(varnames, 'SS_signal_noise_{}'.format(area))
+
+    assert np.shape(X)[1] == np.shape(varnames)[0], 'X and varnames must have the same number of columns'
+
+    return X,varnames
+
+def get_signal_dim(ses,idx_T,idx_N):
+    # idx_N is the subset of cells used to estimate the signal dimension
+    # idx_T is the subset of trials used to estimate the signal dimension
+    # the output is the projection of all trials on the signal dimension
+
+    model_name      = 'Ridge'
+    scoring_type    = 'r2_score'
+    lam             = None
+    kfold           = 5
+
+    X_all  = ses.respmat[idx_N,:].T
+    X      = ses.respmat[np.ix_(idx_N,idx_T)].T
+    y      = ses.trialdata['signal'][idx_T]
+
+    X,y,idx_nan = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+    
+    _,weights,_,_ = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,
+                                                scoring_type=scoring_type,norm_out=False,subtract_shuffle=False) 
+    X_all = zscore(X_all,axis=0,nan_policy='omit')
+    proj = np.dot(X_all,weights)
+    
+    return weights,proj
+
+
+def get_dec_predictors_from_modelversion(version='v1',nneuraldims=10):
+    modelvars_dict = {
+            'v1': ['trialnumber'],
+            'v2': ['trialnumber','signal_raw'],
+            'v3': ['trialnumber','signal_psy'],
+            'v4': ['trialnumber','stimcat_M'],
+            'v5': ['trialnumber','stimcat_N'],
+            'v6': ['trialnumber','signal_psy_noise','stimcat_M'],
+            'v7': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'],
+            'v8': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun'],
+            'v9': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','PC1_all'],
+            'v10': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'] + ['PC{}_{}'.format(i,'all') for i in np.arange(nneuraldims)],
+            'v11': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'] + ['PC{}_{}'.format(i,'V1') for i in np.arange(nneuraldims)],
+            'v12': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'] + ['PC{}_{}'.format(i,'PM') for i in np.arange(nneuraldims)],
+            'v13': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'] + ['PC{}_{}'.format(i,'AL') for i in np.arange(nneuraldims)],
+            'v14': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'] + ['PC{}_{}'.format(i,'RSP') for i in np.arange(nneuraldims)],
+            'v15': ['trialnumber','signal_psy_noise','stimcat_M','runspeed', 'SS_signal_V1'],
+            'v16': ['trialnumber','signal_psy_noise','stimcat_M','runspeed', 'SS_signal_PM'],
+            'v17': ['trialnumber','signal_psy_noise','stimcat_M','runspeed', 'SS_signal_AL'],
+            'v18': ['trialnumber','signal_psy_noise','stimcat_M','runspeed', 'SS_signal_RSP'],
+            'v19': ['trialnumber','signal_psy_noise','stimcat_M','runspeed', 'SS_signal_noise_V1'],
+            'v20': ['trialnumber','signal_psy_noise','stimcat_M','runspeed', 'SS_signal_noise_PM'],
+            'v21': ['trialnumber','signal_psy_noise','stimcat_M','runspeed', 'SS_signal_noise_AL'],
+            'v22': ['trialnumber','signal_psy_noise','stimcat_M','runspeed', 'SS_signal_noise_RSP'],
+            'v23': ['PC{}_{}'.format(i,'all') for i in np.arange(nneuraldims)],
+            'v24': ['PC{}_{}'.format(i,'V1') for i in np.arange(nneuraldims)],
+            'v25': ['PC{}_{}'.format(i,'PM') for i in np.arange(nneuraldims)],
+            'v26': ['PC{}_{}'.format(i,'AL') for i in np.arange(nneuraldims)],
+            'v27': ['PC{}_{}'.format(i,'RSP') for i in np.arange(nneuraldims)],
+            'v28': ['SS_signal_V1','SS_signal_PM','SS_signal_AL','SS_signal_RSP'],
+            'v29': ['SS_signal_noise_V1','SS_signal_noise_PM','SS_signal_noise_AL','SS_signal_noise_RSP'],
+            'v30': ['SS_signal_max_V1','SS_signal_max_PM','SS_signal_max_AL','SS_signal_max_RSP'],
+            'v31': ['SS_signal_noise_V1','SS_signal_noise_PM','SS_signal_noise_AL','SS_signal_noise_RSP','SS_signal_max_V1','SS_signal_max_PM','SS_signal_max_AL','SS_signal_max_RSP'],
+            }
+    
+    return modelvars_dict[version]
+
+def get_dec_modelname(version='v1'):
+    abbr_modelnames = {
+            'v1': 'Trialnumber',
+            'v2': 'Sig',
+            'v3': 'Sig_psy',
+            'v4': 'Sig_M',
+            'v5': 'Sig_N',
+            'v6': 'Sig2',
+            'v7': 'Sig2_run',
+            'v8': 'Sig2_run2',
+            'v9': 'Taskvars_PC1all',
+            'v10': 'Taskvars_PCall',
+            'v11': 'Taskvars_PC_V1',
+            'v12': 'Taskvars_PC_PM',
+            'v13': 'Taskvars_PC_AL',
+            'v14': 'Taskvars_PC_RSP',
+            'v15': 'Taskvars_Sig_Dim_V1',
+            'v16': 'Taskvars_Sig_Dim_PM',
+            'v17': 'Taskvars_Sig_Dim_AL',
+            'v18': 'Taskvars_Sig_Dim_RSP',
+            'v19': 'Taskvars_Noise_Dim_V1',
+            'v20': 'Taskvars_Noise_Dim_PM',
+            'v21': 'Taskvars_Noise_Dim_AL',
+            'v22': 'Taskvars_Noise_Dim_RSP',
+            'v23': 'PCall',
+            'v24': 'PC_V1',
+            'v25': 'PC_PM',
+            'v26': 'PC_AL',
+            'v27': 'PC_RSP',
+            'v28': 'Sig_Dim_Areas',
+            'v29': 'Noise_Dim_Areas',
+            'v30': 'Max_Dim_Areas',
+            'v31': 'Sig_Noise_Max_Dim_Areas',
+            }
+    
+    return abbr_modelnames[version]
