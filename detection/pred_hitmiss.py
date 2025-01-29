@@ -56,7 +56,7 @@ sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,
                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
 # sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
-                        #  load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
+#                          load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
 
 #%% Z-score the calciumdata: 
 for i in range(nSessions):
@@ -161,54 +161,88 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 modelname       = 'LOGR' # Linear regression with Lasso (L1) regularization
 scoring_type    = 'accuracy_score'
-scoring_type    = 'balanced_accuracy_score'
-scoring_type    = 'r2_score'
+# scoring_type    = 'balanced_accuracy_score'
+# scoring_type    = 'r2_score'
 # kfold       = 5 # Define the number of folds for cross-validation
 lam             = 0.05
 lam             = None
+lam             = 0.5
+nneuraldims     = 20
 
 #%% COMPARE MODEL VERSIONS
 versions    = np.array(['v1','v2','v3','v4','v5','v6','v7','v8','v9','v10','v11','v12','v13','v14','v15']) 
 versions    = np.array(['v1','v2','v3','v4','v5','v6','v7','v8','v9']) 
 versions    = np.array(['v%d' % i for i in range(1,22)])
 versions    = np.array(['v%d' % i for i in [6,28,29,30,31]])
-versions    = np.array(['v%d' % i for i in range(23,32)])
-versions    = np.array(['v%d' % i for i in range(1,32)])
+versions    = np.array(['v%d' % i for i in range(23,33)])
+versions    = np.array(['v%d' % i for i in range(1,39)])
 
 #%% Run cross-validation for the different model versions
 error_cv       = np.full((nSessions,len(versions)),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
     idx_T = ses.trialdata['engaged']==1
-    y_all        = ses.trialdata['rewardGiven'].to_numpy()
-    X_all,allvars       = get_dec_predictors(ses)               # get all predictors
+    y_all               = ses.trialdata['rewardGiven'].to_numpy()
+    X_all,allvars       = get_dec_predictors(ses,nneuraldims=nneuraldims)               # get all predictors
     for iver,version in enumerate(versions):
-        modelvars       = get_dec_predictors_from_modelversion(version,nneuraldims=10)
+        modelvars       = get_dec_predictors_from_modelversion(version,nneuraldims=nneuraldims)
         nvars           = len(modelvars)
         X               = X_all[:,np.isin(allvars,modelvars)] #get only predictors of interest
         X               = X[idx_T,:]                     #get only trials of interest
         y               = y_all[idx_T]
         X,y,idx_nan     = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
-        error_cv[ises,iver],_,_,_ = my_decoder_wrapper(X,y,model_name=modelname,kfold=kfold,lam=lam,subtract_shuffle=True,
+        if X.size > 0: #this is necessary because there might be a model with only neural data from AL, but AL was not recorded in session
+            error_cv[ises,iver],_,_,_ = my_decoder_wrapper(X,y,model_name=modelname,kfold=kfold,lam=lam,subtract_shuffle=True,
                           scoring_type=scoring_type,norm_out=True)
+
 
 #%% Plot the decoding performance for the different model versions
 clr_palette = sns.color_palette('husl',n_colors=len(versions))
-fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.7,3))
-# sns.lineplot(data=r2_cv,palette=sns.color_palette('husl',n_colors=len(versions)))
-sns.barplot(data=error_cv,palette=clr_palette,ax=ax)
-ax.set_xlabel('Model version')
-ax.set_xticks(np.arange(len(versions)),versions.tolist())
-# ax.set_xticks(np.arange(len(versions)),[get_dec_modelname(version) for version in versions],fontsize=8,rotation=45)
-for i,patch in enumerate(ax.patches):
-    ax.text(patch.get_x() + patch.get_width()/2,0.02,
+fig,axes = plt.subplots(2,1,figsize=(len(versions)*0.6,6),sharex=False,sharey=True)
+sns.barplot(data=error_cv[:,:len(versions)//2],palette=clr_palette[:len(versions)//2],ax=axes[0])
+axes[0].set_ylabel('Decoding performance \n (%s, norm over shuffle)' % scoring_type)
+for i,patch in enumerate(axes[0].patches):
+    axes[0].text(patch.get_x() + patch.get_width()/2,0.02,
             '{:.3f}'.format(np.nanmean(error_cv[:,i])),ha='center',va='center',fontsize=8)
-ax.set_ylabel('Decoding performance \n(%s)\n(shuffle-subtracted)' % scoring_type)
-ax.set_title('Decoding performance for different model versions')
+
+sns.barplot(data=error_cv[:,len(versions)//2:],palette=clr_palette[len(versions)//2:],ax=axes[1])
+for i,patch in enumerate(axes[1].patches):
+    axes[1].text(patch.get_x() + patch.get_width()/2,0.02,
+            '{:.3f}'.format(np.nanmean(error_cv[:,len(versions)//2:][:,i])),ha='center',va='center',fontsize=9)
+
+axes[0].set_xticks(np.arange(len(versions)//2),versions[:len(versions)//2].tolist(),fontsize=12)
+axes[1].set_xticks(np.arange(len(versions)//2),versions[len(versions)//2:].tolist(),fontsize=12)
+axes[0].grid(axis='y')
+axes[1].grid(axis='y')
 plt.tight_layout()
 # ax.set_position([ax.get_position().x0,ax.get_position().y0,ax.get_position().width,ax.get_position().height])
 # fig.tight_layout()
-# fig.savefig(os.path.join(savedir, 'DecodingPerformance_ModelVersions_%dsessions.png') % (nSessions), format='png')
+fig.savefig(os.path.join(savedir, 'DecodingPerformance_%s_ModelVersions_%dsessions.png') % (scoring_type,nSessions), format='png')
+
+# #%% Plot the decoding performance for the different model versions
+# clr_palette = sns.color_palette('husl',n_colors=len(versions))
+# fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.7,3))
+# # sns.lineplot(data=r2_cv,palette=sns.color_palette('husl',n_colors=len(versions)))
+# sns.barplot(data=error_cv,palette=clr_palette,ax=ax)
+# ax.set_xlabel('Model version')
+# ax.set_xticks(np.arange(len(versions)),versions.tolist())
+# # ax.set_xticks(np.arange(len(versions)),[get_dec_modelname(version) for version in versions],fontsize=8,rotation=45)
+# for i,patch in enumerate(ax.patches):
+#     ax.text(patch.get_x() + patch.get_width()/2,0.02,
+#             '{:.3f}'.format(np.nanmean(error_cv[:,i])),ha='center',va='center',fontsize=8)
+# ax.set_ylabel('Decoding performance \n(%s)\n(shuffle-subtracted)' % scoring_type)
+# ax.set_title('Decoding performance for different model versions')
+# plt.tight_layout()
+# # ax.set_position([ax.get_position().x0,ax.get_position().y0,ax.get_position().width,ax.get_position().height])
+# # fig.tight_layout()
+# fig.savefig(os.path.join(savedir, 'DecodingPerformance_%s_ModelVersions_%dsessions.png') % (scoring_type,nSessions), format='png')
+
+winv = versions[np.nanargmax(np.nanmean(error_cv,axis=0))]
+print('Winning model version (%s - %s:\n%s):' % (winv,get_dec_modelname(winv),get_dec_predictors_from_modelversion(winv)))
+
+print('Top 5 performing models (%s - %s):' % (scoring_type,get_dec_modelname(versions[np.nanargmax(np.nanmean(error_cv,axis=0))])))
+for iv in np.argsort(-np.nanmean(error_cv,axis=0))[:5]:
+    print('%s: %s (%.3f)' % (versions[iv],get_dec_modelname(versions[iv]),np.nanmean(error_cv[:,iv])))
 
 #%% Make a legend where for each version is displayed which model variables are included in the model
 fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.1,2))
@@ -221,34 +255,40 @@ ax.legend(legend_str,loc='upper right',bbox_to_anchor=(0, 0.9),ncol=np.ceil(len(
 plt.tight_layout()
 fig.savefig(os.path.join(savedir, 'Legend_ModelName_Versions.png'), format='png',bbox_inches='tight')
 
-#%% 
-fig,ax = plt.subplots(1,1,figsize=(len(versions)*0.7,3))
-# Make a legend where for each version is displayed which model variables are included in the model
+#%% # Make a legend where for each version is displayed which model variables are included in the model
+fig,ax = plt.subplots(1,1,figsize=(len(versions),0.6))
 legend_str = []
 for iver,version in enumerate(versions):
-    # for ivar,var in enumerate(variables):
     plt.plot(0,0,color=clr_palette[iver],label=version) #,sns.barplot(data=r2_cv,palette=sns.color_palette('husl',n_colors=len(versions)),ax=ax)
-
     modelvars   = get_dec_predictors_from_modelversion(version)
-    modelvars_str = ',\n'.join(modelvars)
+    # modelvars_str = ',\n'.join(modelvars)
+    modelvars_str = ','.join(modelvars)
     legend_str.append('%s: %s' % (version,modelvars_str))
 ax.axis('off')
-ax.legend(legend_str,loc='upper right',bbox_to_anchor=(0, 0.5),ncol=np.ceil(len(versions)/3),fontsize=9,frameon=False)
+ax.legend(legend_str,loc='center',bbox_to_anchor=(0, 0),ncol=2,fontsize=10,frameon=False)
+# ax.legend(legend_str,loc='upper right',bbox_to_anchor=(0, 0.5),ncol=np.ceil(len(versions)/3),fontsize=9,frameon=False)
 plt.tight_layout()
-# fig.savefig(os.path.join(savedir, 'Legend_ModelVersions.png'), format='png',bbox_inches='tight')
+fig.savefig(os.path.join(savedir, 'Legend_ModelVersions.png'), format='png',bbox_inches='tight')
 
 
-#%% COMPARE MODEL VERSIONS
-versions    = np.array(['v6','v31']) 
+
+
+
+
+
+#%% COMPARE MODEL VERSIONS with internal and external signal strength:
+# versions        = np.array(['v9','v31']) 
+versions        = np.array(['v9','v32']) 
 scoring_type    = 'r2_score'
 scoring_type    = 'accuracy_score'
+lam             = 0.5
 
 #%% Run cross-validation for the different model versions
 error_cv       = np.full((nSessions,len(versions)),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
-    idx_T = ses.trialdata['engaged']==1
-    y_all        = ses.trialdata['rewardGiven'].to_numpy()
+    idx_T               = ses.trialdata['engaged']==1
+    y_all               = ses.trialdata['rewardGiven'].to_numpy()
     X_all,allvars       = get_dec_predictors(ses)               # get all predictors
     for iver,version in enumerate(versions):
         modelvars       = get_dec_predictors_from_modelversion(version,nneuraldims=10)
@@ -260,26 +300,78 @@ for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across ses
         error_cv[ises,iver],_,_,_ = my_decoder_wrapper(X,y,model_name=modelname,kfold=kfold,lam=lam,subtract_shuffle=False,
                           scoring_type=scoring_type,norm_out=False)
 
-#%% Plot
-
+#%% Scatter of internal vs external: can you predict hits vs misses from the strength of the internal signal coding strength?
 fig,ax = plt.subplots(1,1,figsize=(4,4))
 sns.scatterplot(x=error_cv[:,0],y=error_cv[:,1],ax=ax)
 ax.plot([0,1],[0,1],color='k',lw=0.5)
 ax.set_xlim([0,1])
 ax.set_ylim([0,1])
 ax.set_xlabel('External signal (%s)' % scoring_type)
-ax.set_ylabel('Internal signal (%s)\n(V1, PM, AL, RSP)' % scoring_type)
-ax.set_title('Comparison of model versions')
+ax.set_ylabel('Internal signal (Signal dimension) \n (%s)' % scoring_type)
+ax.set_title('Predicting perception from external\n vs. internal signal strength')
+#Statistical test
+from scipy.stats import ttest_rel
+pval = ttest_rel(error_cv[:,0],error_cv[:,1])[1]
+ax.text(0.5,0.92,'%s (p = %1.3f)' % (get_sig_asterisks(pval,return_ns=True),pval),ha='center',va='center',transform=ax.transAxes)
 plt.tight_layout()
-# fig.savefig(os.path.join(savedir, 'ErrorRateComparison_v6v31_%dsessions.png') % (nSessions), format='png',bbox_inches='tight')
-
-
-
-
-
+fig.savefig(os.path.join(savedir, 'DecodingComparison_InternalVsExternal_%svs%s_%dsessions.png') % (versions[0],versions[1],nSessions), format='png',bbox_inches='tight')
 
 
 #%% 
+
+
+
+
+#%% COMPARE MODEL VERSIONS with task vars, all neural data, or both
+versions        = np.array(['v7','v33','v38']) 
+# scoring_type    = 'r2_score'
+scoring_type    = 'accuracy_score'
+lam             = 0.5
+
+#%% Run cross-validation for the different model versions
+error_cv       = np.full((nSessions,len(versions)),np.nan)
+
+for ises,ses in tqdm(enumerate(sessions),desc='Fitting encoding model across sessions',total=nSessions):
+    idx_T               = ses.trialdata['engaged']==1
+    y_all               = ses.trialdata['rewardGiven'].to_numpy()
+    X_all,allvars       = get_dec_predictors(ses)               # get all predictors
+    for iver,version in enumerate(versions):
+        modelvars       = get_dec_predictors_from_modelversion(version,nneuraldims=10)
+        nvars           = len(modelvars)
+        X               = X_all[:,np.isin(allvars,modelvars)] #get only predictors of interest
+        X               = X[idx_T,:]                     #get only trials of interest
+        y               = y_all[idx_T]
+        X,y,idx_nan     = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+        error_cv[ises,iver],_,_,_ = my_decoder_wrapper(X,y,model_name=modelname,kfold=kfold,lam=lam,subtract_shuffle=False,
+                          scoring_type=scoring_type,norm_out=False)
+
+#%% Plot results: scatter predict hit/miss
+fig,axes = plt.subplots(1,3,figsize=(9,3))
+combs= [[0,1],[0,2],[1,2]]
+for icomb,comb in enumerate(combs):
+    ax = axes[icomb]
+    sns.scatterplot(x=error_cv[:,comb[0]],y=error_cv[:,comb[1]],ax=ax)
+    ax.plot([0,1],[0,1],color='k',lw=0.5)
+    ax.set_xlim([0.5,1])
+    ax.set_ylim([0.5,1])
+    ax.set_xlabel('%s' % (get_dec_modelname(versions[comb[0]])))
+    ax.set_ylabel('%s' % (get_dec_modelname(versions[comb[1]])))
+    #Statistical test
+    from scipy.stats import ttest_rel
+    pval = ttest_rel(error_cv[:,comb[0]],error_cv[:,comb[1]])[1]
+    ax.text(0.5,0.92,'%s (p = %1.3f)' % (get_sig_asterisks(pval,return_ns=True),pval),ha='center',va='center',transform=ax.transAxes)
+plt.suptitle('Predicting perception from task, neural or both')
+plt.tight_layout()
+fig.savefig(os.path.join(savedir, 'DecodingComparison_Task_vs_Neural_%dsessions.png') % (nSessions), format='png',bbox_inches='tight')
+
+#%% 
+
+
+
+
+
+
+
 
 
 #%% Plot the encoding performance for the model for the different areas: 

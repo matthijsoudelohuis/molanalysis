@@ -96,7 +96,7 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
     # Initialize an array to store the decoding performance
     performance         = np.full((kfold,), np.nan)
     performance_shuffle = np.full((kfold,), np.nan)
-    weights             = np.full((kfold,np.shape(Xfull)[1]), np.nan)
+    # weights             = np.full((kfold,np.shape(Xfull)[1]), np.nan) #deprecated, estimate weights from all data, not cv
     projs               = np.full((np.shape(Xfull)[0]), np.nan)
 
     # Loop through each fold
@@ -108,7 +108,7 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
         # Train a classification model on the training data with regularization
         model.fit(X_train, y_train)
 
-        weights[ifold,:] = model.coef_
+        # weights[ifold,:] = model.coef_ #deprecated, estimate weights from all data, not cv
 
         # Make predictions on the test data
         y_pred = model.predict(X_test)
@@ -130,9 +130,12 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
         performance_avg = np.mean(performance)
     if norm_out: # normalize to maximal range of performance (between shuffle and 1)
         performance_avg = performance_avg / (1-np.mean(performance_shuffle))
-    weights = np.nanmean(weights, axis=0) #average across folds
 
-    ev = var_along_dim(Xfull,weights)
+    #Estimate the weights from the entire dataset:
+    model.fit(Xfull,Yfull)
+    weights = model.coef_.ravel()
+
+    ev      = var_along_dim(Xfull,weights)
 
     return performance_avg,weights,projs,ev
 
@@ -604,24 +607,26 @@ def get_dec_predictors(ses,ibin=0,nneuraldims=10):
     
     areas = ['V1', 'PM', 'AL', 'RSP']
     for iarea,area in enumerate(areas):
-        idx_N = ses.celldata['roi_name']==area
-        pcadata     = ses.respmat[idx_N,:].T
-        pcadata[np.isnan(pcadata)] = 0
-        X           = np.c_[X, PCA(n_components=nneuraldims).fit_transform(pcadata)]
+        idx_N       = ses.celldata['roi_name']==area
+        if np.sum(idx_N) > nneuraldims:
+            pcadata     = ses.respmat[idx_N,:].T
+            pcadata[np.isnan(pcadata)] = 0
+            X           = np.c_[X, PCA(n_components=nneuraldims).fit_transform(pcadata)]
+        else: 
+            X           = np.c_[X, np.zeros((np.shape(X)[0],nneuraldims))]
         varnames    = np.append(varnames, ['PC{}_{}'.format(i,area) for i in np.arange(nneuraldims)])
 
     for iarea,area in enumerate(areas):
-        idx_N           = ses.celldata['roi_name']==area
         idx_T           = np.ones(len(ses.trialdata), dtype=bool)
-        weights,proj    = get_signal_dim(ses,idx_T,idx_N)
-
+        idx_N           = ses.celldata['roi_name']==area
+        proj            = get_signal_dim(ses,idx_T,idx_N)[1] if np.sum(idx_N) > 10 else np.zeros((np.shape(X)[0],1))
         X               = np.c_[X, proj]
         varnames        = np.append(varnames, 'SS_signal_{}'.format(area))
 
     for iarea,area in enumerate(areas):
         idx_N           = ses.celldata['roi_name']==area
         idx_T           = np.isin(ses.trialdata['stimcat'],['C','M'])
-        weights,proj    = get_signal_dim(ses,idx_T,idx_N)
+        proj            = get_signal_dim(ses,idx_T,idx_N)[1] if np.sum(idx_N) > 10 else np.zeros((np.shape(X)[0],1))
 
         X               = np.c_[X, proj]
         varnames        = np.append(varnames, 'SS_signal_max_{}'.format(area))
@@ -629,10 +634,24 @@ def get_dec_predictors(ses,ibin=0,nneuraldims=10):
     for iarea,area in enumerate(areas):
         idx_N           = ses.celldata['roi_name']==area
         idx_T           = ses.trialdata['stimcat'] == 'N'
-        weights,proj    = get_signal_dim(ses,idx_T,idx_N)
+        proj            = get_signal_dim(ses,idx_T,idx_N)[1] if np.sum(idx_N) > 10 else np.zeros((np.shape(X)[0],1))
 
         X               = np.c_[X, proj]
         varnames        = np.append(varnames, 'SS_signal_noise_{}'.format(area))
+
+    # Add signal dimension from all neurons:
+    idx_T           = np.isin(ses.trialdata['stimcat'],['C','M'])
+    idx_N           = np.ones(len(ses.celldata), dtype=bool)
+    proj            = get_signal_dim(ses,idx_T,idx_N)[1] if np.sum(idx_N) > 10 else np.zeros((np.shape(X)[0],1))
+    X               = np.c_[X, proj]
+    varnames        = np.append(varnames, 'SS_signal_max_all')
+
+     # Add signal dimension from all neurons:
+    idx_T           = ses.trialdata['stimcat'] == 'N'
+    idx_N           = np.ones(len(ses.celldata), dtype=bool)
+    proj            = get_signal_dim(ses,idx_T,idx_N)[1] if np.sum(idx_N) > 10 else np.zeros((np.shape(X)[0],1))
+    X               = np.c_[X, proj]
+    varnames        = np.append(varnames, 'SS_signal_noise_all')
 
     assert np.shape(X)[1] == np.shape(varnames)[0], 'X and varnames must have the same number of columns'
 
@@ -672,7 +691,7 @@ def get_dec_predictors_from_modelversion(version='v1',nneuraldims=10):
             'v6': ['trialnumber','signal_psy_noise','stimcat_M'],
             'v7': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'],
             'v8': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','signalxrun'],
-            'v9': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','PC1_all'],
+            'v9': ['signal_psy_noise','stimcat_M'],
             'v10': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'] + ['PC{}_{}'.format(i,'all') for i in np.arange(nneuraldims)],
             'v11': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'] + ['PC{}_{}'.format(i,'V1') for i in np.arange(nneuraldims)],
             'v12': ['trialnumber','signal_psy_noise','stimcat_M','runspeed'] + ['PC{}_{}'.format(i,'PM') for i in np.arange(nneuraldims)],
@@ -695,6 +714,13 @@ def get_dec_predictors_from_modelversion(version='v1',nneuraldims=10):
             'v29': ['SS_signal_noise_V1','SS_signal_noise_PM','SS_signal_noise_AL','SS_signal_noise_RSP'],
             'v30': ['SS_signal_max_V1','SS_signal_max_PM','SS_signal_max_AL','SS_signal_max_RSP'],
             'v31': ['SS_signal_noise_V1','SS_signal_noise_PM','SS_signal_noise_AL','SS_signal_noise_RSP','SS_signal_max_V1','SS_signal_max_PM','SS_signal_max_AL','SS_signal_max_RSP'],
+            'v32': ['SS_signal_noise_all','SS_signal_max_all'],
+            'v33': ['allcells'],
+            'v34': ['V1'],
+            'v35': ['PM'],
+            'v36': ['AL'],
+            'v37': ['RSP'],
+            'v38': ['trialnumber','signal_psy_noise','stimcat_M','runspeed','allcells'],
             }
     
     return modelvars_dict[version]
@@ -709,7 +735,7 @@ def get_dec_modelname(version='v1'):
             'v6': 'Sig2',
             'v7': 'Sig2_run',
             'v8': 'Sig2_run2',
-            'v9': 'Taskvars_PC1all',
+            'v9': 'Sig2_only',
             'v10': 'Taskvars_PCall',
             'v11': 'Taskvars_PC_V1',
             'v12': 'Taskvars_PC_PM',
@@ -732,6 +758,13 @@ def get_dec_modelname(version='v1'):
             'v29': 'Noise_Dim_Areas',
             'v30': 'Max_Dim_Areas',
             'v31': 'Sig_Noise_Max_Dim_Areas',
+            'v32': 'Sig_Noise_Max_Dim',
+            'v33': 'Allcells',
+            'v34': 'V1cells',
+            'v35': 'PMcells',
+            'v36': 'ALcells',
+            'v37': 'RSPcells',
+            'v38': 'Taskvars_Allcells',
             }
     
     return abbr_modelnames[version]

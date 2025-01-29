@@ -45,8 +45,11 @@ def my_floor(a, precision=0):
     return np.true_divide(np.floor(a * 10**precision), 10**precision)
 
 # Define the p-value thresholds array
-def get_sig_asterisks(pvalue):
-    pvalue_thresholds = np.array([[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"], [1, ""]])
+def get_sig_asterisks(pvalue,return_ns=False):
+    if return_ns: 
+        pvalue_thresholds = np.array([[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"], [1, "ns"]])
+    else: 
+        pvalue_thresholds = np.array([[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"], [1, ""]])
     # Iterate through the thresholds and return the appropriate significance string
     for threshold, asterisks in pvalue_thresholds:
         if pvalue <= float(threshold):
