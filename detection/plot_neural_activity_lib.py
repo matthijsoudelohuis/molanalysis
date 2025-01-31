@@ -390,7 +390,7 @@ def plot_noise_activity_example_neurons(ses,example_cell_ids):
     # fig, axes  = plt.subplots(nrows=N,ncols=len(vars),figsize=(3*len(vars),2*N),sharey='row',sharex=True)
     fig, axes  = plt.subplots(nrows=3,ncols=3,figsize=(9,9),sharey='row',sharex=True)
     
-    for iN,cell_id in enumerate(example_cell_ids[:10]):
+    for iN,cell_id in enumerate(example_cell_ids[:9]):
         ax      = axes[iN//3,iN%3]
         uN      = np.where(ses.celldata['cell_id']==cell_id)[0][0]
 
@@ -403,25 +403,16 @@ def plot_noise_activity_example_neurons(ses,example_cell_ids):
         C               = nbins_noise + 2
         noise_signal    = ses.trialdata['signal'][ses.trialdata['stimcat']=='N'].to_numpy()
         
-        # plotdata        = np.empty((C,S))
-        # plotdata[0,:]   = np.nanmean(data[uN,ses.trialdata['signal']==0],axis=0)
-        # plotdata[-1,:]  = np.nanmean(data[uN,ses.trialdata['signal']==100],axis=0)
-
         min_ntrials = 5
 
         edges = np.linspace(np.min(noise_signal),np.max(noise_signal),nbins_noise+1)
         centers = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
         centers = np.r_[0,centers,100]
         plotlabels = np.round(np.hstack((0,centers,100)))
-        # plotcolors = np.hstack(('k',np.linspace(0,1,nbins_noise),'r'))
         plotcolors = sns.color_palette("inferno",C)
-        
-        # plotcolors = [sns. sns.color_palette("inferno",C)
-        plotcolors = ['blue']  # Start with black
-        # plotcolors += sns.color_palette("magma", n_colors=nbins_noise)  # Add 5 colors from the magma palette
-        plotcolors.append('red')  # Add orange at the end
+        cmap = plt.get_cmap('jet')
+        plotcolors = ['blue', 'red']  
         plotlabels = ['miss','hit']
-        markerstyles = ['o','o']
         
         data_sig_hit_mean = np.empty((C,D))
         handles = []
@@ -451,7 +442,12 @@ def plot_noise_activity_example_neurons(ses,example_cell_ids):
             idx_T           = np.all((ses.trialdata['stimcat']=='N', 
                                         ses.trialdata['lickResponse']==lr,
                                         ses.trialdata['engaged']==1), axis=0)
-            ax.scatter(ses.trialdata['signal'][idx_T],ses.respmat[uN,idx_T],marker=markerstyles[ilr],color=plotcolors[ilr],s=5,alpha=0.5)
+            C = np.squeeze(ses.respmat_runspeed)[idx_T]
+            # ax.scatter(ses.trialdata['signal'][idx_T] + np.random.normal(0,0.3,np.sum(idx_T)),ses.respmat[uN,idx_T],
+                    #    c=C, vmin=np.percentile(C,1), vmax=np.percentile(C,99),marker='o',s=6,alpha=0.8)
+            
+            ax.scatter(ses.trialdata['signal'][idx_T] + np.random.normal(0,0.3,np.sum(idx_T)),ses.respmat[uN,idx_T],marker='o',color=plotcolors[ilr],s=5,alpha=0.5)
+            # ax.scatter(ses.trialdata['signal'][idx_T],ses.respmat[uN,idx_T],marker='o',color=plotcolors[ilr],s=5,alpha=0.5)
             ax.set_title('%s' % cell_id,fontsize=11)
         if iN==0:
             ax.legend(handles,plotlabels,loc='upper left',fontsize=11,frameon=False)

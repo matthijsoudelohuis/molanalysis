@@ -8,7 +8,7 @@ This script contains a series of functions that analyze activity in visual VR de
 
 #%% Import packages
 import os
-os.chdir('c:\\Python\\molanalysis\\')
+os.chdir('e:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -55,12 +55,11 @@ session_list = np.array([['LPE11997', '2024_04_16'],
 # session_list        = np.array([['LPE12013','2024_04_25']])
 # session_list        = np.array([['LPE12013','2024_04_26']])
 
-# sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
-#                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
+sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
+                         load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
 sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
-
 
 #%% Z-score the calciumdata: 
 for i in range(nSessions):
@@ -80,6 +79,10 @@ for i in range(nSessions):
     sessions[i].respmat             = compute_respmat_space(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['stimStart'],
                                     sessions[i].zpos_F,sessions[i].trialnum_F,s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
 
+    temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[i].behaviordata['runspeed']),1)))
+    sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
+                                    sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
+
 
 #%% #################### Compute spatial runspeed ####################################
 for ises,ses in enumerate(sessions): # running across the trial:
@@ -93,52 +96,35 @@ sessions = calc_stimresponsive_neurons(sessions,sbins)
 #%% Get signal as relative to psychometric curve for all sessions:
 sessions = noise_to_psy(sessions,filter_engaged=True)
 
-#%% #################### Compute encoding of variables in single neurons  ####################################
-
-ises = 3
-example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
-
-# get some responsive cells: 
-idx                 = np.nanmean(sessions[ises].respmat,axis=1)>1
-example_cell_ids    = (sessions[ises].celldata['cell_id'][idx]).to_numpy()
-
-#%% Show example neurons that are correlated either to the stimulus signal, lickresponse or to running speed:
-ises = 0
-# for iN in range(0,100):
-for iN in np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))[0]:
-    plot_snake_neuron_sortnoise(sessions[ises].stensor[iN,:,:],sbins,sessions[ises])
-    plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
 
 
 #%%
-# example_cell_ids = np.random.choice(sessions[0].celldata['cell_id'],size=8,replace=False)
-# example_cell_ids = ['LPE12385_2024_06_15_0_0126',
-# 'LPE12385_2024_06_15_0_0075']
+ises = 3
+example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
 
 fig = plot_mean_activity_example_neurons(sessions[ises].stensor,sbins,sessions[ises],example_cell_ids)
 # fig.savefig(os.path.join(savedir,'ExampleNeuronActivity_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
 
 #%%
-ises = 3
-example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
+sesid = 'LPE11997_2024_04_12'
+sesid = 'LPE11997_2024_04_16'
+# sesid = 'LPE12385_2024_06_16'
+# sesid = 'LPE12013_2024_04_25'
 
-#%%
-# example_cell_ids = np.random.choice(sessions[0].celldata['cell_id'],size=8,replace=False)
-# example_cell_ids = ['LPE12385_2024_06_15_0_0126',
-# 'LPE12385_2024_06_15_0_0075']
-ises = 5
+sessiondata = pd.concat([ses.sessiondata for ses in sessions])
+ises = np.where(sessiondata['session_id']==sesid)[0][0]
+
+ises = 30
 example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
 
 # get some responsive cells: 
-# idx                 = np.nanmean(sessions[ises].respmat,axis=1)>.5
+# idx                 = np.nanmean(sessions[ises].respmat,axis=1)>0.5
 # idx                 = sessions[ises].celldata['sig_N']==1
 # example_cell_ids = np.random.choice(sessions[ises].celldata['cell_id'][idx], size=9, replace=False)
 # example_cell_ids    = (sessions[ises].celldata['cell_id'][idx]).to_numpy()
 
 fig = plot_noise_activity_example_neurons(sessions[ises],example_cell_ids)
-# fig.savefig(os.path.join(savedir,'ExampleNeuronActivity_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
-
-
+fig.savefig(os.path.join(savedir,'HitMiss_ExampleNeuronActivity_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
 
 
 
@@ -151,14 +137,14 @@ lickresp    = [0,1]
 D           = len(lickresp)
 
 sigtype     = 'signal_psy'
-zmin        = -1.5
-zmax        = 1.5
+zmin        = -1
+zmax        = 1
 nbins_noise = 5
 Z           = nbins_noise + 2
 
 sigtype     = 'signal'
-zmin        = 5
-zmax        = 20
+zmin        = 7
+zmax        = 17
 nbins_noise = 5
 Z           = nbins_noise + 2
 
@@ -218,6 +204,10 @@ for ises,ses in enumerate(sessions):
                 data_sig_hit_spatial[idx_N_ses,ibin+1,ilr,:]   = np.nanmean(sessions[ises].stensor[:,idx_T,:],axis=1)
                 data_sig_hit_mean[idx_N_ses,ibin+1,ilr]        = np.nanmean(sessions[ises].respmat[:,idx_T],axis=1)
 
+#%% 
+plt.plot(np.sum(np.isnan(data_sig_hit_mean[:,:,0]),axis=1))
+
+plt.imshow(np.isnan(data_sig_hit_mean[:,:,0]),aspect='auto')
 
 #%% 
 data = copy.deepcopy(data_sig_mean.T)
@@ -228,6 +218,7 @@ print(np.shape(data))
 data = data - data[:,0][:,np.newaxis]
 
 data = data / np.nanmax(data,axis=0,keepdims=True)
+
 
 # plt.imshow(data,aspect='auto',cmap='Reds')
 # plt.imshow(data,aspect='auto',cmap='bwr',vmin=-0.25,vmax=1.25)
@@ -245,22 +236,29 @@ fig,axes = plt.subplots(1,1,figsize=(3,3))
 ax = axes
 idx_N = celldata['roi_name']=='V1'
 idx_N = celldata['roi_name']=='PM'
-# idx_N = celldata['sig_N']==1
+idx_N = celldata['sig_N']==1
+idx_N = celldata['sig_N']!=1
+
+idx_N = celldata['sig_MN']==1
+idx_N = celldata['sig_MN']!=1
 
 # idx_N = np.all((celldata['roi_name']=='V1',
                 # celldata['sig_N']==1), axis=0)
 
 for ilr,lr in enumerate(lickresp):
     # plt.plot(plotcenters,np.nanmean(data_sig_hit_mean[idx_N,:,ilr],axis=0),color=plotcolors[ilr], label=plotlabels[ilr],linewidth=2)
-    plt.plot(plotcenters[1:-1],np.nanmean(data_sig_hit_mean[idx_N,1:-1,ilr],axis=0),color=plotcolors[ilr], label=plotlabels[ilr],linewidth=2)
+    plt.plot(plotcenters[1:-1],np.nanmean(data_sig_hit_mean[idx_N,1:-1,ilr],axis=0),
+             marker='.',markersize=15,color=plotcolors[ilr], label=plotlabels[ilr],linewidth=2)
+    # plt.plot(plotcenters,np.nanmean(data_sig_hit_mean[idx_N,:,ilr],axis=0),color=plotcolors[ilr], 
+            #  marker='.',markersize=15,label=plotlabels[ilr],linewidth=2)
 ax.legend(plotlabels,loc='upper left',fontsize=11,frameon=False)
     # plt.plot(plotcenters,np.nanmean(data_sig_hit_mean[:,0],axis=0),color='k')
 # plt.plot(plotcenters,np.nanmean(data_sig_hit_mean,axis=0))
-
+# fig.savefig(os.path.join(savedir, 'HitMiss_Mean_NonResponsiveNeurons_%dsessions.png') % (nSessions), format='png')
+# fig.savefig(os.path.join(savedir, 'HitMiss_Mean_NoiseResponsiveNeurons_%dsessions.png') % (nSessions), format='png')
+fig.savefig(os.path.join(savedir, 'HitMiss_Noise_Mean_NoiseResponsiveNeurons_%dsessions.png') % (nSessions), format='png')
 
 #%% 
-
-
 labeled     = ['unl','lab']
 nlabels     = len(labeled)
 areas       = ['V1','PM','AL','RSP']
@@ -276,23 +274,26 @@ for ilab,label in enumerate(labeled):
     for iarea, area in enumerate(areas):
         ax = axes[ilab,iarea]
         handles = []
-        idx_N = np.all((ses.celldata['roi_name']==area, ses.celldata['labeled']==label), axis=0)
-        idx_N = np.all((celldata['roi_name']==area, celldata['labeled']==label), axis=0)
+        # idx_N = np.all((ses.celldata['roi_name']==area, ses.celldata['labeled']==label), axis=0)
+        # idx_N = np.all((celldata['roi_name']==area, celldata['labeled']==label), axis=0)
 
         idx_N = np.all((celldata['roi_name']==area, 
-                        # celldata['sig_MN']==1,
+                        celldata['sig_MN']==1,
                         # celldata['sig_N']==1,
-                        celldata['sig_N']!=1,
+                        # celldata['sig_N']!=1,
                         # celldata['sig_MN']!=1,
-                        # celldata['layer']=='L2/3',
+                        celldata['layer']=='L2/3',
                         # celldata['layer']=='L4',
                         # celldata['layer']=='L5',
+                        # ~np.any(np.isnan(data),axis=(1,2)),
                         celldata['labeled']==label), axis=0)
 
         if np.sum(idx_N) > 5:
             for ilr,lr in enumerate(lickresp):
                 # plt.plot(plotcenters,np.nanmean(data_sig_hit_mean[idx_N,:,ilr],axis=0),color=plotcolors[ilr], label=plotlabels[ilr],linewidth=2)
                 # ax.plot(plotcenters[1:-1],np.nanmean(data[idx_N,1:-1,ilr],axis=0),color=plotcolors[ilr], label=plotlabels[ilr],linewidth=2)
+                # h =shaded_error(plotcenters,data[idx_N,:,ilr],color=plotcolors[ilr],
+                            #  label=plotlabels[ilr],ax=ax,error='sem')
                 h =shaded_error(plotcenters[1:-1],data[idx_N,1:-1,ilr],color=plotcolors[ilr],
                              label=plotlabels[ilr],ax=ax,error='sem')
                 handles.append(h)
@@ -309,9 +310,9 @@ for ilab,label in enumerate(labeled):
         # ax.set_ylim([-0.1,0.6])
         #     ax.legend(frameon=False,fontsize=6)
 plt.tight_layout()
-# plt.savefig(os.path.join(savedir, 'EncodingModel_cvR2_Areas_Labels_%s.png') % ses.sessiondata['session_id'][0], format='png')
+# plt.savefig(os.path.join(savedir, 'HitMiss_Noise_Mean_NoiseResponsiveNeurons_RawSignal_%dsessions_Arealabels.png') % (nSessions), format='png')
+# plt.savefig(os.path.join(savedir, 'HitMiss_Noise_Mean_NonNoiseResponsiveNeurons_RawSignal_%dsessions_Arealabels.png') % (nSessions), format='png')
 # plt.savefig(os.path.join(savedir, 'EncodingModel_%s_cvR2_Areas_Labels_%dsessions.png') % (version,nSessions), format='png')
-
 
 
 #%% 
