@@ -26,7 +26,7 @@ def shaded_error(x,y,yerror=None,ax=None,center='mean',error='std',color='black'
         if error=='std':
             yerror = np.nanstd(y,axis=0)
         elif error=='sem':
-            yerror = np.nanstd(y,axis=0) / np.sqrt(np.shape(y)[1])
+            yerror = np.nanstd(y,axis=0) / np.sqrt(np.shape(y)[0])
         else:
             print('Unknown error type')
     else:
