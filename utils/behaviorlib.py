@@ -120,7 +120,7 @@ def plot_psycurve(sessions,filter_engaged=False):
         ax.text(params[0], 1.05, f'Threshold: {params[0]:.0f}%', ha='center', va='center', transform=ax.get_xaxis_transform())
         ax.text(0.6, 0.6, f'{ses.sessiondata["animal_id"][0]}\n{ses.sessiondata["sessiondate"][0]} \nStim {ses.sessiondata["stim"][0]}', ha='left', va='top', transform=ax.transAxes)
         plt.tight_layout()
-    return fig
+    # return
 
 def plot_all_psycurve(sessions,filter_engaged=False):
     ## Plot the results
