@@ -14,6 +14,7 @@ os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 from preprocessing.preprocesslib import *
 
 # rawdatadir      = "G:\\RawData\\"
+rawdatadir      = "E:\\Kerem\\RawData\\"
 
 animal_ids          = [] #If empty than all animals in folder will be processed
 date_filter         = []
