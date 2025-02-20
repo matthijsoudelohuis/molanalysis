@@ -33,36 +33,37 @@ def get_rawdata_drive(animal_id, protocols):
         protocols = [protocols]
 
     if np.isin(protocols[0], ['IM', 'GR', 'GN', 'SP', 'RF']):
-        drives = {'LPE09665': 'H:',
-                  'LPE09830': 'H:',
-                  'LPE11495': 'H:',
-                  'LPE11998': 'H:',
-                  'LPE12013': 'H:',
-                  'LPE10884': 'I:',
-                  'LPE10885': 'I:',
-                  'LPE11622': 'I:',
-                  'LPE10883': 'J:',
-                  'LPE11086': 'J:',
-                  'LPE10919': 'K:',
-                  'LPE12223': 'K:',
-                  'LPE12385': 'K:'
-                  }
-    elif np.isin(protocols[0], ['VR', 'DM', 'DN', 'DP']):
-        drives = {'LPE09667': 'L:',
-                  'LPE09829': 'L:',
-                  'LPE11081': 'L:',
-                  'LPE11086': 'L:',
-                  'LPE11495': 'L:',
-                  'LPE10884': 'L:',
-                  'LPE11623': 'L:',
-                  'LPE11622': 'L:',
-                  'LPE11997': 'L:',
-                  'LPE11998': 'M:',
-                  'LPE12013': 'M:',
-                  'LPE12223': 'M:',
-                  'LPE12385': 'M:'
-                  }
-
+        drives       = {'LPE09665' : 'H:',
+                    'LPE09830' : 'H:',
+                    'LPE11495' : 'H:',
+                    'LPE11998' : 'H:',
+                    'LPE12013' : 'H:',
+                    'LPE10884' : 'I:',
+                    'LPE10885' : 'I:',
+                    'LPE11622' : 'I:',
+                    'LPE10883' : 'J:',
+                    'LPE11086' : 'J:',
+                    'LPE10919' : 'K:',
+                    'LPE12223' : 'K:',
+                    'LPE12385' : 'K:',
+                    'LPE13641' : 'E:'
+                    }
+    elif np.isin(protocols[0], ['VR','DM','DN','DP']):
+        drives       = {'LPE09667' : 'L:',
+                    'LPE09829' : 'L:',
+                    'LPE11081' : 'L:',
+                    'LPE11086' : 'L:',
+                    'LPE11495' : 'L:',
+                    'LPE10884' : 'L:',
+                    'LPE11623' : 'L:',
+                    'LPE11622' : 'L:',
+                    'LPE11997' : 'L:',
+                    'LPE11998' : 'M:',
+                    'LPE12013' : 'M:',
+                    'LPE12223' : 'M:',
+                    'LPE12385' : 'M:'
+                    }
+   
     if animal_id[0] == 'all':  # Get all animals for this protocol if animal key is 'all'
         animal_id = list(drives.keys())
 
