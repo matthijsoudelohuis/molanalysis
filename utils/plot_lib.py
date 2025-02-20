@@ -6,7 +6,8 @@ import warnings
 from utils.plotting_style import *
 
 
-def shaded_error(x,y,yerror=None,ax=None,center='mean',error='std',color='black',linestyle='-',label=None):
+def shaded_error(x,y,yerror=None,ax=None,center='mean',error='std',color='black',
+                 alpha=0.25,linewidth=2,linestyle='-',label=None):
     x = np.array(x)
     y = np.array(y)
 
@@ -33,8 +34,8 @@ def shaded_error(x,y,yerror=None,ax=None,center='mean',error='std',color='black'
         ycenter = y
         yerror = np.array(yerror)
 
-    h, = ax.plot(x,ycenter,color=color,linestyle=linestyle,label=label,linewidth=2)
-    ax.fill_between(x, ycenter-yerror, ycenter+yerror,color=color,alpha=0.2)
+    h, = ax.plot(x,ycenter,color=color,linestyle=linestyle,label=label,linewidth=linewidth)
+    ax.fill_between(x, ycenter-yerror, ycenter+yerror,color=color,alpha=alpha)
 
     return h
 
@@ -57,13 +58,12 @@ def get_sig_asterisks(pvalue,return_ns=False):
     # Default return if p-value is greater than 1
     return ""
 
-def add_stim_resp_win(ax):
-    ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
-    ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
-    ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
-    ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
+def add_stim_resp_win(ax,colors=['k','b'],linestyles=['--','--'],linewidth=1):
+    ax.axvline(x=0, color=colors[0], linestyle=linestyles[0], linewidth=linewidth)
+    ax.axvline(x=20, color=colors[0], linestyle=linestyles[0], linewidth=linewidth)
+    ax.axvline(x=25, color=colors[1], linestyle=linestyles[1], linewidth=linewidth)
+    ax.axvline(x=45, color=colors[1], linestyle=linestyles[1], linewidth=linewidth)
 
-    
 
 def colored_line(x, y, c, ax, **lc_kwargs):
     """

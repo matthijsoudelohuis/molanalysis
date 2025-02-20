@@ -295,29 +295,6 @@ def compute_respmat_space(data, ts_F, z_T, zpos_F, trialnum_F, s_resp_start=0, s
 
     return respmat
 
-# data = temp
-# ts_F = sessions[i].behaviordata['ts']
-# z_T = sessions[i].trialdata['stimStart']
-# zpos_F = sessions[i].behaviordata['zpos']
-# trialnum_F = sessions[i].behaviordata['trialNumber']
-
-# s_resp_start=0
-# s_resp_stop=20
-# method='mean'
-# subtr_baseline=False
-
-# data = sessions[i].calciumdata
-# ts_F = sessions[i].ts_F
-# z_T = sessions[i].trialdata['stimStart']
-# zpos_F = sessions[i].zpos_F
-# trialnum_F = sessions[i].trialnum_F
-
-# s_resp_start=0
-# s_resp_stop=20
-# method='mean'
-# subtr_baseline=False
-
-
 def construct_behav_matrix_ts_F(ses, nvideoPCs=30):
     Slabels = []
     S = np.empty((len(ses.ts_F), 0))
@@ -335,32 +312,3 @@ def construct_behav_matrix_ts_F(ses, nvideoPCs=30):
         Slabels.append(field)
 
     return S, Slabels
-
-def calc_stimresponsive_neurons(sessions,sbins,thr_p=0.001):
-    binidx_base     = (sbins>=-70) & (sbins<-10)
-    binidx_stim     = (sbins>=-5) & (sbins<20)
-
-    for ises,ses in tqdm(enumerate(sessions),total=len(sessions),desc='Testing significant responsiveness to stim'):
-        [Nses,K,S]      = np.shape(sessions[ises].stensor) #get dimensions of tensor
-
-        idx_N           = np.isin(sessions[ises].trialdata['stimcat'],['N'])
-        idx_M           = np.isin(sessions[ises].trialdata['stimcat'],['M'])
-        idx_MN          = np.isin(sessions[ises].trialdata['stimcat'],['N','M'])
-
-        b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_base)],axis=2)
-        r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_stim)],axis=2)
-        stat,sigmat_N = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
-
-        b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_M,binidx_base)],axis=2)
-        r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_M,binidx_stim)],axis=2)
-        stat,sigmat_M = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
-
-        b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_MN,binidx_base)],axis=2)
-        r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_MN,binidx_stim)],axis=2)
-        stat,sigmat_MN = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
-
-        ses.celldata['sig_N'] = sigmat_N < thr_p
-        ses.celldata['sig_M'] = sigmat_M < thr_p
-        ses.celldata['sig_MN'] = sigmat_MN < thr_p
-
-    return sessions

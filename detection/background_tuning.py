@@ -116,3 +116,48 @@ fig.colorbar(c, cax=cbar_ax,label='Activity (z)')
 fig.tight_layout()
 
 plt.savefig(os.path.join(savedir,'BackgroundActivity_crosssorted_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+
+#%%
+
+#%% ###############################################################
+
+protocols            = ['DN','DP']
+
+# session_list = np.array([['LPE12385', '2024_06_15']])
+# sessions,nSessions = filter_sessions(protocols,session_list) #Load specified list of sessions
+sessions,nSessions = filter_sessions(protocols) #load sessions that meet criteria:
+
+
+    
+#%% ################ Performance across background bins ################
+
+## Parameters for spatial binning
+s_pre       = 0  #pre cm
+s_post      = 200   #post cm
+binsize     = 20     #spatial binning in cm
+sbins       = np.arange(start=s_pre,stop=s_post+binsize,step=binsize)
+sbincenters = np.nanmean((sbins[:-1],sbins[1:]),axis=0)
+
+data = np.empty((nSessions,len(sbins)-1))
+for ises,ses in enumerate(sessions):
+    for ibin,bin in enumerate(zip(sbins[:-1],sbins[1:])):
+        idx_T = np.all((np.isin(sessions[ises].trialdata['stimcat'],['P','N']),
+                        np.mod(sessions[ises].trialdata['stimStart'],200)>=bin[0],
+                        np.mod(sessions[ises].trialdata['stimStart'],200)<=bin[1]), axis=0)
+        data[ises,ibin] = np.sum(sessions[ises].trialdata['lickResponse'][idx_T]) / np.sum(idx_T)
+        # sessions[ises].stensor[ibin,:,:] = np.nanmean(sessions[ises].stensor[np.ix_(idx_T,np.ones(S).astype(bool))],axis=0)
+    # z_T = np.arange(start=0,stop=np.nanmax(sessions[ises].zpos_F),step=200)
+
+fig,ax = plt.subplots(1,1,figsize=(1*3,1*2.5),sharex=True,sharey=True)
+# for i in range(nSessions):
+    # ax.plot(sbincenters, data[i,:], color='k', label=sessions[i].sessiondata['session_id'][0],linewidth=0.2)
+shaded_error(sbincenters, data, color='k', error='sem',linewidth=2)
+ax.set_ylim([0,1])
+ax.set_xlim([0,200])
+ax.set_xlabel('Position relative to stim (cm)')
+ax.set_ylabel('Hit Rate')
+ax.set_title('Hit Rate per background bin')
+plt.savefig(os.path.join(savedir,'Background_Hitrate_NoisePsy_%dsessions' % nSessions + '.png'), format = 'png')
+
+

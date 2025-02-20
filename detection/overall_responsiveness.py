@@ -37,10 +37,10 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\
 #%% ###############################################################
 protocol            = 'DN'
 calciumversion      = 'deconv'
-# calciumversion      = 'dF'
+calciumversion      = 'dF'
 
-sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE12013'],min_cells=100,load_videodata=True,
-                           load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
+# sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE12013'],min_cells=100,load_videodata=True,
+                        #    load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
 
 sessions,nSessions = filter_sessions(protocol,min_cells=100,
                            load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
@@ -54,10 +54,10 @@ for i in range(nSessions):
 
 
 #%%  Show raster or traces plot for some example session:
-ises = 1
+ises = 20
 
 fig = plot_excerpt(sessions[ises],trialsel=[100,150],plot_neural=True,plot_behavioral=True,neural_version='traces')
-fig.savefig(os.path.join(savedir,'ExampleTraces','ExTraces_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
+# fig.savefig(os.path.join(savedir,'ExampleTraces','ExTraces_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
 
 #%%  Show raster or traces plot for some example session:
 ises = 1
@@ -72,8 +72,8 @@ fig.savefig(os.path.join(savedir,'ExampleTraces','ExRaster_%s' % sessions[ises].
 #%% ############################### Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning
-s_pre       = -80  #pre cm
-s_post      = 60   #post cm
+s_pre       = -75  #pre cm
+s_post      = 75   #post cm
 binsize     = 5     #spatial binning in cm
 
 for i in range(nSessions):
@@ -149,6 +149,8 @@ fig.savefig(os.path.join(savedir,'SpatialActivity','ActivityInCorridor_perAnimal
 sessions        = calc_stimresponsive_neurons(sessions,sbins)
 celldata        = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
+
+
 #%% Plot number of responsive neurons per stimulus per area:
 
 areas = ['V1','PM','AL','RSP']
@@ -204,54 +206,111 @@ ax.set_ylabel('% responsive')
 # fig.savefig(os.path.join(savedir,'SpatialActivity','FracResponsive_perStim_%d' % nanimals + '.png'), format = 'png',bbox_inches='tight')
 
 
+
+
+#%%
+
+sessel = sessions[:2]
+sessel = sessions[:2]
+perc_N,frac_M,frac_MN        = calc_spatial_responsive_neurons(sessel,sbins)
+
+celldata        = pd.concat([ses.celldata for ses in sessel]).reset_index(drop=True)
+
+frac_N,frac_M,frac_MN        = calc_spatial_responsive_neurons(sessions,sbins,nshuffle=100)
+celldata        = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+#%%
+np.save('frac_N.npy',frac_N)
+np.save('frac_M.npy',frac_M)
+np.save('frac_MN.npy',frac_MN)
+
 #%% Plot number of responsive neurons per stimulus per area for labeled and unlabeled:
 
-ax_areas        = ['V1','V1','PM','PM']
-ax_stim         = ['N','M','N','M']
-ax_stimlabels   = ['Noise','Max','Noise','Max']
+areas           = ['V1','PM','AL','RSP']
+nareas = len(areas)
+clrs_areas = get_clr_areas(areas)
+# ax_areas        = ['V1','V1','PM','PM']
+# ax_stim         = ['N','M','N','M']
+# ax_stimlabels   = ['Noise','Max','Noise','Max']
 
 labeled         = ['unl','lab']
+nlabeled = len(labeled)
 clr_labeled     = get_clr_labeled()
+lines_labeled = ['-',':']
 min_nlabcells   = 5
 
-fig,axes = plt.subplots(1,4,figsize=(6,3),sharey=True, sharex=True)
+# data = copy.deepcopy(frac_N)
+data = copy.deepcopy(frac_MN)
 
-for iax,(ax,ar,st) in enumerate(zip(axes,ax_areas,ax_stim)):
+thr  = 0.01
 
-    nlabcells = celldata[np.logical_and(celldata['roi_name']==ar,celldata['labeled']=='lab')].groupby('session_id')['sig_'+st].count()
-    nlabcells = nlabcells.reset_index()
-    idx_ses = nlabcells['session_id'][nlabcells['sig_'+st]>=min_nlabcells]
+# fig,axes = plt.subplots(1,nareas,figsize=(15,3),sharey=True, sharex=True)
+fig,axes = plt.subplots(2,nareas,figsize=(15,6),sharey=True, sharex=True)
 
-    frac = celldata[np.logical_and(celldata['roi_name']==ar,celldata['session_id'].isin(idx_ses))].groupby(['session_id','labeled'])['sig_'+st].sum() / \
-        celldata[np.logical_and(celldata['roi_name']==ar,celldata['session_id'].isin(idx_ses))].groupby(['session_id','labeled'])['sig_'+st].count().unstack(fill_value=0).stack()
-    frac = frac.reset_index()
-    frac.columns = ['session_id','labeled','sig']
+# for iax,(ax,ar,st) in enumerate(zip(axes,ax_areas,ax_stim)):
+for iarea,area in enumerate(areas):
+    for ilab,lab in enumerate(labeled):
+        idx_neurons = np.logical_and(celldata['roi_name']==area,celldata['labeled']==lab)
+        if np.sum(idx_neurons)>min_nlabcells:
+            ax = axes[0,iarea]
 
-    sns.stripplot(x='labeled', y='sig' ,hue='labeled', data=frac, s=3,jitter=True, 
-                  palette=clr_labeled,ax=ax,order=labeled,legend=None,hue_order=labeled)
-    g = sns.pointplot(x='labeled', y='sig', hue='labeled',data=frac, ax=ax,order=labeled,
-                  hue_order=labeled,palette=clr_labeled,
-                  errorbar=('ci', 95),capsize=.0,estimator=np.mean,markers=['o', 'o'])
+            plot_data = np.sum(data[idx_neurons,:]>(1-thr),axis=0) / np.sum(idx_neurons)
+            ax.plot(sbins[:-1],plot_data,color=clrs_areas[iarea],linestyle=lines_labeled[ilab])
+            add_stim_resp_win(ax,linewidth=0.5)
+            ax.set_xlabel('Pos. relative to stim')
+            ax.set_ylabel('% responsive')
+
+            ax = axes[1,iarea]
+            plot_data = np.sum(data[idx_neurons,:]<thr,axis=0) / np.sum(idx_neurons)
+            ax.plot(sbins[:-1],plot_data,color=clrs_areas[iarea],linestyle=lines_labeled[ilab])
+
+            add_stim_resp_win(ax,linewidth=0.5)
+            ax.set_xlabel('Pos. relative to stim')
+            ax.set_ylabel('% responsive')
+
+    # nlabcells = celldata[np.logical_and(celldata['roi_name']==ar,celldata['labeled']=='lab')].groupby('session_id')['sig_'+st].count()
+    # nlabcells = nlabcells.reset_index()
+    # idx_ses = nlabcells['session_id'][nlabcells['sig_'+st]>=min_nlabcells]
+
+    # frac = celldata[np.logical_and(celldata['roi_name']==ar,celldata['session_id'].isin(idx_ses))].groupby(['session_id','labeled'])['sig_'+st].sum() / \
+    #     celldata[np.logical_and(celldata['roi_name']==ar,celldata['session_id'].isin(idx_ses))].groupby(['session_id','labeled'])['sig_'+st].count().unstack(fill_value=0).stack()
+    # frac = frac.reset_index()
+    # frac.columns = ['session_id','labeled','sig']
+
+    # sns.stripplot(x='labeled', y='sig' ,hue='labeled', data=frac, s=3,jitter=True, 
+    #               palette=clr_labeled,ax=ax,order=labeled,legend=None,hue_order=labeled)
+    # g = sns.pointplot(x='labeled', y='sig', hue='labeled',data=frac, ax=ax,order=labeled,
+    #               hue_order=labeled,palette=clr_labeled,
+    #               errorbar=('ci', 95),capsize=.0,estimator=np.mean,markers=['o', 'o'])
     
     # g = sns.pointplot(x='labeled', y='sig', color='k',data=frac, ax=ax,order=labeled,
     #             #   hue_order=labeled,palette='grey',
     #               errorbar=('ci', 95),capsize=.0)
-    g.get_legend().remove()
+    # g.get_legend().remove()
     
-    stat,pval = stats.ttest_rel(frac[frac['labeled']=='unl']['sig'],frac[frac['labeled']=='lab']['sig'])
+    # stat,pval = stats.ttest_rel(frac[frac['labeled']=='unl']['sig'],frac[frac['labeled']=='lab']['sig'])
     # stat,pval = stats.wilcoxon(frac[frac['labeled']=='unl']['sig'],frac[frac['labeled']=='lab']['sig'])
-    ax.annotate('%sp = %0.3f' % (get_sig_asterisks(pval),pval), xy=(0.5, 0.9), xycoords='axes fraction', ha='center', va='center', size=9)
-    ax.set_title('%s - %s' % (ar,ax_stimlabels[iax]),fontsize=10)
-    ax.set_xlabel('')
-    ax.set_ylabel('% responsive')
+    # ax.annotate('%sp = %0.3f' % (get_sig_asterisks(pval),pval), xy=(0.5, 0.9), xycoords='axes fraction', ha='center', va='center', size=9)
+    # ax.set_title('%s - %s' % (ar,ax_stimlabels[iax]),fontsize=10)
+    
 
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    # ax.spines['top'].set_visible(False)
+    # ax.spines['right'].set_visible(False)
 
-fig.savefig(os.path.join(savedir,'SpatialActivity','FracResponsive_Labeled_%dsessions' % nSessions + '.png'), format = 'png',bbox_inches='tight')
+fig.savefig(os.path.join(savedir,'SpatialActivity','Spatial_FracResponsive_Labeled_%dsessions' % nSessions + '.png'), format = 'png',bbox_inches='tight')
+
+
+
+
 
 #%% Get signal as relative to psychometric curve for all sessions:
-sessions = noise_to_psy(sessions,filter_engaged=True)
+sessions = noise_to_psy(sessions,filter_engaged=True,bootstrap=True)
+
+
+# fig     = plot_psycurve(sessions,filter_engaged=True)
+# fig     = plot_psycurve([sessions[21]],filter_engaged=True)
+fig     = plot_all_psycurve(sessions,filter_engaged=True)
+
 
 #%% #################### Compute mean activity for saliency trial bins for all sessions ##################
 
@@ -263,59 +322,24 @@ nareas      = len(areas)
 lickresp    = [0,1]
 nlickresp   = len(lickresp)
 
-zmin        = -3
-zmax        = 3
+
+sigtype     = 'signal'
+zmin        = 7
+zmax        = 17
 nbins_noise = 5
-Z           = nbins_noise + 2
 
-edges       = np.linspace(zmin,zmax,nbins_noise+1)
-centers     = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
-plotcenters = np.hstack((centers[0]-2*np.mean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
+sigtype     = 'signal_psy'
+zmin        = -1
+zmax        = 1
+nbins_noise = 5
 
-S           = len(sbins)
+data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
+data_mean_spatial_hitmiss,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
 
-data_spatial = np.full((S,Z,nlickresp,nareas,nlabels,nSessions),np.nan)
-data_mean    = np.full((Z,nlickresp,nareas,nlabels,nSessions),np.nan)
-
-min_ncells  = 5
-min_ntrials = 5
-for ises,ses in enumerate(sessions):
-    print(f"\rComputing mean activity for noise trial bins for session {ises+1} / {len(sessions)}",end='\r')
-    for ilab,label in enumerate(labeled):
-        for iarea, area in enumerate(areas):
-            # idx_N_resp = np.logical_or(sessions[ises].celldata['sig_N'],sessions[ises].celldata['sig_M'])
-            # idx_N     = np.all((sessions[ises].celldata['roi_name']==area,
-            #                     sessions[ises].celldata['labeled']==label,
-            #                     idx_N_resp), axis=0)
-            idx_N     = np.all((sessions[ises].celldata['roi_name']==area,
-                    sessions[ises].celldata['labeled']==label), axis=0)
-            if np.sum(idx_N)>=min_ncells:
-                for ilr,lr in enumerate(lickresp):
-                    #Catch trials
-                    idx_T           = np.all((sessions[ises].trialdata['signal']==0, 
-                                              sessions[ises].trialdata['lickResponse']==lr,
-                                              sessions[ises].trialdata['engaged']==1), axis=0)
-                    data_spatial[:,0,ilr,iarea,ilab,ises]   = np.nanmean(np.nanmean(sessions[ises].stensor[np.ix_(idx_N,idx_T,np.ones(S).astype(bool))],axis=0),axis=0)
-                    data_mean[0,ilr,iarea,ilab,ises]        = np.nanmean(np.nanmean(sessions[ises].respmat[np.ix_(idx_N,idx_T)],axis=0),axis=0)
-                    #Max trials
-                    idx_T           = np.all((sessions[ises].trialdata['signal']==100,
-                                              sessions[ises].trialdata['lickResponse']==lr,
-                                              sessions[ises].trialdata['engaged']==1), axis=0)
-                    data_spatial[:,-1,ilr,iarea,ilab,ises]  = np.nanmean(np.nanmean(sessions[ises].stensor[np.ix_(idx_N,idx_T,np.ones(S).astype(bool))],axis=0),axis=0)
-                    data_mean[-1,ilr,iarea,ilab,ises]       = np.nanmean(np.nanmean(sessions[ises].respmat[np.ix_(idx_N,idx_T)],axis=0),axis=0)
-
-                    for ibin,(low,high) in enumerate(zip(edges[:-1],edges[1:])):
-                        idx_T           = np.all((sessions[ises].trialdata['signal_psy']>=low,
-                                                sessions[ises].trialdata['signal_psy']<=high,
-                                                sessions[ises].trialdata['lickResponse']==lr,
-                                              sessions[ises].trialdata['engaged']==1), axis=0)
-                        if np.sum(idx_T)>=min_ntrials:
-                            data_spatial[:,ibin+1,ilr,iarea,ilab,ises]  = np.nanmean(np.nanmean(sessions[ises].stensor[np.ix_(idx_N,idx_T,np.ones(S).astype(bool))],axis=0),axis=0)
-                            
-                            data_mean[ibin+1,ilr,iarea,ilab,ises]       = np.nanmean(np.nanmean(sessions[ises].respmat[np.ix_(idx_N,idx_T)],axis=0),axis=0)
 
 #%% Construct color panel for saliency trial bins
-plotlabels = ['catch'] + [str(x) for x in np.round(centers,2)] + ['max']
+plotlabels = ['catch'] + [str(x) for x in np.round(plotcenters,2)] + ['max']
+# plotlabels = ['catch'] + [str(x) for x in np.round(plotcenters,2)] + ['max']
 plotcolors = ['black']  # Start with black
 plotcolors += sns.color_palette("magma", n_colors=nbins_noise)  # Add 5 colors from the magma palette
 plotcolors.append('orange')  # Add orange at the end
@@ -324,33 +348,50 @@ plotlines = ['--','-']
 
 #%% ############################### Plot neuron-average activity per stim #################################
 
-plotdata = np.nanmean(data_spatial[:,:,:,:,0,:],axis=(2,3,4))
+plotdata = np.nanmean(data_mean_spatial_hitmiss,axis=(0,3)).T
+Z = np.shape(data_mean_spatial_hitmiss)[1]
 
 fig,ax = plt.subplots(1,1,figsize=(1*3,1*2.5),sharex=True,sharey=True)
 for iZ in range(Z):
     ax.plot(sbins, plotdata[:,iZ], color=plotcolors[iZ], label=plotlabels[iZ],linewidth=2)
-ax.set_ylim([-0.05,0.25])
+ax.set_yticks(np.arange(0,2,0.1))
+ax.set_ylim(np.nanmin(plotdata)*0.9,np.nanmax(plotdata)*1.1)
 # ax.axhline(0, color='grey', linewidth=1, linestyle='--')
 ax.legend(frameon=False,fontsize=8)
 ax.set_xlim([-60,60])
 ax.set_title('Average activity per stim')
 ax.set_xlabel('Position relative to stim (cm)')
 ax.set_ylabel('Activity (z)')
-ax.set_yticks([0,0.1,0.2])
-# add_stim_resp_win(ax)
-plt.savefig(os.path.join(savedir,'Spatial_perSaliency_allAreas_%dsessions' % nSessions + '.png'), format = 'png')
+add_stim_resp_win(ax)
+# plt.savefig(os.path.join(savedir,'Spatial_perSaliency_allAreas_%dsessions' % nSessions + '.png'), format = 'png')
 
 #%% ############################### Plot spatial neuron-average per stim per area #################################
+min_nlabcells = 10
+
+labeled     = ['unl','lab']
+nlabels     = len(labeled)
+areas       = ['V1','PM','AL','RSP']
+nareas      = len(areas)
+
+lickresponses = ['Miss','Hit']
+lickresp    = [0,1]
+nlickresp   = len(lickresp)
 
 fig,axes = plt.subplots(nlabels,nareas,figsize=(nareas*3,nlabels*2.5),sharex=True,sharey=True)
-for ilab,label in enumerate(labeled):
+for ilab,lab in enumerate(labeled):
     for iarea, area in enumerate(areas):
         ax          = axes[ilab,iarea]
-        for ilr,lr in enumerate(lickresp):
-            plotdata    = np.nanmean(data_spatial[:,:,ilr,iarea,ilab,:],axis=(2))
-            if np.any(~np.isnan(plotdata)):
+        # idx_N = np.logical_and(celldata['roi_name']==area,celldata['labeled']==lab)
+        idx_N = np.all((celldata['roi_name']==area,
+                        # celldata['sig_MN']==1,
+                        # celldata['sig_MN']==0,
+                        celldata['labeled']==lab),axis=0)
+        if np.sum(idx_N)>min_nlabcells:
+
+            for ilr,lr in enumerate(lickresp):
+                plotdata    = np.nanmean(data_mean_spatial_hitmiss[idx_N,:,:,ilr],axis=(0))
                 for iZ in range(Z):
-                    ax.plot(sbins, plotdata[:,iZ], color=plotcolors[iZ], label=plotlabels[iZ],linewidth=2,linestyle=plotlines[ilr])
+                    ax.plot(sbins, plotdata[iZ,:], color=plotcolors[iZ], label=plotlabels[iZ],linewidth=2,linestyle=plotlines[ilr])
 
         if not np.any(ax.get_legend_handles_labels()):
             ax.axis('off')
@@ -359,13 +400,14 @@ for ilab,label in enumerate(labeled):
         # ax.set_ylim([-0.05,0.35])
         # if ilab == 0 and iarea == 0:
             # ax.legend(frameon=False,fontsize=6)
-        ax.set_xlim([-60,60])
+        ax.set_xlim([-75,75])
         if ilab == 0:
             ax.set_title(area)
         if ilab == 1:
             ax.set_xlabel('Position relative to stim (cm)')
         if iarea==0:
             ax.set_ylabel('Activity (z)')
+            # ax.set_yticks([0,0.1,0.2,0.3])
             ax.set_yticks([0,0.1,0.2,0.3])
         if iarea == 0 and ilab == 0: 
             leg1 = ax.legend([plt.Line2D([0], [0], color=c, lw=1.5) for c in plotcolors], 
@@ -373,12 +415,12 @@ for ilab,label in enumerate(labeled):
             ax.add_artist(leg1)
         if iarea == 0 and ilab == 1: 
             leg2 = ax.legend([plt.Line2D([0], [0], color='k', lw=1.5,ls=l) for l in plotlines],
-                                ['Hit','Miss'], frameon=False,fontsize=7,loc='upper left',title='Response')
+                                lickresponses, frameon=False,fontsize=7,loc='upper left',title='Response')
             # ax.add_artist(leg1)
         
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir,'Spatial_perSaliency_responsiveNeurons_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
-plt.savefig(os.path.join(savedir,'Spatial_perSaliency_allNeurons_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'Spatial_perSaliency_allNeurons_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
 
 #%% ############################### Plot stimwin neuron-average per stim per area #################################
 
@@ -389,20 +431,31 @@ clrs_areas = get_clr_areas(areas)
 for ilab,label in enumerate(labeled):
     for iarea, area in enumerate(areas):
         ax          = axes[ilab,iarea]
-        for ilr,lr in enumerate(lickresp):
-            # plotdata    = np.nanmean(data_mean[:,ilr,iarea,ilab,:],axis=1)
-            # ax.plot(plotcenters, plotdata, linewidth=2,linestyle=plotlines[ilr],color='k')
-            plotdata    = data_mean[:,ilr,iarea,ilab,:]
-            if np.any(~np.isnan(plotdata)):
-                x = plotcenters[np.any(~np.isnan(plotdata),axis=1)]
-                y = plotdata[np.any(~np.isnan(plotdata),axis=1),:].T
-                h = shaded_error(x, y, error='sem',linestyle=plotlines[ilr],color=clrs_areas[iarea],ax=ax)
-            # ax.plot(plotcenters, plotdata[:], color=plotcolors[iZ], label=plotlabels[iZ],linewidth=2,linestyle=plotlines[ilr])
-        if not np.any(~np.isnan(plotdata)):
+        idx_N = np.all((celldata['roi_name']==area,
+                        celldata['sig_N']==1,
+                        # celldata['sig_MN']==0,
+                        celldata['labeled']==label),axis=0)
+        if np.sum(idx_N)>min_nlabcells:
+            for ilr,lr in enumerate(lickresp):
+                # plotdata    = np.nanmean(data_mean[:,ilr,iarea,ilab,:],axis=1)
+                # ax.plot(plotcenters, plotdata, linewidth=2,linestyle=plotlines[ilr],color='k')
+                # plotdata    = data_mean[:,ilr,iarea,ilab,:]
+                # plotdata    = np.nanmean(data_mean_hitmiss[idx_N,:,ilr],axis=(0))
+                plotdata    = data_mean_hitmiss[idx_N,:,ilr]
+
+                if np.any(~np.isnan(plotdata)):
+                    x = plotcenters[np.any(~np.isnan(plotdata),axis=0)]
+                    y = plotdata[:,np.any(~np.isnan(plotdata),axis=0)]
+                    # h = shaded_error(x, y, error='sem',linestyle=plotlines[ilr],color=clrs_areas[iarea],ax=ax)
+                    h = shaded_error(np.arange(Z), y, error='sem',linestyle=plotlines[ilr],color=clrs_areas[iarea],ax=ax)
+                # ax.plot(plotcenters, plotdata[:], color=plotcolors[iZ], label=plotlabels[iZ],linewidth=2,linestyle=plotlines[ilr])
+        else:
             ax.axis('off')
         
-        ax.set_ylim([-0.025,0.3])
-        ax.set_xticks(plotcenters,plotlabels)
+        # ax.set_ylim([-0.025,0.3])
+        # ax.set_xticks(plotcenters,plotlabels)
+        # ax.set_xticks(plotcenters,plotcenters)
+        ax.set_xticks(np.arange(Z))
         if ilab == 0:
             ax.set_title(area,fontsize=12)
         if np.any(~np.isnan(plotdata)):
@@ -410,41 +463,10 @@ for ilab,label in enumerate(labeled):
         
         if iarea==0:
             ax.set_ylabel('Activity (z)')
-            ax.set_yticks([0,0.1,0.2,0.3])
+            # ax.set_yticks([0,0.1,0.2,0.3])
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'StimResponse_Saliency_neuronAverage_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'StimResponse_Saliency_neuronAverage_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'ActivityInCorridor_deconv_neuronAverage_perStim_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
-
-#%% 
-linecolors = ['red','blue']
-fig,axes = plt.subplots(nlabels,nareas,figsize=(nareas*2.5,nlabels*2.5),sharex=True,sharey=True)
-
-for ilab,label in enumerate(labeled):
-    for iarea, area in enumerate(areas):
-        ax          = axes[ilab,iarea]
-        for ises, session in enumerate(sessions):
-            for ilr,lr in enumerate(lickresp):
-                # plotdata    = np.nanmean(data_mean[:,ilr,iarea,ilab,:],axis=1)
-                plotdata    = data_mean[:,ilr,iarea,ilab,ises]
-                x = plotcenters[~np.isnan(plotdata)]
-                y = plotdata[~np.isnan(plotdata)]
-                ax.plot(x, y, linewidth=1,linestyle=plotlines[ilr],color=clrs_areas[iarea])
-
-        ax.set_ylim([-0.1,0.45])
-        # if ilab == 0 and iarea == 0:
-            # ax.legend(frameon=False,fontsize=6)
-        # ax.set_xlim([-60,60])
-        ax.set_xticks(plotcenters,plotlabels,rotation=45)
-        if ilab == 0:
-            ax.set_title(area)
-
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-
-        if iarea==0:
-            ax.set_ylabel('Activity (z)')
-            ax.set_yticks([0,0.1,0.2,0.3,0.4])
-plt.tight_layout()
 
 #%% 
 fig,axes = plt.subplots(nlabels,nareas,figsize=(nareas*2.5,nlabels*2.5),sharex=True,sharey=True)
@@ -453,19 +475,21 @@ for iarea, area in enumerate(areas):
     for ilab,label in enumerate(labeled):
         ax          = axes[ilab,iarea]
         for ises, session in enumerate(sessions):
-            plotdata    = data_mean[:,1,iarea,ilab,ises] - data_mean[:,0,iarea,ilab,ises]
+            idx_N = 
+            
+            plotdata    = data_mean_hitmiss[idx_N,:,1] - data_mean_hitmiss[idx_N,:,0]
 
             x = plotcenters[~np.isnan(plotdata)]
             y = plotdata[~np.isnan(plotdata)]
             ax.plot(x, y, linewidth=0.5,color='grey')
 
-        plotdata    = data_mean[:,1,iarea,ilab,:] - data_mean[:,0,iarea,ilab,:]
+        plotdata    = data_mean_hitmiss[:,1,iarea,ilab,:] - data_mean_hitmiss[:,0,iarea,ilab,:]
         x = plotcenters[np.any(~np.isnan(plotdata),axis=1)]
         y = plotdata[np.any(~np.isnan(plotdata),axis=1),:].T
         h = shaded_error(x, y, error='sem',linestyle=plotlines[ilr],color=clrs_areas[iarea],ax=ax)
         
         # t_stat,p_val = stats.ttest_rel(plotdata[:,0],plotdata[:,1],nan_policy='omit')
-        t_stat,p_values = stats.ttest_rel(data_mean[:,1,iarea,ilab,:],data_mean[:,0,iarea,ilab,:],axis=1,nan_policy='omit')
+        t_stat,p_values = stats.ttest_rel(data_mean_hitmiss[:,1,iarea,ilab,:],data_mean_hitmiss[:,0,iarea,ilab,:],axis=1,nan_policy='omit')
         for i,p_val in enumerate(p_values): 
             ax.text(plotcenters[i], 0.2, '%s' % (get_sig_asterisks(p_val)), fontsize=12)
         
@@ -488,3 +512,119 @@ plt.savefig(os.path.join(savedir,'StimResponse_Saliency_HitMinusMiss_allNeurons_
 # plt.savefig(os.path.join(savedir,'StimResponse_Saliency_HitMinusMiss_neuronAverage_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
 
 #%% 
+
+sigtype     = 'signal'
+zmin        = 7
+zmax        = 17
+nbins_noise = 5
+
+# zmin        = 5
+# zmax        = 20
+# nbins_noise = 5
+
+# data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
+data_mean,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
+
+#%% Data Ratio:
+areas = ['V1','PM','AL','RSP']
+nareas = len(areas)
+depth_border    = 300
+nmincells       = 10
+layerdata       = np.full((nSessions,nareas,len(sbins),2,2),np.nan)
+diffdata        = np.full((nSessions,nareas,len(sbins),2),np.nan)
+
+for ises,ses in enumerate(sessions):
+    for iarea, area in enumerate(areas):
+        idx_N_sup = np.all((celldata['session_id']==ses.sessiondata['session_id'][0],
+                            celldata['depth']<depth_border,
+                            celldata['roi_name']==area), axis=0)
+        idx_N_deep = np.all((celldata['session_id']==ses.sessiondata['session_id'][0],
+                            celldata['depth']>=depth_border,
+                            celldata['roi_name']==area), axis=0)
+        
+
+        # idx_N_sup = np.all((celldata['session_id']==ses.sessiondata['session_id'][0],
+        #                     celldata['depth']<depth_border,
+        #                     celldata['sig_MN']==0,
+        #                     celldata['roi_name']==area), axis=0)
+        # idx_N_deep = np.all((celldata['session_id']==ses.sessiondata['session_id'][0],
+        #                     celldata['depth']>=depth_border,
+        #                     celldata['sig_MN']==0,
+        #                     celldata['roi_name']==area), axis=0)
+        
+
+        if np.sum(idx_N_sup) > nmincells and np.sum(idx_N_deep) > nmincells:
+            
+            layerdata[ises,iarea,:,:,0] = np.nanmean(data_mean[idx_N_sup,1:-1,:,:],axis=(0,1))
+            layerdata[ises,iarea,:,:,1] = np.nanmean(data_mean[idx_N_deep,1:-1,:,:],axis=(0,1))
+
+            # temp = np.nanmean(data_mean[idx_N_sup,1:-1,:,:],axis=(0,1)) / np.nanmean(data_mean[idx_N_deep,1:-1,:,:],axis=(0,1))
+            # temp =  / np.nanmean(data_mean[idx_N_deep,1:-1,:,:],axis=0)
+
+            # plotdata[ises,iarea,:] = np.nanmean(temp)
+            # plotdata[ises,iarea,:] = np.nanmean(temp,axis=0)
+
+            temp  = np.nanmean(data_mean[idx_N_sup,1:-1,:,:],axis=0) - np.nanmean(data_mean[idx_N_deep,1:-1,:,:],axis=0)
+            diffdata[ises,iarea,:,:]  = np.nanmean(temp,axis=0)
+
+
+# diffdata = layerdata[:,:,:,:,0] - layerdata[:,:,:,:,1]
+
+#%% Plot the layerdata of feedforward to feedback activity
+# fig,axes = plt.subplots(nlabels,nareas,figsize=(nareas*2.5,nlabels*2.5),sharex=True,sharey=True)
+linestyles = ['-','--']
+layerlabels =['Superficial','Deep']
+lickresponses = ['Miss','Hit']
+fig,axes = plt.subplots(2,nareas,figsize=(nareas*2.5,2*2.5),sharex=True,sharey=True)
+clrs_areas = get_clr_areas(areas)
+for iarea, area in enumerate(areas):
+    for ilr,lr in enumerate(lickresponses):
+        ax          = axes[ilr,iarea]
+        handles = []
+        for ilayer,layer in enumerate(layerlabels):
+
+            for ises, session in enumerate(sessions):
+                ax.plot(sbins,layerdata[ises,iarea,:,ilr,ilayer],color=clrs_areas[iarea],linestyle=linestyles[ilayer],
+                        linewidth=0.3,label=session.sessiondata['session_id'][0])
+                # ax.plot(sbins,ratiodata[ises,iarea,:,ilr],color=clrs_areas[iarea],linewidth=0.3,label=session.sessiondata['session_id'][0])
+        # ax.plot(sbins,plotdata[ises,iarea,:],color=clrs_areas[iarea],linewidth=2)
+            handles.append(shaded_error(sbins,layerdata[:,iarea,:,ilr,ilayer],color=clrs_areas[iarea],
+                     linestyle=linestyles[ilayer],error='sem',ax=ax))
+        ax.set_title(area + '-' + lr)
+        ax.legend(handles,layerlabels,frameon=False)
+
+        add_stim_resp_win(ax)
+    # ax.set_ylim([-1,1])
+    # if ilab == 0 and iarea == 0:
+        # ax.legend(frameon=False,fontsize=6)
+        
+plt.tight_layout()
+
+#%% Plot the ratio of feedforward to feedback activity
+# fig,axes = plt.subplots(nlabels,nareas,figsize=(nareas*2.5,nlabels*2.5),sharex=True,sharey=True)
+linestyles = ['--','-']
+fig,axes = plt.subplots(1,nareas,figsize=(nareas*2.5,1*2.5),sharex=True,sharey=True)
+clrs_areas = get_clr_areas(areas)
+for iarea, area in enumerate(areas):
+    ax          = axes[iarea]
+    handles = []
+    for ilr,lr in enumerate([0,1]):
+        for ises, session in enumerate(sessions):
+            ax.plot(sbins,diffdata[ises,iarea,:,ilr],color=clrs_areas[iarea],linestyle=linestyles[ilr],
+                    linewidth=0.3,label=session.sessiondata['session_id'][0])
+        # ax.plot(sbins,plotdata[ises,iarea,:],color=clrs_areas[iarea],linewidth=2)
+        handles.append(shaded_error(sbins,diffdata[:,iarea,:,ilr],color=clrs_areas[iarea],linewidth=2,
+                     linestyle=linestyles[ilr],error='sem',ax=ax))
+    ax.legend(handles,lickresponses,frameon=False,fontsize=9)
+    add_stim_resp_win(ax)
+    ax.set_ylabel('Superficial - Deep')
+    # ax.set_ylim([-1,1])
+    # if ilab == 0 and iarea == 0:
+        # ax.legend(frameon=False,fontsize=6)
+        
+plt.tight_layout()
+# plt.savefig(os.path.join(savedir,'StimResponse_Saliency_HitMinusMiss_allNeurons_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'StimResponse_Saliency_HitMinusMiss_neuronAverage_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
+
+
+

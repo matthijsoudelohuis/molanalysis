@@ -8,7 +8,7 @@ This script contains a series of functions that analyze activity in visual VR de
 
 #%% Import packages
 import os
-os.chdir('e:\\Python\\molanalysis\\')
+os.chdir('c:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -58,8 +58,8 @@ session_list = np.array([['LPE11997', '2024_04_16'],
 # sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
                         #  load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
-# sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
-                        #  load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
+sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
+                         load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
 
 #%% Get signal as relative to psychometric curve for all sessions:
 sessions,nSessions = filter_sessions(protocols=protocol,min_cells=100) #Load specified list of sessions
@@ -118,7 +118,7 @@ for ises,ses in enumerate(sessions): # running across the trial:
 sessions = calc_stimresponsive_neurons(sessions,sbins)
 
 #%%
-ises = 6
+ises = 1
 example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
 
 fig = plot_mean_activity_example_neurons(sessions[ises].stensor,sbins,sessions[ises],example_cell_ids)
@@ -133,117 +133,18 @@ sesid = 'LPE11997_2024_04_16'
 sessiondata = pd.concat([ses.sessiondata for ses in sessions])
 ises = np.where(sessiondata['session_id']==sesid)[0][0]
 
-ises = 2
+ises = 1
 example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
 
 # get some responsive cells: 
-idx                 = np.nanmean(sessions[ises].respmat,axis=1)>0.5
-idx                 = sessions[ises].celldata['sig_N']==1
-example_cell_ids = np.random.choice(sessions[ises].celldata['cell_id'][idx], size=9, replace=False)
+# idx                 = np.nanmean(sessions[ises].respmat,axis=1)>0.5
+# idx                 = sessions[ises].celldata['sig_N']==1
+# example_cell_ids = np.random.choice(sessions[ises].celldata['cell_id'][idx], size=9, replace=False)
 
 fig = plot_noise_activity_example_neurons(sessions[ises],example_cell_ids)
 # fig.savefig(os.path.join(savedir,'HitMiss_ExampleNeuronActivity_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
 
 
-
-#%% #################### Compute mean activity for saliency trial bins for all sessions ##################
-def get_idx_noisebins(trialdata,sigtype,edges):
-    """
-    Bins signal values of noise into bins defined by edges, and puts trial index of 
-    trials with signal 0 and 100 in first and last column
-    Given a session and a set of edges (bin edges) returns a 2D boolean array with the same number of rows as trials 
-    in the session and the same number of columns as bins + 2.
-    """
-    idx_T_noise = np.array([(trialdata[sigtype]>=low) & 
-                    (trialdata[sigtype]<=high) for low,high in zip(edges[:-1],edges[1:])])
-    idx_T_all = np.column_stack((trialdata[sigtype]==0,
-                            idx_T_noise.T,
-                            trialdata[sigtype]==100))
-    return idx_T_all
-
-def get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True):
-
-    celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
-    N           = len(celldata)
-
-    lickresp    = [0,1]
-    D           = len(lickresp)
-
-    Z           = nbins_noise + 2
-
-    edges       = np.linspace(zmin,zmax,nbins_noise+1)
-    centers     = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
-    if sigtype == 'signal_psy':
-        plotcenters = np.hstack((centers[0]-2*np.mean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
-    elif sigtype=='signal': 
-        plotcenters = np.hstack((0,centers,100))
-
-    if splithitmiss: 
-        data_mean    = np.full((N,Z,D),np.nan)
-    else: 
-        data_mean    = np.full((N,Z),np.nan)
-
-    for ises,ses in enumerate(sessions):
-        print(f"\rComputing mean activity for noise trial bins for session {ises+1} / {len(sessions)}",end='\r')
-        idx_N_ses = celldata['session_id']==ses.sessiondata['session_id'][0]
-
-        idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
-
-        if splithitmiss:
-            for iZ in range(Z):
-                for ilr,lr in enumerate(lickresp):
-                    idx_T = np.all((idx_T_all[:,iZ],
-                                sessions[ises].trialdata['lickResponse']==lr,
-                                sessions[ises].trialdata['engaged']==1), axis=0)
-                    data_mean[idx_N_ses,iZ,ilr]        = np.nanmean(sessions[ises].respmat[:,idx_T],axis=1)
-        else: 
-            for iZ in range(Z):
-                data_mean[idx_N_ses,iZ]        = np.nanmean(sessions[ises].respmat[:,idx_T_all[:,iZ]],axis=1)
-
-    return data_mean,plotcenters
-
-def get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True):
-
-    celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
-    N           = len(celldata)
-
-    lickresp    = [0,1]
-    D           = len(lickresp)
-
-    Z           = nbins_noise + 2
-
-    S           = len(sbins)
-
-    edges       = np.linspace(zmin,zmax,nbins_noise+1)
-    centers     = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
-    if sigtype == 'signal_psy':
-        plotcenters = np.hstack((centers[0]-2*np.mean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
-    elif sigtype=='signal': 
-        plotcenters = np.hstack((0,centers,100))
-
-    if splithitmiss: 
-        data_mean    = np.full((N,Z,S,D),np.nan)
-    else: 
-        data_mean    = np.full((N,Z,S),np.nan)
-
-    for ises,ses in enumerate(sessions):
-        print(f"\rComputing mean activity for noise trial bins for session {ises+1} / {len(sessions)}",end='\r')
-        idx_N_ses = celldata['session_id']==ses.sessiondata['session_id'][0]
-
-        idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
-
-        if splithitmiss:
-            for iZ in range(Z):
-                for ilr,lr in enumerate(lickresp):
-                    idx_T = np.all((idx_T_all[:,iZ],
-                                sessions[ises].trialdata['lickResponse']==lr,
-                                sessions[ises].trialdata['engaged']==1), axis=0)
-                    data_mean[idx_N_ses,iZ,ilr,:]        = np.nanmean(sessions[ises].tensor[:,idx_T,:],axis=1)
-        else: 
-            for iZ in range(Z):
-                data_mean[idx_N_ses,iZ,:]      = np.nanmean(sessions[ises].tensor[:,idx_T_all[:,iZ],:],axis=1)
-
-    return data_mean,plotcenters
 
 #%% 
 
@@ -295,6 +196,7 @@ nbins_noise = 5
 
 data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
 
+
 # #Do statistical test between hit and miss
 # for ibin,(low,high) in enumerate(zip(edges[:-1],edges[1:])):
 #     idx_T           = np.all((sessions[ises].trialdata[sigtype]>=low,
@@ -314,7 +216,7 @@ plt.plot(np.sum(np.isnan(data_mean_hitmiss[:,:,0]),axis=1))
 plt.imshow(np.isnan(data_mean_hitmiss[:,:,0]),aspect='auto')
 
 #%% 
-data = copy.deepcopy(data_sig_mean.T)
+data = copy.deepcopy(data_mean_hitmiss.T)
 
 print(np.shape(data))
 
@@ -352,6 +254,7 @@ for sig in [0,1]:
     # idx_N = celldata['sig_N']!=1
 
     idx_N = celldata['sig_MN']==sig
+    # idx_N = celldata['sig_N']==sig
     for ilr,lr in enumerate(lickresp):
         # ax.plot(plotcenters[1:-1],np.nanmean(data_mean_hitmiss[idx_N,1:-1,ilr],axis=0),
                 # marker='.',markersize=15,color=plotcolors[ilr], label=plotlabels[ilr],linewidth=2)
@@ -374,7 +277,7 @@ for sig in [0,1]:
     ax.set_ylim([-0.05,0.55])
     ax.set_title(siglabels[sig])
 
-fig.savefig(os.path.join(savedir, 'HitMiss_Mean_Resp_vs_NonRespNeurons_%dsessions.png') % (nSessions), format='png')
+# fig.savefig(os.path.join(savedir, 'HitMiss_Mean_Resp_vs_NonRespNeurons_%dsessions.png') % (nSessions), format='png')
 # fig.savefig(os.path.join(savedir, 'HitMiss_Mean_NoiseResponsiveNeurons_%dsessions.png') % (nSessions), format='png')
 # fig.savefig(os.path.join(savedir, 'HitMiss_Noise_Mean_NoiseResponsiveNeurons_%dsessions.png') % (nSessions), format='png',bbox_inches='tight')
 
@@ -435,12 +338,52 @@ plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'HitMiss_Noise_Mean_NonNoiseResponsiveNeurons_RawSignal_%dsessions_Arealabels.png') % (nSessions), format='png')
 # plt.savefig(os.path.join(savedir, 'EncodingModel_%s_cvR2_Areas_Labels_%dsessions.png') % (version,nSessions), format='png')
 
+#%%
+
+def get_edges_every_n_points(data, n):
+    """
+    Compute bin edges where each edge corresponds to every `n` sorted data points.
+    
+    Parameters:
+        data (array-like): 1D array of continuous values.
+        n (int): Number of points per bin.
+
+    Returns:
+        numpy.ndarray: Bin edges.
+    """
+    sorted_data = np.sort(data)  # Sort data in ascending order
+    num_bins = len(sorted_data) // n  # Number of bins based on n points per bin
+
+    if num_bins < 1:
+        raise ValueError("n is too large, fewer than one bin can be formed.")
+    
+    edges = sorted_data[::n]  # Select every n-th element as an edge
+    
+    # Ensure the last edge includes the max value
+    if edges[-1] != sorted_data[-1]:
+        edges = np.append(edges, sorted_data[-1])
+
+    return edges
+
+# Example usage
+data = np.random.randn(1000)  # Example continuous values
+n = 100  # Edge at every 100 points
+
+edges = get_edges_every_n_points(data, n)
+print(f"Bin edges:\n{edges}")
+
+
 #%% 
 
 from scipy.stats import wilcoxon
 
-diffdata = np.diff(data_mean_hitmiss,axis=2).squeeze()
+# diffdata = np.diff(data_mean_hitmiss,axis=2).squeeze()
+data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
 diffdata = np.nanmean(np.diff(data_mean_hitmiss,axis=2)[:,1:-1,:],axis=1).squeeze()
+
+# diffdata,plotcenters = get_dprime_signalbins(sessions,sigtype,nbins_noise,zmin,zmax)
+# diffdata = np.nanmean(diffdata[:,1:-1],axis=1).squeeze()
+
 
 fig,axes    = plt.subplots(nlabels,nareas,figsize=(nareas*2,nlabels*2),sharey=False,sharex=True)
 for iarea, area in enumerate(areas):
@@ -451,14 +394,21 @@ for iarea, area in enumerate(areas):
                         # celldata['sig_MN']==1,
                         # celldata['sig_N']==1,
                         # celldata['sig_N']!=1,
-                        celldata['sig_MN']!=1,
+                        # celldata['sig_MN']!=1,
                         celldata['labeled']==label), axis=0)
 
         df = pd.DataFrame(data = {'depth':celldata['depth'][idx_N], 'diff': diffdata[idx_N]})
         
         # sns.scatterplot(data=df,y='depth',x='diff',ax=ax,color=clrs_areas[iarea],alpha=0.5,s=5)
         sns.scatterplot(data=df,y='depth',x='diff',ax=ax,color='k',alpha=0.5,s=5)
-        depth_edges = np.arange(0,500,50)
+        depth_edges = np.nanpercentile(df['depth'],np.linspace(0,100,5))
+
+        # depth_edges = np.arange(0,500,100)
+        if np.all(np.isnan(depth_edges)):
+            depth_edges = [0,1000]
+        # else: 
+            # depth_edges = get_edges_every_n_points(df['depth'], 50)
+
         centers     = np.stack((depth_edges[:-1],depth_edges[1:]),axis=1).mean(axis=1)
 
         depth_diff = np.full(len(centers),np.nan)
@@ -494,7 +444,7 @@ for iarea, area in enumerate(areas):
             ax.set_xlabel(r'hit-miss ($\Delta$z)')
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir,'DeltaHitMiss_Depth_ResponsiveNeurons_Arealabels_%dsessions.png') % (nSessions), format='png')
-plt.savefig(os.path.join(savedir,'DeltaHitMiss_Depth_NonResponsiveNeurons_Arealabels_%dsessions.png') % (nSessions), format='png')
+# plt.savefig(os.path.join(savedir,'DeltaHitMiss_Depth_NonResponsiveNeurons_Arealabels_%dsessions.png') % (nSessions), format='png')
 
 
 
@@ -507,6 +457,13 @@ zmax        = 17
 nbins_noise = 5
 
 data_mean,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=False)
+
+idx_N = np.all((celldata['roi_name']==area, 
+                        # celldata['sig_MN']==1,
+                        # celldata['sig_N']==1,
+                        # celldata['sig_N']!=1,
+                        ), axis=0)
+
 
 
 data = copy.deepcopy(data_mean[idx_N,:])
@@ -544,14 +501,14 @@ for icomp in range(2):
     # ax.plot(plotcenters,pca.components_[icomp,:].T,linewidth=5/(icomp+1))
 # ax.plot(plotcenters,pca.components_[:2,:].T)
 ax.set_title('PC components')
-
+ax.legend(['PC1','PC2'],frameon=False,loc='lower right',fontsize=11)
 ax = axes[2]
 ax.scatter(data_pca[:,0],data_pca[:,1],c='k', marker='o',s=10,alpha=0.5)
 ax.set_title('Neuron locations in PC space')
 ax.set_xlabel('PC1')
 ax.set_ylabel('PC2')
 
-fig.savefig(os.path.join(savedir,'PCA_TuningCurve_%dsessions.png') % (nSessions), format='png')
+# fig.savefig(os.path.join(savedir,'PCA_TuningCurve_%dsessions.png') % (nSessions), format='png')
 
 #%% 
 

@@ -104,7 +104,7 @@ def plot_psycurve(sessions,filter_engaged=False):
         x = psydata.keys().to_numpy()
         y = psydata.to_numpy()
        
-        params,r2 = fit_psycurve(trialdata,printoutput=True)
+        params,r2 = fit_psycurve(trialdata,printoutput=True,bootstrap=True)
 
         ## Plot the results
         fig, ax = plt.subplots(figsize=(3,3))
@@ -150,22 +150,51 @@ def plot_all_psycurve(sessions,filter_engaged=False):
     return fig
 
 
-def fit_psycurve(trialdata,printoutput=False):
+# Bootstrapping helper function
+def bootstrap_fit(X, Y, initial_guess, bounds):
+    # Resample (X, Y) with replacement
+    idxs = np.random.choice(len(X), size=len(X), replace=True)
+    X_resampled, Y_resampled = X[idxs], Y[idxs]
+    
+    # Fit the curve
+    try:
+        params, _ = curve_fit(psychometric_function, X_resampled, Y_resampled, p0=initial_guess, bounds=bounds)
+        Y_pred = psychometric_function(X_resampled, *params)
+        r2 = r2_score(Y_resampled, Y_pred)
+        return params, r2
+    except:
+        return None  # Handle cases where fitting fails
+    
+from joblib import Parallel, delayed
+
+
+def fit_psycurve(trialdata,printoutput=False,bootstrap=False):
 
     psydata = trialdata.groupby(['signal'])['lickResponse'].sum() / trialdata.groupby(['signal'])['lickResponse'].count()
-    x = psydata.keys().to_numpy()
-    y = psydata.to_numpy()
+    x       = psydata.keys().to_numpy()
+    y       = psydata.to_numpy()
 
-    X = trialdata['signal'] #Fit with actual trials, not averages per condition
-    Y = trialdata['lickResponse']
+    X       = trialdata['signal'] #Fit with actual trials, not averages per condition
+    Y       = trialdata['lickResponse']
     initial_guess           = [20, 15, 1-y[-1], y[0]]  # Initial guess for parameters (mu,sigma,lapse_rate,guess_rate)
     # set guess rate and lapse rate to be within 10% of actual response rates at catch and max trials:
-    bounds                  = ([0,2,(1-y[-1])*0.9,y[0]*0.9-0.01],[100,40,(1-y[-1])*1.1+0.01,y[0]*1.1])
+    bounds                  = ([0,2,(1-y[-1])*0.8,y[0]*0.8-0.01],[100,40,(1-y[-1])*1.2+0.01,y[0]*1.2])
     # bounds                  = ([0,4,0,0],[100,40,0.5,0.5])
     
     # Fit the psychometric curve to the data using curve_fit
     # params, covariance      = curve_fit(psychometric_function, x, y, p0=initial_guess,bounds=bounds)
-    params, covariance      = curve_fit(psychometric_function, X, Y, p0=initial_guess,bounds=bounds)
+    if bootstrap:
+        n_bootstrap = 100
+        
+        params_bt = np.empty((4,n_bootstrap))
+        for i in range(n_bootstrap):
+            # Resample (X, Y) with replacement
+            idxs = np.random.choice(len(X), size=len(X), replace=True)
+            X_resampled, Y_resampled = X.to_numpy()[idxs], Y.to_numpy()[idxs]
+            params_bt[:,i], _      = curve_fit(psychometric_function, X_resampled, Y_resampled, p0=initial_guess, bounds=bounds)
+        params = np.nanmedian(params_bt,axis=1)
+    else:
+        params, covariance      = curve_fit(psychometric_function, X, Y, p0=initial_guess,bounds=bounds)
     
     # Predict Y values using the fitted parameters
     Y_pred = psychometric_function(X, *params)
@@ -184,14 +213,14 @@ def fit_psycurve(trialdata,printoutput=False):
     return params,r2
 
 
-def noise_to_psy(sessions,filter_engaged=True):
+def noise_to_psy(sessions,filter_engaged=True,bootstrap=False):
 
     for ises,ses in enumerate(sessions):
         trialdata = ses.trialdata.copy()
         if filter_engaged:
             trialdata = trialdata[trialdata['engaged']==1]
 
-        params,r2 = fit_psycurve(trialdata,printoutput=False)
+        params,r2 = fit_psycurve(trialdata,printoutput=False,bootstrap=bootstrap)
 
         idx = ses.trialdata['stimcat']=='N'
         ses.trialdata['signal_psy'] = pd.Series(dtype='float')

@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.linear_model import LinearRegression
 import copy
+from scipy import stats
+from tqdm.auto import tqdm
 
 from utils.plot_lib import *
 from utils.plotting_style import * #get all the fixed color schemes
@@ -459,4 +461,387 @@ def plot_noise_activity_example_neurons(ses,example_cell_ids):
     return fig
 
 
+
+def calc_stimresponsive_neurons(sessions,sbins,thr_p=0.001):
+    binidx_base     = (sbins>=-70) & (sbins<-10)
+    binidx_stim     = (sbins>=-5) & (sbins<20)
+
+    for ises,ses in tqdm(enumerate(sessions),total=len(sessions),desc='Testing significant responsiveness to stim'):
+        [Nses,K,S]      = np.shape(sessions[ises].stensor) #get dimensions of tensor
+
+        idx_N           = np.isin(sessions[ises].trialdata['stimcat'],['N'])
+        idx_M           = np.isin(sessions[ises].trialdata['stimcat'],['M'])
+        idx_MN          = np.isin(sessions[ises].trialdata['stimcat'],['N','M'])
+
+        b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_base)],axis=2)
+        r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_N,binidx_stim)],axis=2)
+        stat,sigmat_N = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
+
+        b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_M,binidx_base)],axis=2)
+        r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_M,binidx_stim)],axis=2)
+        stat,sigmat_M = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
+
+        b = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_MN,binidx_base)],axis=2)
+        r = np.nanmean(sessions[ises].stensor[np.ix_(np.arange(Nses),idx_MN,binidx_stim)],axis=2)
+        stat,sigmat_MN = stats.ttest_rel(b, r,nan_policy='omit',axis=1)
+
+        ses.celldata['sig_N'] = sigmat_N < thr_p
+        ses.celldata['sig_M'] = sigmat_M < thr_p
+        ses.celldata['sig_MN'] = sigmat_MN < thr_p
+
+    return sessions
+
+
+def calc_spatial_responsive_neurons(sessions, sbins, nshuffle=1000):
+    
+    celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+    N = len(celldata)
+    S = len(sbins) - 1  # Since bins are edges
+
+    perc_N = np.full((N, S), np.nan)
+    perc_M = np.full((N, S), np.nan)
+    perc_MN = np.full((N, S), np.nan)
+
+    for ises, ses in tqdm(enumerate(sessions), total=len(sessions), desc='Testing significant responsiveness to stim'):
+        
+        idx_ses = np.where(celldata['session_id'] == ses.sessiondata['session_id'][0])[0]
+        Nses, K, _ = np.shape(ses.stensor)  # Get tensor dimensions
+        
+        # Precompute stim category indices
+        idx_N = np.isin(ses.trialdata['stimcat'], ['N'])
+        idx_M = np.isin(ses.trialdata['stimcat'], ['M'])
+        idx_MN = np.isin(ses.trialdata['stimcat'], ['N', 'M'])
+
+        stimstart = np.array(ses.trialdata['stimStart'])
+        # Precompute g for all bins
+        # g_all = np.column_stack([stimstart + sbins[:-1], stimstart + sbins[1:]])
+        # start_all = np.concatenate((stimstart[:,None] + sbins[:-1], stimstart[:,None] + sbins[1:]),axis=2)
+        start_all = stimstart[:,None] + sbins[:-1]
+        end_all = stimstart[:,None] + sbins[1:]
+
+        # Preallocate mean activity arrays
+        mean_zpos_N = np.full((Nses, S), np.nan)
+        mean_zpos_M = np.full((Nses, S), np.nan)
+        mean_zpos_MN = np.full((Nses, S), np.nan)
+
+        # Compute means for real data (vectorized approach)
+        for ibin in range(S):
+            # g = np.column_stack((ses.trialdata['stimStart']+bin_start,ses.trialdata['stimStart']+bin_end))
+
+            start, end = start_all[:, ibin], end_all[:, ibin]
+            mask_pos = (ses.zpos_F[:, None] >= start) & (ses.zpos_F[:, None] <= end)
+            
+            mean_zpos_N[:, ibin] = np.nanmean(ses.calciumdata.iloc[np.any(mask_pos[:,idx_N],axis=1),:], axis=0)
+            mean_zpos_M[:, ibin] = np.nanmean(ses.calciumdata.iloc[np.any(mask_pos[:,idx_M],axis=1),:], axis=0)
+            mean_zpos_MN[:, ibin] = np.nanmean(ses.calciumdata.iloc[np.any(mask_pos[:,idx_MN],axis=1),:], axis=0)
+
+        # **Shuffle Process (Optimized)**
+        zpos_F_max = np.max(ses.zpos_F)
+        shuffled_zpos_F = np.mod(ses.zpos_F[:, None] + np.random.randint(zpos_F_max, size=nshuffle), zpos_F_max)
+
+        mean_zpos_N_shuf = np.full((Nses, S, nshuffle), np.nan)
+        mean_zpos_M_shuf = np.full((Nses, S, nshuffle), np.nan)
+        mean_zpos_MN_shuf = np.full((Nses, S, nshuffle), np.nan)
+
+        tempdat = ses.calciumdata.to_numpy()
+
+        # Compute means for real data (vectorized approach)
+        for ibin in range(S):
+            # g = np.column_stack((ses.trialdata['stimStart']+bin_start,ses.trialdata['stimStart']+bin_end))
+
+            start, end = start_all[:, ibin], end_all[:, ibin]
+            mask_pos = (shuffled_zpos_F[:,:, None] >= start) & (shuffled_zpos_F[:,:, None] <= end)
+
+            # mask_pos_N = np.any(mask_pos[:,:,idx_N],axis=2)[:,np.newaxis,:]
+            # mask_pos_N = np.any(mask_pos[:,:,idx_N],axis=2)
+
+            # g = tempdat[:,:,np.newaxis][mask_pos_N[:,np.newaxis,:]] 
+            # mean_zpos_N_shuf[:, ibin,ishuf] = np.nanmean(tempdat[np.any(mask_pos[:,ishuf,idx_N],axis=1)], axis=0)
+
+            # temp = copy.deepcopy(ses.calciumdata.to_numpy()[:,:,None])
+            for ishuf in range(nshuffle):
+                mean_zpos_N_shuf[:, ibin,ishuf] = np.nanmean(tempdat[np.any(mask_pos[:,ishuf,idx_N],axis=1)], axis=0)
+                mean_zpos_M_shuf[:, ibin,ishuf] = np.nanmean(tempdat[np.any(mask_pos[:,ishuf,idx_M],axis=1)], axis=0)
+                mean_zpos_MN_shuf[:, ibin,ishuf] = np.nanmean(tempdat[np.any(mask_pos[:,ishuf,idx_MN],axis=1)], axis=0)
+                
+                # mean_zpos_M[:, ibin] = np.nanmean(ses.calciumdata.iloc[np.any(mask_pos[:,idx_M],axis=1),:], axis=0)
+                # mean_zpos_MN[:, ibin] = np.nanmean(ses.calciumdata.iloc[np.any(mask_pos[:,idx_MN],axis=1),:], axis=0)
+
+                # mean_zpos_N_shuf[:, ibin, :] = np.nanmean(ses.calciumdata[mask_shuf], axis=0)
+                # mean_zpos_M_shuf[:, ibin, :] = np.nanmean(ses.calciumdata[mask_shuf], axis=0)
+                # mean_zpos_MN_shuf[:, ibin, :] = np.nanmean(ses.calciumdata[mask_shuf], axis=0)
+
+                # mean_zpos_N[:, ibin] = np.nanmean(ses.calciumdata.iloc[np.any(mask_pos[:,idx_N],axis=1),:], axis=0)
+                # mean_zpos_M[:, ibin] = np.nanmean(ses.calciumdata.iloc[np.any(mask_pos[:,idx_M],axis=1),:], axis=0)
+                # mean_zpos_MN[:, ibin] = np.nanmean(ses.calciumdata.iloc[np.any(mask_pos[:,idx_MN],axis=1),:], axis=0)
+
+
+        # for ibin in range(S):
+        #     start, end = g_all[:, ibin, 0], g_all[:, ibin, 1]
+        #     mask_shuf = (shuffled_zpos_F[:, :, None] >= start) & (shuffled_zpos_F[:, :, None] <= end)
+
+        #     mean_zpos_N_shuf[:, ibin, :] = np.nanmean(ses.calciumdata[mask_shuf], axis=0)
+        #     mean_zpos_M_shuf[:, ibin, :] = np.nanmean(ses.calciumdata[mask_shuf], axis=0)
+        #     mean_zpos_MN_shuf[:, ibin, :] = np.nanmean(ses.calciumdata[mask_shuf], axis=0)
+
+        # **Compute Percentile Scores in a Vectorized Manner**
+        perc_N[idx_ses, :] = np.sum(mean_zpos_N[:, :, None] >= mean_zpos_N_shuf, axis=2) / nshuffle
+        perc_M[idx_ses, :] = np.sum(mean_zpos_M[:, :, None] >= mean_zpos_M_shuf, axis=2) / nshuffle
+        perc_MN[idx_ses, :] = np.sum(mean_zpos_MN[:, :, None] >= mean_zpos_MN_shuf, axis=2) / nshuffle
+
+    return perc_N,perc_M,perc_MN
+
+
+#################### Compute mean activity for saliency trial bins for all sessions ##################
+def get_idx_noisebins(trialdata,sigtype,edges):
+    """
+    Bins signal values of noise into bins defined by edges, and puts trial index of 
+    trials with signal 0 and 100 in first and last column
+    Given a session and a set of edges (bin edges) returns a 2D boolean array with the same number of rows as trials 
+    in the session and the same number of columns as bins + 2.
+    """
+    idx_T_noise = np.array([(trialdata[sigtype]>=low) & 
+                    (trialdata[sigtype]<=high) for low,high in zip(edges[:-1],edges[1:])])
+    idx_T_all = np.column_stack((trialdata[sigtype]==0,
+                            idx_T_noise.T,
+                            trialdata[sigtype]==100))
+    return idx_T_all
+
+def get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True):
+
+    celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+    N           = len(celldata)
+
+    lickresp    = [0,1]
+    D           = len(lickresp)
+
+    Z           = nbins_noise + 2
+
+    edges       = np.linspace(zmin,zmax,nbins_noise+1)
+    centers     = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
+    if sigtype == 'signal_psy':
+        plotcenters = np.hstack((centers[0]-2*np.mean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
+    elif sigtype=='signal': 
+        plotcenters = np.hstack((0,centers,100))
+
+    if splithitmiss: 
+        data_mean    = np.full((N,Z,D),np.nan)
+    else: 
+        data_mean    = np.full((N,Z),np.nan)
+
+    for ises,ses in enumerate(sessions):
+        print(f"\rComputing mean activity for noise trial bins for session {ises+1} / {len(sessions)}",end='\r')
+        idx_N_ses = celldata['session_id']==ses.sessiondata['session_id'][0]
+
+        idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
+
+        if splithitmiss:
+            for iZ in range(Z):
+                for ilr,lr in enumerate(lickresp):
+                    idx_T = np.all((idx_T_all[:,iZ],
+                                sessions[ises].trialdata['lickResponse']==lr,
+                                sessions[ises].trialdata['engaged']==1), axis=0)
+                    data_mean[idx_N_ses,iZ,ilr]        = np.nanmean(sessions[ises].respmat[:,idx_T],axis=1)
+        else: 
+            for iZ in range(Z):
+                data_mean[idx_N_ses,iZ]        = np.nanmean(sessions[ises].respmat[:,idx_T_all[:,iZ]],axis=1)
+
+    return data_mean,plotcenters
+
+
+def compute_d_prime(response_1, response_2):
+    """
+    Compute d-prime (d') to measure the separation between two distributions.
+    
+    Parameters:
+        response_1 (array-like): Responses of the neuron in condition 1.
+        response_2 (array-like): Responses of the neuron in condition 2.
+
+    Returns:
+        float: d-prime value.
+    """
+    mean_1 = np.mean(response_1)
+    mean_2 = np.mean(response_2)
+    
+    var_1 = np.var(response_1, ddof=1)  # Sample variance
+    var_2 = np.var(response_2, ddof=1)  # Sample variance
+    
+    # Compute d-prime
+    d_prime = (mean_1 - mean_2) / np.sqrt((var_1 + var_2) / 2)
+    
+    return d_prime
+
+def compute_d_prime_matrix(A1, A2):
+    """
+    Compute d-prime (d') for each neuron (row-wise) between two conditions.
+
+    Parameters:
+        A1 (numpy.ndarray): Neurons x Trials response matrix for condition 1.
+        A2 (numpy.ndarray): Neurons x Trials response matrix for condition 2.
+
+    Returns:
+        numpy.ndarray: d-prime values for each neuron.
+    """
+    mean_1 = np.mean(A1, axis=1)  # Mean response per neuron (row-wise)
+    mean_2 = np.mean(A2, axis=1)
+
+    var_1 = np.var(A1, axis=1, ddof=1)  # Sample variance per neuron
+    var_2 = np.var(A2, axis=1, ddof=1)
+
+    # Compute d-prime per neuron
+    d_prime = (mean_1 - mean_2) / np.sqrt((var_1 + var_2) / 2)
+
+    return d_prime
+
+
+def get_dprime_signalbins(sessions,sigtype,nbins_noise,zmin,zmax):
+
+    celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+    N           = len(celldata)
+
+    lickresp    = [0,1]
+    D           = len(lickresp)
+
+    Z           = nbins_noise + 2
+
+    edges       = np.linspace(zmin,zmax,nbins_noise+1)
+    centers     = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
+    if sigtype == 'signal_psy':
+        plotcenters = np.hstack((centers[0]-2*np.mean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
+    elif sigtype=='signal': 
+        plotcenters = np.hstack((0,centers,100))
+
+    data_mean    = np.full((N,Z),np.nan)
+
+    for ises,ses in enumerate(sessions):
+        print(f"\rComputing mean activity for noise trial bins for session {ises+1} / {len(sessions)}",end='\r')
+        idx_N_ses = celldata['session_id']==ses.sessiondata['session_id'][0]
+
+        idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
+
+        for iZ in range(Z):
+            idx_miss = np.all((idx_T_all[:,iZ],
+                        sessions[ises].trialdata['lickResponse']==0,
+                        sessions[ises].trialdata['engaged']==1), axis=0)
+            idx_hit = np.all((idx_T_all[:,iZ],
+                        sessions[ises].trialdata['lickResponse']==1,
+                        sessions[ises].trialdata['engaged']==1), axis=0)
+            
+            data_mean[idx_N_ses,iZ]        = compute_d_prime_matrix(sessions[ises].respmat[:,idx_hit],sessions[ises].respmat[:,idx_miss])
+
+    return data_mean,plotcenters
+
+def get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True):
+
+    celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+    N           = len(celldata)
+
+    lickresp    = [0,1]
+    D           = len(lickresp)
+
+    Z           = nbins_noise + 2
+
+    S           = len(sbins)
+
+    edges       = np.linspace(zmin,zmax,nbins_noise+1)
+    centers     = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
+    if sigtype == 'signal_psy':
+        plotcenters = np.hstack((centers[0]-2*np.mean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
+    elif sigtype=='signal': 
+        plotcenters = np.hstack((0,centers,100))
+
+    if splithitmiss: 
+        data_mean    = np.full((N,Z,S,D),np.nan)
+    else: 
+        data_mean    = np.full((N,Z,S),np.nan)
+
+    for ises,ses in enumerate(sessions):
+        print(f"\rComputing mean activity for noise trial bins for session {ises+1} / {len(sessions)}",end='\r')
+        idx_N_ses = celldata['session_id']==ses.sessiondata['session_id'][0]
+
+        idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
+
+        if splithitmiss:
+            for iZ in range(Z):
+                for ilr,lr in enumerate(lickresp):
+                    idx_T = np.all((idx_T_all[:,iZ],
+                                sessions[ises].trialdata['lickResponse']==lr,
+                                sessions[ises].trialdata['engaged']==1), axis=0)
+                    data_mean[idx_N_ses,iZ,:,ilr]        = np.nanmean(sessions[ises].stensor[:,idx_T,:],axis=1)
+        else: 
+            for iZ in range(Z):
+                data_mean[idx_N_ses,iZ,:]      = np.nanmean(sessions[ises].stensor[:,idx_T_all[:,iZ],:],axis=1)
+
+    return data_mean,plotcenters
+
+
+# def calc_spatial_responsive_neurons(sessions,sbins,thr_p=0.001):
+
+#     celldata        = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+#     N               = len(celldata)
+#     S               = len(sbins)
+#     perc_N          = np.full((N,S),np.nan)
+#     perc_M          = np.full((N,S),np.nan)
+#     perc_MN         = np.full((N,S),np.nan)
+
+#     for ises,ses in tqdm(enumerate(sessions),total=len(sessions),desc='Testing significant responsiveness to stim'):
+#         idx_ses = np.where(celldata['session_id']==ses.sessiondata['session_id'][0])[0]
+#         [Nses,K,S]      = np.shape(sessions[ises].stensor) #get dimensions of tensor
+
+#         idx_N           = np.isin(sessions[ises].trialdata['stimcat'],['N'])
+#         idx_M           = np.isin(sessions[ises].trialdata['stimcat'],['M'])
+#         idx_MN          = np.isin(sessions[ises].trialdata['stimcat'],['N','M'])
+
+#         mean_zpos_N = np.full((Nses,S),np.nan)
+#         mean_zpos_M = np.full((Nses,S),np.nan)
+#         mean_zpos_MN = np.full((Nses,S),np.nan)
+
+#         for ibin,(bin_start,bin_end) in enumerate(zip(sbins[:-1],sbins[1:])):
+#             g = np.column_stack((ses.trialdata['stimStart']+bin_start,ses.trialdata['stimStart']+bin_end))
+#             # g is an array with bin relative to stimStart for each trial
+#             # find all zpositions that are within bin, but per trial:
+#             idx_Z_N = np.concatenate([np.where((ses.zpos_F >= start) & (ses.zpos_F <= end))[0] for start, end in zip(g[idx_N, 0], g[idx_N, 1])])
+#             mean_zpos_N[:,ibin] = np.nanmean(ses.calciumdata.iloc[idx_Z_N,:],axis=0)
+            
+#             idx_Z_M = np.concatenate([np.where((ses.zpos_F >= start) & (ses.zpos_F <= end))[0] for start, end in zip(g[idx_M, 0], g[idx_M, 1])])
+#             mean_zpos_M[:,ibin] = np.nanmean(ses.calciumdata.iloc[idx_Z_M,:],axis=0)
+            
+#             idx_Z_MN = np.concatenate([np.where((ses.zpos_F >= start) & (ses.zpos_F <= end))[0] for start, end in zip(g[idx_MN, 0], g[idx_MN, 1])])
+#             mean_zpos_MN[:,ibin] = np.nanmean(ses.calciumdata.iloc[idx_Z_MN,:],axis=0)
+
+#         nshuffle = 10
+#         mean_zpos_N_shuf = np.full((Nses,S,nshuffle),np.nan)
+#         mean_zpos_M_shuf = np.full((Nses,S,nshuffle),np.nan)
+#         mean_zpos_MN_shuf = np.full((Nses,S,nshuffle),np.nan)
+
+#         for ishuf in range(nshuffle):
+#             for ibin,(bin_start,bin_end) in enumerate(zip(sbins[:-1],sbins[1:])):
+#                 g = np.column_stack((ses.trialdata['stimStart']+bin_start,ses.trialdata['stimStart']+bin_end))
+#                 # g is an array with bin relative to stimStart for each trial
+#                 # find all zpositions that are within bin, but per trial:
+#                 zpos_F_shuf = np.mod(ses.zpos_F+np.random.randint(np.max(ses.zpos_F)),np.max(ses.zpos_F))
+                
+#                 idx_Z_N = np.concatenate([np.where((zpos_F_shuf >= start) & (zpos_F_shuf <= end))[0] for start, end in zip(g[idx_N, 0], g[idx_N, 1])])
+#                 mean_zpos_N_shuf[:,ibin,ishuf] = np.nanmean(ses.calciumdata.iloc[idx_Z_N,:],axis=0)
+                
+#                 idx_Z_M = np.concatenate([np.where((zpos_F_shuf >= start) & (zpos_F_shuf <= end))[0] for start, end in zip(g[idx_M, 0], g[idx_M, 1])])
+#                 mean_zpos_M_shuf[:,ibin,ishuf] = np.nanmean(ses.calciumdata.iloc[idx_Z_M,:],axis=0)
+                
+#                 idx_Z_MN = np.concatenate([np.where((zpos_F_shuf >= start) & (zpos_F_shuf <= end))[0] for start, end in zip(g[idx_MN, 0], g[idx_MN, 1])])
+#                 mean_zpos_MN_shuf[:,ibin,ishuf] = np.nanmean(ses.calciumdata.iloc[idx_Z_MN,:],axis=0)
+
+#         #Find where the true response lies on the shuffle distribution:
+#         # frac_N = np.sum(mean_zpos_N[:,:,np.newaxis] >= mean_zpos_N_shuf,axis=2) / nshuffle
+#         # frac_M = np.sum(mean_zpos_M[:,:,np.newaxis] >= mean_zpos_M_shuf,axis=2) / nshuffle
+#         # frac_MN = np.sum(mean_zpos_MN[:,:,np.newaxis] >= mean_zpos_MN_shuf,axis=2) / nshuffle
+        
+#         perc_N[idx_ses,:]  = np.sum(mean_zpos_N[:,:,np.newaxis] >= mean_zpos_N_shuf,axis=2) / nshuffle
+#         perc_M[idx_ses,:]  = np.sum(mean_zpos_M[:,:,np.newaxis] >= mean_zpos_M_shuf,axis=2) / nshuffle
+#         perc_MN[idx_ses,:] = np.sum(mean_zpos_MN[:,:,np.newaxis] >= mean_zpos_MN_shuf,axis=2) / nshuffle
+
+#         # ses.celldata['sig_N'] = sigmat_N < thr_p
+#         # ses.celldata['sig_M'] = sigmat_M < thr_p
+#         # ses.celldata['sig_MN'] = sigmat_MN < thr_p
+
+#     return perc_N,perc_M,perc_MN
 
