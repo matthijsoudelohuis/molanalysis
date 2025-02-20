@@ -24,6 +24,7 @@ import scipy.stats as st
 from utils.twoplib import get_meta
 from loaddata.get_data_folder import get_data_folder
 from labeling.tdTom_labeling_cellpose import proc_labeling_plane
+from tqdm.auto import tqdm
 
 """
   #####  #######  #####   #####  ### ####### #     # ######     #    #######    #    
@@ -563,7 +564,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
 
     assert np.isin(framerate,[10,15,30,60,66]), 'Error! Frame rate is not 10, 15, 30, 60 Hz, something wrong with triggering'
     sesdur = behaviordata.loc[behaviordata.index[-1],'ts']  - behaviordata.loc[behaviordata.index[0],'ts'] 
-    assert np.isclose(nts,sesdur * framerate,rtol=0.01)
+    assert np.isclose(nts,sesdur * framerate,rtol=0.01), f"Number of trials {nts} is not close enough to session duration {sesdur} * framerate {framerate} = {sesdur * framerate}"
     #Check that frame rate matches interframe interval:
     assert np.isclose(1/framerate,np.mean(np.diff(ts)),rtol=0.01)
     #Check that inter frame interval does not take on crazy values:
@@ -628,7 +629,7 @@ def proc_videodata(rawdatadir,sessiondata,behaviordata,keepPCs=30):
             videodata.iloc[idx,videodata.columns.get_loc("pupil_ypos")] = np.nan
             videodata.iloc[idx,videodata.columns.get_loc("pupil_area")] = np.nan
     else:
-        print('#######################  Could not locate facemapdata...')
+        print(f'#######################  Could not locate facemapdata... in {filenames}')
 
     videodata['session_id']  = sessiondata['session_id'][0]
 
@@ -730,7 +731,7 @@ def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
     #Find the roi to which each plane belongs:
     plane_roi_idx = np.array([roi_depths_idx[np.where(roi_depths == plane_zs[i])[0][0]] for i in range(ops['nplanes'])])
 
-    for iplane,plane_folder in enumerate(plane_folders):
+    for iplane,plane_folder in tqdm(enumerate(plane_folders), desc="Processing plane", total=len(plane_folders)):
     # for iplane,plane_folder in enumerate(plane_folders[:1]):
         print('processing plane %s / %s' % (iplane+1,ops['nplanes']))
 
@@ -748,7 +749,7 @@ def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
             Nredcells_plane     = len(np.unique(masks_cp_red))-1 # number of labeled cells overall, minus 1 because 0 for all nonlabeled pixels
             redcell             = proc_labeling_plane(iplane,plane_folder,showcells=False,overlap_threshold=0.5)
         else: 
-            print('\n\n Warning: cellpose results not found, setting labeling to zero\n\n')
+            print(f'\n\n Warning: cellpose results not found in {plane_folder}, setting labeling to zero\n\n')
             redcell             = np.zeros((len(iscell),3))
             Nredcells_plane     = 0
 
@@ -918,6 +919,7 @@ def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
         celldata_plane['cell_id']         = cell_ids
 
         if os.path.exists(os.path.join(plane_folder, 'Fmatch.mat')):
+            print(f"Writing overlapping cell IDs")
             celldata_plane = proc_roimatchpub(os.path.join(plane_folder, 'Fmatch.mat'),
                                               sessiondata,celldata_plane)
             

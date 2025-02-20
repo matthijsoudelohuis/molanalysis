@@ -15,15 +15,15 @@ import scipy
 
 
 #%% Set the followup session:
-rawdatadir_mei      = "M:\\RawData\\"
-animal_id_mei       = 'LPE12385' #If empty than all animals in folder will be processed
-sessiondate_mei     = '2024_06_16'
+rawdatadir_mei      = "E:\\RawData\\"
+animal_id_mei       = 'LPE13959' #If empty than all animals in folder will be processed
+sessiondate_mei     = '2025_02_19'
 
 meidir          = os.path.join(rawdatadir_mei,animal_id_mei,sessiondate_mei)
 meidir_suite2p  = os.path.join(meidir,"suite2p")
 assert os.path.exists(meidir_suite2p), 'suite2p folder not found'
 
-fname = os.path.join(meidir_suite2p,'plane0','Fmatch.mat')
+fname = os.path.join(meidir_suite2p,'plane1','Fmatch.mat')
 
 data = scipy.io.loadmat(fname,squeeze_me=True)
 data = scipy.io.loadmat(fname)
@@ -42,6 +42,8 @@ h = data['roiMatchData']['rois'][0][0][0][0]['meanFrame'][0][0]
 axes[0].imshow(h)
 h = data['roiMatchData']['rois'][0][0][0][1]['meanFrame'][0][0]
 axes[1].imshow(h)
+
+plt.show()
 
 
 

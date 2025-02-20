@@ -46,7 +46,8 @@ def get_rawdata_drive(animal_id, protocols):
                     'LPE10919' : 'K:',
                     'LPE12223' : 'K:',
                     'LPE12385' : 'K:',
-                    'LPE13641' : 'E:'
+                    'LPE13641' : 'E:',
+                    'LPE13959' : 'E:'
                     }
     elif np.isin(protocols[0], ['VR','DM','DN','DP']):
         drives       = {'LPE09667' : 'L:',
