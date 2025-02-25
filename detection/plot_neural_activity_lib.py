@@ -602,12 +602,12 @@ def get_idx_noisebins(trialdata,sigtype,edges):
     """
     idx_T_noise = np.array([(trialdata[sigtype]>=low) & 
                     (trialdata[sigtype]<=high) for low,high in zip(edges[:-1],edges[1:])])
-    idx_T_all = np.column_stack((trialdata[sigtype]==0,
+    idx_T_all = np.column_stack((trialdata['signal']==0,
                             idx_T_noise.T,
-                            trialdata[sigtype]==100))
+                            trialdata['signal']==100))
     return idx_T_all
 
-def get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True):
+def get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=10):
 
     celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
     N           = len(celldata)
@@ -641,7 +641,8 @@ def get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True
                     idx_T = np.all((idx_T_all[:,iZ],
                                 sessions[ises].trialdata['lickResponse']==lr,
                                 sessions[ises].trialdata['engaged']==1), axis=0)
-                    data_mean[idx_N_ses,iZ,ilr]        = np.nanmean(sessions[ises].respmat[:,idx_T],axis=1)
+                    if np.sum(idx_T)>=min_ntrials:
+                        data_mean[idx_N_ses,iZ,ilr]        = np.nanmean(sessions[ises].respmat[:,idx_T],axis=1)
         else: 
             for iZ in range(Z):
                 data_mean[idx_N_ses,iZ]        = np.nanmean(sessions[ises].respmat[:,idx_T_all[:,iZ]],axis=1)

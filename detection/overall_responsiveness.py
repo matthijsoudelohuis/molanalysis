@@ -37,7 +37,7 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\
 #%% ###############################################################
 protocol            = 'DN'
 calciumversion      = 'deconv'
-calciumversion      = 'dF'
+# calciumversion      = 'dF'
 
 # sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE12013'],min_cells=100,load_videodata=True,
                         #    load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
@@ -48,15 +48,44 @@ sessions,nSessions = filter_sessions(protocol,min_cells=100,
 # sessions,nSessions = filter_sessions(protocol,only_animal_id=['LPE10884'],
 #                            load_behaviordata=True,load_calciumdata=True,calciumversion=calciumversion) #load sessions that meet criteria:
 
+#%% Get signal as relative to psychometric curve for all sessions:
+sessions,nSessions = filter_sessions(protocols=protocol,min_cells=100) #Load specified list of sessions
+sessions = noise_to_psy(sessions,filter_engaged=True,bootstrap=True)
+
+#%% Include sessions based on performance: psychometric curve for the noise #############
+sessiondata = pd.concat([ses.sessiondata for ses in sessions])
+# zmin_thr = -0.5
+# zmax_thr = 0.5
+
+zmin_thr = -0.3
+zmax_thr = 0.3
+guess_thr = 0.4
+idx_ses = np.all((sessiondata['noise_zmin']<=zmin_thr,
+                  sessiondata['noise_zmax']>=zmax_thr,
+                  sessiondata['guess_rate']<=guess_thr),axis=0)
+print('Filtered %d/%d sessions based on performance' % (np.sum(idx_ses),len(idx_ses)))
+
+#%%
+sessions = [sessions[i] for i in np.where(idx_ses)[0]]
+nSessions = len(sessions)
+plot_psycurve(sessions,filter_engaged=True)
+
+#%% Load the data:           
+for ises in range(nSessions):    # iterate over sessions
+    sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion=calciumversion)
+
+
 #%% Z-score calcium data:
 for i in range(nSessions):
     sessions[i].calciumdata = sessions[i].calciumdata.apply(zscore,axis=0)
 
 
 #%%  Show raster or traces plot for some example session:
-ises = 20
+ises = 10
 
 fig = plot_excerpt(sessions[ises],trialsel=[100,150],plot_neural=True,plot_behavioral=True,neural_version='traces')
+# fig = plot_excerpt(sessions[ises],trialsel=[100,110],plot_neural=True,plot_behavioral=True,neural_version='traces')
 # fig.savefig(os.path.join(savedir,'ExampleTraces','ExTraces_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
 
 #%%  Show raster or traces plot for some example session:
@@ -74,7 +103,7 @@ fig.savefig(os.path.join(savedir,'ExampleTraces','ExRaster_%s' % sessions[ises].
 ## Parameters for spatial binning
 s_pre       = -75  #pre cm
 s_post      = 75   #post cm
-binsize     = 5     #spatial binning in cm
+binsize     = 10     #spatial binning in cm
 
 for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
@@ -148,7 +177,6 @@ fig.savefig(os.path.join(savedir,'SpatialActivity','ActivityInCorridor_perAnimal
 
 sessions        = calc_stimresponsive_neurons(sessions,sbins)
 celldata        = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
-
 
 
 #%% Plot number of responsive neurons per stimulus per area:
@@ -227,8 +255,8 @@ np.save('frac_MN.npy',frac_MN)
 #%% Plot number of responsive neurons per stimulus per area for labeled and unlabeled:
 
 areas           = ['V1','PM','AL','RSP']
-nareas = len(areas)
-clrs_areas = get_clr_areas(areas)
+nareas          = len(areas)
+clrs_areas      = get_clr_areas(areas)
 # ax_areas        = ['V1','V1','PM','PM']
 # ax_stim         = ['N','M','N','M']
 # ax_stimlabels   = ['Noise','Max','Noise','Max']
@@ -309,7 +337,7 @@ sessions = noise_to_psy(sessions,filter_engaged=True,bootstrap=True)
 
 # fig     = plot_psycurve(sessions,filter_engaged=True)
 # fig     = plot_psycurve([sessions[21]],filter_engaged=True)
-fig     = plot_all_psycurve(sessions,filter_engaged=True)
+# fig     = plot_all_psycurve(sessions,filter_engaged=True)
 
 
 #%% #################### Compute mean activity for saliency trial bins for all sessions ##################
@@ -324,22 +352,30 @@ nlickresp   = len(lickresp)
 
 
 sigtype     = 'signal'
-zmin        = 7
-zmax        = 17
-nbins_noise = 5
+zmin        = 5
+zmax        = 20
+nbins_noise = 3
 
-sigtype     = 'signal_psy'
-zmin        = -1
-zmax        = 1
-nbins_noise = 5
+# sigtype     = 'signal_psy'
+# zmin        = -1
+# zmax        = 1
+# nbins_noise = 3
 
 data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
 data_mean_spatial_hitmiss,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
 
+#%% 
+plt.figure()
+range_min = np.array([ses.sessiondata['signal_center'][0] - ses.sessiondata['signal_range'][0]/2 for ses in sessions])
+range_max = np.array([ses.sessiondata['signal_center'][0] + ses.sessiondata['signal_range'][0]/2 for ses in sessions])
+plt.hist(range_min,bins=np.arange(30),color='b',alpha=0.5)
+plt.hist(range_max,bins=np.arange(30),color='r',alpha=0.5)
+
 
 #%% Construct color panel for saliency trial bins
-plotlabels = ['catch'] + [str(x) for x in np.round(plotcenters,2)] + ['max']
 # plotlabels = ['catch'] + [str(x) for x in np.round(plotcenters,2)] + ['max']
+# plotlabels = ['catch'] + [str(x) for x in np.round(plotcenters,2)] + ['max']
+plotlabels = plotcenters
 plotcolors = ['black']  # Start with black
 plotcolors += sns.color_palette("magma", n_colors=nbins_noise)  # Add 5 colors from the magma palette
 plotcolors.append('orange')  # Add orange at the end
@@ -424,10 +460,13 @@ plt.tight_layout()
 
 #%% ############################### Plot stimwin neuron-average per stim per area #################################
 
-linecolors = ['red','blue']
-fig,axes = plt.subplots(nlabels,nareas,figsize=(nareas*3,nlabels*2.5),sharex=True,sharey=True)
-clrs_areas = get_clr_areas(areas)
+linecolors      = ['red','blue']
+areas           = ['V1','PM']
+# areas           = ['V1','PM','AL','RSP']
+clrs_areas      = get_clr_areas(areas)
+nareas          = len(areas)
 
+fig,axes = plt.subplots(nlabels,nareas,figsize=(nareas*3,nlabels*2.5),sharex=True,sharey=True)
 for ilab,label in enumerate(labeled):
     for iarea, area in enumerate(areas):
         ax          = axes[ilab,iarea]
@@ -469,31 +508,53 @@ plt.tight_layout()
 # plt.savefig(os.path.join(savedir,'ActivityInCorridor_deconv_neuronAverage_perStim_' + sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 #%% 
+min_nlabcells = 5
 fig,axes = plt.subplots(nlabels,nareas,figsize=(nareas*2.5,nlabels*2.5),sharex=True,sharey=True)
-
+plotcenters = np.arange(Z)
 for iarea, area in enumerate(areas):
     for ilab,label in enumerate(labeled):
         ax          = axes[ilab,iarea]
         for ises, session in enumerate(sessions):
-            idx_N = 
+            idx_N = np.all((celldata['roi_name']==area,
+                        celldata['sig_N']==1,
+                        # celldata['sig_MN']==1,
+                        # celldata['sig_MN']==0,
+                        celldata['session_id']==session.sessiondata['session_id'][0],
+                        celldata['labeled']==label),axis=0)
             
+            if np.sum(idx_N)>min_nlabcells:
+            
+                plotdata    = data_mean_hitmiss[idx_N,:,1] - data_mean_hitmiss[idx_N,:,0]
+
+                x = plotcenters[np.any(~np.isnan(plotdata),axis=0)]
+                y = np.nanmean(plotdata[:,np.any(~np.isnan(plotdata),axis=0)],axis=0)
+                # h = shaded_error(x, y, error='sem',linestyle=plotlines[ilr],color=clrs_areas[iarea],ax=ax)
+                # h = shaded_error(np.arange(Z), y, error='sem',linestyle=plotlines[ilr],color=clrs_areas[iarea],ax=ax)
+
+                # x = plotcenters[~np.isnan(plotdata)]
+                # y = plotdata[~np.isnan(plotdata)]
+                ax.plot(x, y, linewidth=0.5,color='grey')
+
+        idx_N = np.all((celldata['roi_name']==area,
+                        # celldata['sig_MN']==1,
+                        celldata['sig_N']==1,
+                        # celldata['sig_MN']==0,
+                        celldata['labeled']==label),axis=0)
+        # plotdata    = data_mean_hitmiss[:,1,iarea,ilab,:] - data_mean_hitmiss[:,0,iarea,ilab,:]
+        if np.sum(idx_N)>min_nlabcells:
+
             plotdata    = data_mean_hitmiss[idx_N,:,1] - data_mean_hitmiss[idx_N,:,0]
 
-            x = plotcenters[~np.isnan(plotdata)]
-            y = plotdata[~np.isnan(plotdata)]
-            ax.plot(x, y, linewidth=0.5,color='grey')
-
-        plotdata    = data_mean_hitmiss[:,1,iarea,ilab,:] - data_mean_hitmiss[:,0,iarea,ilab,:]
-        x = plotcenters[np.any(~np.isnan(plotdata),axis=1)]
-        y = plotdata[np.any(~np.isnan(plotdata),axis=1),:].T
-        h = shaded_error(x, y, error='sem',linestyle=plotlines[ilr],color=clrs_areas[iarea],ax=ax)
+            x = plotcenters[np.any(~np.isnan(plotdata),axis=0)]
+            y = plotdata[:,np.any(~np.isnan(plotdata),axis=0)]
+            h = shaded_error(x, y, error='sem',linestyle=plotlines[ilr],color=clrs_areas[iarea],ax=ax)
         
         # t_stat,p_val = stats.ttest_rel(plotdata[:,0],plotdata[:,1],nan_policy='omit')
-        t_stat,p_values = stats.ttest_rel(data_mean_hitmiss[:,1,iarea,ilab,:],data_mean_hitmiss[:,0,iarea,ilab,:],axis=1,nan_policy='omit')
-        for i,p_val in enumerate(p_values): 
-            ax.text(plotcenters[i], 0.2, '%s' % (get_sig_asterisks(p_val)), fontsize=12)
+        # t_stat,p_values = stats.ttest_rel(data_mean_hitmiss[:,1,iarea,ilab,:],data_mean_hitmiss[:,0,iarea,ilab,:],axis=1,nan_policy='omit')
+        # for i,p_val in enumerate(p_values): 
+        #     ax.text(plotcenters[i], 0.2, '%s' % (get_sig_asterisks(p_val)), fontsize=12)
         
-        if not np.any(~np.isnan(plotdata)):
+        else:
             ax.axis('off')
         ax.set_ylim([-0.25,0.25])
         ax.set_xticks(plotcenters,plotlabels,rotation=45)
@@ -508,14 +569,14 @@ for iarea, area in enumerate(areas):
         ax.spines['right'].set_visible(False)
 
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'StimResponse_Saliency_HitMinusMiss_allNeurons_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
+# plt.savefig(os.path.join(savedir,'StimResponse_Saliency_HitMinusMiss_allNeurons_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
 # plt.savefig(os.path.join(savedir,'StimResponse_Saliency_HitMinusMiss_neuronAverage_arealabels_%dsessions' % nSessions + '.png'), format = 'png')
 
 #%% 
 
 sigtype     = 'signal'
-zmin        = 7
-zmax        = 17
+zmin        = 5
+zmax        = 20
 nbins_noise = 5
 
 # zmin        = 5
@@ -526,10 +587,13 @@ nbins_noise = 5
 data_mean,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
 
 #%% Data Ratio:
-areas = ['V1','PM','AL','RSP']
-nareas = len(areas)
-depth_border    = 300
-nmincells       = 10
+areas           = ['V1','PM','AL','RSP']
+# areas           = ['V1','PM']
+clrs_areas      = get_clr_areas(areas)
+
+nareas          = len(areas)
+depth_border    = 250
+nmincells       = -1
 layerdata       = np.full((nSessions,nareas,len(sbins),2,2),np.nan)
 diffdata        = np.full((nSessions,nareas,len(sbins),2),np.nan)
 
@@ -541,15 +605,14 @@ for ises,ses in enumerate(sessions):
         idx_N_deep = np.all((celldata['session_id']==ses.sessiondata['session_id'][0],
                             celldata['depth']>=depth_border,
                             celldata['roi_name']==area), axis=0)
-        
 
         # idx_N_sup = np.all((celldata['session_id']==ses.sessiondata['session_id'][0],
         #                     celldata['depth']<depth_border,
-        #                     celldata['sig_MN']==0,
+        #                     celldata['sig_MN']==1,
         #                     celldata['roi_name']==area), axis=0)
         # idx_N_deep = np.all((celldata['session_id']==ses.sessiondata['session_id'][0],
         #                     celldata['depth']>=depth_border,
-        #                     celldata['sig_MN']==0,
+        #                     celldata['sig_MN']==1,
         #                     celldata['roi_name']==area), axis=0)
         
 
