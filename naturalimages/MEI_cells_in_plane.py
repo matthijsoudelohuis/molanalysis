@@ -46,7 +46,7 @@ cells = pd.read_csv(os.path.join(sesfolder,'selected_cells.csv'))
 
 
 # %%
-!!!! ADD title subplot which area it is, and color outline whether cells are labeled or not
+# !!!! ADD title subplot which area it is, and color outline whether cells are labeled or not
 
 #%% 
 

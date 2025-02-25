@@ -11,7 +11,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 # learn right way of module and folders etc.
 
 import os
-os.chdir('e:\\Python\\molanalysis')
+os.chdir('d:\\Python\\molanalysis')
 
 from loaddata.get_data_folder import get_local_drive
 # os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
@@ -21,9 +21,10 @@ from run_suite2p.mol_suite2p_funcs import init_ops, run_bleedthrough_corr
 from preprocessing.locate_rf import locate_rf_session
 from labeling.tdTom_labeling_cellpose import gen_red_images,proc_labeling_session
 
-rawdatadir          = 'L:\\RawData\\'
-animal_id           = 'LPE11997'
-sessiondate         = '2024_04_10'
+# rawdatadir          = 'E:\\RawData\\MEI\\'
+rawdatadir          = 'E:\\RawData\\'
+animal_id           = 'LPE13959'
+sessiondate         = '2025_02_19'
 
 [db,ops] = init_ops(os.path.join(rawdatadir,animal_id,sessiondate))
 
@@ -33,14 +34,15 @@ ops['align_by_chan']    = 1 #1-indexed, 1=gcamp,2=tdtomato
 suite2p.run_s2p(ops=ops, db=db) 
  
 ################# tdTomato bleedthrough correction: ################
-# gain1 = 0.6 # gain2 = 0.4
+gain1 = 0.6 
+gain2 = 0.5
 
 ops = run_bleedthrough_corr(db,ops) #if no gain parameters, autom fit bleedthrough coefficient
 
 ########################## ROI detection ###########################
 ops['do_registration']      = False
 ops['roidetect']            = True
-ops['nbinned']              = 2000
+#ops['nbinned']              = 2000
 
 ops = suite2p.run_s2p(ops=ops, db=db) 
 
@@ -48,7 +50,7 @@ gen_red_images(rawdatadir,animal_id,sessiondate)
 
 ######################## Receptive field localization  ##############
 # Locate receptive field if RF protocol was run in this session: 
-locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'])
+# locate_rf_session(rawdatadir,animal_id,sessiondate,signals=['F','Fneu'])
 
 # proc_labeling_session(rawdatadir,animal_id,sessiondate)
 

@@ -7,17 +7,18 @@ Preprocesses behavioral data, task and trial data, facial video data, calcium im
 """
 
 import os
-os.chdir('e:\\Python\\molanalysis')
+os.chdir('D:\\Python\\molanalysis')
 import numpy as np
 from loaddata.get_data_folder import *
 os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 from preprocessing.preprocesslib import *
+from tqdm.auto import tqdm
 
 # rawdatadir      = "G:\\RawData\\"
-rawdatadir      = "E:\\Kerem\\RawData\\"
+rawdatadir      = "E:\\RawData\\"
 
-animal_ids          = [] #If empty than all animals in folder will be processed
-date_filter         = []
+animal_ids          = ['LPE13959'] #If empty than all animals in folder will be processed
+date_filter         = ['2025_02_19']
 # animal_ids          = ['LPE11495','LPE09665','LPE09830'] #If empty than all animals in folder will be processed
 # date_filter        = ['2024_02_20','2024_02_21  ','2024_02_22','2024_02_23','2024_02_26','2024_02_27']
 # date_filter        = ['2024_05_07']
@@ -36,7 +37,7 @@ date_filter         = []
 # protocols           = ['GR','GN']
 # protocols           = ['DP','DM','DN']
 # protocols           = ['DP']
-protocols           = ['DN']
+protocols           = ['IM']
 
 processimagingflag  = True
 savedataflag        = True
@@ -46,7 +47,7 @@ if len(animal_ids) == 0:
     animal_ids =  get_animals_protocol(protocols)
     # [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
 
-for animal_id in animal_ids: #for each animal
+for animal_id in tqdm(animal_ids, desc="Processing animal", total=len(animal_ids)): #for each animal
 
     rawdatadir = get_rawdata_drive(animal_id,protocols)
 
