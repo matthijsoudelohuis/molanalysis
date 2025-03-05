@@ -18,7 +18,7 @@ from scipy.stats import zscore
 
 os.chdir('c:\\Python\\molanalysis\\')
 from loaddata.get_data_folder import get_local_drive
-from loaddata.session_info import filter_sessions,load_sessions,report_sessions
+from loaddata.session_info import *
 from utils.psth import *
 from utils.plotting_style import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
@@ -38,27 +38,31 @@ calciumversion      = 'deconv'
 sessions,nSessions  = filter_sessions(protocol,load_calciumdata=True,load_behaviordata=True,
                                       load_videodata=True,calciumversion=calciumversion,min_cells=100)
 
-#%% Remove sessions LPE10884 that are too bad:
-sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE10884_2023_12_14','LPE10884_2023_12_15','LPE10884_2024_01_11',
-                                                                'LPE10884_2024_01_16','LPE11622_2024_02_22']))[0]
-sessions            = [sessions[i] for i in sessions_in_list]
-nSessions           = len(sessions)
-sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+# #%% Remove sessions LPE10884 that are too bad:
+# sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+# sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE10884_2023_12_14','LPE10884_2023_12_15','LPE10884_2024_01_11',
+#                                                                 'LPE10884_2024_01_16','LPE11622_2024_02_22']))[0]
+# sessions            = [sessions[i] for i in sessions_in_list]
+# nSessions           = len(sessions)
+# sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
-# Only sessions that have rewardZoneOffset == 25
-sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-sessions_in_list    = np.where(sessiondata['rewardZoneOffset'] == 25)[0]
-sessions            = [sessions[i] for i in sessions_in_list]
-nSessions           = len(sessions)
-sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+# # Only sessions that have rewardZoneOffset == 25
+# sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+# sessions_in_list    = np.where(sessiondata['rewardZoneOffset'] == 25)[0]
+# sessions            = [sessions[i] for i in sessions_in_list]
+# nSessions           = len(sessions)
+# sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+
+#%% 
+sessions,nSessions = load_neural_performing_sessions()
+
 
 #%% ############################### Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning
-s_pre       = -75  #pre cm
-s_post      = 75   #post cm
-sbinsize     = 5     #spatial binning in cm
+s_pre       = -80  #pre cm
+s_post      = 80   #post cm
+sbinsize     = 10     #spatial binning in cm
 
 for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
@@ -101,7 +105,6 @@ def balance_trial(X,y,sample_min_trials=20):
         Xb  = np.concatenate((X[idx0,:],X[idx1,:]))
     return Xb,yb    
 
-
 #%% Decoding stimulus from V1 activity across space:
 dec_perf_stim = np.full((nSessions,len(sbins)), np.nan)
 # Loop through each session
@@ -112,12 +115,12 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding respons
     idx_N = ses.celldata['sig_MN']==1
 
     y = (ses.trialdata['stimcat'][idx_T] == 'C').to_numpy()
-   
+    
     if np.sum(y==0) >= nmintrialscond and np.sum(y==1) >= nmintrialscond:
         # Get the maximum signal vs catch for this session
-
         # X = ses.stensor[np.ix_(idx_N,idx_T,np.ones(len(sbins)).astype(bool))]
-        X = np.nanmean(ses.stensor[np.ix_(idx_N,idx_T,((sbins>-5) & (sbins<20)).astype(bool))],axis=2)
+        idx_B = ((sbins>=-5) & (sbins<=20)).astype(bool)
+        X = np.nanmean(ses.stensor[np.ix_(idx_N,idx_T,idx_B)],axis=2)
         X = X.T # Transpose to K x N (samples x features)
 
         X,y,_ = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
@@ -183,7 +186,7 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding respons
                 temp[i],_,_,_ = my_decoder_wrapper(Xb,yb,model_name='LogisticRegression',kfold=kfold,lam=lam,norm_out=True)
             dec_choice_beh[ises,ibin] = np.mean(temp)
 
-#%% Decoding of choice from behavioral variables:
+#%% Decoding of choice from neural variables:
 lam = 0.8
 # Initialize an array to store the decoding performance
 dec_choice_neu = np.full((nSessions,len(sbins)), np.nan)
@@ -266,14 +269,16 @@ plt.tight_layout()
 #%% Show the decoding performance
 colorset = sns.color_palette('husl',n_colors=nSessions)
 # fig,axes = plt.subplots(1,2,figsize=(5,3))
-fig,axes = plt.subplots(3,1,figsize=(4,9),sharex=True,sharey=True)
+# fig,axes = plt.subplots(3,1,figsize=(4,9),sharex=True,sharey=True)
+fig,axes = plt.subplots(1,3,figsize=(9,3),sharex=True,sharey=True)
+
 ax = axes[0]
 for i,ses in enumerate(sessions):
 # for i,ses in enumerate([sessions[3]]):
         # ax.plot(sbins,sperf[i,:],color='grey',alpha=0.5,linewidth=1)
     ax.plot(sbins,dec_perf_stim[i,:],alpha=0.5,linewidth=1,color=colorset[i])
 # shaded_error(sbins,sperf,error='sem',ax=ax,color='grey')
-ax.plot(sbins,np.nanmean(dec_perf_stim,axis=0),alpha=1,linewidth=2,color='k')
+ax.plot(sbins,np.nanmean(dec_perf_stim,axis=0),alpha=1,linewidth=3,color='k')
 add_stim_resp_win(ax)
 ax.set_ylabel('Performance \n (accuracy - shuffle)')
 ax.set_title('Stim Decoding')
@@ -281,7 +286,7 @@ ax.set_title('Stim Decoding')
 ax = axes[1]
 for i,ses in enumerate(sessions):
     ax.plot(sbins,dec_choice_beh[i,:],alpha=0.5,linewidth=1,color=colorset[i])
-ax.plot(sbins,np.nanmean(dec_choice_beh,axis=0),alpha=1,linewidth=2,color='k')
+ax.plot(sbins,np.nanmean(dec_choice_beh,axis=0),alpha=1,linewidth=3,color='k')
 # shaded_error(sbins,dec_choice_beh,error='sem',ax=ax,color='grey')
 add_stim_resp_win(ax)
 ax.set_ylabel('Performance \n (accuracy - shuffle)')
@@ -290,7 +295,7 @@ ax.set_title('Choice Decoding (Behavioral)')
 ax = axes[2]
 for i,ses in enumerate(sessions):
     ax.plot(sbins,dec_choice_neu[i,:],alpha=0.5,linewidth=1,color=colorset[i])
-ax.plot(sbins,np.nanmean(dec_choice_neu,axis=0),alpha=1,linewidth=2,color='k')
+ax.plot(sbins,np.nanmean(dec_choice_neu,axis=0),alpha=1,linewidth=3,color='k')
 # shaded_error(sbins,dec_choice_neu,error='sem',ax=ax,color='grey')
 add_stim_resp_win(ax)
 ax.set_xlabel('Position relative to stim (cm)')
@@ -300,18 +305,18 @@ ax.set_xticks([-50,-25,0,25,50])
 ax.set_ylim([-0.1,1])
 ax.set_xlim([-60,60])
 plt.tight_layout()
-# plt.savefig(os.path.join(savedir, 'Spatial', 'Dec_Stim_Resp_Neural_Beh_averageSes_bin10cm.png'), format='png')
-# plt.savefig(os.path.join(savedir, 'Spatial', 'Dec_Stim_Resp_Neural_Beh_averageSes.png'), format='png')
+plt.savefig(os.path.join(savedir, 'Spatial', 'Dec_Stim_Resp_Neural_Beh_bin10cm.png'), format='png')
+# plt.savefig(os.path.join(savedir, 'Spatial', 'Dec_Stim_Resp_Neural_Beh.png'), format='png')
 
 #%% Show the decoding performance
-fig,axes = plt.subplots(1,1,figsize=(5,4),sharex=True,sharey=True)
+fig,axes = plt.subplots(1,1,figsize=(4,3),sharex=True,sharey=True)
 ax = axes
 handles = []
 handles.append(shaded_error(sbins,dec_perf_stim,color='b',alpha=0.3,linewidth=1.5,error='sem'))
 handles.append(shaded_error(sbins,dec_choice_beh,color='g',alpha=0.3,linewidth=1.5,error='sem'))
 handles.append(shaded_error(sbins,dec_choice_neu,color='r',alpha=0.3,linewidth=1.5,error='sem'))
 add_stim_resp_win(ax)
-ax.legend(loc='upper left',fontsize=11,frameon=False,handles=handles,labels=['Stim - Neural','Choice - Behav.','Choice - Neural'])
+ax.legend(loc='upper left',fontsize=9,frameon=False,handles=handles,labels=['Stim - Neural','Choice - Behav.','Choice - Neural'])
 ax.set_ylabel('Performance \n (accuracy - shuffle)')
 ax.set_xlabel('Position relative to stim (cm)')
 ax.set_ylabel('Performance \n (accuracy - shuffle)')
@@ -320,7 +325,7 @@ ax.set_xticks([-50,-25,0,25,50])
 ax.set_ylim([-0.1,1])
 ax.set_xlim([-60,60])
 plt.tight_layout()
-# plt.savefig(os.path.join(savedir, 'Spatial', 'Dec_Stim_Resp_Neural_Beh_averageSes_bin10cm.png'), format='png')
+plt.savefig(os.path.join(savedir, 'Spatial', 'Dec_Stim_Resp_Neural_Beh_averageSes_bin10cm.png'), format='png')
 # plt.savefig(os.path.join(savedir, 'Spatial', 'Dec_Stim_Resp_Neural_Beh_averageSes.png'), format='png')
 
 
@@ -351,46 +356,43 @@ for i,ses in enumerate(sessions):
         ax.legend(['Stim - Neural','Choice - Behav.','Choice - Neural'],frameon=False,fontsize=6,title='Decoding')
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'Spatial', 'DecPerformance_Stim_Resp_indSes.png'), format='png')
-# plt.savefig(os.path.join(savedir, 'Spatial', 'DecPerformance_Stim_Choice_NeuralBehavioral_indSes.png'), format='png')
+plt.savefig(os.path.join(savedir, 'Spatial', 'DecPerformance_Stim_Choice_NeuralBehavioral_indSes.png'), format='png')
 
 #%%
 
 
 #%% Show the decoding performance per session 
 # Identifies the difference in neural stimulus coding and behavioral readout of choice
-# fig,axes = plt.subplots(1,2,figsize=(5,3))
-fig,axes = plt.subplots(3,1,figsize=(4,12),sharex=True,sharey=True)
+fig,axes = plt.subplots(1,3,figsize=(9,3),sharex=True,sharey=True)
 ax = axes[0]
 for i,ses in enumerate(sessions):
-    ax.plot(dec_perf_stim[i,:],dec_choice_beh[i,:],alpha=0.75,linewidth=1,color=colorset[i])
-ax.plot(np.nanmean(dec_perf_stim,axis=0),np.nanmean(dec_choice_beh,axis=0),alpha=0.75,linewidth=2,color='k')
+    ax.plot(dec_perf_stim[i,:],dec_choice_beh[i,:],alpha=0.75,linewidth=1.5,color=colorset[i])
+ax.plot(np.nanmean(dec_perf_stim,axis=0),np.nanmean(dec_choice_beh,axis=0),alpha=0.75,linewidth=3,color='k')
 # ax.scatter(dec_perf_stim,dec_choice_beh,alpha=0.5,color='k')
 # ax.plot(dec_perf_stim,dec_choice_beh,alpha=0.5,color='k')
-ax.plot([0,1],[0,1],color='k')
+ax.plot([0,1],[0,1],color='k',linewidth=1,linestyle='--')
 ax.set_xlim([-0.2,1])
 ax.set_ylim([-0.2,1])
 ax.set_xlabel('Stim - Neural')
 ax.set_ylabel('Choice - Behav.')
-ax.set_title('Decoding')
 
 ax = axes[1]
 for i,ses in enumerate(sessions):
     ax.plot(dec_perf_stim[i,:],dec_choice_neu[i,:],alpha=0.75,linewidth=1.5,color=colorset[i])
-ax.plot(np.nanmean(dec_perf_stim,axis=0),np.nanmean(dec_choice_neu,axis=0),alpha=0.75,linewidth=2,color='k')
-ax.plot([0,1],[0,1],color='k')
+ax.plot(np.nanmean(dec_perf_stim,axis=0),np.nanmean(dec_choice_neu,axis=0),alpha=0.75,linewidth=3,color='k')
+ax.plot([0,1],[0,1],color='k',linewidth=1,linestyle='--')
 ax.set_xlabel('Stim - Neural')
 ax.set_ylabel('Choice - Neural')
-ax.set_title('Decoding')
 
 ax = axes[2]
 for i,ses in enumerate(sessions):
     ax.plot(dec_choice_beh[i,:],dec_choice_neu[i,:],alpha=0.75,linewidth=1.5,color=colorset[i])
-ax.plot(np.nanmean(dec_choice_beh,axis=0),np.nanmean(dec_choice_neu,axis=0),alpha=0.75,linewidth=2,color='k')
-ax.plot([0,1],[0,1],color='k')
+ax.plot(np.nanmean(dec_choice_beh,axis=0),np.nanmean(dec_choice_neu,axis=0),alpha=0.75,linewidth=3,color='k')
+ax.plot([0,1],[0,1],color='k',linewidth=1,linestyle='--')
 ax.set_xlabel('Choice - Behav.')
 ax.set_ylabel('Choice - Neural')
-ax.set_title('Decoding')
 plt.tight_layout()
+plt.savefig(os.path.join(savedir, 'Spatial', '2D_DecPerformance_Stim_Choice_NeuralBehavioral_indSes.png'), format='png')
 
 
 #%% 

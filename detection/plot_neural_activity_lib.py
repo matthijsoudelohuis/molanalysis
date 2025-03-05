@@ -284,17 +284,17 @@ def plot_mean_activity_example_neurons(data,sbins,ses,example_cell_ids):
                 C               = nbins_noise + 2
                 noise_signal    = ses.trialdata['signal'][ses.trialdata['stimcat']=='N'].to_numpy()
                 
-                plotdata        = np.empty((C,S))
+                plotdata        = np.full((C,S),np.nan)
                 plotdata[0,:]   = np.nanmean(data[uN,ses.trialdata['signal']==0,:],axis=0)
                 plotdata[-1,:]  = np.nanmean(data[uN,ses.trialdata['signal']==100,:],axis=0)
 
-                edges = np.linspace(np.min(noise_signal),np.max(noise_signal),nbins_noise+1)
-                centers = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
+                edges           = np.linspace(np.min(noise_signal),np.max(noise_signal),nbins_noise+1)
+                centers         = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
 
                 for ibin,(low,high) in enumerate(zip(edges[:-1],edges[1:])):
                     # print(low,high)
                     idx = (ses.trialdata['signal']>=low) & (ses.trialdata['signal']<=high)
-                    plotdata[ibin+1,:] = np.mean(data[uN,idx,:],axis=0)
+                    plotdata[ibin+1,:] = np.nanmean(data[uN,idx,:],axis=0)
                     
                 plotlabels = np.round(np.hstack((0,centers,100)))
                 # plotcolors = np.hstack(('k',np.linspace(0,1,nbins_noise),'r'))
@@ -367,11 +367,8 @@ def plot_mean_activity_example_neurons(data,sbins,ses,example_cell_ids):
                 ax.set_xticklabels([-75,-50,-25,0,25,50,75])
             else:
                 ax.set_xticklabels([])
-            ax.axvline(x=0, color='k', linestyle='--', linewidth=1)
-            ax.axvline(x=20, color='k', linestyle='--', linewidth=1)
-            ax.axvline(x=25, color='b', linestyle='--', linewidth=1)
-            ax.axvline(x=45, color='b', linestyle='--', linewidth=1)
-            ax.set_xlim([-80,60])
+            add_stim_resp_win(ax)
+            ax.set_xlim([-75,75])
 
             # plt.ylim([0,Ntrials])
         

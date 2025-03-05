@@ -21,7 +21,7 @@ from sklearn.model_selection import cross_val_score
 from scipy.signal import medfilt
 from scipy.stats import zscore
 
-from loaddata.session_info import filter_sessions,load_sessions
+from loaddata.session_info import *
 from loaddata.get_data_folder import get_local_drive
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -68,7 +68,7 @@ for i in range(nSessions):
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning
 s_pre       = -80  #pre cm
-s_post      = 60   #post cm
+s_post      = 80   #post cm
 binsize     = 10     #spatial binning in cm
 
 for i in range(nSessions):
@@ -81,6 +81,9 @@ for i in range(nSessions):
     temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[i].behaviordata['runspeed']),1)))
     sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
                                     sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
+
+#%% 
+sessions,nSessions,sbins = load_neural_performing_sessions()
 
 
 #%% #################### Compute spatial runspeed ####################################

@@ -21,7 +21,7 @@ from sklearn.model_selection import cross_val_score
 from scipy.signal import medfilt
 from scipy.stats import zscore
 
-from loaddata.session_info import filter_sessions,load_sessions
+from loaddata.session_info import *
 from loaddata.get_data_folder import get_local_drive
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -61,40 +61,14 @@ session_list = np.array([['LPE11997', '2024_04_16'],
 sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
 
-#%% Get signal as relative to psychometric curve for all sessions:
-sessions,nSessions = filter_sessions(protocols=protocol,min_cells=100) #Load specified list of sessions
-sessions = noise_to_psy(sessions,filter_engaged=True)
-plot_psycurve(sessions,filter_engaged=True)
-
-#%% Include sessions based on performance: psychometric curve for the noise #############
-sessiondata = pd.concat([ses.sessiondata for ses in sessions])
-zmin_thr = -0.3
-zmax_thr = 0.3
-guess_thr = 0.4
-
-idx_ses = np.all((sessiondata['noise_zmin']<=zmin_thr,
-                  sessiondata['noise_zmax']>=zmax_thr,
-                  sessiondata['guess_rate']<=guess_thr),axis=0)
-print('Filtered %d/%d sessions based on performance' % (np.sum(idx_ses),len(idx_ses)))
-
-#%%
-sessions = [sessions[i] for i in np.where(idx_ses)[0]]
-nSessions = len(sessions)
-
-#%% Load the data:           
-for ises in range(nSessions):    # iterate over sessions
-    sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion=calciumversion)
-
-#%% Z-score the calciumdata: 
-for i in range(nSessions):
-    sessions[i].calciumdata = sessions[i].calciumdata.apply(zscore,axis=0)
+#%% 
+sessions,nSessions,sbins = load_neural_performing_sessions()
 
 #%% ############################### Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning
-s_pre       = -75  #pre cm
-s_post      = 75   #post cm
+s_pre       = -80  #pre cm
+s_post      = 80   #post cm
 binsize     = 10     #spatial binning in cm
 
 for i in range(nSessions):
@@ -119,7 +93,7 @@ for ises,ses in enumerate(sessions): # running across the trial:
 sessions = calc_stimresponsive_neurons(sessions,sbins)
 
 #%%
-ises = 4
+ises = 6
 example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
 
 fig = plot_mean_activity_example_neurons(sessions[ises].stensor,sbins,sessions[ises],example_cell_ids)
@@ -768,6 +742,7 @@ for iarea,area in enumerate(['V1','PM']):
 ax.set_title('Neuron locations in PC space')
 ax.set_xlabel('PC1')
 ax.set_ylabel('PC2')
+fig.savefig(os.path.join(savedir,'PCA_TuningCurve_HITMISS_%dsessions.png') % (nSessions), format='png')
 
 #%% 
 
@@ -806,6 +781,7 @@ for icomp in range(ncompstoplot):
     ax.set_title(f'PC{icomp} space: Hits vs Misses')
     ax.legend(handles,areas, loc='lower right',frameon=False)
 
+fig.savefig(os.path.join(savedir,'PCA_Diff_HITMISS_%dsessions.png') % (nSessions), format='png')
 
 #%% 
 

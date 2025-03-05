@@ -7,10 +7,13 @@ Matthijs Oude Lohuis, 2023, Champalimaud Foundation
 import os
 import numpy as np
 import pandas as pd
+import logging
+from scipy.stats import zscore
+
 from loaddata.get_data_folder import get_data_folder
 from loaddata.session import Session
-import logging
-
+from utils.behaviorlib import * # get support functions for beh analysis 
+from utils.psth import * # get support functions for psth generation
 logger = logging.getLogger(__name__)
 
 
@@ -189,6 +192,54 @@ def report_sessions(sessions):
             logger.info(
                 f"Number of neurons in {area}: {len(celldata[celldata['roi_name'] == area])}")
         logger.info(f"Total number of neurons: {len(celldata)}")
+
+def load_neural_performing_sessions(calciumversion='deconv'):
+    #Get signal as relative to psychometric curve for all sessions:
+    sessions,nSessions = filter_sessions(protocols='DN',min_cells=100) #Load specified list of sessions
+    sessions = noise_to_psy(sessions,filter_engaged=True,bootstrap=True)
+    # plot_psycurve(sessions,filter_engaged=True)
+
+    # Include sessions based on performance: psychometric curve for the noise #############
+    sessiondata = pd.concat([ses.sessiondata for ses in sessions])
+    zmin_thr = -0.3
+    zmax_thr = 0.3
+    guess_thr = 0.4
+
+    idx_ses = np.all((sessiondata['noise_zmin']<=zmin_thr,
+                    sessiondata['noise_zmax']>=zmax_thr,
+                    sessiondata['guess_rate']<=guess_thr),axis=0)
+    print('Filtered %d/%d DN sessions based on performance' % (np.sum(idx_ses),len(idx_ses)))
+
+    #
+    sessions = [sessions[i] for i in np.where(idx_ses)[0]]
+    nSessions = len(sessions)
+
+    # Load the data:           
+    for ises in range(nSessions):    # iterate over sessions
+        sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                    calciumversion=calciumversion)
+    # Z-score the calciumdata: 
+    for i in range(nSessions):
+        sessions[i].calciumdata = sessions[i].calciumdata.apply(zscore,axis=0)
+
+    ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
+    s_pre       = -80  #pre cm
+    s_post      = 80   #post cm
+    binsize     = 10     #spatial binning in cm
+
+    for i in range(nSessions):
+        sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
+                                        sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=binsize,method='binmean')
+        # Compute average response in stimulus response zone:
+        sessions[i].respmat             = compute_respmat_space(sessions[i].calciumdata, sessions[i].ts_F, sessions[i].trialdata['stimStart'],
+                                        sessions[i].zpos_F,sessions[i].trialnum_F,s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
+
+        temp = pd.DataFrame(np.reshape(np.array(sessions[i].behaviordata['runspeed']),(len(sessions[i].behaviordata['runspeed']),1)))
+        sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
+                                        sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
+
+
+    return sessions,nSessions,sbins
 
     # print("{nneurons} dataset: {nsessions} sessions, {ntrials} trials".format(
         # protocol = sessions[0].sessiondata.protocol,nsessions = len(sessiondata),ntrials = len(trialdata))
