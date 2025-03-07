@@ -164,7 +164,7 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     ses.load_data(load_behaviordata, load_calciumdata, load_videodata, calciumversion)
                     sessions.append(ses)
 
-    report_sessions(sessions)
+    # report_sessions(sessions)
 
     return sessions, len(sessions)
 
@@ -184,14 +184,14 @@ def report_sessions(sessions):
         if hasattr(ses, 'celldata'):
             celldata = pd.concat([celldata, ses.celldata])
 
-    logger.info(
+    print(
         f'{pd.unique(sessiondata["protocol"])} dataset: {len(pd.unique(sessiondata["animal_id"]))} mice, {len(sessiondata)} sessions, {len(trialdata)} trials')
 
     if np.any(celldata):
         for area in np.unique(celldata['roi_name']):
-            logger.info(
+            print(
                 f"Number of neurons in {area}: {len(celldata[celldata['roi_name'] == area])}")
-        logger.info(f"Total number of neurons: {len(celldata)}")
+        print(f"Total number of neurons: {len(celldata)}")
 
 def load_neural_performing_sessions(calciumversion='deconv'):
     #Get signal as relative to psychometric curve for all sessions:
