@@ -14,7 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-os.chdir('e:\\Python\\molanalysis\\')
+os.chdir('c:\\Python\\molanalysis\\')
 from loaddata.get_data_folder import get_local_drive
 from loaddata.session_info import *
 from utils.psth import *
@@ -29,20 +29,27 @@ from matplotlib.lines import Line2D
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\DecodeLabeling\\')
 
+#%% TODO:
+# 1. Add a function to compute the decoding performance for each session 
+# for matched number of labeled and unlabeled neurons
+
+# 2. Try to decode label or unlabeled from individual sessions
+
 #%% ########################## Load data #######################
 protocol            = ['DN']
 calciumversion      = 'deconv'
 
 sessions,nSessions  = filter_sessions(protocol,load_calciumdata=True,load_behaviordata=True,
                                       load_videodata=True,calciumversion=calciumversion,
-                                      min_lab_cells_V1=20,min_lab_cells_PM=20,
+                                    #   min_lab_cells_V1=20,min_lab_cells_PM=20,
+                                      min_lab_cells_V1=1,min_lab_cells_PM=1,
                                       filter_areas=['V1','PM'])
 
 report_sessions(sessions)
 # sessions,nSessions  = filter_sessions(protocol,calciumversion=calciumversion,min_lab_cells_V1=50,min_lab_cells_PM=50)
 
 #%% 
-# sessions,nSessions = load_neural_performing_sessions()
+sessions,nSessions,sbins = load_neural_performing_sessions()
 
 #%% ############################### Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
@@ -60,10 +67,10 @@ sessions = calc_stimresponsive_neurons(sessions,sbins)
 
 #%% #################### Compute mean activity for saliency trial bins for all sessions ##################
 
-labeled     = ['unl','lab']
-nlabels     = len(labeled)
-areas       = ['V1','PM','AL','RSP']
-nareas      = len(areas)
+# labeled     = ['unl','lab']
+# nlabels     = len(labeled)
+# areas       = ['V1','PM','AL','RSP']
+# nareas      = len(areas)
 
 lickresp    = [0,1]
 nlickresp   = len(lickresp)
@@ -71,10 +78,12 @@ nlickresp   = len(lickresp)
 sigtype     = 'signal'
 zmin        = 5
 zmax        = 20
+# zmin        = 7
+# zmax        = 17
 nbins_noise = 3
 
 # data_mean_spatial_hitmiss,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
-data_mean_spatial_hitmiss,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=False)
+data_mean_spatial_hitmiss,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=False,min_ntrials=5)
 
 Z = np.shape(data_mean_spatial_hitmiss)[1]
 # plotcolors = [sns. sns.color_palette("inferno",C)
@@ -98,7 +107,6 @@ for ses in sessions:
 #%% 
 areas = ['V1','PM']
 nareas = len(areas)
-noise_level = 100
 
 #%% 
 fig,axes = plt.subplots(1,nareas,figsize=(4*nareas,2.5))
@@ -129,7 +137,8 @@ for iarea,area in enumerate(areas):
     ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
     ax.set_xticks([-75,-50,-25,0,25,50,75])
     ax.set_xticklabels([-75,-50,-25,0,25,50,75])
-    
+    ax.set_title(area)
+
     add_stim_resp_win(ax)
     ax.set_xlim([-60,80])
     if iarea == 0:
@@ -160,9 +169,9 @@ for iarea,area in enumerate(areas):
     y = celldata['redcell'][idx_N].to_numpy()
     X = data_mean_spatial_hitmiss[idx_N,:,:].reshape(np.sum(idx_N),-1)
 
-    # X,y,idx_nan = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+    X,y,idx_nan = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
-    lam   = 0.95
+    lam   = 0.85
     model = LDA(n_components=1,solver='eigen', shrinkage=np.clip(lam,0,1))
 
     LDAproj = model.fit_transform(X,y)
@@ -186,12 +195,18 @@ fig.savefig(os.path.join(savedir,'LDAweights_%s_%dsessions.png' % (exp_label,nSe
 
 #%% 
 
-data_mean_spatial_hitmiss,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
+data_mean_spatial_hitmiss,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=2)
 # data_mean_spatial_hitmiss,plotcenters = get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=False)
+
+# data_mean_spatial_hitmiss -= np.nanmean(data_mean_spatial_hitmiss[:,:,sbins<0,:],axis=(2),keepdims=True)
+# data_mean_spatial_hitmiss -= np.nanmean(data_mean_spatial_hitmiss,axis=(2),keepdims=True)
 
 
 #%% 
+noise_level = 20
 exp_label = 'Decoding_proj_type'
+nmodelruns = 25
+subfrac = 0.5
 
 fig,axes = plt.subplots(1,nareas,figsize=(4*nareas,2.5))
 
@@ -200,27 +215,47 @@ for iarea,area in enumerate(areas):
 
     idx_N = np.all((celldata['noise_level']<noise_level,
                     np.isin(celldata['roi_name'],area),
-                    # celldata['depth']>300,
+                    # celldata['depth']<250,
+                    # celldata['depth']>250,
                     idx_nearby),axis=0)
-    
+        
     y = celldata['redcell'][idx_N].to_numpy()
     X = data_mean_spatial_hitmiss[idx_N,:,:].reshape(np.sum(idx_N),-1)
 
+    # X -= np.nanmean(X,axis=0,keepdims=True)
+
     X,y,idx_nan = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
-    lam   = 0.95
+    lam   = 0.9
     model = LDA(n_components=1,solver='eigen', shrinkage=np.clip(lam,0,1))
+    # coefs = np.full((np.shape(data_mean_spatial_hitmiss) + (nmodelruns,)),np.nan)
+    coefs = np.full((np.shape(data_mean_spatial_hitmiss)[1:] + (nmodelruns,)),np.nan)
 
-    LDAproj = model.fit_transform(X,y)
+    for i in range(nmodelruns):
+        idx_sub = np.random.choice(np.arange(np.shape(X)[0]),size=np.shape(X)[0]//(int(1/subfrac)),replace=False)
+        Xsub,ysub = X[idx_sub,:], y[idx_sub]
+        # X,y,idx_nan = prep_Xpredictor(Xsub,ysub) #zscore, set columns with all nans to 0, set nans to 0
+        LDAproj = model.fit_transform(Xsub,ysub)
+        coefs[:,:,:,i] = np.reshape(model.coef_,(Z,len(sbins),2))
+    coefs = np.nanmean(coefs,axis=3)
 
-    coefs = np.reshape(model.coef_,(Z,len(sbins),2))
+    # LDAproj = model.fit_transform(X,y)
+
+    # coefs = np.reshape(model.coef_,(Z,len(sbins),2))
 
     # for iZ in range(Z):
-        # ax.plot(sbins,coefs[iZ,:,0],color=plotcolors[iZ], label=plotcenters[iZ],linewidth=2,linestyle=['--','-'][0])
-        # ax.plot(sbins,coefs[iZ,:,1],color=plotcolors[iZ], label=plotcenters[iZ],linewidth=2,linestyle=['--','-'][1])
+    for iZ in range(Z)[1:-1]:
+        ax.plot(sbins,coefs[iZ,:,0],color=plotcolors[iZ], label=plotcenters[iZ],linewidth=1,linestyle=['--','-'][0])
+        ax.plot(sbins,coefs[iZ,:,1],color=plotcolors[iZ], label=plotcenters[iZ],linewidth=1,linestyle=['--','-'][1])
 
-    ax.plot(sbins,np.nanmean(coefs[:,:,0],axis=0),color='k',linewidth=2,linestyle=['--','-'][0])
-    ax.plot(sbins,np.nanmean(coefs[:,:,1],axis=0),color='k',linewidth=2,linestyle=['--','-'][1])
+    # ax.plot(sbins,np.nanmean(coefs[1:-1,:,0],axis=0),color='k',linewidth=2,linestyle=['--','-'][0])
+    # ax.plot(sbins,np.nanmean(coefs[1:-1,:,1],axis=0),color='k',linewidth=2,linestyle=['--','-'][1])
+
+    # ax.plot(sbins,np.nanmean(coefs[:-1,:,0],axis=0),color='k',linewidth=2,linestyle=['--','-'][0])
+    # ax.plot(sbins,np.nanmean(coefs[:-1,:,1],axis=0),color='k',linewidth=2,linestyle=['--','-'][1])
+
+    ax.plot(sbins,np.nanmean(coefs[1:-1,:,0],axis=0),color='k',linewidth=3,linestyle=['--','-'][0])
+    ax.plot(sbins,np.nanmean(coefs[1:-1,:,1],axis=0),color='k',linewidth=3,linestyle=['--','-'][1])
 
     ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
     ax.set_xticks([-75,-50,-25,0,25,50,75])
@@ -233,24 +268,107 @@ for iarea,area in enumerate(areas):
         ax.legend(plothandles,frameon=False,fontsize=8,loc='upper left')
 plt.tight_layout()
 fig.savefig(os.path.join(savedir,'LDAweights_HitMiss_%s_%dsessions.png' % (exp_label,nSessions)), format = 'png')
+# fig.savefig(os.path.join(savedir,'LDAweights_HitMiss_DepthTo250%s_%dsessions.png' % (exp_label,nSessions)), format = 'png')
+# fig.savefig(os.path.join(savedir,'LDAweights_HitMiss_DepthFrom250%s_%dsessions.png' % (exp_label,nSessions)), format = 'png')
 
 
-#%%
-df = pd.DataFrame(data={'LDAproj':LDAproj.squeeze(),'y':y})
-# sns.scatterplot(x='LDAproj',y='y',data=df)
-sns.histplot(x='LDAproj',hue='y',data=df,kde=True)
 
-#%%
+#%% 
+noise_level = 20
+exp_label = 'Decoding_proj_type'
+nmodelruns = 25
+subfrac = 0.5
+
+fig,axes = plt.subplots(1,nareas,figsize=(4*nareas,2.5))
+
+for iarea,area in enumerate(areas):
+    ax = axes[iarea]
+
+    idx_N = np.all((celldata['noise_level']<noise_level,
+                    np.isin(celldata['roi_name'],area),
+                    # celldata['depth']<250,
+                    # celldata['depth']>250,
+                    idx_nearby),axis=0)
+        
+    y = celldata['redcell'][idx_N].to_numpy()
+    X = data_mean_spatial_hitmiss[idx_N,:,:].reshape(np.sum(idx_N),-1)
+
+    # X -= np.nanmean(X,axis=0,keepdims=True)
+
+    X,y,idx_nan = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+    lam   = 0.9
+    model = LDA(n_components=1,solver='eigen', shrinkage=np.clip(lam,0,1))
+    # coefs = np.full((np.shape(data_mean_spatial_hitmiss) + (nmodelruns,)),np.nan)
+    coefs = np.full((np.shape(data_mean_spatial_hitmiss)[1:] + (nmodelruns,)),np.nan)
+
+    for i in range(nmodelruns):
+        idx_sub = np.random.choice(np.arange(np.shape(X)[0]),size=np.shape(X)[0]//(int(1/subfrac)),replace=False)
+        Xsub,ysub = X[idx_sub,:], y[idx_sub]
+        # X,y,idx_nan = prep_Xpredictor(Xsub,ysub) #zscore, set columns with all nans to 0, set nans to 0
+        LDAproj = model.fit_transform(Xsub,ysub)
+        coefs[:,:,:,i] = np.reshape(model.coef_,(Z,len(sbins),2))
+    coefs = np.nanmean(coefs,axis=3)
+
+    # LDAproj = model.fit_transform(X,y)
+
+    # coefs = np.reshape(model.coef_,(Z,len(sbins),2))
+
+    # for iZ in range(Z):
+    for iZ in range(Z)[1:-1]:
+        ax.plot(sbins,coefs[iZ,:,0],color=plotcolors[iZ], label=plotcenters[iZ],linewidth=1,linestyle=['--','-'][0])
+        ax.plot(sbins,coefs[iZ,:,1],color=plotcolors[iZ], label=plotcenters[iZ],linewidth=1,linestyle=['--','-'][1])
+
+    # ax.plot(sbins,np.nanmean(coefs[1:-1,:,0],axis=0),color='k',linewidth=2,linestyle=['--','-'][0])
+    # ax.plot(sbins,np.nanmean(coefs[1:-1,:,1],axis=0),color='k',linewidth=2,linestyle=['--','-'][1])
+
+    # ax.plot(sbins,np.nanmean(coefs[:-1,:,0],axis=0),color='k',linewidth=2,linestyle=['--','-'][0])
+    # ax.plot(sbins,np.nanmean(coefs[:-1,:,1],axis=0),color='k',linewidth=2,linestyle=['--','-'][1])
+
+    ax.plot(sbins,np.nanmean(coefs[1:-1,:,0],axis=0),color='k',linewidth=3,linestyle=['--','-'][0])
+    ax.plot(sbins,np.nanmean(coefs[1:-1,:,1],axis=0),color='k',linewidth=3,linestyle=['--','-'][1])
+
+    ax.set_xlabel('Pos. relative to stim (cm)',fontsize=9)
+    ax.set_xticks([-75,-50,-25,0,25,50,75])
+    ax.set_xticklabels([-75,-50,-25,0,25,50,75])
+    add_stim_resp_win(ax)
+    ax.set_xlim([-60,80])
+    ax.set_title(area)
+    if iarea == 0: 
+        ax.set_ylabel('LDA weights')
+        ax.legend(plothandles,frameon=False,fontsize=8,loc='upper left')
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'LDAweights_HitMiss_%s_%dsessions.png' % (exp_label,nSessions)), format = 'png')
+# fig.savefig(os.path.join(savedir,'LDAweights_HitMiss_DepthTo250%s_%dsessions.png' % (exp_label,nSessions)), format = 'png')
+# fig.savefig(os.path.join(savedir,'LDAweights_HitMiss_DepthFrom250%s_%dsessions.png' % (exp_label,nSessions)), format = 'png')
 
 # df = pd.DataFrame(data={'LDAproj':LDAproj.squeeze()})
 
 
 
 #%% 
-lam = 0.8
+lam = 0.08
 kfold = 5
+modelname = 'LDA'
+# modelname = 'LOGR'
+
+idx_N = np.all((celldata['noise_level']<noise_level,
+                np.isin(celldata['roi_name'],area),
+                # celldata['depth']<250,
+                # celldata['depth']>250,
+                # idx_nearby
+                ),axis=0)
+    
+# y = celldata['redcell'][idx_N].to_numpy()
+y = celldata['sig_MN'][idx_N].to_numpy()
+X = data_mean_spatial_hitmiss[idx_N,:,:].reshape(np.sum(idx_N),-1)
+
+# X -= np.nanmean(X,axis=0,keepdims=True)
+
+X,y,idx_nan = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
 # temp,_,_,_   = my_decoder_wrapper(X,y,model_name='LOGR',kfold=kfold,lam=None,norm_out=True)
-temp,_,_,_   = my_decoder_wrapper(X,y,model_name='LDA',kfold=kfold,lam=lam,norm_out=False,subtract_shuffle=True)
+temp,_,_,_   = my_decoder_wrapper(X,y,model_name=modelname,kfold=kfold,lam=lam,norm_out=False,subtract_shuffle=True)
 print(temp)
 
 # lam = find_optimal_lambda(X,y,model_name='LDA',kfold=kfold)

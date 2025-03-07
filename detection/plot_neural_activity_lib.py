@@ -729,7 +729,7 @@ def get_dprime_signalbins(sessions,sigtype,nbins_noise,zmin,zmax):
 
     return data_mean,plotcenters
 
-def get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True):
+def get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=10):
 
     celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
     N           = len(celldata)
@@ -765,7 +765,8 @@ def get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,spl
                     idx_T = np.all((idx_T_all[:,iZ],
                                 sessions[ises].trialdata['lickResponse']==lr,
                                 sessions[ises].trialdata['engaged']==1), axis=0)
-                    data_mean[idx_N_ses,iZ,:,ilr]        = np.nanmean(sessions[ises].stensor[:,idx_T,:],axis=1)
+                    if np.sum(idx_T)>=min_ntrials:
+                        data_mean[idx_N_ses,iZ,:,ilr]        = np.nanmean(sessions[ises].stensor[:,idx_T,:],axis=1)
         else: 
             for iZ in range(Z):
                 data_mean[idx_N_ses,iZ,:]      = np.nanmean(sessions[ises].stensor[:,idx_T_all[:,iZ],:],axis=1)

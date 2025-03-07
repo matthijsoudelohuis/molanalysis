@@ -9,7 +9,7 @@ from scipy.linalg import norm
 from sklearn.preprocessing import minmax_scale
 from sklearn.metrics import r2_score
 
-os.chdir('e:\\Python\\molanalysis')
+# os.chdir('e:\\Python\\molanalysis')
 
 from scipy.stats import vonmises
 from loaddata.session import Session

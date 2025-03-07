@@ -223,7 +223,7 @@ def load_neural_performing_sessions(calciumversion='deconv'):
         sessions[i].calciumdata = sessions[i].calciumdata.apply(zscore,axis=0)
 
     ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
-    s_pre       = -80  #pre cm
+    s_pre       = -60  #pre cm
     s_post      = 80   #post cm
     binsize     = 10     #spatial binning in cm
 

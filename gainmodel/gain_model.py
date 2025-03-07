@@ -10,7 +10,7 @@ from sklearn.preprocessing import minmax_scale
 from sklearn.metrics import r2_score
 from tqdm import tqdm
 
-os.chdir('e:\\Python\\molanalysis')
+os.chdir('c:\\Python\\molanalysis')
 
 from loaddata.get_data_folder import get_local_drive
 
@@ -25,7 +25,7 @@ from utils.plotting_style import * #get all the fixed color schemes
 from utils.gain_lib import * 
 from utils.plot_lib import shaded_error
 
-savedir = 'E:\\OneDrive\\PostDoc\\Figures\\SharedGain\\GainModel\\'
+savedir =  os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\GainModel\\')
 
 #%%  
 nNeurons        = 1000
