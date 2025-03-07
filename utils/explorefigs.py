@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import copy
 
 from sklearn import preprocessing
 from utils.plotting_style import *  # get all the fixed color schemes
@@ -571,4 +572,177 @@ def plot_PCA_images(ses, size='runspeed'):
         sns.despine(fig=fig, top=True, right=True)
         # ax.legend(labels=oris)
     plt.tight_layout()
+    return fig
+
+
+
+def indices_at_percentiles(data, percentiles):
+    data = np.asarray(data)
+    sorted_indices = np.argsort(data)  # Get sorted indices
+    sorted_data = data[sorted_indices]  # Sort data
+
+    # Find approximate indices in the sorted array
+    percentile_values = np.percentile(data, percentiles, method='nearest')
+    indices = np.searchsorted(sorted_data, percentile_values)
+
+    return sorted_indices[indices]  # Map back to original indices
+
+
+def plot_PCA_gratings_3D_traces(ses, t_axis,size='runspeed', export_animation=False, savedir=None,
+                                thr_tuning=0,plotgainaxis=False,n_single_trials=10):
+
+    ########### PCA on trial-averaged responses ############
+    ######### plot result as scatter by orientation ########
+
+    ori = ses.trialdata['Orientation']
+    oris = np.sort(pd.Series.unique(ses.trialdata['Orientation']))
+
+    ori_ind = [np.argwhere(np.array(ori) == iori)[:, 0] for iori in oris]
+
+    pal = sns.color_palette('husl', len(oris))
+    pal = np.tile(sns.color_palette('husl', int(len(oris)/2)), (2, 1))
+    if size == 'runspeed':
+        sizes = (ses.respmat_runspeed - np.percentile(ses.respmat_runspeed, 5)) / \
+            (np.percentile(ses.respmat_runspeed, 95) -
+             np.percentile(ses.respmat_runspeed, 5))
+    elif size == 'videome':
+        sizes = (ses.respmat_videome - np.percentile(ses.respmat_videome, 5)) / \
+            (np.percentile(ses.respmat_videome, 95) -
+             np.percentile(ses.respmat_videome, 5))
+
+    idx_tuned = ses.celldata['tuning_var'] > thr_tuning
+    idx = np.logical_and(idx_tuned, idx_tuned)
+    
+    # zscore for each neuron across trial responses
+    # respmat_zsc = ses.respmat[idx, :]
+
+    # tensor Z:
+    # tensor_zsc = ses.tensor[idx, :, :]
+    # tensor_zsc = zscore(ses.tensor[idx, :, :], axis=(1,2))
+    tensor_zsc = copy.deepcopy(ses.tensor[idx, :, :])
+    tensor_zsc -= np.mean(tensor_zsc, axis=(1,2), keepdims=True)
+    tensor_zsc /= np.std(tensor_zsc, axis=(1,2), keepdims=True)
+
+    idx_B = (t_axis>=0) & (t_axis<=1)
+    respmat_zsc = np.nanmean(tensor_zsc[:,:,idx_B], axis=2)
+
+    # construct PCA object with specified number of components
+    pca = PCA(n_components=3)
+    # fit pca to response matrix (n_samples by n_features)
+    Xp = pca.fit_transform(respmat_zsc.T).T
+    # dimensionality is now reduced from N by K to ncomp by K
+
+    if plotgainaxis:
+        data                = respmat_zsc
+        poprate             = np.nanmean(data,axis=0)
+        gain_weights        = np.array([np.corrcoef(poprate,data[n,:])[0,1] for n in range(data.shape[0])])
+        gain_trials         = poprate - np.nanmean(data,axis=None)
+        # g = np.outer(np.percentile(gain_trials,[0,100]),gain_weights)
+        g = np.outer([-2,10],gain_weights)
+        # g = np.outer(np.percentile(gain_trials,[0,100])*np.percentile(poprate,[0,100]),gain_weights)
+        Xg = pca.transform(g).T
+
+    data_re     = np.reshape(tensor_zsc,(tensor_zsc.shape[0],-1))
+    Xt          = pca.transform(data_re.T).T
+    Xt          = np.reshape(Xt,(Xt.shape[0],tensor_zsc.shape[1],tensor_zsc.shape[2]))
+
+    data                = respmat_zsc
+    poprate             = np.nanmean(data,axis=0)
+
+    # select a number of example trials with varying population rates
+    # idx_T = indices_at_percentiles(poprate,np.arange(0,100 + 100/n_single_trials,100/n_single_trials))
+    # poprate[idx_T]
+
+    # idx_T = np.random.choice(len(poprate),n_single_trials,replace=False)
+    # poprate[idx_T]
+
+    # percvalues = np.percentile(poprate,np.arange(0,100 + 100/num_trials,100/num_trials))
+    # indices = np.searchsorted(sorted_data, percvalues)
+    # trialsel = np.argsort(poprate)[:num_trials]
+    # plt.scatter(Xp[0,trialsel],Xp[1,trialsel],Xp[2,trialsel],color=[0,0,0],s=150,marker='x',zorder=10)
+    nActBins = 5
+    binedges = np.percentile(poprate,np.linspace(0,100,nActBins+1))
+
+    fig = plt.figure(figsize=(nActBins*5,5))
+
+    for iap  in range(nActBins):
+         # fig,axes = plt.figure(1, len(areas), figsize=[len(areas)*3, 3])
+        ax = fig.add_subplot(1, nActBins, iap+1, projection='3d')
+
+        # plot orientation separately with diff colors
+        for t, t_type in enumerate(oris):
+            # get all data points for this ori along first PC or projection pairs
+            x = Xp[0, ori_ind[t]]
+            y = Xp[1, ori_ind[t]]  # and the second
+            z = Xp[2, ori_ind[t]]  # and the second
+            # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
+            # ax.scatter(x, y, z, color=pal[t], s=ses.respmat_runspeed[ori_ind[t]], alpha=0.8)     #each trial is one dot
+            # each trial is one dot
+            ax.scatter(x, y, z, color=pal[t], s=sizes[ori_ind[t]]*2, alpha=0.6)
+            # ax.scatter(x, y, z, color='k', s=2, alpha=0.5)
+            # ax.scatter(x, y, z,marker='o')     #each trial is one dot
+        if plotgainaxis:
+            ax.plot(Xg[0,:],Xg[1,:],Xg[2,:],color='k',linewidth=1)
+
+        
+        # nActbins  = 2
+        # binedges = 
+        # plot orientation separately with diff colors
+        for t, t_type in enumerate(oris[:8]):
+        # for t, t_type in enumerate(oris[:1]):
+            # for iap in range(nActBins):
+            idx_T = np.all((np.array(ori) == t_type,
+                            poprate >= binedges[iap],
+                            poprate <= binedges[iap+1]
+                            ),axis=0)
+            # get all data points for this ori along first PC or projection pairs
+            # x = np.nanmean(Xt[np.ix_([0],ori_ind[t],:],axis=1) #Xt[0, ori_ind[t]]
+            x = np.nanmean(Xt[0,idx_T,:],axis=0) #Xt[0, ori_ind[t]]
+            y = np.nanmean(Xt[1,idx_T,:],axis=0) #Xp[1, ori_ind[t]]  # and the second
+            z = np.nanmean(Xt[2,idx_T,:],axis=0) #Xp[2, ori_ind[t]]  # and the second
+            ax.plot(x,y,z,color=pal[t],linewidth=1.5)
+
+                # ax.plot(x,y,z,color=pal[t],linewidth=0.5)
+
+        # for k,ik in enumerate(idx_T):
+        #     # fit pca to response matrix (n_samples by n_features)
+        #     Xt = pca.transform(tensor_zsc[:,ik,:].T).T
+        #     # dimensionality is now reduced from N by K to ncomp by K
+
+        ax.set_xlabel('PC 1')  # give labels to axes
+        ax.set_ylabel('PC 2')
+        ax.set_zlabel('PC 3')
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_zticklabels([])
+        
+        ax.grid(False)
+        ax.set_facecolor('white')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_zticks([])
+        ax.set_title('Pop Act Bin %d' % iap)
+
+        # Get rid of colored axes planes, remove fill
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+        limpercs = [1, 99]
+        # limpercs = [0, 98]
+        ax.set_xlim(np.percentile(Xp[0, :], limpercs))
+        ax.set_ylim(np.percentile(Xp[1, :], limpercs))
+        ax.set_zlim(np.percentile(Xp[2, :], limpercs))
+
+        # Now set color to white (or whatever is "invisible")
+        ax.xaxis.pane.set_edgecolor('w')
+        ax.yaxis.pane.set_edgecolor('w')
+        ax.zaxis.pane.set_edgecolor('w')
+
+    if export_animation:
+        print("Making animation")
+        rot_animation = animation.FuncAnimation(
+            fig, rotate, frames=np.arange(0, 364, 4), interval=100)
+        rot_animation.save(os.path.join(
+            savedir, 'rotation.gif'), dpi=80, writer='imagemagick')
+
     return fig

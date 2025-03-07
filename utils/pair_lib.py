@@ -71,7 +71,7 @@ def filter_2d_areapair(ses,areapair):
     if areapair == ' ':
         return np.full(np.shape(ses.distmat_xy),True)
     area1,area2 = areapair.split('-')
-    assert 'roi_name' in ses.celldata, "Error: 'roi_name' is not in ses.celldata. Please run the function filter_sessions() with the argument has_pupil=True"
+    assert 'roi_name' in ses.celldata, "Error: 'roi_name' is not in ses.celldata."
     assert np.isin([area1,area2],ses.celldata['roi_name'].unique()).all(), \
         f"Error: one of {area1} or {area2} is not in ses.celldata['roi_name']. Unique labels are {ses.celldata['roi_name'].unique()}"
     return np.outer(ses.celldata['roi_name']==area1, ses.celldata['roi_name']==area2)
@@ -82,7 +82,7 @@ def filter_2d_layerpair(ses,layerpair):
     if layerpair == ' ':
         return np.full(np.shape(ses.distmat_xy),True)
     layer1,layer2 = layerpair.split('-')
-    assert 'layer' in ses.celldata, "Error: 'layer' is not in ses.celldata. Please run the function filter_sessions() with the argument has_pupil=True"
+    assert 'layer' in ses.celldata, "Error: 'layer' is not in ses.celldata."
     # assert np.isin([layer1,layer2],ses.celldata['layer'].unique()).all(), \
     #     f"Error: one of {layer1} or {layer2} is not in ses.celldata['layer']. Unique labels are {ses.celldata['layer'].unique()}"
     return np.outer(ses.celldata['layer']==layer1, ses.celldata['layer']==layer2)
@@ -93,7 +93,7 @@ def filter_2d_projpair(ses,projpair):
     if projpair == ' ':
         return np.full(np.shape(ses.distmat_xy),True)
     proj1,proj2 = projpair.split('-')
-    assert 'labeled' in ses.celldata, "Error: 'labeled' is not in ses.celldata. Please run the function filter_sessions() with the argument has_pupil=True"
+    assert 'labeled' in ses.celldata, "Error: 'labeled' is not in ses.celldata. "
     # assert np.isin([proj1,proj2],ses.celldata['labeled'].unique()).all(), \
         # f"Error: one of {proj1} or {proj2} is not in ses.celldata['labeled']. Unique labels are {ses.celldata['labeled'].unique()}"
     return np.outer(ses.celldata['labeled']==proj1, ses.celldata['labeled']==proj2)

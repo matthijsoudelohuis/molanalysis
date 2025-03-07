@@ -33,7 +33,7 @@ import scipy.stats as ss
 from scipy.optimize import curve_fit
 from scipy.stats import linregress
 from utils.arrayop_lib import nanweightedaverage
-
+from utils.shuffle_lib import * 
 
  #####  ####### #     # ######  #     # ####### #######     #####  ####### ######  ######  
 #     # #     # ##   ## #     # #     #    #    #          #     # #     # #     # #     # 
@@ -56,6 +56,7 @@ def compute_trace_correlation(sessions,uppertriangular=True,binwidth=1):
         time window over which to compute the mean of the fluorescence trace
     Returns sessions
     """
+
     for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing trace correlations: '):
     
         avg_nframes     = int(np.round(sessions[ises].sessiondata['fs'][0] * binwidth))
@@ -146,7 +147,13 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_statio
                     respmat_res     = sessions[ises].respmat - data_hat
 
             # Compute noise correlations from residuals:
-            sessions[ises].noise_corr       = np.corrcoef(respmat_res)
+            # sessions[ises].noise_corr       = np.corrcoef(respmat_res)
+
+            trial_ori   = sessions[ises].trialdata['Orientation']
+            noise_corr = np.empty((N,N,len(oris)))  
+            for i,ori in enumerate(oris):
+                noise_corr[:,:,i] = np.corrcoef(respmat_res[:,trial_ori==ori])
+            sessions[ises].noise_corr       = np.mean(noise_corr,axis=2)
 
             idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
             if uppertriangular:
@@ -463,7 +470,7 @@ def mean_corr_areas_labeling(sessions,corr_type='trace_corr',absolute=False,
 def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='F',
                     rotate_prefori=False,deltaori=None,noise_thr=100,onlysameplane=False,
                     binresolution=5,tuned_thr=0,absolute=False,normalize=False,dsi_thr=0,
-                    filtersign=None,corr_thr=0.05):
+                    filtersign=None,corr_thr=0.05,shufflefield=None):
     """
     Binning pairwise correlations as a function of pairwise delta x and y position.
     - Sessions are binned by areapairs, layerpairs, and projpairs.
@@ -519,11 +526,24 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
     bin_angle_surr_count = np.zeros((npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
 
     for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
+
+        celldata        = copy.deepcopy(sessions[ises].celldata)
         if hasattr(sessions[ises],corr_type):
             corrdata = getattr(sessions[ises],corr_type).copy()
 
-            delta_x        = sessions[ises].celldata['xloc'].to_numpy()[:,None] - sessions[ises].celldata['xloc'].to_numpy()[None,:]
-            delta_y        = sessions[ises].celldata['yloc'].to_numpy()[:,None] - sessions[ises].celldata['yloc'].to_numpy()[None,:]
+            if shufflefield == 'RF':
+                celldata['rf_el_' + rf_type],celldata['rf_az_' + rf_type] = my_shuffle_celldata_joint(celldata['rf_el_' + rf_type],celldata['rf_az_' + rf_type],
+                                                                celldata['roi_name'])
+            elif shufflefield == 'XY':
+                celldata['xloc'],celldata['yloc'] = my_shuffle_celldata_joint(celldata['xloc'],celldata['yloc'],
+                                                                celldata['roi_name'])
+            elif shufflefield == 'corrdata':
+                corrdata = my_shuffle(corrdata,method='random',axis=None)
+            elif shufflefield is not None:
+                celldata = my_shuffle_celldata(celldata,shufflefield,keep_roi_name=True)
+
+            delta_x        = celldata['xloc'].to_numpy()[:,None] - celldata['xloc'].to_numpy()[None,:]
+            delta_y        = celldata['yloc'].to_numpy()[:,None] - celldata['yloc'].to_numpy()[None,:]
             delta_xy       = np.sqrt(delta_x**2 + delta_y**2)
             angle_xy       = np.mod(np.arctan2(delta_x,delta_y)-np.pi,np.pi*2)
             angle_xy       = np.mod(angle_xy+np.deg2rad(polarbinres/2),np.pi*2) - np.deg2rad(polarbinres/2)
@@ -540,9 +560,9 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
                 elif filtersign =='pos':
                     corrsignfilter              = corrdata > 0
                 else:
-                    corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+                    corrsignfilter = np.ones((len(celldata),len(celldata))).astype(bool)
             elif method=='frac':
-                corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+                corrsignfilter = np.ones((len(celldata),len(celldata))).astype(bool)
                 if filtersign == 'neg':
                     fracsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
                 elif filtersign =='pos':
@@ -555,28 +575,28 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
             # Rotate delta azimuth and delta elevation to the pref ori of the source neuron
             # delta_az is source neurons
             if rotate_prefori: 
-                for iN in range(len(sessions[ises].celldata)):
-                    ori_rots            = sessions[ises].celldata['pref_ori'][iN]
-                    ori_rots            = np.tile(sessions[ises].celldata['pref_ori'][iN],len(sessions[ises].celldata))
+                for iN in range(len(celldata)):
+                    ori_rots            = celldata['pref_ori'][iN]
+                    ori_rots            = np.tile(celldata['pref_ori'][iN],len(celldata))
                     angle_vec           = np.vstack((delta_x[iN,:], delta_y[iN,:]))
                     angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots + 90) #90 degrees is added to make collinear horizontal
                     delta_x[iN,:]      = angle_vec_rot[0,:]
                     delta_y[iN,:]      = angle_vec_rot[1,:]
 
             if onlysameplane:
-                planefilter    = np.meshgrid(sessions[ises].celldata['plane_idx'],sessions[ises].celldata['plane_idx'])
+                planefilter    = np.meshgrid(celldata['plane_idx'],celldata['plane_idx'])
                 planefilter    = planefilter[0] == planefilter[1]
             else:
-                planefilter    = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+                planefilter    = np.ones((len(celldata),len(celldata))).astype(bool)
 
             for iap,areapair in enumerate(areapairs):
                 for ilp,layerpair in enumerate(layerpairs):
                     for ipp,projpair in enumerate(projpairs):
-                        signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<noise_thr,sessions[ises].celldata['noise_level']<noise_thr)
+                        signalfilter    = np.meshgrid(celldata['noise_level']<noise_thr,celldata['noise_level']<noise_thr)
                         signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
 
                         if tuned_thr:
-                            tuningfilter    = np.meshgrid(sessions[ises].celldata['tuning_var']>tuned_thr,sessions[ises].celldata['tuning_var']>tuned_thr)
+                            tuningfilter    = np.meshgrid(celldata['tuning_var']>tuned_thr,celldata['tuning_var']>tuned_thr)
                             tuningfilter    = np.logical_and(tuningfilter[0],tuningfilter[1])
                         else: 
                             tuningfilter    = np.ones(np.shape(signalfilter))
@@ -603,7 +623,7 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
                             deltaorifilter = np.ones(np.shape(signalfilter)).astype(bool)
 
                         if dsi_thr:
-                            dsi_filter = np.meshgrid(sessions[ises].celldata['DSI']>dsi_thr,sessions[ises].celldata['DSI']>dsi_thr)
+                            dsi_filter = np.meshgrid(celldata['DSI']>dsi_thr,celldata['DSI']>dsi_thr)
                             dsi_filter = np.logical_and(dsi_filter[0],dsi_filter[1])
                         else:
                             dsi_filter = np.ones(np.shape(signalfilter)).astype(bool)
@@ -736,313 +756,323 @@ def plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type):
 ######  ### #     #    ######  ####### #######    #    #     #    #     # #       
 
 
-def bin_corr_deltarf(sessions,method='mean',areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='Fsmooth',
-                    r2_thr=0.2,noise_thr=100,filternear=False,binresolution=5,tuned_thr=0,absolute=False,
-                    normalize=False,dsi_thr=0,min_dist=15,filtersign=None,corr_thr=0.05,
-                    rotate_prefori=False,deltaori=None,centerori=None,surroundori=None):
-    """
-    Binning pairwise correlations as a function of pairwise delta azimuth and elevation.
-    - Sessions are binned by areapairs, layerpairs, and projpairs.
-    - Returns binmean,bincount,binedges
+# def bin_corr_deltarf(sessions,method='mean',areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='Fsmooth',
+#                     r2_thr=0.2,noise_thr=100,filternear=False,binresolution=5,tuned_thr=0,absolute=False,
+#                     normalize=False,dsi_thr=0,min_dist=15,filtersign=None,corr_thr=0.05,
+#                     rotate_prefori=False,deltaori=None,centerori=None,surroundori=None):
+#     """
+#     Binning pairwise correlations as a function of pairwise delta azimuth and elevation.
+#     - Sessions are binned by areapairs, layerpairs, and projpairs.
+#     - Returns binmean,bincount,binedges
 
-    Parameters
-    ----------
-    sessions : list
-        list of sessions
-    areapairs : list (if ' ' then all areapairs are used)
-        list of areapairs
-    layerpairs : list  (if ' ' then all layerpairs are used)
-        list of layerpairs
-    projpairs : list  (if ' ' then all projpairs are used)
-        list of projpairs
-    corr_type : str, optional
-        type of correlation to use, by default 'trace_corr'
-    normalize : bool, optional
-        whether to normalize correlations to the mean correlation at distances < 60 um, by default False
-    rf_type : str, optional
-        type of receptive field to use, by default 'F'
-    """
+#     Parameters
+#     ----------
+#     sessions : list
+#         list of sessions
+#     areapairs : list (if ' ' then all areapairs are used)
+#         list of areapairs
+#     layerpairs : list  (if ' ' then all layerpairs are used)
+#         list of layerpairs
+#     projpairs : list  (if ' ' then all projpairs are used)
+#         list of projpairs
+#     corr_type : str, optional
+#         type of correlation to use, by default 'trace_corr'
+#     normalize : bool, optional
+#         whether to normalize correlations to the mean correlation at distances < 60 um, by default False
+#     rf_type : str, optional
+#         type of receptive field to use, by default 'F'
+#     """
 
-    #Binning parameters 2D:
-    binlim          = 75
-    binedges_2d     = np.arange(-binlim,binlim,binresolution)+binresolution/2 
-    bincenters_2d   = binedges_2d[:-1]+binresolution/2 
-    nBins           = len(bincenters_2d)
+#     #Binning parameters 2D:
+#     binlim          = 75
+#     binedges_2d     = np.arange(-binlim,binlim,binresolution)+binresolution/2 
+#     bincenters_2d   = binedges_2d[:-1]+binresolution/2 
+#     nBins           = len(bincenters_2d)
 
-    bin_2d          = np.zeros((nBins,nBins,len(areapairs),len(layerpairs),len(projpairs)))
-    bin_2d_count    = np.zeros((nBins,nBins,len(areapairs),len(layerpairs),len(projpairs)))
+#     bin_2d          = np.zeros((nBins,nBins,len(areapairs),len(layerpairs),len(projpairs)))
+#     bin_2d_count    = np.zeros((nBins,nBins,len(areapairs),len(layerpairs),len(projpairs)))
 
-    #Binning parameters 1D dRF
-    binlim          = 75
-    binedges_dist   = np.arange(-binresolution/2,binlim,binresolution)+binresolution/2 
-    binsdRF         = binedges_dist[:-1]+binresolution/2 
-    nBins           = len(binsdRF)
+#     #Binning parameters 1D dRF
+#     binlim          = 75
+#     binedges_dist   = np.arange(-binresolution/2,binlim,binresolution)+binresolution/2 
+#     binsdRF         = binedges_dist[:-1]+binresolution/2 
+#     nBins           = len(binsdRF)
 
-    bin_dist        = np.zeros((nBins,len(areapairs),len(layerpairs),len(projpairs)))
-    bin_dist_count  = np.zeros((nBins,len(areapairs),len(layerpairs),len(projpairs)))
+#     bin_dist        = np.zeros((nBins,len(areapairs),len(layerpairs),len(projpairs)))
+#     bin_dist_count  = np.zeros((nBins,len(areapairs),len(layerpairs),len(projpairs)))
 
-    #Binning parameters 1D angle
-    polarbinres         = 45
-    binedges_angle      = np.deg2rad(np.arange(0-polarbinres/2,360,step=polarbinres))
-    bincenters_angle    = binedges_angle[:-1]+np.deg2rad(polarbinres/2)
-    npolarbins          = len(bincenters_angle)
+#     #Binning parameters 1D angle
+#     polarbinres         = 45
+#     binedges_angle      = np.deg2rad(np.arange(0-polarbinres/2,360,step=polarbinres))
+#     bincenters_angle    = binedges_angle[:-1]+np.deg2rad(polarbinres/2)
+#     npolarbins          = len(bincenters_angle)
 
-    # centerthr           = [15,15,15,15]
-    centerthr           = [20,20,20,20]
-    bin_angle_cent      = np.zeros((npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
-    bin_angle_cent_count = np.zeros((npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
+#     # centerthr           = [15,15,15,15]
+#     centerthr           = [20,20,20,20]
+#     bin_angle_cent      = np.zeros((npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
+#     bin_angle_cent_count = np.zeros((npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
 
-    bin_angle_surr      = np.zeros((npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
-    bin_angle_surr_count = np.zeros((npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
+#     bin_angle_surr      = np.zeros((npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
+#     bin_angle_surr_count = np.zeros((npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
 
-    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
-        if hasattr(sessions[ises],corr_type):
-            corrdata = getattr(sessions[ises],corr_type).copy()
-            if 'rf_r2_' + rf_type in sessions[ises].celldata:
+#     for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
+        
+#         if hasattr(sessions[ises],corr_type):
+#             corrdata = getattr(sessions[ises],corr_type).copy()
 
-                el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+            # if shufflefield == 'RF':
+            #     celldata['rf_el_' + rf_type],celldata['rf_az_' + rf_type] = my_shuffle_RF(celldata['rf_el_' + rf_type],celldata['rf_az_' + rf_type],
+            #                                                     celldata['roi_name'])
+            # elif shufflefield == 'corrdata':
+            #     corrdata = my_shuffle(corrdata,method='random',axis=None)
+            # elif shufflefield is not None:
+            #     celldata = my_shuffle_celldata(celldata,shufflefield,keep_roi_name=True)
+
+#             if 'rf_r2_' + rf_type in sessions[ises].celldata:
+
+#                 el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
+#                 az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
                 
-                # [az,el]         = my_shuffleRF(az,el, sessions[ises].celldata['roi_name'].to_numpy())
+#                 # [az,el]         = my_shuffleRF(az,el, sessions[ises].celldata['roi_name'].to_numpy())
 
-                delta_el        = el[:,None] - el[None,:]
-                delta_az        = az[:,None] - az[None,:]
+#                 delta_el        = el[:,None] - el[None,:]
+#                 delta_az        = az[:,None] - az[None,:]
 
-                delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
-                # angle_rf        = np.mod(np.arctan2(delta_az,delta_el)+np.pi/2,np.pi*2)
-                angle_rf        = np.mod(np.arctan2(delta_az,delta_el)+np.pi/2,np.pi*2)
-                angle_rf        = np.mod(angle_rf+np.deg2rad(polarbinres/2),np.pi*2) - np.deg2rad(polarbinres/2)
+#                 delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
+#                 # angle_rf        = np.mod(np.arctan2(delta_az,delta_el)+np.pi/2,np.pi*2)
+#                 angle_rf        = np.mod(np.arctan2(delta_az,delta_el)+np.pi/2,np.pi*2)
+#                 angle_rf        = np.mod(angle_rf+np.deg2rad(polarbinres/2),np.pi*2) - np.deg2rad(polarbinres/2)
                 
-                # fig,axes = plt.subplots(1,5,figsize=(10,2))
-                # axes[0].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=angle_rf[:50,:50].flatten(),
-                #             cmap='bwr',vmin=0,vmax=np.pi*2)
-                # axes[1].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=delta_rf[:50,:50].flatten(),
-                #             cmap='bwr',vmin=-50,vmax=50)
-                # axes[2].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=delta_az[:50,:50].flatten(),
-                #             cmap='bwr',vmin=-30,vmax=30)
-                # axes[3].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=delta_el[:50,:50].flatten(),
-                #             cmap='bwr',vmin=-30,vmax=30)
-                # axes[4].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=corrdata[:50,:50].flatten(),
-                #             cmap='bwr',vmin=-0.3,vmax=0.3)
-                # for ax,title in zip(axes,['angle_rf','delta_rf','delta_az','delta_el','corrdata']):
-                #     ax.set_title(title)
-                # plt.tight_layout()
-                # corrdata[delta_el>25] = 0.5
+#                 # fig,axes = plt.subplots(1,5,figsize=(10,2))
+#                 # axes[0].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=angle_rf[:50,:50].flatten(),
+#                 #             cmap='bwr',vmin=0,vmax=np.pi*2)
+#                 # axes[1].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=delta_rf[:50,:50].flatten(),
+#                 #             cmap='bwr',vmin=-50,vmax=50)
+#                 # axes[2].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=delta_az[:50,:50].flatten(),
+#                 #             cmap='bwr',vmin=-30,vmax=30)
+#                 # axes[3].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=delta_el[:50,:50].flatten(),
+#                 #             cmap='bwr',vmin=-30,vmax=30)
+#                 # axes[4].scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=corrdata[:50,:50].flatten(),
+#                 #             cmap='bwr',vmin=-0.3,vmax=0.3)
+#                 # for ax,title in zip(axes,['angle_rf','delta_rf','delta_az','delta_el','corrdata']):
+#                 #     ax.set_title(title)
+#                 # plt.tight_layout()
+#                 # corrdata[delta_el>25] = 0.5
                 
-                # Careful definitions:
-                # delta_az is source neurons azimuth minus target neurons azimuth position:
-                # plt.imshow(delta_az[:10,:10],vmin=-20,vmax=20,cmap='bwr')
-                # entry delta_az[0,1] being positive means target neuron RF (column of 2d array) 
-                # is to the right of source neuron (row of 2d array)
-                # entry delta_el[0,1] being positive means target neuron RF is above source neuron
-                # To rotate azimuth and elevation to relative to the preferred orientation of the source neuron
-                # means that for a neuron with preferred orientation 45 deg all delta az and delta el of paired neruons
-                # will rotate 45 deg, such that now delta azimuth and delta elevation is relative to the angle 
-                # of pref ori of the source neuron 
+#                 # Careful definitions:
+#                 # delta_az is source neurons azimuth minus target neurons azimuth position:
+#                 # plt.imshow(delta_az[:10,:10],vmin=-20,vmax=20,cmap='bwr')
+#                 # entry delta_az[0,1] being positive means target neuron RF (column of 2d array) 
+#                 # is to the right of source neuron (row of 2d array)
+#                 # entry delta_el[0,1] being positive means target neuron RF is above source neuron
+#                 # To rotate azimuth and elevation to relative to the preferred orientation of the source neuron
+#                 # means that for a neuron with preferred orientation 45 deg all delta az and delta el of paired neruons
+#                 # will rotate 45 deg, such that now delta azimuth and delta elevation is relative to the angle 
+#                 # of pref ori of the source neuron 
 
-                if absolute:
-                    corrdata = np.abs(corrdata)
+#                 if absolute:
+#                     corrdata = np.abs(corrdata)
 
-                if normalize:
-                    # corrdata = corrdata/np.nanstd(corrdata,axis=None) - np.nanmean(corrdata,axis=None)
-                    corrdata = corrdata - np.nanmean(corrdata,axis=None)
+#                 if normalize:
+#                     # corrdata = corrdata/np.nanstd(corrdata,axis=None) - np.nanmean(corrdata,axis=None)
+#                     corrdata = corrdata - np.nanmean(corrdata,axis=None)
 
-                if corr_type == 'trace_corr':
-                    n = len(sessions[ises].ts_F)
-                elif corr_type in ['noise_corr','sig_corr']:
-                    n = np.shape(sessions[ises].respmat)[1]
-                sigcorrdata = corrdata.copy()
+#                 if corr_type == 'trace_corr':
+#                     n = len(sessions[ises].ts_F)
+#                 elif corr_type in ['noise_corr','sig_corr']:
+#                     n = np.shape(sessions[ises].respmat)[1]
+#                 sigcorrdata = corrdata.copy()
 
-                if method=='mean':
-                    if filtersign == 'neg':
-                        # corrsignfilter              = corrdata < -0.1
-                        # corrsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
-                        corrsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) < 0
-                    elif filtersign =='pos':
-                        # corrsignfilter              = corrdata > 0.3
-                        # corrsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
-                        corrsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) > 0
-                    else:
-                        corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
-                elif method=='frac':
-                    corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
-                    if filtersign == 'neg':
-                        fracsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
-                        # fracsignfilter              = corrdata < -0.15
-                        # fracsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) < 0
-                    elif filtersign =='pos':
-                        fracsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
-                        # fracsignfilter              = corrdata > 0.3
-                        # fracsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) > 0
-                    else:
-                        raise ValueError('filtersign must be either pos or neg if metohd==frac is chosen')
-                else: 
-                    raise ValueError('invalid method to apply to bins')
+#                 if method=='mean':
+#                     if filtersign == 'neg':
+#                         # corrsignfilter              = corrdata < -0.1
+#                         # corrsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
+#                         corrsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) < 0
+#                     elif filtersign =='pos':
+#                         # corrsignfilter              = corrdata > 0.3
+#                         # corrsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
+#                         corrsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) > 0
+#                     else:
+#                         corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+#                 elif method=='frac':
+#                     corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+#                     if filtersign == 'neg':
+#                         fracsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
+#                         # fracsignfilter              = corrdata < -0.15
+#                         # fracsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) < 0
+#                     elif filtersign =='pos':
+#                         fracsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
+#                         # fracsignfilter              = corrdata > 0.3
+#                         # fracsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) > 0
+#                     else:
+#                         raise ValueError('filtersign must be either pos or neg if metohd==frac is chosen')
+#                 else: 
+#                     raise ValueError('invalid method to apply to bins')
 
-                if filternear:
-                    nearfilter      = filter_nearlabeled(sessions[ises],radius=50)
-                    nearfilter      = np.meshgrid(nearfilter,nearfilter)
-                    nearfilter      = np.logical_and(nearfilter[0],nearfilter[1])
-                else: 
-                    nearfilter      = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+#                 if filternear:
+#                     nearfilter      = filter_nearlabeled(sessions[ises],radius=50)
+#                     nearfilter      = np.meshgrid(nearfilter,nearfilter)
+#                     nearfilter      = np.logical_and(nearfilter[0],nearfilter[1])
+#                 else: 
+#                     nearfilter      = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
 
-                # Rotate delta azimuth and delta elevation to the pref ori of the source neuron
-                # delta_az is source neurons
-                if rotate_prefori: 
-                    for iN in range(len(sessions[ises].celldata)):
-                        # ori_rots            = sessions[ises].celldata['pref_ori'][iN]
-                        ori_rots            = np.tile(sessions[ises].celldata['pref_ori'][iN],len(sessions[ises].celldata))
-                        angle_vec           = np.vstack((delta_el[iN,:], delta_az[iN,:]))
-                        angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots) 
-                        # angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots + 90) #90 degrees is added to make collinear horizontal, incorrect
-                        delta_el[iN,:]      = angle_vec_rot[0,:]
-                        delta_az[iN,:]      = angle_vec_rot[1,:]
+#                 # Rotate delta azimuth and delta elevation to the pref ori of the source neuron
+#                 # delta_az is source neurons
+#                 if rotate_prefori: 
+#                     for iN in range(len(sessions[ises].celldata)):
+#                         # ori_rots            = sessions[ises].celldata['pref_ori'][iN]
+#                         ori_rots            = np.tile(sessions[ises].celldata['pref_ori'][iN],len(sessions[ises].celldata))
+#                         angle_vec           = np.vstack((delta_el[iN,:], delta_az[iN,:]))
+#                         angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots) 
+#                         # angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots + 90) #90 degrees is added to make collinear horizontal, incorrect
+#                         delta_el[iN,:]      = angle_vec_rot[0,:]
+#                         delta_az[iN,:]      = angle_vec_rot[1,:]
 
-                    delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
-                    angle_rf        = np.mod(np.arctan2(delta_az,delta_el)+np.pi/2,np.pi*2)
-                    angle_rf        = np.mod(angle_rf+np.deg2rad(polarbinres/2),np.pi*2) - np.deg2rad(polarbinres/2)
-                    # plt.hist(angle_rf.flatten())
+#                     delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
+#                     angle_rf        = np.mod(np.arctan2(delta_az,delta_el)+np.pi/2,np.pi*2)
+#                     angle_rf        = np.mod(angle_rf+np.deg2rad(polarbinres/2),np.pi*2) - np.deg2rad(polarbinres/2)
+#                     # plt.hist(angle_rf.flatten())
 
-                # corrdata[angle_rf<0.35] = 0.5
-                # corrdata[delta_el>25] = 0.5
+#                 # corrdata[angle_rf<0.35] = 0.5
+#                 # corrdata[delta_el>25] = 0.5
 
-                # plt.scatter(angle_rf_b[sessions[ises].celldata['pref_ori']==90,:].flatten(),angle_rf[sessions[ises].celldata['pref_ori']==90,:].flatten())
-                # plt.scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=angle_rf[:50,:50].flatten(),
-                #             cmap='bwr',vmin=0,vmax=np.pi*2)
+#                 # plt.scatter(angle_rf_b[sessions[ises].celldata['pref_ori']==90,:].flatten(),angle_rf[sessions[ises].celldata['pref_ori']==90,:].flatten())
+#                 # plt.scatter(delta_az[:50,:50].flatten(),delta_el[:50,:50].flatten(),s=5,c=angle_rf[:50,:50].flatten(),
+#                 #             cmap='bwr',vmin=0,vmax=np.pi*2)
                 
-                rffilter        = np.meshgrid(sessions[ises].celldata['rf_r2_' + rf_type]> r2_thr,sessions[ises].celldata['rf_r2_'  + rf_type] > r2_thr)
-                rffilter        = np.logical_and(rffilter[0],rffilter[1])
+#                 rffilter        = np.meshgrid(sessions[ises].celldata['rf_r2_' + rf_type]> r2_thr,sessions[ises].celldata['rf_r2_'  + rf_type] > r2_thr)
+#                 rffilter        = np.logical_and(rffilter[0],rffilter[1])
                 
-                signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<noise_thr,sessions[ises].celldata['noise_level']<noise_thr)
-                signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+#                 signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<noise_thr,sessions[ises].celldata['noise_level']<noise_thr)
+#                 signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
 
-                if tuned_thr:
-                    tuningfilter    = np.meshgrid(sessions[ises].celldata['tuning_var']>tuned_thr,sessions[ises].celldata['tuning_var']>tuned_thr)
-                    tuningfilter    = np.logical_and(tuningfilter[0],tuningfilter[1])
-                else: 
-                    tuningfilter    = np.ones(np.shape(rffilter))
+#                 if tuned_thr:
+#                     tuningfilter    = np.meshgrid(sessions[ises].celldata['tuning_var']>tuned_thr,sessions[ises].celldata['tuning_var']>tuned_thr)
+#                     tuningfilter    = np.logical_and(tuningfilter[0],tuningfilter[1])
+#                 else: 
+#                     tuningfilter    = np.ones(np.shape(rffilter))
 
-                nanfilter       = np.all((~np.isnan(corrdata),~np.isnan(delta_rf)),axis=0)
+#                 nanfilter       = np.all((~np.isnan(corrdata),~np.isnan(delta_rf)),axis=0)
 
-                proxfilter      = ~(sessions[ises].distmat_xy<min_dist)
+#                 proxfilter      = ~(sessions[ises].distmat_xy<min_dist)
 
-                assert sum([deltaori is not None, centerori is not None, surroundori is not None]) <= 1, 'at maximum one of deltaori, centerori, or surroundori can be not None'
+#                 assert sum([deltaori is not None, centerori is not None, surroundori is not None]) <= 1, 'at maximum one of deltaori, centerori, or surroundori can be not None'
                 
-                if centerori is not None:
-                    centerorifilter = np.tile(sessions[ises].celldata['pref_ori']== centerori,(len(sessions[ises].celldata),1)).T
-                else:
-                    centerorifilter = np.ones(np.shape(rffilter)).astype(bool)
+#                 if centerori is not None:
+#                     centerorifilter = np.tile(sessions[ises].celldata['pref_ori']== centerori,(len(sessions[ises].celldata),1)).T
+#                 else:
+#                     centerorifilter = np.ones(np.shape(rffilter)).astype(bool)
 
-                if surroundori is not None:
-                    surroundorifilter = np.tile(sessions[ises].celldata['pref_ori']== surroundori,(len(sessions[ises].celldata),1))
-                else:
-                    surroundorifilter = np.ones(np.shape(rffilter)).astype(bool)
+#                 if surroundori is not None:
+#                     surroundorifilter = np.tile(sessions[ises].celldata['pref_ori']== surroundori,(len(sessions[ises].celldata),1))
+#                 else:
+#                     surroundorifilter = np.ones(np.shape(rffilter)).astype(bool)
 
-                if deltaori is not None:
-                    if isinstance(deltaori,(float,int)):
-                        deltaori = np.array([deltaori,deltaori])
-                    if np.shape(deltaori) == (1,):
-                        deltaori = np.tile(deltaori,2)
-                    assert np.shape(deltaori) == (2,),'deltaori must be a 2x1 array'
-                    delta_pref = sessions[ises].delta_pref 
-                    # delta_pref = np.mod(sessions[ises].delta_pref,90) #convert to 0-90, direction tuning is ignored
-                    # delta_pref[sessions[ises].delta_pref == 90] = 90 #after modulo operation, restore 90 as 90
-                    deltaorifilter = np.all((delta_pref >= deltaori[0], #find all entries with delta_pref between deltaori[0] and deltaori[1]
-                                            delta_pref <= deltaori[1]),axis=0)
-                else:
-                    deltaorifilter = np.ones(np.shape(rffilter)).astype(bool)
+#                 if deltaori is not None:
+#                     if isinstance(deltaori,(float,int)):
+#                         deltaori = np.array([deltaori,deltaori])
+#                     if np.shape(deltaori) == (1,):
+#                         deltaori = np.tile(deltaori,2)
+#                     assert np.shape(deltaori) == (2,),'deltaori must be a 2x1 array'
+#                     delta_pref = sessions[ises].delta_pref 
+#                     # delta_pref = np.mod(sessions[ises].delta_pref,90) #convert to 0-90, direction tuning is ignored
+#                     # delta_pref[sessions[ises].delta_pref == 90] = 90 #after modulo operation, restore 90 as 90
+#                     deltaorifilter = np.all((delta_pref >= deltaori[0], #find all entries with delta_pref between deltaori[0] and deltaori[1]
+#                                             delta_pref <= deltaori[1]),axis=0)
+#                 else:
+#                     deltaorifilter = np.ones(np.shape(rffilter)).astype(bool)
 
-                if dsi_thr:
-                    dsi_filter = np.meshgrid(sessions[ises].celldata['DSI']>dsi_thr,sessions[ises].celldata['DSI']>dsi_thr)
-                    dsi_filter = np.logical_and(dsi_filter[0],dsi_filter[1])
-                else:
-                    dsi_filter = np.ones(np.shape(rffilter)).astype(bool)
+#                 if dsi_thr:
+#                     dsi_filter = np.meshgrid(sessions[ises].celldata['DSI']>dsi_thr,sessions[ises].celldata['DSI']>dsi_thr)
+#                     dsi_filter = np.logical_and(dsi_filter[0],dsi_filter[1])
+#                 else:
+#                     dsi_filter = np.ones(np.shape(rffilter)).astype(bool)
 
-                for iap,areapair in enumerate(areapairs):
-                    for ilp,layerpair in enumerate(layerpairs):
-                        for ipp,projpair in enumerate(projpairs):
+#                 for iap,areapair in enumerate(areapairs):
+#                     for ilp,layerpair in enumerate(layerpairs):
+#                         for ipp,projpair in enumerate(projpairs):
 
-                            areafilter      = filter_2d_areapair(sessions[ises],areapair)
+#                             areafilter      = filter_2d_areapair(sessions[ises],areapair)
 
-                            layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
+#                             layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
 
-                            projfilter      = filter_2d_projpair(sessions[ises],projpair)
+#                             projfilter      = filter_2d_projpair(sessions[ises],projpair)
 
-                            #Combine all filters into a single filter:
-                            cellfilter      = np.all((rffilter,signalfilter,tuningfilter,areafilter,nearfilter,corrsignfilter,
-                                                layerfilter,projfilter,proxfilter,nanfilter,
-                                                deltaorifilter,dsi_filter,centerorifilter,surroundorifilter),axis=0)
+#                             #Combine all filters into a single filter:
+#                             cellfilter      = np.all((rffilter,signalfilter,tuningfilter,areafilter,nearfilter,corrsignfilter,
+#                                                 layerfilter,projfilter,proxfilter,nanfilter,
+#                                                 deltaorifilter,dsi_filter,centerorifilter,surroundorifilter),axis=0)
 
-                            if np.any(cellfilter):
-                                # valuedata are the correlation values, these are going to be binned
-                                vdata               = corrdata[cellfilter].flatten()
+#                             if np.any(cellfilter):
+#                                 # valuedata are the correlation values, these are going to be binned
+#                                 vdata               = corrdata[cellfilter].flatten()
 
-                                # First 2D binning: x is elevation, y is azimuth, 
-                                xdata               = delta_el[cellfilter].flatten()
-                                ydata               = delta_az[cellfilter].flatten()
-                                # #First 2D binning: x is azimuth, y is elevation, 
-                                # xdata               = delta_az[cellfilter].flatten()
-                                # ydata               = delta_el[cellfilter].flatten()
+#                                 # First 2D binning: x is elevation, y is azimuth, 
+#                                 xdata               = delta_el[cellfilter].flatten()
+#                                 ydata               = delta_az[cellfilter].flatten()
+#                                 # #First 2D binning: x is azimuth, y is elevation, 
+#                                 # xdata               = delta_az[cellfilter].flatten()
+#                                 # ydata               = delta_el[cellfilter].flatten()
                                 
-                                #Take the sum of the correlations in each bin:
-                                if method == 'mean': 
-                                    bin_2d[:,:,iap,ilp,ipp]   += binned_statistic_2d(x=xdata, y=ydata, values=vdata,bins=binedges_2d, statistic='sum')[0]
-                                elif method == 'frac':
-                                    # bin_2d[:,:,iap,ilp,ipp]   += np.histogram2d(x=delta_az[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), 
-                                            # y=delta_el[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), bins=binedges_2d)[0]                                       
-                                    bin_2d[:,:,iap,ilp,ipp]   += np.histogram2d(x=delta_el[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), 
-                                            y=delta_az[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), bins=binedges_2d)[0]                                       
+#                                 #Take the sum of the correlations in each bin:
+#                                 if method == 'mean': 
+#                                     bin_2d[:,:,iap,ilp,ipp]   += binned_statistic_2d(x=xdata, y=ydata, values=vdata,bins=binedges_2d, statistic='sum')[0]
+#                                 elif method == 'frac':
+#                                     # bin_2d[:,:,iap,ilp,ipp]   += np.histogram2d(x=delta_az[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), 
+#                                             # y=delta_el[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), bins=binedges_2d)[0]                                       
+#                                     bin_2d[:,:,iap,ilp,ipp]   += np.histogram2d(x=delta_el[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), 
+#                                             y=delta_az[np.all((cellfilter,fracsignfilter),axis=0)].flatten(), bins=binedges_2d)[0]                                       
 
-                                # Count how many correlation observations are in each bin:
-                                bin_2d_count[:,:,iap,ilp,ipp]  += np.histogram2d(x=xdata,y=ydata,bins=binedges_2d)[0]
+#                                 # Count how many correlation observations are in each bin:
+#                                 bin_2d_count[:,:,iap,ilp,ipp]  += np.histogram2d(x=xdata,y=ydata,bins=binedges_2d)[0]
 
-                                #Now 1D, so only by deltarf:
-                                xdata           = delta_rf[cellfilter].flatten()
-                                if method == 'mean': 
-                                    bin_dist[:,iap,ilp,ipp] += binned_statistic(x=xdata,values=vdata,statistic='sum', bins=binedges_dist)[0]
-                                elif method == 'frac':
-                                    bin_dist[:,iap,ilp,ipp] += np.histogram(delta_rf[np.all((cellfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_dist)[0]
-                                bin_dist_count[:,iap,ilp,ipp] += np.histogram(xdata,bins=binedges_dist)[0]
+#                                 #Now 1D, so only by deltarf:
+#                                 xdata           = delta_rf[cellfilter].flatten()
+#                                 if method == 'mean': 
+#                                     bin_dist[:,iap,ilp,ipp] += binned_statistic(x=xdata,values=vdata,statistic='sum', bins=binedges_dist)[0]
+#                                 elif method == 'frac':
+#                                     bin_dist[:,iap,ilp,ipp] += np.histogram(delta_rf[np.all((cellfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_dist)[0]
+#                                 bin_dist_count[:,iap,ilp,ipp] += np.histogram(xdata,bins=binedges_dist)[0]
 
-                                #Now polar binning:
-                                tempfilter      = np.all((cellfilter,delta_rf<centerthr[iap]),axis=0)
-                                vdata           = corrdata[tempfilter].flatten()
-                                xdata           = angle_rf[tempfilter].flatten() #x is angle of rf difference
+#                                 #Now polar binning:
+#                                 tempfilter      = np.all((cellfilter,delta_rf<centerthr[iap]),axis=0)
+#                                 vdata           = corrdata[tempfilter].flatten()
+#                                 xdata           = angle_rf[tempfilter].flatten() #x is angle of rf difference
 
-                                if method == 'mean': 
-                                    if np.any(tempfilter):
-                                        bin_angle_cent[:,iap,ilp,ipp]  += binned_statistic(x=xdata,values=vdata,
-                                                                    statistic='sum',bins=binedges_angle)[0]
-                                elif method == 'frac':
-                                    bin_angle_cent[:,iap,ilp,ipp] += np.histogram(angle_rf[np.all((tempfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_angle)[0]
-                                bin_angle_cent_count[:,iap,ilp,ipp] += np.histogram(xdata,bins=binedges_angle)[0]
+#                                 if method == 'mean': 
+#                                     if np.any(tempfilter):
+#                                         bin_angle_cent[:,iap,ilp,ipp]  += binned_statistic(x=xdata,values=vdata,
+#                                                                     statistic='sum',bins=binedges_angle)[0]
+#                                 elif method == 'frac':
+#                                     bin_angle_cent[:,iap,ilp,ipp] += np.histogram(angle_rf[np.all((tempfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_angle)[0]
+#                                 bin_angle_cent_count[:,iap,ilp,ipp] += np.histogram(xdata,bins=binedges_angle)[0]
                                 
-                                tempfilter      = np.all((cellfilter,delta_rf>centerthr[iap]),axis=0)
-                                vdata           = corrdata[tempfilter].flatten()
-                                xdata           = angle_rf[tempfilter].flatten() #x is angle of rf difference
+#                                 tempfilter      = np.all((cellfilter,delta_rf>centerthr[iap]),axis=0)
+#                                 vdata           = corrdata[tempfilter].flatten()
+#                                 xdata           = angle_rf[tempfilter].flatten() #x is angle of rf difference
                                 
-                                if method == 'mean': 
-                                    if np.any(tempfilter):
-                                        bin_angle_surr[:,iap,ilp,ipp]  += binned_statistic(x=xdata,values=vdata,
-                                                                    statistic='sum',bins=binedges_angle)[0]
-                                elif method == 'frac':
-                                    bin_angle_surr[:,iap,ilp,ipp] += np.histogram(angle_rf[np.all((tempfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_angle)[0]
-                                bin_angle_surr_count[:,iap,ilp,ipp] += np.histogram(xdata,bins=binedges_angle)[0]
+#                                 if method == 'mean': 
+#                                     if np.any(tempfilter):
+#                                         bin_angle_surr[:,iap,ilp,ipp]  += binned_statistic(x=xdata,values=vdata,
+#                                                                     statistic='sum',bins=binedges_angle)[0]
+#                                 elif method == 'frac':
+#                                     bin_angle_surr[:,iap,ilp,ipp] += np.histogram(angle_rf[np.all((tempfilter,fracsignfilter),axis=0)].flatten(),bins=binedges_angle)[0]
+#                                 bin_angle_surr_count[:,iap,ilp,ipp] += np.histogram(xdata,bins=binedges_angle)[0]
         
 
-    # divide the total summed correlations by the number of counts in that bin to get the mean:
-    bin_2d = bin_2d / bin_2d_count
-    bin_dist = bin_dist / bin_dist_count
-    bin_angle_cent = bin_angle_cent / bin_angle_cent_count
-    bin_angle_surr = bin_angle_surr / bin_angle_surr_count
+#     # divide the total summed correlations by the number of counts in that bin to get the mean:
+#     bin_2d = bin_2d / bin_2d_count
+#     bin_dist = bin_dist / bin_dist_count
+#     bin_angle_cent = bin_angle_cent / bin_angle_cent_count
+#     bin_angle_surr = bin_angle_surr / bin_angle_surr_count
 
-    return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,binsdRF,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
+#     return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,binsdRF,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
 
 
 def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='Fsmooth',
                     r2_thr=0.2,noise_thr=100,filternear=False,binresolution=5,tuned_thr=0,absolute=False,
                     normalize=False,dsi_thr=0,min_dist=15,filtersign=None,corr_thr=0.05,
-                    rotate_prefori=False,deltaori=None,centerori=None,surroundori=None):
+                    rotate_prefori=False,deltaori=None,centerori=None,surroundori=None,shufflefield=None):
     """
     Binning pairwise correlations as a function of pairwise delta azimuth and elevation.
     - Sessions are binned by areapairs, layerpairs, and projpairs.
@@ -1100,12 +1130,25 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
     bin_angle_surr_count = np.zeros((nSessions,npolarbins,len(areapairs),len(layerpairs),len(projpairs)))
 
     for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
+        celldata = copy.deepcopy(sessions[ises].celldata)
         if hasattr(sessions[ises],corr_type):
             corrdata = getattr(sessions[ises],corr_type).copy()
-            if 'rf_r2_' + rf_type in sessions[ises].celldata:
 
-                el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+            if shufflefield == 'RF':
+                celldata['rf_el_' + rf_type],celldata['rf_az_' + rf_type] = my_shuffle_celldata_joint(celldata['rf_el_' + rf_type],
+                                                                celldata['rf_az_' + rf_type],celldata['roi_name'])
+            elif shufflefield == 'XY':
+                celldata['xloc'],celldata['yloc'] = my_shuffle_celldata_joint(celldata['xloc'],celldata['yloc'],
+                                                                celldata['roi_name'])
+            elif shufflefield == 'corrdata':
+                corrdata = my_shuffle(corrdata,method='random',axis=None)
+            elif shufflefield is not None:
+                celldata = my_shuffle_celldata(celldata,shufflefield,keep_roi_name=True)
+
+            if 'rf_r2_' + rf_type in celldata:
+
+                el              = celldata['rf_el_' + rf_type].to_numpy()
+                az              = celldata['rf_az_' + rf_type].to_numpy()
                 
                 delta_el        = el[:,None] - el[None,:]
                 delta_az        = az[:,None] - az[None,:]
@@ -1147,9 +1190,9 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                         # corrsignfilter              = corrdata > np.nanpercentile(corrdata,(100-corr_thr*100))
                         corrsignfilter              = filter_corr_p(sigcorrdata,n,p_thr=corr_thr) > 0
                     else:
-                        corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+                        corrsignfilter = np.ones((len(celldata),len(celldata))).astype(bool)
                 elif method=='frac':
-                    corrsignfilter = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+                    corrsignfilter = np.ones((len(celldata),len(celldata))).astype(bool)
                     if filtersign == 'neg':
                         # fracsignfilter              = corrdata < np.nanpercentile(corrdata,(corr_thr*100))
                         # fracsignfilter              = corrdata < -0.15
@@ -1168,14 +1211,14 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                     nearfilter      = np.meshgrid(nearfilter,nearfilter)
                     nearfilter      = np.logical_and(nearfilter[0],nearfilter[1])
                 else: 
-                    nearfilter      = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+                    nearfilter      = np.ones((len(celldata),len(celldata))).astype(bool)
 
                 # Rotate delta azimuth and delta elevation to the pref ori of the source neuron
                 # delta_az is source neurons
                 if rotate_prefori: 
-                    for iN in range(len(sessions[ises].celldata)):
-                        # ori_rots            = sessions[ises].celldata['pref_ori'][iN]
-                        ori_rots            = np.tile(sessions[ises].celldata['pref_ori'][iN],len(sessions[ises].celldata))
+                    for iN in range(len(celldata)):
+                        # ori_rots            = celldata['pref_ori'][iN]
+                        ori_rots            = np.tile(celldata['pref_ori'][iN],len(celldata))
                         angle_vec           = np.vstack((delta_el[iN,:], delta_az[iN,:]))
                         angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots) 
                         # angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots + 90) #90 degrees is added to make collinear horizontal, incorrect
@@ -1187,16 +1230,16 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                     angle_rf         = np.mod(angle_rf+np.deg2rad(polarbinres/2),np.pi*2) - np.deg2rad(polarbinres/2)
                     # plt.hist(angle_rf.flatten())
 
-                # plt.scatter(angle_rf_b[sessions[ises].celldata['pref_ori']==90,:].flatten(),angle_rf[sessions[ises].celldata['pref_ori']==90,:].flatten())
+                # plt.scatter(angle_rf_b[celldata['pref_ori']==90,:].flatten(),angle_rf[celldata['pref_ori']==90,:].flatten())
 
-                rffilter        = np.meshgrid(sessions[ises].celldata['rf_r2_' + rf_type]> r2_thr,sessions[ises].celldata['rf_r2_'  + rf_type] > r2_thr)
+                rffilter        = np.meshgrid(celldata['rf_r2_' + rf_type]> r2_thr,celldata['rf_r2_'  + rf_type] > r2_thr)
                 rffilter        = np.logical_and(rffilter[0],rffilter[1])
                 
-                signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<noise_thr,sessions[ises].celldata['noise_level']<noise_thr)
+                signalfilter    = np.meshgrid(celldata['noise_level']<noise_thr,celldata['noise_level']<noise_thr)
                 signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
 
                 if tuned_thr:
-                    tuningfilter    = np.meshgrid(sessions[ises].celldata['tuning_var']>tuned_thr,sessions[ises].celldata['tuning_var']>tuned_thr)
+                    tuningfilter    = np.meshgrid(celldata['tuning_var']>tuned_thr,celldata['tuning_var']>tuned_thr)
                     tuningfilter    = np.logical_and(tuningfilter[0],tuningfilter[1])
                 else: 
                     tuningfilter    = np.ones(np.shape(rffilter))
@@ -1208,12 +1251,12 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                 assert sum([deltaori is not None, centerori is not None, surroundori is not None]) <= 1, 'at maximum one of deltaori, centerori, or surroundori can be not None'
                 
                 if centerori is not None:
-                    centerorifilter = np.tile(sessions[ises].celldata['pref_ori']== centerori,(len(sessions[ises].celldata),1)).T
+                    centerorifilter = np.tile(celldata['pref_ori']== centerori,(len(celldata),1)).T
                 else:
                     centerorifilter = np.ones(np.shape(rffilter)).astype(bool)
 
                 if surroundori is not None:
-                    surroundorifilter = np.tile(sessions[ises].celldata['pref_ori']== surroundori,(len(sessions[ises].celldata),1))
+                    surroundorifilter = np.tile(celldata['pref_ori']== surroundori,(len(celldata),1))
                 else:
                     surroundorifilter = np.ones(np.shape(rffilter)).astype(bool)
 
@@ -1232,7 +1275,7 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                     deltaorifilter = np.ones(np.shape(rffilter)).astype(bool)
 
                 if dsi_thr:
-                    dsi_filter = np.meshgrid(sessions[ises].celldata['DSI']>dsi_thr,sessions[ises].celldata['DSI']>dsi_thr)
+                    dsi_filter = np.meshgrid(celldata['DSI']>dsi_thr,celldata['DSI']>dsi_thr)
                     dsi_filter = np.logical_and(dsi_filter[0],dsi_filter[1])
                 else:
                     dsi_filter = np.ones(np.shape(rffilter)).astype(bool)
@@ -1318,6 +1361,184 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
 
     return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,binsdRF,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
 
+
+def bin_corr_deltarf_ses_vkeep(sessions,method='mean',areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='Fsmooth',
+                    r2_thr=0.2,noise_thr=100,filternear=False,binresolution=5,tuned_thr=0,absolute=False,
+                    normalize=False,dsi_thr=0,min_dist=15,filtersign=None,corr_thr=0.05,
+                    rotate_prefori=False,deltaori=None,centerori=None,surroundori=None,shufflefield=None):
+    """
+    Binning pairwise correlations as a function of pairwise delta azimuth and elevation.
+    - Sessions are binned by areapairs, layerpairs, and projpairs.
+    - Returns binmean,bincount,binedges
+
+    Parameters
+    ----------
+    sessions : list
+        list of sessions
+    areapairs : list (if ' ' then all areapairs are used)
+        list of areapairs
+    layerpairs : list  (if ' ' then all layerpairs are used)
+        list of layerpairs
+    projpairs : list  (if ' ' then all projpairs are used)
+        list of projpairs
+    corr_type : str, optional
+        type of correlation to use, by default 'trace_corr'
+    normalize : bool, optional
+        whether to normalize correlations to the mean correlation at distances < 60 um, by default False
+    rf_type : str, optional
+        type of receptive field to use, by default 'F'
+    """
+    nSessions = len(sessions)
+    maxsamples = 10000
+
+    #Binning parameters 1D distance
+    binlim          = 75
+    binedges_dist   = np.arange(-binresolution/2,binlim,binresolution)+binresolution/2 
+    binsdRF = binedges_dist[:-1]+binresolution/2 
+    nBins           = len(binsdRF)
+
+    bin_dist        = np.full((nSessions,nBins,len(areapairs),len(layerpairs),len(projpairs),maxsamples),np.nan)
+    bin_dist_count  = np.full((nSessions,nBins,len(areapairs),len(layerpairs),len(projpairs),maxsamples),0)
+
+    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
+        celldata = copy.deepcopy(sessions[ises].celldata)
+        if hasattr(sessions[ises],corr_type):
+            corrdata = getattr(sessions[ises],corr_type).copy()
+
+            if shufflefield == 'RF':
+                celldata['rf_el_' + rf_type],celldata['rf_az_' + rf_type] = my_shuffle_celldata_joint(celldata['rf_el_' + rf_type],celldata['rf_az_' + rf_type],
+                                                                celldata['roi_name'])
+            elif shufflefield == 'XY':
+                celldata['xloc'],celldata['yloc'] = my_shuffle_celldata_joint(celldata['xloc'],celldata['yloc'],
+                                                                celldata['roi_name'])
+            elif shufflefield == 'corrdata':
+                corrdata = my_shuffle(corrdata,method='random',axis=None)
+            elif shufflefield is not None:
+                celldata = my_shuffle_celldata(celldata,shufflefield,keep_roi_name=True)
+
+            if 'rf_r2_' + rf_type in celldata:
+
+                el              = celldata['rf_el_' + rf_type].to_numpy()
+                az              = celldata['rf_az_' + rf_type].to_numpy()
+                
+                delta_el        = el[:,None] - el[None,:]
+                delta_az        = az[:,None] - az[None,:]
+
+                delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
+                
+                # Careful definitions:
+                # delta_az is source neurons azimuth minus target neurons azimuth position:
+                # plt.imshow(delta_az[:10,:10],vmin=-20,vmax=20,cmap='bwr')
+                # entry delta_az[0,1] being positive means target neuron RF is to the right of source neuron
+                # entry delta_el[0,1] being positive means target neuron RF is above source neuron
+                # To rotate azimuth and elevation to relative to the preferred orientation of the source neuron
+                # means that for a neuron with preferred orientation 45 deg all delta az and delta el of paired neruons
+                # will rotate 45 deg, such that now delta azimuth and delta elevation is relative to the angle 
+                # of pref ori of the source neuron 
+
+                if absolute:
+                    corrdata = np.abs(corrdata)
+
+                if normalize:
+                    # corrdata = corrdata/np.nanstd(corrdata,axis=None) - np.nanmean(corrdata,axis=None)
+                    corrdata = corrdata - np.nanmean(corrdata,axis=None)
+
+                if filternear:
+                    nearfilter      = filter_nearlabeled(sessions[ises],radius=50)
+                    nearfilter      = np.meshgrid(nearfilter,nearfilter)
+                    nearfilter      = np.logical_and(nearfilter[0],nearfilter[1])
+                else: 
+                    nearfilter      = np.ones((len(celldata),len(celldata))).astype(bool)
+
+                # Rotate delta azimuth and delta elevation to the pref ori of the source neuron
+                # delta_az is source neurons
+                if rotate_prefori: 
+                    for iN in range(len(celldata)):
+                        # ori_rots            = celldata['pref_ori'][iN]
+                        ori_rots            = np.tile(celldata['pref_ori'][iN],len(celldata))
+                        angle_vec           = np.vstack((delta_el[iN,:], delta_az[iN,:]))
+                        angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots) 
+                        # angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots + 90) #90 degrees is added to make collinear horizontal, incorrect
+                        delta_el[iN,:]      = angle_vec_rot[0,:]
+                        delta_az[iN,:]      = angle_vec_rot[1,:]
+
+                    delta_rf         = np.sqrt(delta_az**2 + delta_el**2)
+
+                rffilter        = np.meshgrid(celldata['rf_r2_' + rf_type]> r2_thr,celldata['rf_r2_'  + rf_type] > r2_thr)
+                rffilter        = np.logical_and(rffilter[0],rffilter[1])
+                
+                signalfilter    = np.meshgrid(celldata['noise_level']<noise_thr,celldata['noise_level']<noise_thr)
+                signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+
+                if tuned_thr:
+                    tuningfilter    = np.meshgrid(celldata['tuning_var']>tuned_thr,celldata['tuning_var']>tuned_thr)
+                    tuningfilter    = np.logical_and(tuningfilter[0],tuningfilter[1])
+                else: 
+                    tuningfilter    = np.ones(np.shape(rffilter))
+
+                nanfilter       = np.all((~np.isnan(corrdata),~np.isnan(delta_rf)),axis=0)
+
+                proxfilter      = ~(sessions[ises].distmat_xy<min_dist)
+
+                assert sum([deltaori is not None, centerori is not None, surroundori is not None]) <= 1, 'at maximum one of deltaori, centerori, or surroundori can be not None'
+                
+                if centerori is not None:
+                    centerorifilter = np.tile(celldata['pref_ori']== centerori,(len(celldata),1)).T
+                else:
+                    centerorifilter = np.ones(np.shape(rffilter)).astype(bool)
+
+                if surroundori is not None:
+                    surroundorifilter = np.tile(celldata['pref_ori']== surroundori,(len(celldata),1))
+                else:
+                    surroundorifilter = np.ones(np.shape(rffilter)).astype(bool)
+
+                if deltaori is not None:
+                    if isinstance(deltaori,(float,int)):
+                        deltaori = np.array([deltaori,deltaori])
+                    if np.shape(deltaori) == (1,):
+                        deltaori = np.tile(deltaori,2)
+                    assert np.shape(deltaori) == (2,),'deltaori must be a 2x1 array'
+                    delta_pref = sessions[ises].delta_pref.copy()
+                    # delta_pref = np.mod(sessions[ises].delta_pref,90) #convert to 0-90, direction tuning is ignored
+                    # delta_pref[sessions[ises].delta_pref == 90] = 90 #after modulo operation, restore 90 as 90
+                    deltaorifilter = np.all((delta_pref >= deltaori[0], #find all entries with delta_pref between deltaori[0] and deltaori[1]
+                                            delta_pref <= deltaori[1]),axis=0)
+                else:
+                    deltaorifilter = np.ones(np.shape(rffilter)).astype(bool)
+
+                if dsi_thr:
+                    dsi_filter = np.meshgrid(celldata['DSI']>dsi_thr,celldata['DSI']>dsi_thr)
+                    dsi_filter = np.logical_and(dsi_filter[0],dsi_filter[1])
+                else:
+                    dsi_filter = np.ones(np.shape(rffilter)).astype(bool)
+
+                for iap,areapair in enumerate(areapairs):
+                    for ilp,layerpair in enumerate(layerpairs):
+                        for ipp,projpair in enumerate(projpairs):
+
+                            areafilter      = filter_2d_areapair(sessions[ises],areapair)
+
+                            layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
+
+                            projfilter      = filter_2d_projpair(sessions[ises],projpair)
+
+                            #Combine all filters into a single filter:
+                            cellfilter      = np.all((rffilter,signalfilter,tuningfilter,areafilter,nearfilter,
+                                                layerfilter,projfilter,proxfilter,nanfilter,
+                                                deltaorifilter,dsi_filter,centerorifilter,surroundorifilter),axis=0)
+
+                            if np.any(cellfilter):
+                                # valuedata are the correlation values, these are going to be binned
+                                vdata               = corrdata[cellfilter].flatten()
+                                #1D binning by deltarf:
+                                xdata           = delta_rf[cellfilter].flatten()
+                                
+                                for ibin in range(len(binedges_dist)-1):
+                                    idx  = (xdata >= binedges_dist[ibin]) & (xdata < binedges_dist[ibin+1])
+                                    bin_dist[ises,ibin,iap,ilp,ipp,:np.sum(idx)] = vdata[idx][:maxsamples]
+                                bin_dist_count[ises,:,iap,ilp,ipp] = np.histogram(xdata,bins=binedges_dist)[0]
+    
+    return bin_dist,bin_dist_count,binsdRF
 
 ######  #       ####### #######    ######  ####### #       #######    #       ######  ####### 
 #     # #       #     #    #       #     # #       #          #      # #      #     # #       
@@ -1558,7 +1779,7 @@ def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
     testbins        = [[0,20],[25,70]]
     testbincolors   = ['grey','grey']
     testlabels      = ['Center','Surround']
-    min_counts      = 50
+    min_counts      = 10
 
     statpairs_areas = [[('unl-unl','lab-unl'),
             ('unl-unl','lab-lab'),
@@ -1584,9 +1805,12 @@ def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
     #Compute data mean and error:
     temp = copy.deepcopy(bin_dist_data_ses)
     temp[bin_dist_count_ses<min_counts] = np.nan
-    data_mean   = np.nanmean(temp,axis=0)
+
+    # data_mean   = np.nanmean(temp,axis=0)
+
+    data_mean   = nanweightedaverage(temp, weights=bin_dist_count_ses, axis=0)
     data_error  = np.nanstd(temp,axis=0) / np.sqrt(np.shape(temp)[0])
-    
+
     #Make figure:
     fig,axes    = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*4,3),sharex=False,sharey=True)
 
@@ -1966,6 +2190,7 @@ def plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf
     delta_x,delta_y   = np.meshgrid(bincenters_2d,-bincenters_2d)
 
     min_counts          = 200
+    xy_min              = 10
 
     if np.max(bincenters_2d)>100:
         xylim               = 250
@@ -2023,7 +2248,10 @@ def plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf
         shaded_error(x=binsdRF,y=bin_dist_negf[:,iap,ilp,ipp],yerror=data_neg_error[:,iap,ilp,ipp],
                     ax = ax2,color='b',label='neg')
         ax.legend(frameon=False)
-        ax.set_xlim([0,xylim])
+        ax.set_xlim([xy_min,xylim])
+        ax.set_ylim(np.percentile(bin_dist_mean[binsdRF>xy_min,iap,ilp,ipp],[0,100]))
+        ax2.set_ylim([0,np.percentile(bin_dist_posf[binsdRF>xy_min,iap,ilp,ipp],100)])
+        # ax.set_xlim([0,xylim])
         ax.set_xlabel(u'Δ %s' % dim12label)   
         ax.set_title('%s\n Joint' % (areapair),c=clrs_areapairs[iap])
         ax.set_ylabel('correlation')
@@ -2859,10 +3087,10 @@ def bin_2d_rangecorr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' '
     for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
         if hasattr(sessions[ises],corr_type):
             corrdata = getattr(sessions[ises],corr_type).copy()
-            if 'rf_r2_' + rf_type in sessions[ises].celldata:
+            if 'rf_r2_' + rf_type in celldata:
                 
-                el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+                el              = celldata['rf_el_' + rf_type].to_numpy()
+                az              = celldata['rf_az_' + rf_type].to_numpy()
                 
                 delta_el        = el[:,None] - el[None,:]
                 delta_az        = az[:,None] - az[None,:]
@@ -2876,15 +3104,15 @@ def bin_2d_rangecorr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' '
                     nearfilter      = np.meshgrid(nearfilter,nearfilter)
                     nearfilter      = np.logical_and(nearfilter[0],nearfilter[1])
                 else: 
-                    nearfilter      = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+                    nearfilter      = np.ones((len(celldata),len(celldata))).astype(bool)
 
                 for iap,areapair in enumerate(areapairs):
                     for ilp,layerpair in enumerate(layerpairs):
                         for ipp,projpair in enumerate(projpairs):
-                            rffilter        = np.meshgrid(sessions[ises].celldata['rf_r2_' + rf_type]>r2_thr,sessions[ises].celldata['rf_r2_'  + rf_type]> r2_thr)
+                            rffilter        = np.meshgrid(celldata['rf_r2_' + rf_type]>r2_thr,celldata['rf_r2_'  + rf_type]> r2_thr)
                             rffilter        = np.logical_and(rffilter[0],rffilter[1])
                             
-                            signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<=noise_thr,sessions[ises].celldata['noise_level']<=noise_thr)
+                            signalfilter    = np.meshgrid(celldata['noise_level']<=noise_thr,celldata['noise_level']<=noise_thr)
                             signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
 
                             areafilter      = filter_2d_areapair(sessions[ises],areapair)
@@ -3030,10 +3258,10 @@ def bin_1d_fraccorr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',
             # pos_thr = 0.2
             # neg_thr = -0.075
 
-            if 'rf_r2_' + rf_type in sessions[ises].celldata:
+            if 'rf_r2_' + rf_type in celldata:
 
-                el              = sessions[ises].celldata['rf_el_' + rf_type].to_numpy()
-                az              = sessions[ises].celldata['rf_az_' + rf_type].to_numpy()
+                el              = celldata['rf_el_' + rf_type].to_numpy()
+                az              = celldata['rf_az_' + rf_type].to_numpy()
                 
                 delta_el        = el[:,None] - el[None,:]
                 delta_az        = az[:,None] - az[None,:]
@@ -3044,18 +3272,18 @@ def bin_1d_fraccorr_deltarf(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',
                     nearfilter      = np.meshgrid(nearfilter,nearfilter)
                     nearfilter      = np.logical_and(nearfilter[0],nearfilter[1])
                 else: 
-                    nearfilter      = np.ones((len(sessions[ises].celldata),len(sessions[ises].celldata))).astype(bool)
+                    nearfilter      = np.ones((len(celldata),len(celldata))).astype(bool)
 
                 for iap,areapair in enumerate(areapairs):
                     for ilp,layerpair in enumerate(layerpairs):
                         for ipp,projpair in enumerate(projpairs):
-                            rffilter        = np.meshgrid(sessions[ises].celldata['rf_r2_' + rf_type]>r2_thr,sessions[ises].celldata['rf_r2_'  + rf_type]>r2_thr)
+                            rffilter        = np.meshgrid(celldata['rf_r2_' + rf_type]>r2_thr,celldata['rf_r2_'  + rf_type]>r2_thr)
                             rffilter        = np.logical_and(rffilter[0],rffilter[1])
                             
-                            signalfilter    = np.meshgrid(sessions[ises].celldata['noise_level']<=noise_thr,sessions[ises].celldata['noise_level']<=noise_thr)
+                            signalfilter    = np.meshgrid(celldata['noise_level']<=noise_thr,celldata['noise_level']<=noise_thr)
                             signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
 
-                            # signalfilter    = np.meshgrid(sessions[ises].celldata['tuning_var']>0.05,sessions[ises].celldata['tuning_var']>0.05)
+                            # signalfilter    = np.meshgrid(celldata['tuning_var']>0.05,celldata['tuning_var']>0.05)
                             # signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
 
                             areafilter      = filter_2d_areapair(sessions[ises],areapair)

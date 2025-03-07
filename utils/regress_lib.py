@@ -117,12 +117,13 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
         performance[ifold] = score_fun(y_test, y_pred)
         projs[test_index] = y_pred
 
-        # Shuffle the labels and calculate the decoding performance for this fold
-        np.random.shuffle(y_train)
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
+        if subtract_shuffle:
+            # Shuffle the labels and calculate the decoding performance for this fold
+            np.random.shuffle(y_train)
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
 
-        performance_shuffle[ifold] = score_fun(y_test, y_pred)
+            performance_shuffle[ifold] = score_fun(y_test, y_pred)
 
     if subtract_shuffle: # subtract the shuffling performance from the average perf
         performance_avg = np.mean(performance - performance_shuffle)
@@ -135,7 +136,10 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
     model.fit(Xfull,Yfull)
     weights = model.coef_.ravel()
 
-    ev      = var_along_dim(Xfull,weights)
+    if len(np.unique(Yfull)) == 2:
+        ev      = var_along_dim(Xfull,weights)
+    else:
+        ev = None
 
     return performance_avg,weights,projs,ev
 

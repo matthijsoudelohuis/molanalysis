@@ -37,7 +37,7 @@ session_list        = np.array([['LPE10919','2023_11_06']])
 session_list        = np.array([['LPE09665','2023_03_21'], #GR
                                 ['LPE10919','2023_11_06']]) #GR
 
-sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
+sessions,nSessions   = filter_sessions(protocol = 'GR',session_list=session_list)
 # sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
 
 #%% Load all sessions from certain protocols: 
@@ -156,7 +156,7 @@ bin_angle_surr_count,binsangle] = bin_corr_deltaxy(sessions,
 
 fig = plot_mean_frac_corr_areas(bins2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
                         binsdRF,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,areapairs,layerpairs,projpairs)
-fig.savefig(os.path.join(savedir,'deltaXYZ','Corr_deltaXY_%s_%s_GRGN' % (corr_type,calciumversion) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'deltaXYZ','Corr_deltaXY_%s_%s_GRGN' % (corr_type,calciumversion) + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'deltaXYZ','Corr_deltaXY_%s_GMremoved_%s_GRGN' % (corr_type,calciumversion) + '.png'), format = 'png')
 
 # %% #######################################################################################################
@@ -186,16 +186,50 @@ for ses in sessions:
 # ##########################################################################################################
 
 sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='GM')
+# sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='PCA',remove_rank=1)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
+
+
+#%% #########################################################################################
+# Contrast: across areas
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+# layerpairs          = ['L2/3-L2/3']
+# layerpairs          = ['L5-L5']
+layerpairs          = ' '
+projpairs           = ' '
+
+[bin_dist_mean_ses,bin_dist_count_ses,binsdRF] = bin_corr_deltarf_ses_vkeep(sessions,rf_type=rf_type,
+                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                        method='mean',filtersign=None,corr_type=corr_type,noise_thr=20,
+                        binresolution=binresolution,normalize=False)
+
+binres              = 0.005
+binedges            = np.arange(-1,1,binres)
+bincenters          = binedges[:-1] + binres/2
+nbins               = len(bincenters)
+
+hist_mean_ses = np.full(list(np.shape(bin_dist_mean_ses))[:-1] + [nbins],np.nan)
+
+for idx in np.ndindex(*bin_dist_mean_ses.shape[:-1]):
+    hist_mean_ses[idx],_ = np.histogram(bin_dist_mean_ses[idx],bins=binedges)
+
+hist_mean_ses /= np.sum(hist_mean_ses,axis=-1,keepdims=True)
+
+# plt.plot(bincenters,np.nanmean(hist_mean_ses,axis=(0,1,2,3,4)))
+plt.plot(bincenters,np.nanmean(hist_mean_ses[:,:2,:,:,:,:],axis=(0,1,2,3)).T)
+plt.plot(bincenters,np.nanmean(hist_mean_ses[:,:3,0,:,:,:],axis=(0,1,2)).T)
+plt.xlim([-0.1,0.1])
+
 
 #%% #########################################################################################
 # Contrast: across areas
 areapairs           = ['V1-V1','PM-PM','V1-PM']
 # areapairs           = ['V1-PM']
 # areapairs           = ['PM-PM']
-# layerpairs          = ['L2/3-L2/3']
-layerpairs          = ['L2/3-L5']
+layerpairs          = ['L2/3-L2/3']
+# layerpairs          = ['L2/3-L5']
 # layerpairs          = ['L5-L5']
+# layerpairs          = ' '
 projpairs           = ' '
 
 # corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
@@ -239,6 +273,10 @@ bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_t
 # [_,bin_2d_negf,_,bin_dist_negf,_,_,bin_angle_cent_negf,_,bin_angle_surr_negf,_,_] = bin_corr_deltarf(sessions,
 #                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,method='frac',
 #                         filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr)
+
+#%% 
+plt.hist(bin_2d_count_ses.flatten(),bins=np.arange(0,1e5,10000))
+plt.ylim([0,100])
 
 #%% Plot radial tuning:
 filestring = 'RadialTuning_areas_%s_%s_' % (corr_type,layerpairs[0].replace('/',''))
@@ -291,7 +329,7 @@ areapairs           = ['V1-V1','PM-PM','V1-PM']
 # areapairs           = ['V1-PM']
 projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
 layerpairs          = ' '
-layerpairs          = ['L2/3-L2/3']
+# layerpairs          = ['L2/3-L2/3']
 # layerpairs          = ['L2/3-L5']
 
 corr_thr            = 0.01 #thr in percentile of total corr for significant pos or neg
@@ -300,6 +338,9 @@ corr_type           = 'noise_corr'
 # corr_type           = 'trace_corr'
 # corr_type           = 'sig_corr'
 binresolution       = 10
+shufflefield        = None
+# shufflefield        = 'corrdata'
+# shufflefield      = 'labeled'
 
 # [bins2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,binsdRF,
 # bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
@@ -323,18 +364,18 @@ bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
 bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_type,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
                         method='mean',filtersign=None,corr_type=corr_type,noise_thr=20,
-                        binresolution=binresolution,normalize=False)
+                        binresolution=binresolution,normalize=False,shufflefield=shufflefield)
 
 [_,bin_2d_posf_ses,_,bin_dist_posf_ses,_,_,
  bin_angle_cent_posf_ses,_,bin_angle_surr_posf_ses,_,_] = bin_corr_deltarf_ses(sessions,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,
                         method='frac',filtersign='pos',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr,
-                        binresolution=binresolution)
+                        binresolution=binresolution,shufflefield=shufflefield)
 
 [_,bin_2d_negf_ses,_,bin_dist_negf_ses,_,_,bin_angle_cent_negf_ses,_,bin_angle_surr_negf_ses,_,_] = bin_corr_deltarf_ses(sessions,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,
                         method='frac',filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr,
-                        binresolution=binresolution)
+                        binresolution=binresolution,shufflefield=shufflefield)
 
 # bin_2d_mean = nanweightedaverage(bin_2d_mean_ses,weights=bin_2d_count_ses,axis=0)
 # bin_2d_posf = nanweightedaverage(bin_2d_posf_ses,weights=bin_2d_count_ses,axis=0)
@@ -380,7 +421,6 @@ fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_negf_GRGN_stats' % (cor
 # fig = plot_mean_frac_corr_projs(bins2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
 #                         binsdRF,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,areapairs,layerpairs,projpairs)
 # fig.savefig(os.path.join(savedir,'deltaRF','1DRF','CorrFrac_deltaRF_V1PM_%s_%s_%s_projs_GRGN' % (rf_type,corr_type,calciumversion) + '.png'), format = 'png')
-
 
 #%% Reassign layers:
 for ses in sessions:

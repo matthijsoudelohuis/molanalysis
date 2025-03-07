@@ -168,7 +168,7 @@ class Session():
                 t_resp_start = 0.25
                 t_resp_stop = 1.5
         else:
-            print('skipping mean response for unknown protocol')
+            print('skipping mean response calculation for unknown protocol')
             return
 
         ##############################################################################

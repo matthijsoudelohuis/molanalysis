@@ -54,7 +54,7 @@ def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='in
         tensor = np.empty([N, K, T])
 
         for k in range(K):
-            print(f"\rComputing tensor for trial {k+1} / {K}", end='\r')
+            # print(f"\rComputing tensor for trial {k+1} / {K}", end='\r')
             firstframe = np.where(ts_F > ts_T[k] + t_pre - binsize/2)[0][0]
             tensor[:, k, :] = data.iloc[firstframe:firstframe+T, :].T
     elif method == 'binmean':
@@ -70,11 +70,8 @@ def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='in
 
         tensor = np.empty([N, K, T])
 
-        label = f'Computing spatial tensor for {kwargs.get("label", "trial")}'
-        progress_bar = kwargs.get('progress_bar', True)
-        leave = kwargs.get('leave', False)
-
-        for k in tqdm(range(K), desc=label, disable=not progress_bar, leave=leave):
+        # label = f'Computing spatial tensor for {kwargs.get("label", "trial")}'
+        for k in range(K):
             # idx_trial = trialnum_F==k+1
             for t, (bin_start, bin_end) in enumerate(zip(binedges[:-1], binedges[1:])):
                 # idx_bin = bin_start <= zpos_F[idx]-z_T[k] < bin_end
@@ -86,9 +83,7 @@ def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='in
         print('method to bin is unknown')
 
         # label = f'Computing temporal tensor for {kwargs.get("label", "trial")}'
-        # progress_bar = kwargs.get('progress_bar', True)
-        # leave = kwargs.get('leave', False)
-        # for n in tqdm(range(N), desc=label, disable=not progress_bar, leave=leave):
+        # for n in range(N):
         #     print(f"\rComputing tensor for neuron {n+1} / {N}", end='\r')
         #     for k in range(K):
         #         if method == 'binmean':
@@ -151,9 +146,7 @@ def compute_tensor_space(data, ts_F, z_T, zpos_F, trialnum_F, s_pre=-100, s_post
     tensor = np.empty([N, K, S])
 
     label = f'Computing spatial tensor for {kwargs.get("label", "trial")}'
-    progress_bar = kwargs.get('progress_bar', True)
-    leave = kwargs.get('leave', False)
-    for k in tqdm(range(K), desc=label, disable=not progress_bar, leave=leave):
+    for k in range(K):
         # idx_trial = trialnum_F==k+1
         for s, (bin_start, bin_end) in enumerate(zip(binedges[:-1], binedges[1:])):
             # idx_bin = bin_start <= zpos_F[idx]-z_T[k] < bin_end
@@ -239,7 +232,6 @@ def compute_respmat(data, ts_F, ts_T, t_resp_start=0, t_resp_stop=1,
     respmat = np.empty([N, K])  # init output matrix
 
     for k in range(K): #loop across trials, for every trial, slice through activity matrix and compute response across neurons:
-        print(f"\rComputing average response for trial {k+1} / {K}",end='\r')
         respmat[:,k]      = data[np.logical_and(ts_F>ts_T[k]+t_resp_start,ts_F<ts_T[k]+t_resp_stop),:].mean(axis=0)
 
         if subtr_baseline: #subtract baseline activity if requested:
@@ -278,9 +270,7 @@ def compute_respmat_space(data, ts_F, z_T, zpos_F, trialnum_F, s_resp_start=0, s
 
     # loop across trials, for every trial, slice through activity matrix and compute response across neurons:
     label = f'Computing average response for {kwargs.get("label", "trial")}'
-    progress_bar = kwargs.get('progress_bar', True)
-    leave = kwargs.get('leave', False)
-    for k in tqdm(range(K), desc=label, disable=not progress_bar, leave=leave):
+    for k in range(K):
         idx_K = trialnum_F == k+1
         idx_S = np.logical_and(
             zpos_F-z_T[k] > s_resp_start, zpos_F-z_T[k] < s_resp_stop)

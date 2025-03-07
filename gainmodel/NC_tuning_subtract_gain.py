@@ -34,8 +34,7 @@ session_list        = np.array([['LPE12223','2024_06_10'], #GR
 # session_list        = np.array([['LPE12223','2024_06_10']])
 
 
-sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
-# sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
+sessions,nSessions   = filter_sessions(protocols = ['GR'],only_session_id=session_list,filter_areas=['V1','PM']) 
 
 sessions,nSessions   = filter_sessions(protocols = ['GR'],filter_areas=['V1','PM']) 
 

@@ -155,15 +155,15 @@ min_target_neurons  = 10
 binmean             = np.zeros((len(delta_rfbincenters),len(delta_rfbincenters)))
 bincounts           = np.zeros((len(delta_rfbincenters),len(delta_rfbincenters)))
 
-# method              = 'CCA'
-method              = 'RRR'
+method              = 'CCA'
+# method              = 'RRR'
 
 n_components        = 5
 lambda_reg          = 1
 
-absolute            = True
+absolute            = False
 
-for ises,ses in enumerate(sessions):
+for ises,ses in tqdm(enumerate(sessions),desc='Computing CCA maps',total=nSessions):
     for iaz,az in enumerate(binedges_az[:-1]):
         for iel,el in enumerate(binedges_el[:-1]):
             idx_in_bin = np.where((ses.celldata['roi_name']==target_area) & 
