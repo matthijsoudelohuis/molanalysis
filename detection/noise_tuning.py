@@ -8,7 +8,6 @@ This script contains a series of functions that analyze activity in visual VR de
 
 #%% Import packages
 import os
-os.chdir('c:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -19,7 +18,7 @@ from sklearn import svm as SVM
 # from sklearn.metrics import accuracy_score, r2_score, explained_variance_score
 from sklearn.model_selection import cross_val_score
 from scipy.signal import medfilt
-from scipy.stats import zscore
+from scipy.stats import zscore, wilcoxon, ranksums, ttest_rel
 
 from loaddata.session_info import *
 from loaddata.get_data_folder import get_local_drive
@@ -51,23 +50,23 @@ session_list = np.array([['LPE11997', '2024_04_16'],
                          ['LPE11998', '2024_04_30'],
                          ['LPE12013','2024_04_25']])
 # session_list = np.array([['LPE10884', '2023_12_14']])
-# session_list = np.array([['LPE10884', '2023_12_14']])
 # session_list        = np.array([['LPE12013','2024_04_25']])
 # session_list        = np.array([['LPE12013','2024_04_26']])
 
-# sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
-                        #  load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
+sessions,nSessions = filter_sessions(protocols=protocol,only_session_id=session_list,load_behaviordata=True,load_videodata=False,
+                         load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
 
 sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
 
-#%% 
-sessions,nSessions,sbins = load_neural_performing_sessions()
+#%% Z-score the calciumdata: 
+for i in range(nSessions):
+    sessions[i].calciumdata = sessions[i].calciumdata.apply(zscore,axis=0)
 
 #%% ############################### Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning
-s_pre       = -80  #pre cm
+s_pre       = -60  #pre cm
 s_post      = 80   #post cm
 binsize     = 10     #spatial binning in cm
 
@@ -82,6 +81,11 @@ for i in range(nSessions):
     sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
                                     sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
 
+
+#%% 
+sessions,nSessions,sbins = load_neural_performing_sessions()
+
+sessions = noise_to_psy(sessions,filter_engaged=True,bootstrap=True)
 
 #%% #################### Compute spatial runspeed ####################################
 for ises,ses in enumerate(sessions): # running across the trial:
@@ -169,7 +173,8 @@ zmin        = 5
 zmax        = 20
 nbins_noise = 5
 
-data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
+data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,
+                                                    splithitmiss=True,min_ntrials=5)
 
 
 # #Do statistical test between hit and miss
@@ -207,9 +212,6 @@ data = data / np.nanmax(data,axis=0,keepdims=True)
 #%% 
 # plt.plot(plotcenters,np.nanmean(data_sig_mean,axis=0),color='k')
 
-from scipy.stats import ranksums
-from scipy.stats import ttest_rel
-
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 lickresp        = [0,1]
@@ -229,8 +231,8 @@ for sig in [0,1]:
     # idx_N = celldata['sig_N']==1
     # idx_N = celldata['sig_N']!=1
 
-    # idx_N = celldata['sig_MN']==sig
-    idx_N = celldata['sig_N']==sig
+    idx_N = celldata['sig_MN']==sig
+    # idx_N = celldata['sig_N']==sig
     for ilr,lr in enumerate(lickresp):
         # ax.plot(plotcenters[1:-1],np.nanmean(data_mean_hitmiss[idx_N,1:-1,ilr],axis=0),
                 # marker='.',markersize=15,color=plotcolors[ilr], label=plotlabels[ilr],linewidth=2)
@@ -312,45 +314,7 @@ plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'HitMiss_Noise_Mean_NonNoiseResponsiveNeurons_RawSignal_%dsessions_Arealabels.png') % (nSessions), format='png')
 # plt.savefig(os.path.join(savedir, 'EncodingModel_%s_cvR2_Areas_Labels_%dsessions.png') % (version,nSessions), format='png')
 
-#%%
-
-def get_edges_every_n_points(data, n):
-    """
-    Compute bin edges where each edge corresponds to every `n` sorted data points.
-    
-    Parameters:
-        data (array-like): 1D array of continuous values.
-        n (int): Number of points per bin.
-
-    Returns:
-        numpy.ndarray: Bin edges.
-    """
-    sorted_data = np.sort(data)  # Sort data in ascending order
-    num_bins = len(sorted_data) // n  # Number of bins based on n points per bin
-
-    if num_bins < 1:
-        raise ValueError("n is too large, fewer than one bin can be formed.")
-    
-    edges = sorted_data[::n]  # Select every n-th element as an edge
-    
-    # Ensure the last edge includes the max value
-    if edges[-1] != sorted_data[-1]:
-        edges = np.append(edges, sorted_data[-1])
-
-    return edges
-
-# Example usage
-data = np.random.randn(1000)  # Example continuous values
-n = 100  # Edge at every 100 points
-
-edges = get_edges_every_n_points(data, n)
-print(f"Bin edges:\n{edges}")
-
-
 #%% 
-
-from scipy.stats import wilcoxon
-
 # diffdata = np.diff(data_mean_hitmiss,axis=2).squeeze()
 data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
 diffdata = np.nanmean(np.diff(data_mean_hitmiss,axis=2)[:,1:-1,:],axis=1).squeeze()
@@ -386,8 +350,6 @@ for iarea, area in enumerate(areas):
         # depth_edges = np.arange(0,500,100)
         if np.all(np.isnan(depth_edges)):
             depth_edges = [0,1000]
-        # else: 
-            # depth_edges = get_edges_every_n_points(df['depth'], 50)
 
         centers     = np.stack((depth_edges[:-1],depth_edges[1:]),axis=1).mean(axis=1)
 
@@ -507,7 +469,6 @@ zmin = 7
 zmax = 17
 nbins_noise = 5
 
-
 # diffdata = np.diff(data_mean_hitmiss,axis=2).squeeze()
 data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=min_ntrials)
 diffdata = np.nanmean(np.diff(data_mean_hitmiss,axis=2)[:,1:-1,:],axis=1).squeeze()
@@ -572,24 +533,50 @@ plt.savefig(os.path.join(savedir, 'Corr_Hitmiss_Runspeed_Layers_%dsessions.png' 
 
 #%% 
 
+#%% Create index of nearby cells to compare to:
+from utils.rf_lib import filter_nearlabeled
+
+celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+N           = len(celldata)
+idx_nearby = np.zeros(N,dtype=bool)
+for ses in sessions:
+    idx_ses = np.where(celldata['session_id']==ses.sessiondata['session_id'][0])[0]
+    idx_nearby[idx_ses] = filter_nearlabeled(ses,radius=50)
+    # idx_nearby[idx_ses] = filter_nearlabeled(ses,radius=50)
+
 #%% 
 sigtype     = 'signal'
 zmin        = 5
 zmax        = 15
+
 nbins_noise = 3
-min_ntrials = 10
+plotlabels      = ['Catch','Sub','Thr','Sup','Max']
+
+# nbins_noise = 5
+# plotlabels      = ['Catch','Imp','Sub','Thr','Sup','Lar','Max']
+
+min_ntrials = 2
 ncompstoplot = 2
 ncomponents = nbins_noise+2
+areas       = ['V1','PM']
+clrs_areas = get_clr_areas(areas)
 
-data,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=False,min_ntrials=min_ntrials)
+# data,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,
+                                    #    splithitmiss=False,min_ntrials=min_ntrials)
+
+data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=min_ntrials)
+
+data = np.nanmean(data_mean_hitmiss,axis=-1)
 
 idx_N = np.all((
                 # celldata['roi_name']==area, 
-                celldata['sig_MN']==1,
-                # celldata['runcorr']>0.1,
+                np.isin(celldata['roi_name'],['V1','PM']),
+                # celldata['sig_MN']==1,
+                celldata['noise_level']<20,
                 # celldata['depth']>200,
                 # celldata['sig_N']==1,
                 # celldata['sig_N']!=1,
+                idx_nearby,
                 ), axis=0)
 # idx_N = np.ones(len(celldata),dtype=bool)
 
@@ -610,8 +597,7 @@ ax.set_xlabel('PC index')
 ax.set_ylabel('Explained Variance')
 ax.set_title('Explained Variance')
 
-plotlocs        = np.arange(np.shape(data_mean_hitmiss)[1])
-plotlabels      = ['Catch','Sub','Thr','Sup','Max']
+plotlocs        = np.arange(np.shape(data)[1])
 # clrs = ['blue','red']
 clrs = sns.color_palette('husl',n_colors=ncompstoplot)
 ax = axes[1]
@@ -624,7 +610,53 @@ ax.set_xticks(plotlocs,plotlabels)
 ax.legend(['PC%d' % (icomp+1) for icomp in range(ncompstoplot)],frameon=False,loc='best',fontsize=10)
 
 ax = axes[2]
-for iarea,area in enumerate(['V1','PM']):
+for iarea,area in enumerate(areas):
+    idx = celldata['roi_name']==area
+    idx = idx[idx_N][idx_nan]
+    # idx_N = celldata['roi_name']==area
+    # X = data_pca_re[0,idx_N,icomp]
+    # Y = data_pca_re[1,idx_N,icomp]
+    ax.scatter(data_pca[idx,0], data_pca[idx,1], c=clrs_areas[iarea], marker = '.',s=10, alpha=0.25)
+l = ax.legend(areas, loc='upper right',frameon=False,fontsize=11)
+for it,text in enumerate(l.get_texts()):
+    text.set_color(clrs_areas[it])
+
+ax.set_title('Neuron locations in PC space')
+ax.set_xlabel('PC1')
+ax.set_ylabel('PC2')
+plt.tight_layout()
+# fig.savefig(os.path.join(savedir,'PCA_TuningCurve_%dsessions.png') % (nSessions), format='png')
+
+#%% Tuning curves for labeled and unlabeled cells:
+nclusters = 3
+#perform k-means clustering in PC space with k=3
+from sklearn.cluster import KMeans
+# kmeans = KMeans(n_clusters=3, random_state=0).fit(data_pca)
+kmeans = KMeans(n_clusters=nclusters).fit(data_pca[:,:2])
+# kmeans = KMeans(n_clusters=nclusters, random_state=0).fit(data_pca[:,:3])
+
+#Resort categories to have consistent definition:
+kmeans_cat = np.zeros(np.shape(data_pca)[0])
+kmeans_cat[kmeans.labels_==np.argmax(kmeans.cluster_centers_[:,0])] = 1
+kmeans_cat[kmeans.labels_==np.argmax(kmeans.cluster_centers_[:,1])] = 2
+
+# plt.hist(kmeans_cat,bins=nclusters)
+
+# kmeans_labels = ['Max-tuned','Thr-tuned','Non-tuned']
+kmeans_labels = ['Non-tuned','Max-tuned','Thr-tuned']
+clrs_cluster = ['grey','#1f77b4', '#ff7f0e']
+
+
+#%% Make clusters manually:
+thr = 0.3
+# thr = 0.2
+kmeans_cat = np.argmax(data_pca[:,:2], axis=1)+1
+kmeans_cat[(data_pca[:,0]<thr) & (data_pca[:,1]<thr)] = 0
+
+#%% Show the KMEans clusters in PC space:
+fig,axes = plt.subplots(1,3,figsize=(9,3))
+ax = axes[0]
+for iarea,area in enumerate(areas):
     idx = celldata['roi_name']==area
     idx = idx[idx_N]
     idx = idx[idx_nan]
@@ -635,26 +667,281 @@ for iarea,area in enumerate(['V1','PM']):
 l = ax.legend(areas, loc='upper right',frameon=False,fontsize=11)
 for it,text in enumerate(l.get_texts()):
     text.set_color(clrs_areas[it])
+    
+ax = axes[1]
+for icluster in range(nclusters):
 
-# ax.scatter(data_pca[:,0],data_pca[:,1],c='k', marker='o',s=10,alpha=0.5)
-# ax.scatter(data_pca[:,0], data_pca[:,1], c='k', marker = '.',s=10, alpha=0.25)
-
-ax.set_title('Neuron locations in PC space')
+    idx_cluster = kmeans_cat==icluster
+    ax.scatter(data_pca[idx_cluster,0], data_pca[idx_cluster,1], c=clrs_cluster[icluster], marker = '.',s=10, alpha=0.5)
+ax.set_title('K-Means clusters in PC space')
+ax.legend(kmeans_labels,title="Category",frameon=False)
+for itext,text in enumerate(ax.legend_.texts):
+    text.set_color(clrs_cluster[itext])
 ax.set_xlabel('PC1')
 ax.set_ylabel('PC2')
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'PCA_TuningCurve_%dsessions.png') % (nSessions), format='png')
 
+
+ax = axes[2]
+arealabels = ['V1unl','V1lab','PMunl','PMlab']
+
+df = pd.DataFrame({'arealabel':celldata['arealabel'][idx_N][idx_nan],
+                   'klabel':kmeans_cat})
+df = df[df['arealabel'].isin(arealabels)]
+
+count_data = df.groupby(["arealabel", "klabel"]).size().unstack(fill_value=0)
+# Normalize to ensure each bar sums to 1
+normalized_data = count_data.div(count_data.sum(axis=1), axis=0)
+# Plot stacked bars using Matplotlib with Seaborn styling
+bottom = np.zeros(len(normalized_data))
+# Loop through each unique value in "Value" to stack the bars
+for idx, value in enumerate(normalized_data.columns):
+    ax.bar(normalized_data.index, normalized_data[value], label=kmeans_labels[idx], bottom=bottom, color=clrs_cluster[idx])
+    bottom += normalized_data[value]  # Update bottom for stacking
+
+# Labels and legend
+ax.set_ylabel("Fraction of Total")
+# plt.title("")
+ax.legend(title="Category",frameon=False,bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+ax.set_ylim(0, 1)  # Ensure y-axis goes from 0 to 1
+fig.savefig(os.path.join(savedir,'KMeans_PCA_%dsessions.png') % (nSessions), format='png')
+
+#%% 
+
+arealabels = ['V1unl','V1lab','PMunl','PMlab']
+narealabels = len(arealabels)
+
+normalized_data = np.full((narealabels, nclusters,nSessions), np.nan)  # init array with NaN 
+for ises,ses in enumerate(sessions):
+    for ial,arealabel in enumerate(arealabels):
+        idx = np.all((celldata['arealabel'][idx_N][idx_nan]==arealabel,
+                          celldata['session_id'][idx_N][idx_nan]==ses.sessiondata['session_id'][0])
+                          ,axis=0)
+        if np.sum(idx)>5:
+            for icluster in range(nclusters):
+                normalized_data[ial,icluster,ises] = np.sum(kmeans_cat[idx]==icluster) / np.sum(idx)
+
+#%% 
+fs = 12
+clrs_arealabels = get_clr_area_labeled(arealabels)
+fig,axes = plt.subplots(1,2,figsize=(5,3),sharey=True,sharex=True)
+for iax,icl in enumerate([1,2]):
+    ax = axes[iax]
+    for ial,arealabel in enumerate(arealabels):
+        ax.bar(ial,np.nanmean(normalized_data[ial,icl,:],axis=-1),color=clrs_arealabels[ial],
+               label=arealabel,width=0.5)
+        for ises,ses in enumerate(sessions):
+                ax.plot([ial],normalized_data[ial,icl,ises],'.',color='k',markersize=7)
+
+    ax.plot([0,1],normalized_data[[0,1],icl,:],'-',color='k',linewidth=0.3)
+    ax.plot([2,3],normalized_data[[2,3],icl,:],'-',color='k',linewidth=0.3)
+
+    ax.set_xticks(np.arange(narealabels),arealabels)
+    ax.set_ylim([0,ax.get_ylim()[1]])
+
+    data = normalized_data[:,icl,:].T
+    t,p = ttest_rel(data[:,0],data[:,1],nan_policy='omit')
+    ax.text(0.25,0.7,'%s' % get_sig_asterisks(p,return_ns=True),transform=ax.transAxes,ha='center',fontsize=fs)
+    t,p = ttest_rel(data[:,2],data[:,3],nan_policy='omit')
+    ax.text(0.75,0.7,'%s' % get_sig_asterisks(p,return_ns=True),transform=ax.transAxes,ha='center',fontsize=fs)
+
+    # t,p = ttest_rel(data[:,0],data[:,2],nan_policy='omit')
+    # ax.text(0.5,0.2,'%s' % get_sig_asterisks(p,return_ns=True),transform=ax.transAxes,ha='center',color='k',fontsize=fs)
+
+    ax.set_title(kmeans_labels[icl])
+    if iax==1:
+        ax.set_xlabel('Area + Proj.')
+    if iax==0: 
+        ax.set_ylabel('Fraction tuned')
+    # ax.legend()
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'Tuning_FractionTotal_V1PM_Labeled_%dsessions.png') % (nSessions), format='png')
+
+#%% 
+fig,axes = plt.subplots(1,2,figsize=(3,3),sharey=True,sharex=True)
+for iax,icl in enumerate([1,2]):
+    ax = axes[iax]
+
+    ial = 0
+    ax.bar(ial,np.nanmean(normalized_data[ial,icl,:],axis=-1),color=clrs_arealabels[ial],
+            label=arealabel,width=0.5)
+    for ises,ses in enumerate(sessions):
+        ax.plot([0],normalized_data[ial,icl,ises],'.',color='k',markersize=7)
+
+    ial = 2
+    ax.bar(1,np.nanmean(normalized_data[ial,icl,:],axis=-1),color=clrs_arealabels[ial],
+            label=arealabel,width=0.5)
+    for ises,ses in enumerate(sessions):
+        ax.plot([1],normalized_data[ial,icl,ises],'.',color='k',markersize=7)
+
+    ax.plot([0,1],normalized_data[[0,2],icl,:],'-',color='k',linewidth=0.3)
+    # ax.plot([2,3],normalized_data[[2,3],icl,:],'-',color='k',linewidth=0.3)
+
+    ax.set_xticks([0,1],arealabels[0::2])
+    ax.set_ylim([0,ax.get_ylim()[1]])
+
+    data = normalized_data[:,icl,:].T
+
+    t,p = ttest_rel(data[:,0],data[:,2],nan_policy='omit')
+    ax.text(0.5,0.8,'%s' % get_sig_asterisks(p,return_ns=True),transform=ax.transAxes,ha='center',color='k',fontsize=fs)
+
+    ax.set_title(kmeans_labels[icl])
+    # if iax==1:
+        # ax.set_xlabel('Area + Proj.')
+    if iax==0: 
+        ax.set_ylabel('Fraction of total')
+    # ax.legend()
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'Tuning_FractionTotal_V1PM_%dsessions.png') % (nSessions), format='png')
+
+
+#%% Now project the data of hits and misses in the PCA space
+# data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=min_ntrials)
+
+# data = np.nanmean(data_mean_hitmiss,axis=-1)
+
+# data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=min_ntrials)
+# 
+data = data_mean_hitmiss[idx_N,:,:][idx_nan,:,:]
+
+idx_nan_hitmiss = ~np.any(np.isnan(data),axis=(1,2))
+
+misses = pca.transform(data[idx_nan_hitmiss,:,0])[:,:2]
+hits = pca.transform(data[idx_nan_hitmiss,:,1])[:,:2]
+# hits = pca.transform(data_mean_hitmiss)
+
+kmeans_cat_hitmiss = kmeans_cat[idx_nan_hitmiss]
+
+#%% 
+fig,axes = plt.subplots(1,3,figsize=(10,3))
+ax = axes[0]
+for icl in range(nclusters):
+    idx = kmeans_cat_hitmiss==icl
+    ax.scatter(hits[idx,0],hits[idx,1],c=clrs_cluster[icl], marker = 'o',s=10, alpha=0.25)
+    ax.scatter(misses[idx,0],misses[idx,1],c=clrs_cluster[icl], marker = 'x',s=10, alpha=0.25)
+    # ax.scatter(hits[:,0],hits[:,1],c='r', marker = '.',s=10, alpha=0.25)
+    # ax.scatter(misses[:,0],misses[:,1],c='g', marker = '.',s=10, alpha=0.25)
+
+ax = axes[1]
+for icl in range(nclusters):
+    idx = kmeans_cat_hitmiss==icl
+    # ax.scatter(hits[idx,0],hits[idx,1],c=clrs_cluster[icl], marker = 'o',s=10, alpha=0.25)
+    # ax.scatter(misses[idx,0],misses[idx,1],c=clrs_cluster[icl], marker = 'x',s=10, alpha=0.25)
+    ax.scatter(misses[idx,0],hits[idx,0],c=clrs_cluster[icl], marker = '.',s=10, alpha=0.5)
+
+ax.plot([0,1],[0,1],color='k',linewidth=1,alpha=1,linestyle='--',transform=ax.transAxes)
+ax.set_xlabel('Misses')
+ax.set_ylabel('Hits')
+ax.set_title(f'PC{0} space: Hits vs Misses')
+# ax.legend(handles,areas, loc='lower right',frameon=False)
+
+ax = axes[2]
+for icl in range(nclusters):
+    idx = kmeans_cat_hitmiss==icl
+    # ax.scatter(hits[idx,0],hits[idx,1],c=clrs_cluster[icl], marker = 'o',s=10, alpha=0.25)
+    # ax.scatter(misses[idx,0],misses[idx,1],c=clrs_cluster[icl], marker = 'x',s=10, alpha=0.25)
+    ax.scatter(misses[idx,1],hits[idx,1],c=clrs_cluster[icl], marker = '.',s=10, alpha=0.5)
+
+ax.plot([0,1],[0,1],color='k',linewidth=1,alpha=1,linestyle='--',transform=ax.transAxes)
+ax.set_xlabel('Misses')
+ax.set_ylabel('Hits')
+ax.set_title(f'PC{1} space: Hits vs Misses')
+# ax.legend(handles,areas, loc='lower right',frameon=False)
+
+#%% 
+data = data_mean_hitmiss[idx_N,:,:]
+data = data[idx_nan,:,:]
+idx_nan_hitmiss = ~np.any(np.isnan(data),axis=(1,2))
+
+fig,axes = plt.subplots(2,3,figsize=(10,6),sharey=True)
+# fig,axes = plt.subplots(2,3,figsize=(10,6),sharey=False)
+for iarea,area in enumerate(areas):
+    for icl in range(nclusters):
+        ax      = axes[iarea,icl]
+        idx     = kmeans_cat==icl
+        idx     = np.all((kmeans_cat==icl,
+                      idx_nan_hitmiss,
+                       celldata['roi_name'][idx_N][idx_nan]==area),axis=0)
+        
+        shaded_error(plotlocs,data[idx,:,0],error='sem',color='grey',ax=ax)
+        shaded_error(plotlocs,data[idx,:,1],error='sem',color='darkgreen',ax=ax)
+
+        t,p = ttest_rel(np.nanmean(data[idx,:,0],axis=1),np.nanmean(data[idx,:,1],axis=1))
+        # t,p = ttest_rel(data[idx,:,0].flatten(),data[idx,:,1].flatten())
+
+        ax.text(0.5,0.8,'p=%s' % get_sig_asterisks(p,return_ns=True),transform=ax.transAxes,ha='center',color='k',fontsize=fs)
+        ax.set_title('%s-%s' % (area,kmeans_labels[icl]))
+        # ax.set_ticks(np.arange())
+        ax.set_xticks(plotlocs,plotlabels)
+
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'HitMiss_KmeansTuned_V1PM_%dsessions.png') % (nSessions), format='png')
+
+#%% 
+data = data_mean_hitmiss[idx_N,:,:]
+data = data[idx_nan,:,:]
+idx_nan_hitmiss = ~np.any(np.isnan(data),axis=(1,2))
+
+fig,axes = plt.subplots(4,3,figsize=(10,10),sharey=True)
+# fig,axes = plt.subplots(2,3,figsize=(10,6),sharey=False)
+for ial,arealabel in enumerate(arealabels):
+    for icl in range(nclusters):
+        ax      = axes[ial,icl]
+        idx     = kmeans_cat==icl
+        idx     = np.all((kmeans_cat==icl,
+                      idx_nan_hitmiss,
+                       celldata['arealabel'][idx_N][idx_nan]==arealabel),axis=0)
+        
+        shaded_error(plotlocs,data[idx,:,0],error='sem',color='grey',ax=ax)
+        shaded_error(plotlocs,data[idx,:,1],error='sem',color='darkgreen',ax=ax)
+
+        t,p = ttest_rel(np.nanmean(data[idx,:,0],axis=1),np.nanmean(data[idx,:,1],axis=1))
+        
+        # t,p = ttest_rel(data[idx,:,0].flatten(),data[idx,:,1].flatten())
+        
+        ax.text(0.5,0.8,'p=%s' % get_sig_asterisks(p,return_ns=True),transform=ax.transAxes,ha='center',color='k',fontsize=fs)
+        ax.set_title('%s-%s' % (arealabel,kmeans_labels[icl]))
+        # ax.set_ticks(np.arange())
+        ax.set_xticks(plotlocs,plotlabels)
+
+plt.tight_layout()
+fig.savefig(os.path.join(savedir,'HitMiss_KmeansTuned_V1PM_Labeled_%dsessions.png') % (nSessions), format='png')
+
+
+#%% 
+data = data_mean_hitmiss[idx_N,:,:]
+data = data[idx_nan,:,:]
+idx_nan_hitmiss = ~np.any(np.isnan(data),axis=(1,2))
+
+fig,axes = plt.subplots(2,3,figsize=(10,6),sharey=True)
+# fig,axes = plt.subplots(2,3,figsize=(10,6),sharey=False)
+for iarea,area in enumerate(areas):
+    for icl in range(nclusters):
+        ax      = axes[iarea,icl]
+        idx     = kmeans_cat==icl
+        idx     = np.all((
+                        kmeans_cat<10,
+                      idx_nan_hitmiss,
+                       celldata['roi_name'][idx_N][idx_nan]==area),axis=0)
+        
+        ax.plot(np.nanmean(data[idx,:,0],axis=0),color='grey')
+        ax.plot(np.nanmean(data[idx,:,1],axis=0),color='darkgreen')
+        ax.set_title('%s-%s' % (area,kmeans_labels[icl]))
+        # ax.set_ticks(np.arange())
+        ax.set_xticks(plotlocs,plotlabels)
+
+plt.tight_layout()
 
 #%%
-areas = ['V1','PM','AL','RSP']
+# areas = ['V1','PM','AL','RSP']
 areas = ['V1','PM']
 
 df = pd.DataFrame(data_pca[:,:2],columns=['PC1','PC2'])
 fig,axes = plt.subplots(1,3,figsize=(10,3))
 df['roi_name'] = np.array(celldata['roi_name'][idx_N][idx_nan])
 clrs_areas  = get_clr_areas(areas)
-sns.jointplot(x='PC1',y='PC2',data= df[df['roi_name'].isin(areas)],hue='roi_name',ax=axes,hue_order=areas,s=7,
+sns.jointplot(x='PC1',y='PC2',data= df[df['roi_name'].isin(areas)],hue='roi_name',ax=axes,
+              hue_order=areas,s=7,
               palette=clrs_areas,marginal_kws={'common_norm':False})
 
 #%% 
@@ -662,18 +949,20 @@ sigtype     = 'signal'
 zmin        = 5
 zmax        = 15
 nbins_noise = 3
-min_ntrials = 10
+min_ntrials = 5
 
 data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=min_ntrials)
 # diffdata = np.nanmean(np.diff(data_mean_hitmiss,axis=2)[:,1:-1,:],axis=1).squeeze()
 
 idx_N = np.all((
                 # celldata['roi_name']==area, 
-                celldata['sig_MN']==1,
+                # celldata['sig_MN']==1,
                 # celldata['runcorr']>0.1,
+                celldata['noise_level']<20,
                 # celldata['depth']>200,
                 # celldata['sig_N']==1,
                 # celldata['sig_N']!=1,
+                # idx_nearby,
                 ), axis=0)
 # idx_N = np.ones(len(celldata),dtype=bool)
 
@@ -721,8 +1010,6 @@ ax = axes[2]
 for iarea,area in enumerate(['V1','PM']):
     idx = celldata['roi_name']==area
     idx = idx[idx_N]
-    # idx = idx[idx_nan]
-    # idx_N = celldata['roi_name']==area
     X = data_pca_re[0,idx,0]
     Y = data_pca_re[0,idx,1]
 
@@ -734,15 +1021,10 @@ for iarea,area in enumerate(['V1','PM']):
     # ax.scatter(X, Y, c=clrs_areas[iarea], marker = '.',s=10, alpha=0.25)
     ax.scatter(X, Y, c='g', marker = '.',s=10, alpha=0.25)
 
-# ax.scatter(data_pca[:,0], data_pca[:,1], c='k', marker = '.',s=10, alpha=0.25)
-
-# sns.kdeplot(data=pd.DataFrame({'PC1': data_pca[:,0], 'PC2': data_pca[:,1]}), 
-            # x='PC1', y='PC2', fill=True, ax=ax,levels=100, cmap="mako")
-# ax.scatter(data_pca[:,0], data_pca[:,1], c='k', marker='o', s=10, alpha=0.25)
 ax.set_title('Neuron locations in PC space')
 ax.set_xlabel('PC1')
 ax.set_ylabel('PC2')
-fig.savefig(os.path.join(savedir,'PCA_TuningCurve_HITMISS_%dsessions.png') % (nSessions), format='png')
+# fig.savefig(os.path.join(savedir,'PCA_TuningCurve_HITMISS_%dsessions.png') % (nSessions), format='png')
 
 #%% 
 

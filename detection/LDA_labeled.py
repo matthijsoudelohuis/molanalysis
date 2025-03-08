@@ -51,6 +51,9 @@ report_sessions(sessions)
 #%% 
 sessions,nSessions,sbins = load_neural_performing_sessions()
 
+#%% 
+sessions = noise_to_psy(sessions,filter_engaged=True,bootstrap=True)
+
 #%% ############################### Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning

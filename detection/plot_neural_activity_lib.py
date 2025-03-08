@@ -617,7 +617,7 @@ def get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True
     edges       = np.linspace(zmin,zmax,nbins_noise+1)
     centers     = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
     if sigtype == 'signal_psy':
-        plotcenters = np.hstack((centers[0]-2*np.mean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
+        plotcenters = np.hstack((centers[0]-2*np.nanmean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
     elif sigtype=='signal': 
         plotcenters = np.hstack((0,centers,100))
 
