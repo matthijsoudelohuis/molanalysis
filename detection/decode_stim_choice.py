@@ -501,6 +501,7 @@ def decvar_hitmiss_from_arealabel_wrapper(sessions,sbins,arealabels,var='noise',
 def plot_dec_perf_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,testwin=[0,25]):
 
     ylow = 0.45 if np.nanmin(dec_perf)>.25 else -0.05
+    ymax = 1.0 if np.nanmax(dec_perf)>.75 else 0.5
     ychance = .5 if np.nanmin(dec_perf)>.25 else 0.0
 
     fig,axes    = plt.subplots(1,4,figsize=(10,3),sharex=False,sharey=True,gridspec_kw={'width_ratios': [3,1,3,1]})
@@ -522,12 +523,12 @@ def plot_dec_perf_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,testwin=[0
     ax.set_xlabel('Position relative to stim (cm)')
     add_stim_resp_win(ax)
     ax.set_xticks([-50,-25,0,25,50,75])
-    ax.set_ylim([ylow,1])
+    ax.set_ylim([ylow,ymax])
     ax.set_xlim([-50,75])
 
     for ibin, bincenter in enumerate(sbins):
         t,pval = ttest_rel(dec_perf[ibin,0,:],dec_perf[ibin,1,:],nan_policy='omit')
-        ax.text(bincenter, 0.9, '%s' % get_sig_asterisks(pval,return_ns=False), color='k', ha='center', fontsize=12)
+        ax.text(bincenter, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=False), color='k', ha='center', fontsize=12)
 
     ax = axes[1]
     ax.plot([0,1],statdata[:2,:],color='k',linewidth=0.25)
@@ -554,7 +555,7 @@ def plot_dec_perf_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,testwin=[0
 
     for ibin, bincenter in enumerate(sbins):
         t,pval = ttest_rel(dec_perf[ibin,2,:],dec_perf[ibin,3,:],nan_policy='omit')
-        ax.text(bincenter, 0.9, '%s' % get_sig_asterisks(pval,return_ns=False), color='k', ha='center', fontsize=12)
+        ax.text(bincenter, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=False), color='k', ha='center', fontsize=12)
     ax.legend(loc='upper left',fontsize=9,frameon=False,handles=handles,labels=arealabels[2:])
     ax.set_xlabel('Position relative to stim (cm)')
     add_stim_resp_win(ax)
@@ -712,14 +713,14 @@ kfold           = 5
 # lam             = 0.08
 lam             = 1
 nmintrialscond  = 10
-nmodelfits      = 20 
-nminneurons     = 10 #how many neurons in a population to include the session
+nmodelfits      = 100
+nminneurons     = 20 #how many neurons in a population to include the session
 nsampleneurons  = 20
 
 #%% Decoding threshold stimulus presence:
 decode_var      = 'noise'
-decode_var      = 'max'
-testwin         = [10,30]
+# decode_var      = 'max'
+
 # decode_var      = 'choice'
 # testwin           = [20,50] 
 
@@ -732,6 +733,8 @@ dec_perf[:,arealabels.index('V1unl'),np.all(np.isnan(dec_perf[:,arealabels.index
 dec_perf[:,arealabels.index('PMunl'),np.all(np.isnan(dec_perf[:,arealabels.index('PMlab'),:]),axis=0)] = np.nan
 
 #%% 
+testwin         = [10,20]
+testwin         = [0,25]
 fig = plot_dec_perf_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,testwin=testwin)
 plt.suptitle('Decoding %s' % decode_var,fontsize=14)
 plt.savefig(os.path.join(savedir, 'Dec_%s_V1PM_Labeled_%dsessions.png' % (decode_var,nSessions)), format='png')
@@ -821,7 +824,7 @@ def decvar_cont_from_arealabel_wrapper(sessions,sbins,arealabels,var='signal',nm
 #%% Decoding threshold stimulus strength from V1 and PM labeled and unlabeled neurons separately:
 decode_var      = 'signal'
 testwin         = [0,25]
-nmodelfits      = 20
+nmodelfits      = 50
 nmintrialscond  = 20
 nminneurons     = 20
 
