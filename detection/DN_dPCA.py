@@ -76,6 +76,9 @@ for i in range(nSessions):
     sessions[i].respmat_runspeed    = compute_respmat_space(temp, sessions[i].behaviordata['ts'], sessions[i].trialdata['stimStart'],
                                     sessions[i].behaviordata['zpos'],sessions[i].behaviordata['trialNumber'],s_resp_start=0,s_resp_stop=20,method='mean',subtr_baseline=False)
 
+#%%
+# sessions,nSessions,sbins = load_neural_performing_sessions()
+
 
 #%% 
 sessions = calc_stimresponsive_neurons(sessions,sbins)

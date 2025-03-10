@@ -203,6 +203,7 @@ def report_sessions(sessions):
 def load_neural_performing_sessions(calciumversion='deconv'):
     #Get signal as relative to psychometric curve for all sessions:
     sessions,nSessions = filter_sessions(protocols='DN',min_cells=100) #Load specified list of sessions
+    np.random.seed(0)
     sessions = noise_to_psy(sessions,filter_engaged=True,bootstrap=True)
     # plot_psycurve(sessions,filter_engaged=True)
 
