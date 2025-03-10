@@ -153,6 +153,21 @@ def prep_Xpredictor(X,y):
     y           = np.nan_to_num(y,nan=np.nanmean(y,axis=0,keepdims=True))
     return X,y,idx_nan
 
+def balance_trial(X,y,sample_min_trials=20):
+    N0,N1 = np.sum(y==0),np.sum(y==1)
+    mintrials =  np.min([N0,N1])
+    if mintrials < sample_min_trials:
+        idx0 = np.random.choice(np.where(y==0)[0],size=sample_min_trials,replace=True)
+        idx1 = np.random.choice(np.where(y==1)[0],size=sample_min_trials,replace=True)
+        yb = np.concatenate((y[idx0],y[idx1]))
+        Xb = np.concatenate((X[idx0,:],X[idx1,:]))
+    else: 
+        idx0 = np.random.choice(np.where(y==0)[0],size=mintrials,replace=False)
+        idx1 = np.random.choice(np.where(y==1)[0],size=mintrials,replace=False)
+        yb  = np.concatenate((y[idx0],y[idx1]))
+        Xb  = np.concatenate((X[idx0,:],X[idx1,:]))
+    return Xb,yb    
+
 # def prep_Xpredictor(X,y):
 #     X           = X[:,~np.all(np.isnan(X),axis=0)] #
 #     idx_nan     = ~np.all(np.isnan(X),axis=1)

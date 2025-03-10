@@ -54,7 +54,8 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     only_session_id=None,
                     min_cells=None, min_lab_cells_V1=None, min_lab_cells_PM=None, 
                     filter_areas=None,min_trials=None, session_rf=None,
-                    any_of_areas=None,only_all_areas=None,has_pupil=False):
+                    any_of_areas=None,only_all_areas=None,has_pupil=False,
+                    filter_noiselevel=False):
     """
     This function filters and returns a list of session objects that meet specific 
     criteria based on the input arguments. It allows the user to specify conditions 
@@ -153,7 +154,13 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                 
                 # FILTER DATA TO ONLY LOAD DATA FROM SPECIFIED AREAS
                 if sesflag and filter_areas is not None and hasattr(ses, 'celldata'):
-                    ses.cellfilter = np.isin(ses.celldata['roi_name'],filter_areas)
+                    cellfilter = np.isin(ses.celldata['roi_name'],filter_areas)
+                    ses.cellfilter = np.logical_and(getattr(ses, 'cellfilter', True), cellfilter)
+                
+                # FILTER DATA TO ONLY LOAD DATA BELOW NOISE LEVEL 20 (rupprecht et al. 2021)
+                if sesflag and filter_noiselevel and hasattr(ses, 'celldata'):
+                    cellfilter = ses.celldata['noise_level']<20
+                    ses.cellfilter = np.logical_and(getattr(ses, 'cellfilter', True), cellfilter)
                 
                 # SELECT BASED ON WHETHER SESSION HAS PUPIL DATA MEASUREMENTS
                 if sesflag and has_pupil:
