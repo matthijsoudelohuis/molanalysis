@@ -12,8 +12,12 @@ from sklearn import svm as SVM
 from sklearn.metrics import accuracy_score, r2_score, explained_variance_score
 from sklearn.model_selection import cross_val_score
 from sklearn.decomposition import PCA
+from scipy.stats import zscore, wilcoxon, ranksums, ttest_rel
+from matplotlib.lines import Line2D
 
 from utils.dimreduc_lib import *
+from utils.rf_lib import filter_nearlabeled
+from utils.plot_lib import *
 
 def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
     if model_name == 'LogisticRegression':
@@ -177,6 +181,538 @@ def balance_trial(X,y,sample_min_trials=20):
 #     X           = zscore(X, axis=0)
 #     X           = np.nan_to_num(X,nan=np.nanmean(X,axis=0,keepdims=True))
 #     return X,y
+
+######  #######  #####     #     #    #    ######     #     # ######     #    ######  ######  ####### ######  
+#     # #       #     #    #     #   # #   #     #    #  #  # #     #   # #   #     # #     # #       #     # 
+#     # #       #          #     #  #   #  #     #    #  #  # #     #  #   #  #     # #     # #       #     # 
+#     # #####   #          #     # #     # ######     #  #  # ######  #     # ######  ######  #####   ######  
+#     # #       #           #   #  ####### #   #      #  #  # #   #   ####### #       #       #       #   #   
+#     # #       #     #      # #   #     # #    #     #  #  # #    #  #     # #       #       #       #    #  
+######  #######  #####        #    #     # #     #     ## ##  #     # #     # #       #       ####### #     # 
+
+# Binary classification decoder from e.g. V1 and PM labeled and unlabeled neurons separately
+def decvar_from_arealabel_wrapper(sessions,sbins,arealabels,var='noise',nmodelfits=20,kfold=5,lam=0.08,nmintrialscond=10,
+                                   nminneurons=10,nsampleneurons=20,model_name='LOGR',filter_nearby=False):
+    np.random.seed(49)
+
+    nSessions       = len(sessions)
+    narealabels     = len(arealabels)
+
+    dec_perf   = np.full((len(sbins),narealabels,nSessions), np.nan)
+    # Loop through each session
+    for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding response across sessions'):
+        neuraldata = copy.deepcopy(ses.stensor)
+        if var=='noise':
+            idx_T       = np.all((np.isin(ses.trialdata['stimcat'],['C','N']),
+                                    # np.isin(ses.trialdata['trialOutcome'],['HIT','CR']),
+                                    ses.trialdata['engaged']==1),axis=0)
+            y_idx_T           = (ses.trialdata['stimcat'][idx_T] == 'C').to_numpy()
+        elif var=='max':
+            idx_T       = np.all((np.isin(ses.trialdata['stimcat'],['C','M']),
+                                    # np.isin(ses.trialdata['trialOutcome'],['HIT','CR']),
+                                    ses.trialdata['engaged']==1),axis=0)
+            y_idx_T           = (ses.trialdata['stimcat'][idx_T] == 'C').to_numpy()
+        elif var=='choice':
+            for isig,sig in enumerate(np.unique(ses.trialdata['signal'])):
+                idx_T = ses.trialdata['signal']==sig
+                neuraldata[:,idx_T,:] -= np.nanmean(neuraldata[:,idx_T,:],axis=1,keepdims=True)
+
+            #Correct setting: stimulus trials during engaged part of the session:
+            idx_T       = np.all((ses.trialdata['engaged']==1,np.isin(ses.trialdata['stimcat'],['N'])), axis=0)
+            y_idx_T     = ses.trialdata['lickResponse'][idx_T].to_numpy()
+
+        for ial, arealabel in enumerate(arealabels):
+            
+            if filter_nearby:
+                idx_nearby  = filter_nearlabeled(ses,radius=50)
+            else:
+                idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+
+            idx_N       = np.all((ses.celldata['arealabel']==arealabel,
+                                    ses.celldata['noise_level']<20,	
+                                    idx_nearby),axis=0)
+
+            if np.sum(y_idx_T==0) >= nmintrialscond and np.sum(y_idx_T==1) >= nmintrialscond and np.sum(idx_N) >= nminneurons:
+                for ibin, bincenter in enumerate(sbins):            # Loop through each spatial bin
+                    temp = np.empty(nmodelfits)
+                    for i in range(nmodelfits):
+                        y   = copy.deepcopy(y_idx_T)
+
+                        if np.sum(idx_N) >= nsampleneurons:
+                            # idx_Ns = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+                            idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+                        else:
+                            idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=True)
+
+                        X       = neuraldata[np.ix_(idx_Ns,idx_T,sbins==bincenter)].squeeze()
+                        X       = X.T
+
+                        X,y,_   = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+                        Xb,yb           = balance_trial(X,y,sample_min_trials=nmintrialscond)
+                        # temp[i],_,_,_   = my_decoder_wrapper(Xb,yb,model_name='LogisticRegression',kfold=kfold,lam=lam,norm_out=True)
+                        temp[i],_,_,_   = my_decoder_wrapper(Xb,yb,model_name=model_name,kfold=kfold,lam=lam,
+                                                                subtract_shuffle=False,norm_out=False)
+                    dec_perf[ibin,ial,ises] = np.nanmean(temp)
+
+    return dec_perf
+
+# Decode from subpopulations separately, split by hit/miss e.g. V1 and PM labeled and unlabeled neurons
+def decvar_hitmiss_from_arealabel_wrapper(sessions,sbins,arealabels,var='noise',nmodelfits=20,kfold=5,lam=0.08,nmintrialscond=10,
+                                   nminneurons=10,nsampleneurons=20,filter_nearby=False):
+    np.random.seed(49)
+
+    nSessions       = len(sessions)
+    narealabels     = len(arealabels)
+    nlickresponse   = 2
+
+    dec_perf   = np.full((len(sbins),narealabels,nlickresponse,nSessions), np.nan)
+    # Loop through each session
+    for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding response across sessions'):
+        neuraldata = copy.deepcopy(ses.stensor)
+
+        for ial, arealabel in enumerate(arealabels):
+            for ilr in range(nlickresponse):
+
+                if var=='noise':
+                    idx_cat     = np.logical_or(np.logical_and(ses.trialdata['stimcat']=='N',
+                                                               ses.trialdata['lickResponse']==ilr),
+                                        ses.trialdata['stimcat']=='C')
+                    idx_T       = np.all((idx_cat,
+                                  ses.trialdata['engaged']==1),axis=0)
+                    y_idx_T           = (ses.trialdata['stimcat'][idx_T] == 'C').to_numpy()
+
+                elif var=='max':
+                    idx_cat     = np.logical_or(np.logical_and(ses.trialdata['stimcat']=='M',
+                                                               ses.trialdata['lickResponse']==ilr),
+                                        ses.trialdata['stimcat']=='C')
+                    idx_T       = np.all((idx_cat,
+                                  ses.trialdata['engaged']==1),axis=0)
+                    y_idx_T           = (ses.trialdata['stimcat'][idx_T] == 'C').to_numpy()
+
+                if filter_nearby:
+                    idx_nearby  = filter_nearlabeled(ses,radius=50)
+                else:
+                    idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+                # idx_nearby  = filter_nearlabeled(ses,radius=50)
+                idx_N       = np.all((ses.celldata['arealabel']==arealabel,
+                                        ses.celldata['noise_level']<20,	
+                                        idx_nearby),axis=0)
+
+                if np.sum(y_idx_T==0) >= nmintrialscond and np.sum(y_idx_T==1) >= nmintrialscond and np.sum(idx_N) >= nminneurons:
+                    for ibin, bincenter in enumerate(sbins):            # Loop through each spatial bin
+                        temp = np.empty(nmodelfits)
+                        for i in range(nmodelfits):
+                            y   = copy.deepcopy(y_idx_T)
+
+                            if np.sum(idx_N) >= nsampleneurons:
+                                # idx_Ns = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+                                idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+                            else:
+                                idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=True)
+
+                            X       = neuraldata[np.ix_(idx_Ns,idx_T,sbins==bincenter)].squeeze()
+                            X       = X.T
+
+                            X,y,_   = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+                            Xb,yb           = balance_trial(X,y,sample_min_trials=nmintrialscond)
+                            # temp[i],_,_,_   = my_decoder_wrapper(Xb,yb,model_name='LogisticRegression',kfold=kfold,lam=lam,norm_out=True)
+                            temp[i],_,_,_   = my_decoder_wrapper(Xb,yb,model_name='LogisticRegression',kfold=kfold,lam=lam,
+                                                                    subtract_shuffle=False,norm_out=False)
+                        dec_perf[ibin,ial,ilr,ises] = np.nanmean(temp)
+
+    return dec_perf
+
+# Binary classification decoder  from V1 and PM labeled and unlabeled neurons separately
+def decvar_cont_from_arealabel_wrapper(sessions,sbins,arealabels,var='signal',nmodelfits=20,kfold=5,lam=0.08,nmintrialscond=10,
+                                   nminneurons=10,nsampleneurons=20,model_name='Ridge',filter_nearby=False):
+    np.random.seed(49)
+
+    nSessions       = len(sessions)
+    narealabels     = len(arealabels)
+
+    dec_perf   = np.full((len(sbins),narealabels,nSessions), np.nan)
+    # Loop through each session
+    for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding response across sessions'):
+        neuraldata = copy.deepcopy(ses.stensor)
+        if var=='signal':
+            idx_T       = np.all((np.isin(ses.trialdata['stimcat'],['N']),
+                        ses.trialdata['engaged']==1),axis=0)
+            y_idx_T           = ses.trialdata['signal'][idx_T].to_numpy()
+        
+        for ial, arealabel in enumerate(arealabels):
+            if filter_nearby:
+                idx_nearby  = filter_nearlabeled(ses,radius=50)
+            else:
+                idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+                
+            idx_N       = np.all((ses.celldata['arealabel']==arealabel,
+                                    ses.celldata['noise_level']<20,	
+                                    idx_nearby),axis=0)
+            
+            if len(y_idx_T) >= nmintrialscond and np.sum(idx_N) >= nminneurons:
+                for ibin, bincenter in enumerate(sbins):            # Loop through each spatial bin
+                    temp = np.empty(nmodelfits)
+                    for i in range(nmodelfits):
+                        y   = copy.deepcopy(y_idx_T)
+
+                        if np.sum(idx_N) >= nsampleneurons:
+                            # idx_Ns = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+                            idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+                        else:
+                            idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=True)
+
+                        X       = neuraldata[np.ix_(idx_Ns,idx_T,sbins==bincenter)].squeeze()
+                        X       = X.T
+
+                        X,y,_   = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+                        temp[i],_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,
+                                                                subtract_shuffle=True,norm_out=True)
+                    dec_perf[ibin,ial,ises] = np.nanmean(temp)
+
+    return dec_perf
+
+
+# Binary classification decoder  from V1 and PM labeled and unlabeled neurons separately
+def decvar_cont_hitmiss_from_arealabel_wrapper(sessions,sbins,arealabels,var='signal',nmodelfits=20,kfold=5,lam=0.08,nmintrialscond=10,
+                                   nminneurons=10,nsampleneurons=20,model_name='Ridge',filter_nearby=False):
+    np.random.seed(49)
+
+    nSessions       = len(sessions)
+    narealabels     = len(arealabels)
+    nlickresponse   = 2
+
+    dec_perf   = np.full((len(sbins),narealabels,nlickresponse,nSessions), np.nan)
+    # Loop through each session
+    for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding response across sessions'):
+        neuraldata = copy.deepcopy(ses.stensor)
+
+        for ilr in range(nlickresponse):
+
+            if var=='signal':
+                idx_T       = np.all((np.isin(ses.trialdata['stimcat'],['N']),
+                                    ses.trialdata['lickResponse']==ilr,
+                                    ses.trialdata['engaged']==1),axis=0)
+                y_idx_T           = ses.trialdata['signal'][idx_T].to_numpy()
+            
+            for ial, arealabel in enumerate(arealabels):
+                if filter_nearby:
+                    idx_nearby  = filter_nearlabeled(ses,radius=50)
+                else:
+                    idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+                    
+                idx_N       = np.all((ses.celldata['arealabel']==arealabel,
+                                        ses.celldata['noise_level']<20,	
+                                        idx_nearby),axis=0)
+                
+                if len(y_idx_T) >= nmintrialscond and np.sum(idx_N) >= nminneurons:
+                    for ibin, bincenter in enumerate(sbins):            # Loop through each spatial bin
+                        temp = np.empty(nmodelfits)
+                        for i in range(nmodelfits):
+                            y   = copy.deepcopy(y_idx_T)
+
+                            if np.sum(idx_N) >= nsampleneurons:
+                                idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+                            else:
+                                idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=True)
+
+                            X       = neuraldata[np.ix_(idx_Ns,idx_T,sbins==bincenter)].squeeze()
+                            X       = X.T
+
+                            X,y,_   = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+                            temp[i],_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,
+                                                                    subtract_shuffle=True,norm_out=True)
+                        dec_perf[ibin,ial,ilr,ises] = np.nanmean(temp)
+
+    return dec_perf
+
+
+
+# Show the decoding performance across space for the different populations:
+def plot_dec_perf_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,testwin=[0,25]):
+
+    ylow = 0.45 if np.nanmin(dec_perf)>.25 else -0.05
+    ymax = 1.0 if np.nanmax(dec_perf)>.75 else 0.5
+    ychance = .5 if np.nanmin(dec_perf)>.25 else 0.0
+
+    fig,axes    = plt.subplots(1,4,figsize=(10,3),sharex=False,sharey=True,gridspec_kw={'width_ratios': [3,1,3,1]})
+    markersize  = 30
+
+    statdata    = np.nanmean(dec_perf[(sbins>=testwin[0]) & (sbins<=testwin[1]),:,:],axis=0)
+
+    nSessions   = dec_perf.shape[2]
+    # statdata    = np.nanmean(dec_perf[(sbins>=11) & (sbins<=20),:,:],axis=0)
+    ax = axes[0]
+    handles = []
+    for ial, arealabel in enumerate(arealabels[:2]):
+        handles.append(shaded_error(sbins,dec_perf[:,ial,:].T,color=clrs_arealabels[ial],alpha=0.5,linewidth=1.5,error='sem',ax=ax))
+        for ises in range(nSessions):
+            ax.plot(sbins,dec_perf[:,ial,ises],color=clrs_arealabels[ial],linewidth=0.2)
+
+    ax.legend(loc='upper left',fontsize=9,frameon=False,handles=handles,labels=arealabels[:2])
+    ax.set_ylabel('Decoding performance')
+    ax.set_xlabel('Position relative to stim (cm)')
+    add_stim_resp_win(ax)
+    ax.set_xticks([-50,-25,0,25,50,75])
+    ax.set_ylim([ylow,ymax])
+    ax.set_xlim([-50,75])
+
+    for ibin, bincenter in enumerate(sbins):
+        t,pval = ttest_rel(dec_perf[ibin,0,:],dec_perf[ibin,1,:],nan_policy='omit')
+        ax.text(bincenter, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=False), color='k', ha='center', fontsize=12)
+
+    ax = axes[1]
+    ax.plot([0,1],statdata[:2,:],color='k',linewidth=0.25)
+    ax.scatter(np.zeros(nSessions),statdata[0,:],color='k',marker='.',s=markersize)
+    ax.scatter(np.ones(nSessions),statdata[1,:],color='k',marker='.',s=markersize)
+    ax.scatter([0,1],np.nanmean(statdata[:2,:],axis=1),color=clrs_arealabels[:2],marker='o',s=markersize*2,zorder=10)
+    ax.errorbar([0,1],np.nanmean(statdata[:2,:],axis=1),np.nanstd(statdata[:2,:],axis=1)/np.sqrt(nSessions),
+                color='k',capsize=0,elinewidth=2,zorder=0)
+
+    t,pval = ttest_rel(statdata[0,:],statdata[1,:],nan_policy='omit')
+    ax.text(0.5, 0.9, '%s' % get_sig_asterisks(pval,return_ns=True), color='k', ha='center', transform=ax.transAxes,fontsize=12)
+    ax.set_xticks([0,1],arealabels[:2])
+    ax.axhline(ychance,color='k',linestyle='--',linewidth=1)
+    ax.text(0.5, ychance-0.05, 'Chance', color='gray', ha='center', fontsize=8)
+    ax.set_xlim([-0.3,1.3])
+
+    ax = axes[2]
+    handles = []
+    for ial, arealabel in enumerate(arealabels[2:]):
+        idx = ial + 2
+        handles.append(shaded_error(sbins,dec_perf[:,idx,:].T,color=clrs_arealabels[idx],alpha=0.5,linewidth=1.5,error='sem',ax=ax))
+        for ises in range(nSessions):
+            ax.plot(sbins,dec_perf[:,idx,ises],color=clrs_arealabels[idx],linewidth=0.2)
+
+    for ibin, bincenter in enumerate(sbins):
+        t,pval = ttest_rel(dec_perf[ibin,2,:],dec_perf[ibin,3,:],nan_policy='omit')
+        ax.text(bincenter, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=False), color='k', ha='center', fontsize=12)
+    ax.legend(loc='upper left',fontsize=9,frameon=False,handles=handles,labels=arealabels[2:])
+    ax.set_xlabel('Position relative to stim (cm)')
+    add_stim_resp_win(ax)
+    ax.set_xticks([-50,-25,0,25,50,75])
+    ax.set_xlim([-50,75])
+
+    ax = axes[3]
+    ax.plot([0,1],statdata[2:,:],color='k',linewidth=0.25)
+    ax.scatter(np.zeros(nSessions),statdata[2,:],color='k',marker='.',s=markersize)
+    ax.scatter(np.ones(nSessions),statdata[3,:],color='k',marker='.',s=markersize)
+    ax.scatter([0,1],np.nanmean(statdata[2:,:],axis=1),color=clrs_arealabels[2:],marker='o',s=markersize*2,zorder=10)
+    ax.errorbar([0,1],np.nanmean(statdata[2:,:],axis=1),np.nanstd(statdata[2:,:],axis=1)/np.sqrt(nSessions),
+                color='k',capsize=0,elinewidth=2,zorder=0)
+
+    t,pval = ttest_rel(statdata[2,:],statdata[3,:],nan_policy='omit')
+    ax.text(0.5, 0.9, '%s' % get_sig_asterisks(pval,return_ns=True), color='k', ha='center', transform=ax.transAxes,fontsize=12)
+    ax.set_xticks([0,1],arealabels[2:])
+    ax.axhline(ychance,color='k',linestyle='--',linewidth=1)
+    ax.text(0.5, ychance-0.05, 'Chance', color='gray', ha='center', fontsize=8)
+    ax.set_xlim([-0.3,1.3])
+
+    sns.despine(offset=3,trim=True)
+
+    plt.tight_layout()
+    return fig
+
+from statsmodels.stats.anova import AnovaRM
+
+# Show the decoding performance across space for the different populations:
+def plot_dec_perf_area(dec_perf,sbins,arealabels,clrs_arealabels,testwin=[0,25]):
+
+    ylow = 0.45 if np.nanmin(dec_perf)>.25 else -0.05
+    ymax = 1.0 if np.nanmax(dec_perf)>.75 else 0.5
+    ychance = .5 if np.nanmin(dec_perf)>.25 else 0.0
+    narealabels = len(arealabels)
+
+    fig,axes    = plt.subplots(1,2,figsize=(6,3),sharex=False,sharey=True,gridspec_kw={'width_ratios': [3,1]})
+    markersize  = 30
+
+    statdata    = np.nanmean(dec_perf[(sbins>=testwin[0]) & (sbins<=testwin[1]),:,:],axis=0)
+
+    nSessions   = dec_perf.shape[2]
+    # statdata    = np.nanmean(dec_perf[(sbins>=11) & (sbins<=20),:,:],axis=0)
+    ax = axes[0]
+    handles = []
+    for ial, arealabel in enumerate(arealabels):
+        handles.append(shaded_error(sbins,dec_perf[:,ial,:].T,color=clrs_arealabels[ial],alpha=0.5,linewidth=1.5,error='sem',ax=ax))
+        for ises in range(nSessions):
+            ax.plot(sbins,dec_perf[:,ial,ises],color=clrs_arealabels[ial],linewidth=0.2)
+
+    ax.legend(loc='upper left',fontsize=9,frameon=False,handles=handles,labels=arealabels)
+    ax.set_ylabel('Decoding performance')
+    ax.set_xlabel('Position relative to stim (cm)')
+    add_stim_resp_win(ax)
+    ax.set_xticks([-50,-25,0,25,50,75])
+    ax.set_ylim([ylow,ymax])
+    ax.set_xlim([-50,75])
+
+    # for ibin, bincenter in enumerate(sbins):
+    #     t,pval = ttest_rel(dec_perf[ibin,0,:],dec_perf[ibin,1,:],nan_policy='omit')
+    #     ax.text(bincenter, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=False), color='k', ha='center', fontsize=12)
+
+    ax = axes[1]
+    ax.plot(np.arange(narealabels),statdata,color='k',linewidth=0.25)
+    for ial, arealabel in enumerate(arealabels):
+        ax.scatter(np.ones(nSessions)*ial,statdata[ial,:],color='k',marker='.',s=markersize)
+        ax.scatter(ial,np.nanmean(statdata[ial,:]),color=clrs_arealabels[ial],marker='o',s=markersize*2,zorder=10)
+    # ax.scatter([0,1],np.nanmean(statdata[:2,:],axis=1),color=clrs_arealabels[:2],marker='o',s=markersize*2,zorder=10)
+        ax.errorbar(ial,np.nanmean(statdata[ial,:]),np.nanstd(statdata[ial,:])/np.sqrt(nSessions),
+                    color='k',capsize=0,elinewidth=2,zorder=0)
+    
+    # df = pd.DataFrame({'dec_perf' : statdata.flatten(),
+    #                    'arealabel': np.tile(arealabels,(nSessions,1)).flatten(),
+    #                    'session'  : np.tile(np.arange(nSessions).reshape((-1, 1)),(1,narealabels)).flatten()})
+    # df = df.dropna().reset_index(drop=True) #drop occasional missing data
+    # aov = AnovaRM(data=df, depvar='dec_perf', subject='session', within=['arealabel']).fit()
+    # Fval = aov.FValues['arealabel'][0]
+   
+    # ax.text(0.5, 0.9, f'F({narealabels-1},{narealabels-1}) = {aov.anova_table['F Value'][0]:.2f}\np = {pval:.4f}', color='k', ha='center', transform=ax.transAxes,fontsize=10)
+    
+    # t,pval = ttest_rel(statdata[0,:],statdata[1,:],nan_policy='omit')
+    # ax.text(0.5, 0.9, '%s' % get_sig_asterisks(pval,return_ns=True), color='k', ha='center', transform=ax.transAxes,fontsize=12)
+    ax.set_xticks(np.arange(narealabels),arealabels)
+    ax.axhline(ychance,color='k',linestyle='--',linewidth=1)
+    ax.text(0.5, ychance-0.05, 'Chance', color='gray', ha='center', fontsize=8)
+    ax.set_xlim([-0.3,narealabels - 1 + 0.3])
+
+    sns.despine(offset=3,trim=True)
+
+    plt.tight_layout()
+    return fig
+
+# Show the decoding performance across space for the different populations:
+def plot_dec_perf_hitmiss_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,testwin=[0,25]):
+
+    ylow = 0.45 if np.nanmin(dec_perf)>.25 else -0.05
+    ymax = 1.0 if np.nanmax(dec_perf)>.75 else 0.5
+    ychance = .5 if np.nanmin(dec_perf)>.25 else 0.0
+    
+    fig,axes    = plt.subplots(1,4,figsize=(10,3),sharex=False,sharey=True,gridspec_kw={'width_ratios': [3,1,3,1]})
+    markersize  = 30
+
+    statdata    = np.nanmean(dec_perf[(sbins>=testwin[0]) & (sbins<=testwin[1]),:,:,:],axis=0)
+
+    nSessions   = dec_perf.shape[-1]
+    # statdata    = np.nanmean(dec_perf[(sbins>=11) & (sbins<=20),:,:],axis=0)
+    ax = axes[0]
+    handles = []
+    for ial, arealabel in enumerate(arealabels[:2]):
+        for ilr in range(2):
+            handles.append(shaded_error(sbins,dec_perf[:,ial,ilr,:].T,color=clrs_arealabels[ial],
+                                    linestyle=['--','-'][ilr],alpha=0.25,linewidth=1.5,error='sem',ax=ax))
+    firstlegend = ax.legend(loc='upper left',fontsize=9,frameon=False,handles=handles[1::2],labels=arealabels[:2])
+    leg_lines = [Line2D([0], [0], color='black', linewidth=2, linestyle='-'),
+                Line2D([0], [0], color='black', linewidth=2, linestyle='--')]
+    leg_labels = ['Hits','Misses']
+    ax.legend(leg_lines, leg_labels, loc='center left', frameon=False, fontsize=9)
+    ax.add_artist(firstlegend)
+
+    ax.set_ylabel('Decoding performance')
+    ax.set_xlabel('Position relative to stim (cm)')
+    add_stim_resp_win(ax)
+    ax.set_xticks([-50,-25,0,25,50,75])
+    ax.set_ylim([ylow,ymax])
+    ax.set_xlim([-50,75])
+
+    # for ibin, bincenter in enumerate(sbins):
+    #     t,pval = ttest_rel(dec_perf[ibin,0,:],dec_perf[ibin,1,:],nan_policy='omit')
+    #     ax.text(bincenter, 0.9, '%s' % get_sig_asterisks(pval,return_ns=False), color='k', ha='center', fontsize=12)
+    
+    ax = axes[1]
+    ax.plot([0,1],statdata[:2,0,:],color='k',linewidth=0.25)
+    ax.scatter(np.zeros(nSessions),statdata[0,0,:],color='k',marker='.',s=markersize)
+    ax.scatter(np.ones(nSessions),statdata[1,0,:],color='k',marker='.',s=markersize)
+    ax.scatter([0,1],np.nanmean(statdata[:2,0,:],axis=1),color=clrs_arealabels[:2],marker='o',s=markersize*2,zorder=10)
+    ax.errorbar([0,1],np.nanmean(statdata[:2,0,:],axis=1),np.nanstd(statdata[:2,0,:],axis=1)/np.sqrt(nSessions),
+                color='k',capsize=0,elinewidth=2,zorder=0)
+    
+    ax.plot([2,3],statdata[:2,1,:],color='k',linewidth=0.25)
+    ax.scatter(np.zeros(nSessions)+2,statdata[0,1,:],color='k',marker='.',s=markersize)
+    ax.scatter(np.ones(nSessions)+2,statdata[1,1,:],color='k',marker='.',s=markersize)
+    ax.scatter([2,3],np.nanmean(statdata[:2,1,:],axis=1),color=clrs_arealabels[:2],marker='o',s=markersize*2,zorder=10)
+    ax.errorbar([2,3],np.nanmean(statdata[:2,1,:],axis=1),np.nanstd(statdata[:2,1,:],axis=1)/np.sqrt(nSessions),
+                color='k',capsize=0,elinewidth=2,zorder=0)
+
+    t,pval = ttest_rel(statdata[0,0,:],statdata[1,0,:],nan_policy='omit')
+    ax.text(0.5, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=True), color='k', ha='center', fontsize=12)
+
+    t,pval = ttest_rel(statdata[0,1,:],statdata[1,1,:],nan_policy='omit')
+    ax.text(2.5, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=True), color='k', ha='center', fontsize=12)
+
+    # ax.set_xticks([0,1,2,3],np.tile(arealabels[:2],2),fontsize=7)
+    ax.set_xticks([0.5,2.5],['Misses','Hits'],fontsize=7)
+
+    ax.axhline(ychance,color='k',linestyle='--',linewidth=1)
+    ax.text(1.5, ychance-0.05, 'Chance', color='gray', ha='center', fontsize=8)
+    ax.set_xlim([-0.3,3.3])
+
+    ax = axes[2]
+    handles = []
+    for ial, arealabel in enumerate(arealabels[2:]):
+        idx = ial + 2
+        for ilr in range(2):
+            handles.append(shaded_error(sbins,dec_perf[:,idx,ilr,:].T,color=clrs_arealabels[idx],
+                                    linestyle=['--','-'][ilr],alpha=0.25,linewidth=1.5,error='sem',ax=ax))
+        #   for ises in range(nSessions):
+            # ax.plot(sbins,dec_perf[:,idx,ises],color=clrs_arealabels[idx],linewidth=0.2)
+
+    # for ibin, bincenter in enumerate(sbins):
+    #     t,pval = ttest_rel(dec_perf[ibin,2,:],dec_perf[ibin,3,:],nan_policy='omit')
+    #     ax.text(bincenter, 0.9, '%s' % get_sig_asterisks(pval,return_ns=False), color='k', ha='center', fontsize=12)
+    firstlegend = ax.legend(loc='upper left',fontsize=9,frameon=False,handles=handles[1::2],labels=arealabels[2:])
+    leg_lines = [Line2D([0], [0], color='black', linewidth=2, linestyle='-'),
+                Line2D([0], [0], color='black', linewidth=2, linestyle='--')]
+    leg_labels = ['Hits','Misses']
+    ax.legend(leg_lines, leg_labels, loc='center left', frameon=False, fontsize=9)
+    ax.add_artist(firstlegend)
+    # ax.legend(loc='upper left',fontsize=9,frameon=False,handles=handles,labels=arealabels[2:])
+    ax.set_xlabel('Position relative to stim (cm)')
+    add_stim_resp_win(ax)
+    ax.set_xticks([-50,-25,0,25,50,75])
+    ax.set_xlim([-50,75])
+
+    ax = axes[3]
+    ax.plot([0,1],statdata[2:,0,:],color='k',linewidth=0.25)
+    ax.scatter(np.zeros(nSessions),statdata[2,0,:],color='k',marker='.',s=markersize)
+    ax.scatter(np.ones(nSessions),statdata[3,0,:],color='k',marker='.',s=markersize)
+    ax.scatter([0,1],np.nanmean(statdata[2:,0,:],axis=1),color=clrs_arealabels[2:],marker='o',s=markersize*2,zorder=10)
+    ax.errorbar([0,1],np.nanmean(statdata[2:,0,:],axis=1),np.nanstd(statdata[2:,0,:],axis=1)/np.sqrt(nSessions),
+                color='k',capsize=0,elinewidth=2,zorder=0)
+    
+    ax.plot([2,3],statdata[2:,1,:],color='k',linewidth=0.25)
+    ax.scatter(np.zeros(nSessions)+2,statdata[2,1,:],color='k',marker='.',s=markersize)
+    ax.scatter(np.ones(nSessions)+2,statdata[3,1,:],color='k',marker='.',s=markersize)
+    ax.scatter([2,3],np.nanmean(statdata[2:,1,:],axis=1),color=clrs_arealabels[2:],marker='o',s=markersize*2,zorder=10)
+    ax.errorbar([2,3],np.nanmean(statdata[2:,1,:],axis=1),np.nanstd(statdata[2:,1,:],axis=1)/np.sqrt(nSessions),
+                color='k',capsize=0,elinewidth=2,zorder=0)
+
+    t,pval = ttest_rel(statdata[2,0,:],statdata[3,0,:],nan_policy='omit')
+    ax.text(0.5, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=True), color='k', ha='center', fontsize=12)
+
+    t,pval = ttest_rel(statdata[2,1,:],statdata[3,1,:],nan_policy='omit')
+    ax.text(2.5, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=True), color='k', ha='center', fontsize=12)
+
+    # ax.set_xticks([0,1,2,3],np.tile(arealabels[2:],2),fontsize=7)
+    ax.set_xticks([0.5,2.5],['Misses','Hits'],fontsize=7)
+
+    ax.axhline(ychance,color='k',linestyle='--',linewidth=1)
+    ax.text(0.5, ychance-0.05, 'Chance', color='gray', ha='center', fontsize=8)
+    ax.set_xlim([-0.3,3.3])
+
+    sns.despine(offset=3,trim=True)
+
+    plt.tight_layout()
+    return fig
+
+####### #     #  #####  ####### ######  ### #     #  #####  
+#       ##    # #     # #     # #     #  #  ##    # #     # 
+#       # #   # #       #     # #     #  #  # #   # #       
+#####   #  #  # #       #     # #     #  #  #  #  # #  #### 
+#       #   # # #       #     # #     #  #  #   # # #     # 
+#       #    ## #     # #     # #     #  #  #    ## #     # 
+####### #     #  #####  ####### ######  ### #     #  #####  
 
 def get_enc_predictors(ses,ibin=0):
     X           = np.empty([len(ses.trialdata), 0])
@@ -541,7 +1077,13 @@ def enc_model_spatial_wrapper(ses,sbins,idx_N,idx_T,version='v20',modelname='Las
     
     return error, weights, y_hat, error_var
 
-
+######  #######  #####  ####### ######  ### #     #  #####  
+#     # #       #     # #     # #     #  #  ##    # #     # 
+#     # #       #       #     # #     #  #  # #   # #       
+#     # #####   #       #     # #     #  #  #  #  # #  #### 
+#     # #       #       #     # #     #  #  #   # # #     # 
+#     # #       #     # #     # #     #  #  #    ## #     # 
+######  #######  #####  ####### ######  ### #     #  #####  
 
 
 def get_dec_predictors(ses,ibin=0,nneuraldims=10):

@@ -234,7 +234,7 @@ def noise_to_psy(sessions,filter_engaged=True,bootstrap=False):
     return sessions
 
 
-def calc_runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+def calc_runPSTH(ses,s_pre = -75, s_post = 75, binsize = 5):
     """
     Parameters for spatial binning
 
@@ -261,7 +261,7 @@ def calc_runPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
     return runPSTH, bincenters
 
 
-def calc_lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+def calc_lickPSTH(ses,s_pre = -75, s_post = 75, binsize = 5):
     """
     Parameters for spatial binning
 
@@ -290,7 +290,7 @@ def calc_lickPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 
     return lickPSTH, bincenters
 
-def calc_videomePSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+def calc_videomePSTH(ses,s_pre = -75, s_post = 75, binsize = 5):
     """
     Parameters for spatial binning
 
@@ -315,7 +315,7 @@ def calc_videomePSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
                                                 ses.videodata['motionenergy'], statistic='mean', bins=binedges)[0]
     return videomePSTH, bincenters
 
-def calc_pupilPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
+def calc_pupilPSTH(ses,s_pre = -75, s_post = 75, binsize = 5):
     """
     Parameters for spatial binning
 
@@ -346,39 +346,42 @@ def calc_pupilPSTH(ses,s_pre = -80, s_post = 60, binsize = 5):
 def plot_lick_corridor_outcome(trialdata,lickPSTH,bincenters):
     ### Plot licking rate as a function of trial type:
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(4,2.5))
 
     ttypes = pd.unique(trialdata['trialOutcome'])
     # ttypes = ['CR', 'MISS', 'HIT','FA']
     colors = get_clr_outcome(ttypes)
-
+    ymax = 0
     for i,ttype in enumerate(ttypes):
         idx = trialdata['trialOutcome']==ttype
         data_mean = np.nanmean(lickPSTH[idx,:],axis=0)
         data_error = np.nanstd(lickPSTH[idx,:],axis=0) / math.sqrt(sum(idx))
+        # data_error = np.nanstd(lickPSTH[idx,:],axis=0)
+        ymax = np.max((ymax,my_ceil(np.nanmax(data_mean)*1.2,1)))
+
         ax.plot(bincenters,data_mean,label=ttype,color=colors[i],linewidth=2)
         ax.fill_between(bincenters, data_mean+data_error,  data_mean-data_error, alpha=.3, linewidth=0,color=colors[i])
 
     rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
     rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
 
-    ax.legend()
-    ax.set_ylim(0,1.5)
+    l = ax.legend(frameon=False,fontsize=9,loc='upper left')
+    for text, color in zip(l.get_texts(), colors):
+        text.set_color(color)
+
+    ax.set_ylim(0,ymax)
     ax.set_xlim(bincenters[0],bincenters[-1])
+    ax.set_xlim([-50,75])
     ax.set_xlabel('Position rel. to stimulus onset (cm)')
     ax.set_ylabel('Lick Rate (licks/cm)')
     # ax.fill_between([0,30], [0,50], [0,50],alpha=0.5)
-    ax.add_patch(matplotlib.patches.Rectangle((0,0),20,2, 
-                            fill = True, alpha=0.2,
-                            color = "blue",
-                            linewidth = 0))
-    ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,3, 
-                            fill = True, alpha=0.2,
-                            color = "grey",
-                            linewidth = 0))
+    add_stim_resp_win(ax)
+    ax.set_xticks([-50,-25,0,25,50,75])
 
-    plt.text(5, 1.4, 'Stim',fontsize=11)
-    plt.text(27, 1.4, 'Reward',fontsize=11)
+    ax.text(10, ymax-0.1, 'Stim\nZone',fontsize=9,ha='center')
+    ax.text(35, ymax-0.1, 'Rew.\nZone',fontsize=9,ha='center')
+    sns.despine(fig=fig, top=True, right=True,offset=3)
+
     plt.tight_layout()
 
     return fig
@@ -557,14 +560,7 @@ def plot_run_corridor_psy(trialdata,runPSTH,bincenters,version='signal',hitonly=
     ax.set_xlim(bincenters[0],bincenters[-1])
     ax.set_xlabel('Position rel. to stimulus onset (cm)')
     ax.set_ylabel('Running speed (cm/s)')
-    ax.add_patch(matplotlib.patches.Rectangle((0,0),20,50, 
-                            fill = True, alpha=0.2,
-                            color = "blue",
-                            linewidth = 0))
-    ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,50, 
-                            fill = True, alpha=0.2,
-                            color = "grey",
-                            linewidth = 0))
+    add_stim_resp_win(ax)
 
     plt.text(5, 45, 'Stim',fontsize=11)
     plt.text(27, 45, 'Reward',fontsize=11)
@@ -575,7 +571,7 @@ def plot_run_corridor_psy(trialdata,runPSTH,bincenters,version='signal',hitonly=
 def plot_run_corridor_outcome(trialdata,runPSTH,bincenters,plot_mean=True,plot_trials=False):
     ### Plot licking rate as a function of trial type:
 
-    fig, ax = plt.subplots(figsize=(4,3))
+    fig, ax = plt.subplots(figsize=(4,2.5))
     
     ttypes = pd.unique(trialdata['trialOutcome'])
     colors = get_clr_outcome(ttypes)
@@ -596,28 +592,26 @@ def plot_run_corridor_outcome(trialdata,runPSTH,bincenters,plot_mean=True,plot_t
     rewzonestart = np.mean(trialdata['rewardZoneStart'] - trialdata['stimStart'])
     rewzonelength = np.mean(trialdata['rewardZoneEnd'] - trialdata['rewardZoneStart'])
 
-    ax.legend(frameon=False,fontsize=8,loc='upper left')
+    l = ax.legend(frameon=False,fontsize=9,loc='lower left')
+    for text, color in zip(l.get_texts(), colors):
+        text.set_color(color)
+
+    ax.set_xlim([-50,75])
+
     if plot_trials:
         ylim = my_ceil(np.nanmax(runPSTH),-1)
     else:
         ylim = my_ceil(np.nanmax(data_mean),-1)
 
-    ax.set_xlim(bincenters[0],bincenters[-1])
     ax.set_xlabel('Position rel. to stimulus onset (cm)')
     ax.set_ylabel('Running speed (cm/s)')
-    ax.add_patch(matplotlib.patches.Rectangle((0,0),20,50, 
-                            fill = True, alpha=0.2,
-                            color = "blue",
-                            linewidth = 0))
-    ax.add_patch(matplotlib.patches.Rectangle((rewzonestart,0),rewzonelength,50, 
-                            fill = True, alpha=0.2,
-                            color = "grey",
-                            linewidth = 0))
+    add_stim_resp_win(ax)
     ax.set_ylim(0,ylim)
-    plt.text(3, ylim-3, 'Stim',fontsize=10)
-    plt.text(rewzonestart+3, ylim-3, 'Rew',fontsize=10)
+
+    ax.text(10, ylim-3, 'Stim\nZone',fontsize=9,ha='center')
+    ax.text(35, ylim-3, 'Rew.\nZone',fontsize=9,ha='center')
+    sns.despine(fig=fig, top=True, right=True,offset=3)
     plt.tight_layout()
-    plt.title(trialdata['session_id'][0],fontsize=10)
     return fig
 
 def stim_remapping(sessions):

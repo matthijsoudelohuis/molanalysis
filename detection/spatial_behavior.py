@@ -85,20 +85,48 @@ sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
+report_sessions(sessions)
+
 #%% #################### Define the stimulus window ############################
-s_min       = -5   #cm, start of stimulus window
-s_max       = 15
+s_min       = 0   #cm, start of stimulus window
+s_max       = 20
 sbinsize    = 5
 
 #%% #################### Compute spatial runspeed ####################################
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Computing spatial PSTHs'): # running across the trial:
-    sessions[ises].behaviordata['runspeed']     = medfilt(sessions[ises].behaviordata['runspeed'], kernel_size=51)
+    # sessions[ises].behaviordata['runspeed']     = medfilt(sessions[ises].behaviordata['runspeed'], kernel_size=51)
     [sessions[ises].runPSTH,bincenters]         = calc_runPSTH(sessions[ises],binsize=sbinsize)
     sessions[ises].trialdata['runspeed_stim']   = np.mean(sessions[ises].runPSTH[:,(bincenters>=s_min) & (bincenters<=s_max)],axis=1)
     [sessions[ises].pupilPSTH,bincenters]       = calc_pupilPSTH(sessions[ises],binsize=sbinsize)
     [sessions[ises].videomePSTH,bincenters]     = calc_videomePSTH(sessions[ises],binsize=sbinsize)
     [sessions[ises].lickPSTH,bincenters]        = calc_lickPSTH(sessions[ises],binsize=sbinsize)
     sessions[ises].trialdata['lickrate_stim']   = np.mean(sessions[ises].lickPSTH[:,(bincenters>=s_min) & (bincenters<=s_max)],axis=1)
+
+
+#%% Get super average of licking rate and running speed:
+trialdata   = pd.concat([ses.trialdata for ses in sessions]).reset_index(drop=True)
+lickPSTH    = np.concatenate([ses.lickPSTH for ses in sessions],axis=0)
+runPSTH     = np.concatenate([ses.runPSTH for ses in sessions],axis=0)
+
+idx_T       = trialdata['engaged']==1 #trialdata['stimcat'] == 'C'
+
+fig = plot_lick_corridor_outcome(trialdata[idx_T],lickPSTH[idx_T,:],bincenters)
+# fig = plot_lick_corridor_outcome(trialdata,lickPSTH,bincenters)
+fig.savefig(os.path.join(savedir,'Performance','LickRate_Outcome_Engaged_%dsessions'  %  nSessions + '.png'), format = 'png')
+
+# fig = plot_run_corridor_outcome(trialdata,runPSTH,bincenters)
+fig = plot_run_corridor_outcome(trialdata[idx_T],runPSTH[idx_T,:],bincenters)
+fig.savefig(os.path.join(savedir,'Performance','Runspeed_Outcome_Engaged_%dsessions' %  nSessions + '.png'), format = 'png')
+
+#%% 
+
+
+
+
+
+
+
+
 
 #%% Show histograms of running speed during the stimulus window:
 speedres    = 2.5 #cm/s bins
@@ -351,7 +379,7 @@ for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across session
             # X[np.isnan(X)] = 0
 
             # Calculate the average decoding performance across folds
-            performance[ises,ibin] = my_classifier_wrapper(X,y,model_name='LOGR',kfold=kfold,lam=optimal_lambda,norm_out=True)
+            performance[ises,ibin],_,_,_ = my_decoder_wrapper(X,y,model_name='LOGR',kfold=kfold,lam=optimal_lambda,norm_out=True)
 
 #%% Show the decoding performance
 fig,ax = plt.subplots(1,1,figsize=(4,3))

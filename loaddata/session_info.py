@@ -155,12 +155,12 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                 # FILTER DATA TO ONLY LOAD DATA FROM SPECIFIED AREAS
                 if sesflag and filter_areas is not None and hasattr(ses, 'celldata'):
                     cellfilter = np.isin(ses.celldata['roi_name'],filter_areas)
-                    ses.cellfilter = np.logical_and(getattr(ses, 'cellfilter', True), cellfilter)
-                
+                    ses.cellfilter = np.logical_and(ses.cellfilter, cellfilter) if getattr(ses, 'cellfilter', None) is not None else cellfilter
+
                 # FILTER DATA TO ONLY LOAD DATA BELOW NOISE LEVEL 20 (rupprecht et al. 2021)
                 if sesflag and filter_noiselevel and hasattr(ses, 'celldata'):
                     cellfilter = ses.celldata['noise_level']<20
-                    ses.cellfilter = np.logical_and(getattr(ses, 'cellfilter', True), cellfilter)
+                    ses.cellfilter = np.logical_and(ses.cellfilter, cellfilter) if getattr(ses, 'cellfilter', None) is not None else cellfilter
                 
                 # SELECT BASED ON WHETHER SESSION HAS PUPIL DATA MEASUREMENTS
                 if sesflag and has_pupil:
@@ -174,7 +174,6 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
     # report_sessions(sessions)
 
     return sessions, len(sessions)
-
 
 def report_sessions(sessions):
     """
