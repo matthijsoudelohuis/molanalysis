@@ -47,16 +47,14 @@ session_list = np.array([['LPE11997', '2024_04_16'],
                          ['LPE11622', '2024_02_21'],
                          ['LPE11998', '2024_04_30'],
                          ['LPE12013','2024_04_25']])
-# session_list = np.array([['LPE10884', '2023_12_14']])
-# session_list = np.array([['LPE10884', '2023_12_14']])
 # session_list        = np.array([['LPE12013','2024_04_25']])
 # session_list        = np.array([['LPE12013','2024_04_26']])
 
-# sessions,nSessions = load_sessions(protocol,session_list,load_behaviordata=True,load_videodata=False,
-#                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
-
-sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
+sessions,nSessions = filter_sessions(protocols=protocol,only_session_id=session_list,load_behaviordata=True,load_videodata=False,
                          load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
+
+# sessions,nSessions = filter_sessions(protocols=protocol,load_behaviordata=True,load_videodata=False,
+#                          load_calciumdata=True,calciumversion=calciumversion,min_cells=100) #Load specified list of sessions
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Detection\\Encoding\\')
 
@@ -67,8 +65,8 @@ for i in range(nSessions):
 #%% ############################### Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
 ## Parameters for spatial binning
-s_pre       = -80  #pre cm
-s_post      = 80   #post cm
+s_pre       = -75  #pre cm
+s_post      = 75   #post cm
 binsize     = 10     #spatial binning in cm
 
 for i in range(nSessions):
@@ -114,19 +112,96 @@ for iN in np.where(np.isin(sessions[ises].celldata['cell_id'],example_cell_ids))
     plot_snake_neuron_sortnoise(sessions[ises].stensor[iN,:,:],sbins,sessions[ises])
     plt.suptitle(sessions[ises].celldata['cell_id'][iN],fontsize=16,y=0.96)
 
-
 #%%
 # example_cell_ids = np.random.choice(sessions[0].celldata['cell_id'],size=8,replace=False)
 # example_cell_ids = ['LPE12385_2024_06_15_0_0126',
 # 'LPE12385_2024_06_15_0_0075']
+ises = 1
+example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
 
 fig = plot_mean_activity_example_neurons(sessions[ises].stensor,sbins,sessions[ises],example_cell_ids)
 fig.savefig(os.path.join(savedir,'ExampleNeuronActivity_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png',bbox_inches='tight')
 
+#%% 
 
 
 
-# for ises, ses in tqdm(enumerate(sessions),desc='Decoding response across sessions'):
+#%% 
+
+
+#%% 
+# plt.plot(plotcenters,np.nanmean(data_sig_mean,axis=0),color='k')
+ises = 4
+example_cell_ids = get_example_cells(sessions[ises].sessiondata['session_id'][0])
+# example_cell_ids = np.array(example_cell_ids)[np.array([8,21,33,37,5])]
+# example_cell_ids = np.array(example_cell_ids)[np.array([32,36,20,5])]
+nexampleneurons = len(example_cell_ids)
+
+lickresp        = [0,1]
+D               = len(lickresp)
+
+import matplotlib as mpl
+mpl.rcParams['xtick.labelsize'] = 9 # must be place before the actual plot creation
+
+plotlabels      = ['miss','hit']
+
+
+sigtype     = 'signal'
+zmin        = 5
+zmax        = 20
+nbins_noise = 3
+
+# markerstyles    = ['o','o']
+zmin = np.min(sessions[ises].trialdata['signal'][sessions[ises].trialdata['stimcat']=='N'])
+zmax = np.max(sessions[ises].trialdata['signal'][sessions[ises].trialdata['stimcat']=='N'])
+data_mean_hitmiss,plotcenters = get_mean_signalbins([sessions[ises]],sigtype,nbins_noise,zmin,zmax,
+                                                splithitmiss=True,min_ntrials=1)
+
+C = len(plotcenters)
+plotcolors = sns.color_palette("inferno",C)
+
+# plotcolors = [sns. sns.color_palette("inferno",C)
+plotcolors = ['black']  # Start with black
+plotcolors += sns.color_palette("magma", n_colors=nbins_noise)  # Add 5 colors from the magma palette
+plotcolors.append('orange')  # Add orange at the end
+plothandles = ['catch','sub','thr','sup','max']
+# plothandles = ['catch','sub','thr','sup','sup','max']
+# plothandles = ['catch','sub','sub','thr','sup','sup','max']
+
+plotlocs        = np.arange(np.shape(data_mean_hitmiss)[1])
+
+fig,axes = plt.subplots(1,nexampleneurons,figsize=(nexampleneurons*2,2),sharey=True,sharex=True)
+
+for iN,cell_id in enumerate(example_cell_ids):
+    ax = axes[iN]
+    idx_N = np.where(sessions[ises].celldata['cell_id']==cell_id)[0]
+
+    for ilr,lr in enumerate(lickresp):
+        ax.plot(plotlocs,np.squeeze(data_mean_hitmiss[idx_N,:,ilr]),color='k',linestyle=['--','-'][ilr], 
+                 marker='.',markersize=0,label=plotlabels[ilr],linewidth=2)
+        for iC in range(C):
+            ax.plot(plotlocs[iC],np.squeeze(data_mean_hitmiss[idx_N,iC,ilr]),color=plotcolors[iC], 
+                     marker='.',markersize=15,label=plotlabels[ilr],linewidth=0)
+            # ax.errorbar(plotlocs[iC],np.squeeze(data_mean_hitmiss[idx_N,iC,ilr]),
+    
+    if iN ==0:
+        ax.legend([plt.Line2D([0], [0], color='k', lw=2, linestyle='-'),
+              plt.Line2D([0], [0], color='k', lw=2, linestyle='--')], 
+              ['hit','miss'], loc='best', fontsize=9, frameon=False)
+    ax.set_xticks(np.arange(C),plothandles,fontsize=7,rotation=45)
+    # ax.set_ylim([ax.get_ylim()[0]|,ax.get_ylim()[1]*1.2])
+    ax.set_ylim([ax.get_ylim()[0],np.nanmax(data_mean_hitmiss[np.isin(sessions[ises].celldata['cell_id'],example_cell_ids),:,:])*1.2])
+    # ax.legend(plotlabels,loc='upper left',fontsize=11,frameon=False,reverse=True)
+        # plt.plot(plotcenters,np.nanmean(data_mean_hitmiss[:,0],axis=0),color='k')
+    if iN==0:
+        # ax.set_xlabel('Signal Strength (%)')
+        ax.set_ylabel('Mean Activity (z)')
+    # ax.set_ylim([-0.05,0.55])
+    # ax.set_title(siglabels[sig])
+sns.despine(offset=2,trim=True)
+# plt.suptitle('Mean activity of example neurons')
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.savefig(os.path.join(savedir, 'MeanActivity_ExampleNeurons_NoiseTuning_%s.png') % (sessions[ises].sessiondata['session_id'][0]), format='png')
 
 #%% 
 nspatbins   = len(sbins)
