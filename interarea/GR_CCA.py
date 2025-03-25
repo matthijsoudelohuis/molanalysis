@@ -34,6 +34,8 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\CCA\\GR\\'
 #%% 
 session_list        = np.array([['LPE09665','2023_03_21'], #GR
                                 ['LPE10919','2023_11_06']]) #GR
+# session_list        = np.array([['LPE09665','2023_03_21'], #GR
+                                # ['LPE10919','2023_11_06']]) #GR
 
 sessions,nSessions   = filter_sessions(protocols = 'GR',only_session_id=session_list)
 
@@ -44,7 +46,7 @@ calciumversion = 'deconv'
 
 for ises in range(nSessions):
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion=calciumversion,keepraw=False)
+                                calciumversion=calciumversion,keepraw=True)
     
     # detrend(sessions[ises].calciumdata,type='linear',axis=0,overwrite_data=True)
     # sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.2,uppertriangular=False)[0]
@@ -125,7 +127,7 @@ for ises in range(nSessions):
         DATA1               = resp_res[idx_V1,:]
         DATA2               = resp_res[idx_PM,:]
 
-        corr_test[ises,i],corr_train[ises,i] = CCA_sample_2areas_v3(DATA1,DATA2,resamples=5,kFold=5,prePCA=25)
+        corr_test[ises,i],corr_train[ises,i] = CCA_subsample_1dim(DATA1,DATA2,resamples=5,kFold=5,prePCA=25)
 
 fig,ax = plt.subplots(figsize=(3,3))
 shaded_error(oris,corr_test,error='std',color='blue',ax=ax)
@@ -154,10 +156,22 @@ corr = np.corrcoef(X_c[:,0],Y_c[:,0], rowvar = False)[0,1]
 plt.figure()
 plt.scatter(X_c, Y_c)
 
+#%%
+plt.figure()
+plt.scatter(X_c, Xp_1[0,:])
+
+
+
 #%% 
 
 areas = ['V1','PM','AL','RSP']
 nareas = len(areas)
+
+
+areas = ['V1','PM']
+nareas = len(areas)
+
+#%% 
 sessions,nSessions   = filter_sessions(protocols = 'GR',only_all_areas=areas)
 
 #%%  Load data properly:        
@@ -168,51 +182,32 @@ for ises in range(nSessions):
     
 
 #%% 
-oris            = np.sort(sessions[ises].trialdata['Orientation'].unique())
 
-nOris = 16
-# corr_test = np.zeros((nSessions,nOris))
-# corr_train = np.zeros((nSessions,nOris))
-# for ises in range(nSessions):
-#     # get signal correlations:
-#     [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+#To improve: run multiple iterations, subsampling different neurons / trials
+# show errorbars across sessions
 
-#     oris            = np.sort(sessions[ises].trialdata['Orientation'].unique())
-#     ori_counts      = sessions[ises].trialdata.groupby(['Orientation'])['Orientation'].count().to_numpy()
-#     assert(len(ori_counts) == 16 or len(ori_counts) == 8)
+oris                = np.sort(sessions[ises].trialdata['Orientation'].unique())
+nOris               = len(oris)
 
-#     idx_V1 = sessions[ises].celldata['roi_name']=='V1'
-#     idx_PM = sessions[ises].celldata['roi_name']=='PM'
+nSessions           = len(sessions)
 
-#     for i,ori in enumerate(oris): # loop over orientations 
-#         ori_idx             = sessions[ises].trialdata['Orientation']==ori
-#         resp_meanori        = np.nanmean(sessions[ises].respmat[:,ori_idx],axis=1,keepdims=True)
-#         resp_res            = sessions[ises].respmat[:,ori_idx] - resp_meanori
-        
-#         ## Split data into area 1 and area 2:
-#         DATA1               = resp_res[idx_V1,:]
-#         DATA2               = resp_res[idx_PM,:]
+CC1_to_var_labels       = ['test trials','pop. rate','global PC1','locomotion','videoME']
 
-#         corr_test[ises,i],corr_train[ises,i] = CCA_sample_2areas_v3(DATA1,DATA2,resamples=5,kFold=5,prePCA=25)
-# nSessions       = 1
-# oris            = [0,90]
-nSessions       = len(sessions)
-
-corr_CC1_poprate    = np.empty((nareas,nareas,nOris,2,nSessions))
-corr_CC1_PC1        = np.empty((nareas,nareas,nOris,2,nSessions))
-corr_CC1_run        = np.empty((nareas,nareas,nOris,2,nSessions))
+nvars                    = len(CC1_to_var_labels)
+corr_CC1_vars            = np.full((nareas,nareas,nOris,2,nvars,nSessions),np.nan)
 
 areapairmat = np.empty((nareas,nareas),dtype='object')
 for ix,areax in enumerate(areas):
     for iy,areay in enumerate(areas):
         areapairmat[ix,iy] = areax + '-' + areay
+nareapairs = nareas**2
 
-Nsub = 50
+Nsub        = 250 #how many neurons to subsample from each area
+prePCA      = 25 #perform dim reduc before fitting CCA, otherwise overfitting
 
 model_CCA = CCA(n_components = 1,scale = False, max_iter = 1000)
 model_PCA = PCA(n_components = 1)
 
-# CC1data = np.empty((nareas,nareas,nOris,2,nSessions))
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA dim1'):    # iterate over sessions
     # get signal correlations:
     [N,K]           = np.shape(ses.respmat) #get dimensions of response matrix
@@ -223,106 +218,236 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA dim1'
     gPC1            = model_PCA.fit_transform(zmat).squeeze()
 
     for iori,ori in enumerate(oris): # loop over orientations 
+        idx_T               = ses.trialdata['Orientation']==ori
         for ix,areax in enumerate(areas):
             for iy,areay in enumerate(areas):
-                idx_N_x             = ses.celldata['roi_name']==areax
-                idx_N_y             = ses.celldata['roi_name']==areay
 
-                N1                  = np.sum(idx_N_x)
-                N2                  = np.sum(idx_N_y)
+                idx_areax           = np.where(ses.celldata['roi_name']==areax)[0]
+                idx_areay           = np.where(ses.celldata['roi_name']==areay)[0]
 
-                idx_T               = ses.trialdata['Orientation']==ori
+                # N1                  = np.sum(idx_areax)
+                # N2                  = np.sum(idx_areay)
 
-                ori_idx             = sessions[ises].trialdata['Orientation']==ori
-                resp_meanori        = np.nanmean(sessions[ises].respmat[:,ori_idx],axis=1,keepdims=True)
-                resp_res            = sessions[ises].respmat[:,ori_idx] - resp_meanori
+                idx_areax_sub       = np.random.choice(idx_areax,np.min((np.sum(idx_areax),Nsub)),replace=False)
+                idx_areay_sub       = np.random.choice(idx_areay[~np.isin(idx_areay,idx_areax_sub)],np.min((np.sum(idx_areay),Nsub)),replace=False)
+
+                X                   = sessions[ises].respmat[np.ix_(idx_areax_sub,idx_T)].T
+                Y                   = sessions[ises].respmat[np.ix_(idx_areay_sub,idx_T)].T
                 
-                resp_res = resp_res.T
-                # ## Split data into area 1 and area 2:
-                # DATA1               = resp_res[idx_V1,:]
-                # DATA2               = resp_res[idx_PM,:]
+                X                   = zscore(X,axis=0)  #Z score activity for each neuron
+                Y                   = zscore(Y,axis=0)
 
-                ## Split data into area 1 and area 2:
-                # DATA1               = resp_res[np.ix_(idx_T,idx_N_x)]
-                # DATA2               = resp_res[np.ix_(idx_T,idx_N_y)]
-
-                ## Split data into area 1 and area 2:
-                DATA1               = resp_res[:,idx_N_x]
-                DATA2               = resp_res[:,idx_N_y]
-
-                # DATA1               = ses.respmat[np.ix_(idx_N_x,idx_T)].T
-                # DATA2               = ses.respmat[np.ix_(idx_N_y,idx_T)].T
-
-                # DATA1               = zmat[np.ix_(idx_T,idx_N_x)]
-                # DATA2               = zmat[np.ix_(idx_T,idx_N_y)]
-
-                # corr_test[ises,i],corr_train[ises,i] = CCA_sample_2areas_v3(DATA1,DATA2,resamples=5,kFold=5,prePCA=25)
-
-                # randtimepoints = np.random.choice(K,nK,replace=False)
-                X = DATA1[:,np.random.choice(N1,np.min((N1,Nsub)),replace=False)]
-                Y = DATA2[:,np.random.choice(N2,np.min((N2,Nsub)),replace=False)]
-                # Y = DATA2[np.ix_(randtimepoints,np.random.choice(N2,nN,replace=False))]
-
-                # X = np.reshape(X,(nN,-1),order='F').T #concatenate time bins from each trial and transpose (samples by features now)
-                # Y = np.reshape(Y,(nN,-1),order='F').T
-
-                # X = zscore(X,axis=0)  #Z score activity for each neuron
-                # Y = zscore(Y,axis=0)
-
+                if prePCA and Nsub>prePCA:
+                    prepca      = PCA(n_components=prePCA)
+                    X           = prepca.fit_transform(X)
+                    Y           = prepca.fit_transform(Y)
+                    
                 # Compute and store canonical correlations for the first pair
                 X_c, Y_c = model_CCA.fit_transform(X,Y)
 
-                # np.corrcoef(X_c[:,0],Y_c[:,0])[0,1]
+                # corr_CC1[ix,iy,iori,0,ises] = np.corrcoef(X_c[:,0],Y_c[:,0])[0,1]
+                [corr_CC1_vars[ix,iy,iori,0,0,ises],_] = CCA_subsample_1dim(X.T,Y.T,resamples=5,kFold=5,prePCA=None)
 
-                corr_CC1_run[ix,iy,iori,0,ises] = np.corrcoef(X_c[:,0],ses.respmat_runspeed[idx_T])[0,1]
-                corr_CC1_run[ix,iy,iori,1,ises] = np.corrcoef(Y_c[:,0],ses.respmat_runspeed[idx_T])[0,1]
+                corr_CC1_vars[ix,iy,iori,0,1,ises] = np.corrcoef(X_c[:,0],poprate[idx_T])[0,1]
+                corr_CC1_vars[ix,iy,iori,1,1,ises] = np.corrcoef(Y_c[:,0],poprate[idx_T])[0,1]
 
-                corr_CC1_PC1[ix,iy,iori,0,ises] = np.corrcoef(X_c[:,0],gPC1[idx_T])[0,1]
-                corr_CC1_PC1[ix,iy,iori,1,ises] = np.corrcoef(Y_c[:,0],gPC1[idx_T])[0,1]
+                corr_CC1_vars[ix,iy,iori,0,2,ises] = np.corrcoef(X_c[:,0],gPC1[idx_T])[0,1]
+                corr_CC1_vars[ix,iy,iori,1,2,ises] = np.corrcoef(Y_c[:,0],gPC1[idx_T])[0,1]
 
-                corr_CC1_poprate[ix,iy,iori,0,ises] = np.corrcoef(X_c[:,0],poprate[idx_T])[0,1]
-                corr_CC1_poprate[ix,iy,iori,1,ises] = np.corrcoef(Y_c[:,0],poprate[idx_T])[0,1]
+                corr_CC1_vars[ix,iy,iori,0,3,ises] = np.corrcoef(X_c[:,0],ses.respmat_runspeed[idx_T])[0,1]
+                corr_CC1_vars[ix,iy,iori,1,3,ises] = np.corrcoef(Y_c[:,0],ses.respmat_runspeed[idx_T])[0,1]
 
-#%% 
-data = np.nanmean(corr_CC1_run,axis=(2,3,4))
-# data = np.nanmean(np.abs(corr_CC1_run),axis=(2,3,4))
-
-fig, axes = plt.subplots(1,3,figsize=(9,3))
-ax = axes[0]
-ax.imshow(data,cmap='bwr',clim=(-1,1))
-ax.set_xticks(np.arange(0,nareas))
-ax.set_xticklabels(areas)
-ax.set_yticks(np.arange(0,nareas))
-ax.set_yticklabels(areas)
-# fig.colorbar(ax.images[0], ax=ax)
-
-ax = axes[1]
-data = np.nanmean(corr_CC1_PC1,axis=(2,3,4))
-ax.imshow(data,cmap='bwr',clim=(-1,1))
-ax.set_xticks(np.arange(0,nareas))
-ax.set_xticklabels(areas)
-ax.set_yticks(np.arange(0,nareas))
-ax.set_yticklabels(areas)
-# fig.colorbar(ax.images[0], ax=ax)
-
-data = np.nanmean(corr_CC1_poprate,axis=(2,3,4))
-
-ax = axes[2]
-ax.imshow(data,cmap='bwr',clim=(-1,1))
-ax.set_xticks(np.arange(0,nareas))
-ax.set_xticklabels(areas)
-ax.set_yticks(np.arange(0,nareas))
-ax.set_yticklabels(areas)
-fig.colorbar(ax.images[0], ax=ax)
+                corr_CC1_vars[ix,iy,iori,0,4,ises] = np.corrcoef(X_c[:,0],sessions[0].respmat_videome[idx_T])[0,1]
+                corr_CC1_vars[ix,iy,iori,1,4,ises] = np.corrcoef(Y_c[:,0],sessions[0].respmat_videome[idx_T])[0,1]
 
 #%% 
-data = np.nanmean(corr_CC1_run,axis=(2,3))
-data = np.transpose(data,(2,0,1)).reshape((nSessions,-1))
+#function to add colorbar for imshow data and axis
+def add_colorbar_outside(im,ax):
+    fig = ax.get_figure()
+    bbox = ax.get_position() #bbox contains the [x0 (left), y0 (bottom), x1 (right), y1 (top)] of the axis.
+    width = 0.01
+    eps = 0.01 #margin between plot and colorbar
+    # [left most position, bottom position, width, height] of color bar.
+    cax = fig.add_axes([bbox.x1 + eps, bbox.y0, width, bbox.height])
+    cbar = fig.colorbar(im, cax=cax)
+    return cbar
 
-fig, axes = plt.subplots(1,1,figsize=(9,3))
+#%% 
+fig, axes = plt.subplots(1,nvars,figsize=(nvars*3,3),sharex=True,sharey=True)
+for ivar,var in enumerate(CC1_to_var_labels):
+    ax = axes[ivar]
+    data = np.nanmean(corr_CC1_vars[:,:,:,:,ivar,:],axis=(2,3,4))
+
+    ax.imshow(data,cmap='bwr',clim=(-1,1))
+    ax.set_xticks(np.arange(0,nareas))
+    ax.set_xticklabels(areas)
+    ax.set_yticks(np.arange(0,nareas))
+    ax.set_yticklabels(areas)
+    ax.set_title(var)
+cbar = add_colorbar_outside(ax.images[0],ax)
+cbar.set_label('Correlation', rotation=90, labelpad=-40)
+fig.suptitle('CC1 correlation to:')
+# plt.tight_layout()
+plt.savefig(os.path.join(savedir,'CC1_CorrVars_Heatmap_V1PM_%dsessions.png' % nSessions),
+             bbox_inches='tight',  format = 'png')
+
+#%% 
+colorvars                = sns.color_palette("husl",nvars)
+
+fig, axes = plt.subplots(1,1,figsize=(4,4))
 ax = axes
-apflat = areapairmat.flatten()
-nareapairs = nareas*(nareas-1)/2
-# plt.nanmean(data,axis=1)
-ax.plot(np.arange(len(apflat)),np.nanmean(data,axis=0))
-ax.set_xticks(np.arange(len(apflat)),apflat)
+for ivar,var in enumerate(CC1_to_var_labels):
+    data = np.nanmean(corr_CC1_vars[:,:,:,:,ivar,:],axis=(2,3,4))
+    ax.plot(np.arange(nareapairs),data.flatten(),color=colorvars[ivar],linewidth=1.5)
+    ax.set_xticks(np.arange(nareapairs),areapairmat.flatten())
+ax.set_ylim([0,1])
+ax.set_yticks([0,0.25,0.5,0.75,1])
+ax.legend(CC1_to_var_labels,frameon=False,fontsize=10,loc='lower left')
+ax.set_title('CC1 correlation to:')
+ax.set_xlabel('Area pairs')
+ax.set_ylabel('CC1 correlation with\n variable of interest')
+# plt.tight_layout()
+plt.savefig(os.path.join(savedir,'CC1_CorrVars_Lineplot_V1PM_%dsessions.png' % nSessions),
+             bbox_inches='tight',  format = 'png')
+
+
+#%% 
+oris                = np.sort(sessions[ises].trialdata['Orientation'].unique())
+nOris               = len(oris)
+nSessions           = len(sessions)
+
+
+#%%
+
+for ises,ses in enumerate(sessions):    # iterate over sessions
+    ses.celldata['labeled'] = np.where(ses.celldata['redcell']==1, 'lab', 'unl')
+    ses.celldata['arealabel'] = ses.celldata['roi_name'] + ses.celldata['labeled']
+
+#%%
+arealabels      = ['V1unl','V1lab','PMunl','PMlab']
+narealabels     = len(arealabels)
+ncells = np.empty((nSessions,narealabels))
+for i,ses in enumerate(sessions):
+    for ial, arealabel in enumerate(arealabels):
+        ncells[i,ial] = np.sum(ses.celldata['arealabel']==arealabel)
+plt.hist(ncells.flatten(),np.arange(0,1100,25))
+
+from utils.regress_lib import *
+
+
+#%% Parameters for decoding from size-matched populations of V1 and PM labeled and unlabeled neurons
+# arealabelpairs  = [['V1unl','PMunl'],
+#                    ['V1lab','PMunl'],
+#                    ['V1unl','PMlab'],
+#                    ['V1lab','PMlab']]
+
+arealabelpairs  = ['V1unl-PMunl',
+                    'V1unl-PMlab',
+                    'V1lab-PMunl',
+                    'V1lab-PMlab']
+
+clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
+
+# clrs_arealabels = get_clr_area_labeled(arealabels)
+narealabelpairs = len(arealabelpairs)
+
+nccadims            = 10
+
+kfold               = 5
+# lam             = 0.08
+# lam             = 1
+nmodelfits          = 5
+filter_nearby       = True
+
+CCA_corrtest            = np.full((narealabelpairs,nccadims,nOris,nSessions,nmodelfits),np.nan)
+
+model_CCA               = CCA(n_components = nccadims,scale = False, max_iter = 1000)
+
+prePCA                  = 25 #perform dim reduc before fitting CCA, otherwise overfitting
+
+nminneurons             = 15 #how many neurons in a population to include the session
+nsampleneurons          = 15
+
+regress_out_behavior = True
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA dim1'):    # iterate over sessions
+    # get signal correlations:
+    [N,K]           = np.shape(ses.respmat) #get dimensions of response matrix
+    for iori,ori in enumerate(oris): # loop over orientations 
+        idx_T               = ses.trialdata['Orientation']==ori
+        for iapl, arealabelpair in enumerate(arealabelpairs):
+            
+            alx,aly = arealabelpair.split('-')
+
+            if filter_nearby:
+                idx_nearby  = filter_nearlabeled(ses,radius=50)
+            else:
+                idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+
+            # idx_N       = np.all((ses.celldata['arealabel']==arealabel,
+            #                         ses.celldata['noise_level']<100,	
+            #                         idx_nearby),axis=0) 
+            idx_areax           = np.where(np.all((ses.celldata['arealabel']==alx,
+                                    ses.celldata['noise_level']<100,	
+                                    idx_nearby),axis=0))[0]
+            idx_areay           = np.where(np.all((ses.celldata['arealabel']==aly,
+                                    ses.celldata['noise_level']<100,	
+                                    idx_nearby),axis=0))[0]
+            # idx_areay           = np.where(ses.celldata['arealabel']==aly)[0]
+
+            if len(idx_areax)>nminneurons and len(idx_areay)>nminneurons:
+                for i in range(nmodelfits):
+
+                    idx_areax_sub       = np.random.choice(idx_areax,np.min((np.sum(idx_areax),nsampleneurons)),replace=False)
+                    idx_areay_sub       = np.random.choice(idx_areay[~np.isin(idx_areay,idx_areax_sub)],np.min((np.sum(idx_areay),nsampleneurons)),replace=False)
+
+                    X                   = sessions[ises].respmat[np.ix_(idx_areax_sub,idx_T)].T
+                    Y                   = sessions[ises].respmat[np.ix_(idx_areay_sub,idx_T)].T
+                    
+                    X   = zscore(X,axis=0)  #Z score activity for each neuron
+                    Y   = zscore(Y,axis=0)
+
+                    if prePCA and nsampleneurons>prePCA:
+                        prepca      = PCA(n_components=prePCA)
+                        X           = prepca.fit_transform(X)
+                        Y           = prepca.fit_transform(Y)
+
+                    # X = my_shuffle(X,method='random')
+                    B = np.stack((sessions[ises].respmat_videome[idx_T],
+                                      sessions[ises].respmat_runspeed[idx_T],
+                                      sessions[ises].respmat_pupilarea[idx_T]),axis=1)
+
+                    if regress_out_behavior:
+                        X   = regress_out_behavior_modulation(sessions[ises],B,X,rank=3,lam=0)
+                        Y   = regress_out_behavior_modulation(sessions[ises],B,Y,rank=3,lam=0)
+                        # Y   = regress_out_behavior_modulation(Y,sessions[ises].trialdata[idx_T],sessions[ises].trialdata['Orientation']==ori)
+
+
+                    [CCA_corrtest[iapl,:,iori,ises,i],_] = CCA_subsample(X.T,Y.T,resamples=5,kFold=5,prePCA=None,n_components=nccadims)
+
+#%%
+
+fig, axes = plt.subplots(1,1,figsize=(4,4))
+
+ax = axes
+
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax.plot(np.arange(nccadims),np.nanmean(CCA_corrtest[iapl,:,:,:,:],axis=(1,2,3)),
+            color=clrs_arealabelpairs[iapl],linewidth=2)
+# plt.plot(np.arange(nccadims),np.nanmean(CCA_corrtest[:,:,0,:,0],axis=(0,1,2)),color='k',linewidth=2)
+ax.set_xticks(np.arange(nccadims))
+ax.set_xticklabels(np.arange(nccadims)+1)
+ax.set_ylim([0,my_ceil(np.nanmax(np.nanmean(CCA_corrtest,axis=(2,3,4))),1)])
+# ax.set_yticks([0,ax.get_ylim()[1]])
+ax.set_yticks([0,ax.get_ylim()[1]/2,ax.get_ylim()[1]])
+ax.set_xlabel('CCA Dimension')
+ax.set_ylabel('Correlation')
+ax.legend(arealabelpairs,loc='upper right',frameon=False,fontsize=9)
+sns.despine(top=True,right=True,offset=3)
+# plt.savefig(os.path.join(savedir,'CCA_cvShuffleTestCorr_Dim_V1PM_LabUnl_%dsessions.png' % nSessions), format = 'png')
+# plt.savefig(os.path.join(savedir,'CCA_cvTestCorr_Dim_V1PM_LabUnl_%dsessions.png' % nSessions), 
+            # format = 'png', bbox_inches='tight')
+
+#%%
+
+# Make one for different number of neurons per population:

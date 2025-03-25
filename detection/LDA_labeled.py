@@ -353,10 +353,10 @@ fig.savefig(os.path.join(savedir,'LDAweights_HitMiss_%s_%dsessions.png' % (exp_l
 
 
 #%% 
-noise_level = 20
-exp_label = 'Decoding_proj_type'
-nmodelruns = 25
-subfrac = 0.5
+noise_level     = 20
+exp_label       = 'Decoding_proj_type'
+nmodelruns      = 25
+subfrac         = 0.5
 
 fig,axes = plt.subplots(1,nareas,figsize=(4*nareas,2.5))
 

@@ -144,7 +144,7 @@ def xval_rank(Y, X, lam, ranks, K=5):
 
     return Rsss_lm, Rsss_rrr
 
-def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2):
+def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2,lam=0.8):
     if X is None:
         X,Xlabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
 
@@ -154,7 +154,7 @@ def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2):
     assert X.shape[0] == Y.shape[0],'number of samples of calcium activity and interpolated behavior data do not match'
 
     ## LM model run
-    B_hat = LM(Y, X, lam=10)
+    B_hat = LM(Y, X, lam=lam)
 
     B_hat_rr = RRR(Y, X, B_hat, r=rank, mode='left')
     Y_hat_rr = X @ B_hat_rr
