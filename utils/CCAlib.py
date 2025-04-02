@@ -29,6 +29,9 @@ def CCA_subsample(DATA1,DATA2,nN=None,nK=None,resamples=5,kFold=5,prePCA=None,n_
     if nN is None:
         nN        = np.min((N1,N2)) #find common minimum number of neurons recorded
 
+    if prePCA and nN>prePCA:
+        n_components = prePCA
+
     if nK is None:
         nK        = np.floor(K/kFold  * (kFold-1)).astype('int') #find common minimum number of neurons recorded
         # nK        = K #find common minimum number of neurons recorded
@@ -47,8 +50,8 @@ def CCA_subsample(DATA1,DATA2,nN=None,nK=None,resamples=5,kFold=5,prePCA=None,n_
         X = DATA1[np.ix_(randtimepoints,np.random.choice(N1,nN,replace=False))]
         Y = DATA2[np.ix_(randtimepoints,np.random.choice(N2,nN,replace=False))]
 
-        X = zscore(X,axis=1)  #Z score activity for each neuron
-        Y = zscore(Y,axis=1)
+        X = zscore(X,axis=0)  #Z score activity for each neuron
+        Y = zscore(Y,axis=0)
 
         if prePCA and nN>prePCA:
             pca         = PCA(n_components=prePCA)

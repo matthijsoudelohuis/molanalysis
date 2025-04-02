@@ -175,6 +175,17 @@ def colored_line_between_pts(x, y, c, ax, **lc_kwargs):
 
     return ax.add_collection(lc)
 
+#function to add colorbar for imshow data and axis
+def add_colorbar_outside(im,ax):
+    fig = ax.get_figure()
+    bbox = ax.get_position() #bbox contains the [x0 (left), y0 (bottom), x1 (right), y1 (top)] of the axis.
+    width = 0.01
+    eps = 0.01 #margin between plot and colorbar
+    # [left most position, bottom position, width, height] of color bar.
+    cax = fig.add_axes([bbox.x1 + eps, bbox.y0, width, bbox.height])
+    cbar = fig.colorbar(im, cax=cax)
+    return cbar
+
 def plot_mean_stim_spatial(ses, sbins, labeled= ['unl','lab'], areas= ['V1','PM','AL','RSP']):
     nlabels     = 2
     nareas      = len(areas)

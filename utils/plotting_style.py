@@ -89,13 +89,21 @@ def get_clr_area_labelpairs(area_labelpairs):
     palette       = {'V1unl-V1unl': sns.xkcd_rgb['mint'],
         'V1unl-V1lab': sns.xkcd_rgb['light green'],
         'V1lab-V1lab': sns.xkcd_rgb['chartreuse'],
+        
         'PMunl-PMunl': sns.xkcd_rgb['lilac'],
         'PMunl-PMlab': sns.xkcd_rgb['orchid'],
         'PMlab-PMlab': sns.xkcd_rgb['plum'],
+        
         'V1unl-PMunl': sns.xkcd_rgb['tangerine'],
         'V1unl-PMlab': sns.xkcd_rgb['orange brown'],
-        'V1lab-PMunl': sns.xkcd_rgb['burnt orange'],
-        'V1lab-PMlab': sns.xkcd_rgb['crimson']}
+        'V1lab-PMunl': sns.xkcd_rgb['reddish orange'],
+        'V1lab-PMlab': sns.xkcd_rgb['crimson'],
+        
+        'PMunl-V1unl': sns.xkcd_rgb['dark sea green'],
+        'PMunl-V1lab': sns.xkcd_rgb['minty green'],
+        'PMlab-V1unl': sns.xkcd_rgb['teal blue'],
+        'PMlab-V1lab': sns.xkcd_rgb['true blue'],
+                    }
     
     return itemgetter(*area_labelpairs)(palette)
 
@@ -129,6 +137,31 @@ def get_clr_protocols(protocols):
                     'DP' : sns.xkcd_rgb['neon blue']
 }
     return itemgetter(*protocols)(palette)
+
+def get_clr_thrbins(Z):
+    """
+    Returns colors for threshold bins. The colors are chosen such that they are
+    sorted by increasing brightness. The first color is black, the last color is
+    orange.
+    ----------
+    Z : number of conditions (catch, max + nbins_noise).
+    -------
+    clrs_Z :         List of colors for the threshold bins.
+    labels_Z :         List of labels for the threshold bins.
+    """
+    # plotcolors = [sns. sns.color_palette("inferno",C)
+    clrs_Z = ['black']  # Start with black
+    clrs_Z += sns.color_palette("magma", n_colors=Z-2)  # Add 5 colors from the magma palette
+    clrs_Z.append('orange')  # Add orange at the end
+
+    if Z == 5: 
+        labels_Z = ['catch','sub','thr','sup','max']
+    elif Z == 6:
+        labels_Z = ['catch','sub','thr','sup','max']
+    elif Z == 7:
+        labels_Z = ['catch','imp','sub','thr','sup','sat','max']
+
+    return clrs_Z,labels_Z
 
 def get_clr_stimuli_vr(stimuli):
     stims           = ['A','B','C','D']

@@ -7,7 +7,7 @@ Preprocesses behavioral data, task and trial data, facial video data, calcium im
 """
 
 import os
-os.chdir('D:\\Python\\molanalysis')
+os.chdir('e:\\Python\\molanalysis')
 import numpy as np
 from loaddata.get_data_folder import *
 os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
@@ -24,7 +24,8 @@ date_filter         = ['2025_02_19']
 # date_filter        = ['2024_05_07']
 # date_filter        = ['2023_10_12']
 # animal_ids          = ['LPE09665', 'LPE11495', 'LPE11998', 'LPE12013'] #If empty than all animals in folder will be processed
-# animal_ids          = ['LPE10885'] #If empty than all animals in folder will be processed
+# animal_ids          = [] #If empty than all animals in folder will be processed
+date_filter        = []
 
 # animal_ids          = ['LPE11998'] #If empty than all animals in folder will be processed
 # date_filter         = ['2024_05_01']

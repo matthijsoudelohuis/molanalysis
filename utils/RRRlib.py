@@ -117,11 +117,12 @@ def xval_rank(Y, X, lam, ranks, K=5):
     # ranks = list(range(2,7)) # ranks to check
 
     ix = np.arange(Y.shape[0])
-    sp.random.shuffle(ix)
-    ix_splits = chunk(ix,K)
+    np.random.shuffle(ix)
+    ix_splits = np.array_split(ix,K)
 
     Rsss_lm = np.zeros(K) # to calculate the distribution
     Rsss_rrr = np.zeros((K,len(ranks))) # to evaluate against
+    EV_rrr = np.zeros((K,len(ranks)))
 
     # k-fold
     for k in tqdm(range(K),desc='xval rank'):
@@ -141,8 +142,8 @@ def xval_rank(Y, X, lam, ranks, K=5):
             B_hat_lr = RRR(Y[train_ix], X[train_ix], B_hat, r)
             Y_hat_lr_test = X[test_ix] @ B_hat_lr
             Rsss_rrr[k,i] = Rss(Y[test_ix], Y_hat_lr_test)
-
-    return Rsss_lm, Rsss_rrr
+            EV_rrr[k,i] = EV(Y[test_ix], Y_hat_lr_test)
+    return Rsss_lm, Rsss_rrr,EV_rrr
 
 def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2,lam=0.8):
     if X is None:
@@ -160,5 +161,6 @@ def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2,lam=
     Y_hat_rr = X @ B_hat_rr
 
     Y_out = Y - Y_hat_rr
+    # print("EV of behavioral modulation: %1.4f" % EV(Y,Y_hat_rr))
 
     return Y_out

@@ -604,7 +604,7 @@ def get_idx_noisebins(trialdata,sigtype,edges):
                             trialdata['signal']==100))
     return idx_T_all
 
-def get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=10):
+def get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=10,autobin=False):
 
     celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
     N           = len(celldata)
@@ -630,7 +630,13 @@ def get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True
         print(f"\rComputing mean activity for noise trial bins for session {ises+1} / {len(sessions)}",end='\r')
         idx_N_ses = celldata['session_id']==ses.sessiondata['session_id'][0]
 
-        idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
+        if autobin:
+            edges       = np.linspace(np.min(sessions[ises].trialdata[sigtype][sessions[ises].trialdata['stimcat']=='N']),
+                                      np.max(sessions[ises].trialdata[sigtype][sessions[ises].trialdata['stimcat']=='N']),nbins_noise+1)
+            idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
+
+        else: 
+            idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
 
         if splithitmiss:
             for iZ in range(Z):
@@ -729,7 +735,7 @@ def get_dprime_signalbins(sessions,sigtype,nbins_noise,zmin,zmax):
 
     return data_mean,plotcenters
 
-def get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=10):
+def get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=10,autobin=False):
 
     celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
     N           = len(celldata)
@@ -757,7 +763,13 @@ def get_spatial_mean_signalbins(sessions,sbins,sigtype,nbins_noise,zmin,zmax,spl
         print(f"\rComputing mean activity for noise trial bins for session {ises+1} / {len(sessions)}",end='\r')
         idx_N_ses = celldata['session_id']==ses.sessiondata['session_id'][0]
 
-        idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
+        if autobin:
+            edges       = np.linspace(np.min(sessions[ises].trialdata[sigtype][sessions[ises].trialdata['stimcat']=='N']),
+                                      np.max(sessions[ises].trialdata[sigtype][sessions[ises].trialdata['stimcat']=='N']),nbins_noise+1)
+            idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
+
+        else: 
+            idx_T_all = get_idx_noisebins(sessions[ises].trialdata,sigtype,edges)
 
         if splithitmiss:
             for iZ in range(Z):

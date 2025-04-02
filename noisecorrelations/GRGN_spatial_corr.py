@@ -341,6 +341,7 @@ binresolution       = 10
 shufflefield        = None
 # shufflefield        = 'corrdata'
 # shufflefield      = 'labeled'
+shufflefield      = 'RF'
 
 # [bins2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,binsdRF,
 # bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
@@ -366,16 +367,16 @@ bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_t
                         method='mean',filtersign=None,corr_type=corr_type,noise_thr=20,
                         binresolution=binresolution,normalize=False,shufflefield=shufflefield)
 
-[_,bin_2d_posf_ses,_,bin_dist_posf_ses,_,_,
- bin_angle_cent_posf_ses,_,bin_angle_surr_posf_ses,_,_] = bin_corr_deltarf_ses(sessions,
-                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,
-                        method='frac',filtersign='pos',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr,
-                        binresolution=binresolution,shufflefield=shufflefield)
+# [_,bin_2d_posf_ses,_,bin_dist_posf_ses,_,_,
+#  bin_angle_cent_posf_ses,_,bin_angle_surr_posf_ses,_,_] = bin_corr_deltarf_ses(sessions,
+#                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,
+#                         method='frac',filtersign='pos',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr,
+#                         binresolution=binresolution,shufflefield=shufflefield)
 
-[_,bin_2d_negf_ses,_,bin_dist_negf_ses,_,_,bin_angle_cent_negf_ses,_,bin_angle_surr_negf_ses,_,_] = bin_corr_deltarf_ses(sessions,
-                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,
-                        method='frac',filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr,
-                        binresolution=binresolution,shufflefield=shufflefield)
+# [_,bin_2d_negf_ses,_,bin_dist_negf_ses,_,_,bin_angle_cent_negf_ses,_,bin_angle_surr_negf_ses,_,_] = bin_corr_deltarf_ses(sessions,
+#                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,rf_type=rf_type,
+#                         method='frac',filtersign='neg',corr_type=corr_type,noise_thr=20,corr_thr=corr_thr,
+#                         binresolution=binresolution,shufflefield=shufflefield)
 
 # bin_2d_mean = nanweightedaverage(bin_2d_mean_ses,weights=bin_2d_count_ses,axis=0)
 # bin_2d_posf = nanweightedaverage(bin_2d_posf_ses,weights=bin_2d_count_ses,axis=0)
@@ -393,10 +394,13 @@ fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_mean_ses
 # fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs,datatype='Correlation')
 # axes = fig.get_axes()
 # axes[0].set_ylim([-0.05,0.05])
-fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN' % (corr_type) + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN' % (corr_type) + '.pdf'), format = 'pdf')
-fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_stats' % (corr_type) + '.png'), format = 'png')
-fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_stats' % (corr_type) + '.pdf'), format = 'pdf')
+
+fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_shuf' % (corr_type) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_shuf' % (corr_type) + '.pdf'), format = 'pdf')
+# fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN' % (corr_type) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN' % (corr_type) + '.pdf'), format = 'pdf')
+# fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_stats' % (corr_type) + '.png'), format = 'png')
+# fig2.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_stats' % (corr_type) + '.pdf'), format = 'pdf')
 
 fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_posf_ses,areapairs,layerpairs,projpairs,datatype='Fraction')
 fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_posf_GRGN' % (corr_type) + '.png'), format = 'png')
