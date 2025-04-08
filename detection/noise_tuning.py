@@ -125,6 +125,24 @@ fig = plot_noise_activity_example_neurons(sessions[ises],example_cell_ids)
 
 
 
+#%%  Include sessions based on performance: psychometric curve for the noise #############
+sessiondata = pd.concat([ses.sessiondata for ses in sessions])
+zmin_thr    = -0.3
+zmax_thr    = 0.3
+zmin_thr    = 0
+zmax_thr    = 0
+# guess_thr   = 0.5
+guess_thr   = 0.4
+
+idx_ses     = np.all((sessiondata['noise_zmin']<=zmin_thr,
+                sessiondata['noise_zmax']>=zmax_thr,
+                sessiondata['guess_rate']<=guess_thr),axis=0)
+print('Filtered %d/%d DN sessions based on performance' % (np.sum(idx_ses),len(idx_ses)))
+
+idx_N_perf = np.isin(celldata['session_id'],sessiondata['session_id'][idx_ses])
+
+
+
 #%% 
 
 
@@ -316,12 +334,14 @@ plt.tight_layout()
 
 #%% 
 # diffdata = np.diff(data_mean_hitmiss,axis=2).squeeze()
-data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
+zmin=7
+zmax=17
+data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,min_ntrials=5,
+                                                    splithitmiss=True,autobin=True)
 diffdata = np.nanmean(np.diff(data_mean_hitmiss,axis=2)[:,1:-1,:],axis=1).squeeze()
+# diffdata = np.nanmean(np.diff(data_mean_hitmiss,axis=2)[:,:,:],axis=1).squeeze()
 
-# diffdata,plotcenters = get_dprime_signalbins(sessions,sigtype,nbins_noise,zmin,zmax)
-# diffdata = np.nanmean(diffdata[:,1:-1],axis=1).squeeze()
-
+#%% 
 labeled     = ['unl','lab']
 nlabels     = len(labeled)
 areas       = ['V1','PM']
@@ -335,10 +355,12 @@ for iarea, area in enumerate(areas):
         ax = axes[ilab,iarea]
         handles = []
         idx_N = np.all((celldata['roi_name']==area, 
-                        # celldata['sig_MN']==1,
-                        celldata['sig_N']==1,
+                        celldata['sig_MN']==1,
+                        # celldata['sig_N']==1,
                         # celldata['sig_N']!=1,
                         # celldata['sig_MN']!=1,
+                        idx_N_perf,
+                        # idx_nearby,
                         celldata['labeled']==label), axis=0)
 
         df = pd.DataFrame(data = {'depth':celldata['depth'][idx_N], 'diff': diffdata[idx_N]})
@@ -389,8 +411,58 @@ plt.tight_layout()
 # plt.savefig(os.path.join(savedir,'DeltaHitMiss_Depth_ResponsiveNeurons_Arealabels_%dsessions.png') % (nSessions), format='png')
 # plt.savefig(os.path.join(savedir,'DeltaHitMiss_Depth_NonResponsiveNeurons_Arealabels_%dsessions.png') % (nSessions), format='png')
 
-#%%
+#%% Is the hit-miss difference related to difference in running speed correlation?
 
+data_mean_hitmiss,plotcenters = get_mean_signalbins(sessions,sigtype,nbins_noise,zmin,zmax,splithitmiss=True)
+diffdata = np.nanmean(np.diff(data_mean_hitmiss,axis=2)[:,1:-1,:],axis=1).squeeze()
+
+sessiondata = pd.concat([ses.sessiondata for ses in sessions])
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+N = len(celldata)
+runcorr = np.full(N,np.nan)
+
+for iN in tqdm(range(N),total=N,desc='Computing running speed correlation'):
+    sesidx = np.where(sessiondata['session_id']==celldata['session_id'][iN])[0][0]
+    neuronidx = np.where(sessions[sesidx].celldata['cell_id']==celldata['cell_id'][iN])[0][0]
+    idx_T = np.isin(sessions[sesidx].trialdata['stimcat'],['N'])
+    # runcorr[iN] = np.corrcoef(sessions[sesidx].respmat[np.ix_(neuronidx,idx_T)],sessions[sesidx].respmat_runspeed[idx_T].squeeze())[0,1]
+    runcorr[iN] = np.corrcoef(sessions[sesidx].respmat[neuronidx,idx_T],sessions[sesidx].respmat_runspeed.squeeze()[idx_T])[0,1]
+
+#%% Plot running speed correlation vs hit-miss difference
+
+fig,axes = plt.subplots(1,2,figsize=(6,3),sharey=True,sharex=True)
+ax = axes[0]
+ax.scatter(runcorr,diffdata,c='k',marker = '.',s=5, alpha=0.25)
+from scipy.stats import linregress
+
+notnan = ~np.isnan(runcorr) & ~np.isnan(diffdata)
+
+res = linregress(runcorr[notnan],diffdata[notnan])
+xfit = np.linspace(np.nanmin(runcorr),np.nanmax(runcorr),100)
+
+yfit = res.intercept + res.slope*xfit
+ax.plot(xfit,yfit,'-',color='grey')
+ax.fill_between(xfit,res.intercept + res.slope*xfit + res.stderr*1.96,res.intercept + res.slope*xfit - res.stderr*1.96,alpha=0.2,color='k')
+ax.text(0.1,0.1,'p = %.2e' % res.pvalue,ha='left',va='bottom',transform=ax.transAxes,fontsize=10)
+ax.set_xlabel('Running speed correlation')
+ax.set_ylabel('Hit-miss difference')
+
+ax = axes[1]
+
+hist_matrix, x_edges, y_edges = np.histogram2d(runcorr[notnan], diffdata[notnan], bins=50)
+# hist_matrix, x_edges, y_edges = np.histogram2d(diffdata[notnan],runcorr[notnan], bins=50)
+hist_matrix = hist_matrix.T
+hist_matrix = hist_matrix / np.sum(hist_matrix)
+# hist_matrix = np.log10(hist_matrix + 1e-10)
+hist_matrix = np.log10(hist_matrix + np.min(hist_matrix[hist_matrix>0]))
+ax.pcolormesh(x_edges, y_edges, hist_matrix, cmap='magma')
+# ax.pcolormesh(x_edges, y_edges, hist_matrix.T, cmap='viridis', norm=colors.LogNorm())
+ax.plot(xfit,yfit,'w-')
+ax.set_ylim([-1,1])
+ax.set_xlim([-0.55,0.55])
+ax.set_xlabel('Running speed correlation')
+# cbar = fig.colorbar(ax.collections[0], ax=ax, shrink=0.3)
 
 #%% 
 
