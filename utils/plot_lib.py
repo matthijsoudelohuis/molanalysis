@@ -46,17 +46,62 @@ def my_floor(a, precision=0):
     return np.true_divide(np.floor(a * 10**precision), 10**precision)
 
 # Define the p-value thresholds array
-def get_sig_asterisks(pvalue,return_ns=False):
-    if return_ns: 
-        pvalue_thresholds = np.array([[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"], [10000, "ns"]])
-    else: 
-        pvalue_thresholds = np.array([[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"], [10000, ""]])
+def get_sig_asterisks(pvalue, return_ns=False):
+    """
+    Return a string of asterisks corresponding to the significance level of the p-value.
+
+    Parameters
+    ----------
+    pvalue : float
+        The p-value of the statistical test.
+    return_ns : bool, optional
+        If `True`, return "ns" for non-significant results. If `False`, return an empty string.
+        Default is `False`.
+
+    Returns
+    -------
+    asterisks : str
+        A string of asterisks corresponding to the significance level of the p-value.
+    """
+    pvalue_thresholds = np.array([[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"], [10000, "ns" if return_ns else ""]])
     # Iterate through the thresholds and return the appropriate significance string
     for threshold, asterisks in pvalue_thresholds:
         if pvalue <= float(threshold):
             return asterisks
     # Default return if p-value is greater than 1
     return ""
+
+
+def add_stat_annotation(ax, x1, x2, y, p, h=None):
+    """
+    Add statistical annotation to plot.
+
+    Parameters
+    ----------
+    ax : matplotlib axis
+        The axis to which the annotation will be added.
+    x1 : float
+        The x-position of the first group.
+    x2 : float
+        The x-position of the second group.
+    y : float
+        The y-position of the bar.
+    p : float
+        The p-value of the statistical test.
+    h : float, optional
+        The height of the bar. If None, the height will be set to y/10.
+
+    Notes
+    -----
+    The function draws a line connecting the two groups and adds a label with
+    the p-value of the statistical test. The label is centered above the line.
+    """
+    if h is None:
+        h = y / 10
+    ax.plot([x1, x1, x2, x2], [y, y + h, y + h, y], lw=1.5, c='k')
+    ax.text((x1 + x2) * .5, y + h, get_sig_asterisks(p, return_ns=True),
+            ha='center', va='bottom', size=8)
+
 
 def add_stim_resp_win(ax,colors=['k','b'],linestyles=['--','--'],linewidth=1):
     ax.axvline(x=0, color=colors[0], linestyle=linestyles[0], linewidth=linewidth)

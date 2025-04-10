@@ -149,27 +149,136 @@ plt.tight_layout()
 fig.savefig(os.path.join(savedir,'SharedGain','RunningModulation_V1PM_LabUnl_' + str(nSessions) + 'sessions.png'), format = 'png')
 
 #%% Is the gain modulation similar for labeled and unlabeled, and for V1 and PM?
-redcells            = np.unique(celldata['redcell'])
-redcell_labels      = ['Unl','Lab']
-areas               = ['V1','PM']
-mrkrs_redcells      = ['o','+']
+arealabels = ['V1unl','V1lab','PMunl','PMlab']
+clrs_arealabels = get_clr_area_labeled(arealabels)
+narealabels = len(arealabels)
+# 
+# redcells            = np.unique(celldata['redcell'])
+# redcell_labels      = ['Unl','Lab']
+# areas               = ['V1','PM']
+mrkrs_arealabels      = ['o','+','o','+']
+mrkrs_arealabels      = ['o','o','+','+']
+data_gainregress_mean = np.full((narealabels,3),np.nan)
 
 fig,ax = plt.subplots(1,1,figsize=(3,3))
-for iarea,area in enumerate(areas):
-    for ired,redcell in enumerate(redcells):
-        # ax = axes[iarea,ired]
-        idx_neurons = celldata['redcell']==redcell
-        idx_neurons = np.logical_and(idx_neurons,celldata['roi_name']==area)
-        idx_neurons = np.logical_and(idx_neurons,celldata['tuning_var']>0.05)
-        xdata = np.nanmean(mean_resp_speedsplit[idx_neurons,:,0,0],axis=0)
-        ydata = np.nanmean(mean_resp_speedsplit[idx_neurons,:,1,0],axis=0)
-        plt.scatter(xdata,ydata,color=clrs_areas[iarea],marker=mrkrs_redcells[ired],label=area + redcell_labels[ired],s=25)
-        plt.plot([0,3],[0,3],'grey',ls='--',linewidth=1)
+for ial,arealabel in enumerate(arealabels):
+    # ax = axes[iarea,ired]
+    idx_N = np.all((celldata['arealabel']==arealabel,
+                    celldata['tuning_var']>0.05),axis=0)
+
+    xdata = np.nanmean(mean_resp_speedsplit[idx_N,:,0,0],axis=0)
+    ydata = np.nanmean(mean_resp_speedsplit[idx_N,:,1,0],axis=0)
+    b = linregress(xdata,ydata)
+    data_gainregress_mean[ial,:] = b[:3]
+    xvals = np.arange(0,3,0.1)
+    yvals = data_gainregress_mean[ial,0]*xvals + data_gainregress_mean[ial,1]
+    ax.plot(xvals,yvals,color=clrs_arealabels[ial],linewidth=0.3)
+    ax.scatter(xdata,ydata,color=clrs_arealabels[ial],marker=mrkrs_arealabels[ial],label=arealabel,alpha=0.6,s=25)
+    ax.plot([0,3],[0,3],'grey',ls='--',linewidth=1)
 ax.legend(frameon=False,loc='lower right')
 ax.set_xlabel('Still (Norm. Response)')
 ax.set_ylabel('Running (Norm. Response)')
+ax.set_xlim([0,3.5])
+ax.set_ylim([0,3.5])
 plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True,offset=3)
 fig.savefig(os.path.join(savedir,'SharedGain','Gain_V1PM_LabUnl_' + str(nSessions) + 'sessions.png'), format = 'png')
+
+#%% Fit gain coefficient for each neuron and compare labeled and unlabeled neurons:
+
+N = len(celldata)
+data_gainregress = np.full((N,3),np.nan)
+for iN in range(N):
+    b = linregress(mean_resp_speedsplit[iN,:,0,0],mean_resp_speedsplit[iN,:,1,0])
+    data_gainregress[iN,:] = b[:3]
+
+#%% Show some neurons
+
+# neuronsel = np.random.choice(np.where(celldata['tuning_var']>0.05)[0],size=25,replace=False)
+neuronsel = np.random.choice(np.where(data_gainregress[:,2]>0.75)[0],size=25,replace=False)
+fig, axes = plt.subplots(5,5,figsize=(8,8),sharex=True,sharey=True)
+for iN,N in enumerate(neuronsel):
+    ax = axes[iN//5,iN%5]
+    ax.plot(mean_resp_speedsplit[N,:,0,0],mean_resp_speedsplit[N,:,1,0],'.',color='black',alpha=0.8)
+    ax.plot([0,3],[0,3],'grey',ls='--',linewidth=1)
+    xvals = np.arange(-1,3,0.1)
+    yvals = data_gainregress[N,0]*xvals + data_gainregress[N,1]
+    ax.plot(xvals,yvals,linewidth=0.3,color='blue')
+ax.set_xlim([-0.25,3])
+ax.set_ylim([-0.25,3])
+ax.set_xticks([0,3])
+ax.set_yticks([0,3])
+axes[2,0].set_ylabel('Running (Norm. Response)')
+axes[4,2].set_xlabel('Still (Norm. Response)')
+sns.despine(fig=fig, top=True, right=True,offset=3)
+fig.suptitle('Gain Modulation - Individual neurons')
+fig.savefig(os.path.join(savedir,'SharedGain','Gain_ExampleNeurons' + str(nSessions) + 'sessions.png'), 
+            bbox_inches='tight',format = 'png')
+
+#%%
+arealabels = ['V1unl','V1lab','PMunl','PMlab']
+clrs_arealabels = get_clr_area_labeled(arealabels)
+minrvalue = 0.2
+mintuningvar = 0.0
+
+import pandas as pd
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+df = pd.DataFrame(np.c_[data_gainregress, celldata[['arealabel', 'session_id']]], columns=['slope', 'intercept', 'rvalue', 'arealabel', 'session_id'])
+
+idx_N = np.all((celldata['tuning_var']>mintuningvar,
+                np.isin(celldata['arealabel'],arealabels),
+                        data_gainregress[:,2]>minrvalue),axis=0)
+
+df = df[idx_N]
+
+# Convert categorical variables to categorical type
+df['arealabel'] = df['arealabel'].astype('category')
+df['session_id'] = df['session_id'].astype('category')
+df['slope'] = pd.to_numeric(df['slope'], errors='coerce')
+df['intercept'] = pd.to_numeric(df['intercept'], errors='coerce')
+df['rvalue'] = pd.to_numeric(df['rvalue'], errors='coerce')
+
+testpairs   = [('V1unl','V1lab'),
+             ('PMunl','PMlab'),
+             ('V1unl','PMunl')]
+
+from statannotations.Annotator import Annotator
+
+fig,axes = plt.subplots(1,2,figsize=(7,4))
+for ivar,var in enumerate(['slope','intercept']):
+    for ial,arealabel in enumerate(arealabels):
+        ax = axes[ivar]
+        xdata = df[var][df['arealabel']==arealabel]
+        sns.violinplot(x=ial,y=xdata,ax=ax,color=clrs_arealabels[ial],inner=None)
+        median = np.median(xdata)
+        q25    = np.percentile(xdata,25)
+        q75    = np.percentile(xdata,75)
+        ax.plot([ial,ial],[q25,q75],linestyle='-',color='k',alpha=0.5)
+        ax.plot([ial],[median],marker='o',color='k',alpha=0.5)
+    if ivar==0:
+        ax.axhline(1,color='k',ls='--',alpha=0.5)
+    ax.set_title(var)
+    ax.set_xticks(np.arange(4),arealabels,fontsize=8,rotation=45)
+    ax.set_ylim([-1,7.5])
+
+    for itp,(area1,area2) in enumerate(testpairs):
+        xdata = df[var][df['arealabel'].isin([area1,area2])]
+        t,p = stats.ttest_ind(xdata[df['arealabel']==area1],xdata[df['arealabel']==area2])
+        area1_loc = arealabels.index(area1)
+        area2_loc = arealabels.index(area2)
+        add_stat_annotation(ax, area1_loc, area2_loc, 5.5+itp*0.25, p, h=0.25)
+
+    # # Fit the Linear Mixed Model
+    # model = smf.mixedlm(var + " ~ C(arealabel, Treatment('V1unl'))", df, groups=df["session_id"]).fit()
+
+    # # mod = smf.mixedlm(var + ' ~ C(arealabel)', data=df, groups=df['session_id'])
+    # # res = model.fit()
+    # print(model.summary())
+    # model.f_test
+fig.savefig(os.path.join(savedir,'SharedGain','GainPopulation_V1PM_LabUnl_' + str(nSessions) + 'sessions.png'), 
+            bbox_inches='tight',format = 'png')
 
 #%% Subtracting gain removes tuned gain modulation in mean response:
 redcells            = np.unique(celldata['redcell'])
