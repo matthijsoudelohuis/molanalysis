@@ -791,18 +791,18 @@ plt.axvline(lam,linestyle='--',color='k')
 plt.text(lam,0,'lam=%.3f' % lam,ha='right',va='center',fontsize=9)
 plt.savefig(os.path.join(savedir,'RRR_Lam_prePCADims_%dneurons.png' % nsampleneurons), format = 'png')
 
-#%% Does performance increase with increasing number of neurons?
-#Predicting PM from V1 with different number of V1 and PM neurons
+#%% Does performance increase with increasing number of neurons? Predicting PM from V1 with different number of V1 and PM neurons
 
-popsizes            = np.array([5,10,20,50,100,200,500])
-# popsizes            = np.array([5,10,20,50,100])
-R2_cv               = np.full((nOris,len(popsizes),len(popsizes),nSessions,nmodelfits,kfold),np.nan)
+popsizes            = np.array([5,10,20,50,100,200,500,1000])
 
 lam                 = 500
-kfold               = 5
+kfold               = 10
 nmodelfits          = 5
+ndims               = 25
 
 prePCA              = 25
+R2_cv               = np.full((nOris,len(popsizes),ndims,nSessions,nmodelfits,kfold),np.nan)
+# pca                 = PCA(n_components=np.max([int(pop/10),10]))
 pca                 = PCA(n_components=prePCA)
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model'):    # iterate over sessions
@@ -814,60 +814,103 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
     for iori,ori in enumerate(oris): # loop over orientations 
         idx_T               = ses.trialdata['Orientation']==ori
 
-        for ixpop,xpop in enumerate(popsizes):
-            for iypop,ypop in enumerate(popsizes):
-                if len(idx_areax)>xpop and len(idx_areay)>ypop:
-                    for imf in range(nmodelfits):
+        for ipop,pop in enumerate(popsizes):
 
-                        idx_areax_sub       = np.random.choice(idx_areax,xpop,replace=False)
-                        idx_areay_sub       = np.random.choice(idx_areay,ypop,replace=False)
+            if len(idx_areax)>pop and len(idx_areay)>pop:
+                for imf in range(nmodelfits):
 
-                        X                   = sessions[ises].respmat[np.ix_(idx_areax_sub,idx_T)].T
-                        Y                   = sessions[ises].respmat[np.ix_(idx_areay_sub,idx_T)].T
+                    idx_areax_sub       = np.random.choice(idx_areax,pop,replace=False)
+                    idx_areay_sub       = np.random.choice(idx_areay,pop,replace=False)
+
+                    X                   = sessions[ises].respmat[np.ix_(idx_areax_sub,idx_T)].T
+                    Y                   = sessions[ises].respmat[np.ix_(idx_areay_sub,idx_T)].T
+                    
+                    X                   = zscore(X,axis=0)  #Z score activity for each neuron across trials/timepoints
+                    Y                   = zscore(Y,axis=0)
+
+                    if prePCA and pop>prePCA: 
+                        X                   = pca.fit_transform(X)
+                    if prePCA and pop>prePCA: 
+                        Y                   = pca.fit_transform(Y)
+        
+                    # cross-validation version
+                    R2_kfold = np.zeros((ndims,kfold))
+                    kf = KFold(n_splits=kfold)
+                    for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
+                        X_train, X_test = X[idx_train], X[idx_test]
+                        Y_train, Y_test = Y[idx_train], Y[idx_test]
+
+                        B_hat_train         = LM(Y_train,X_train, lam=lam)
                         
-                        X                   = zscore(X,axis=0)  #Z score activity for each neuron across trials/timepoints
-                        Y                   = zscore(Y,axis=0)
-
-                        if prePCA and xpop>prePCA: 
-                            X                   = pca.fit_transform(X)
-                        if prePCA and ypop>prePCA: 
-                            Y                   = pca.fit_transform(Y)
-            
-                        # cross-validation version
-                        R2_kfold = np.zeros((ndims,kfold))
-                        kf = KFold(n_splits=kfold)
-                        for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
-                            X_train, X_test = X[idx_train], X[idx_test]
-                            Y_train, Y_test = Y[idx_train], Y[idx_test]
-
-                            B_hat_train         = LM(Y_train,X_train, lam=lam)
-                            
-                            r                   = np.min(popsizes) #rank for RRR
-
-                            B_hat_lr            = RRR(Y_train, X_train, B_hat_train, r, mode='right')
+                        for r in range(np.min([pop,prePCA,ndims])):
+                            B_hat_lr = RRR(Y_train, X_train, B_hat_train, r, mode='right')
                             # B_hat_lr = RRR(Y_train, X_train, B_hat_train, r, mode='left')
 
-                            Y_hat_test_rr       = X_test @ B_hat_lr
+                            Y_hat_test_rr = X_test @ B_hat_lr
 
-                            if prePCA and ypop>prePCA: 
-                                R2_cv[iori,ixpop,iypop,ises,imf,ikf] = EV(Y_test,Y_hat_test_rr) *  np.sum(pca.explained_variance_ratio_)
+                            if prePCA and pop>prePCA: 
+                                R2_cv[iori,ipop,r,ises,imf,ikf] = EV(Y_test,Y_hat_test_rr) *  np.sum(pca.explained_variance_ratio_)
                             else:
-                                R2_cv[iori,ixpop,iypop,ises,imf,ikf] = EV(Y_test,Y_hat_test_rr)
+                                R2_cv[iori,ipop,r,ises,imf,ikf] = EV(Y_test,Y_hat_test_rr)
+
+#%% Identify dimensionality: 
+# To find the optimal dimensionality for the RRR model (the value of m), we use 
+# cross-validation and found the smallest number of dimensions for which predictive 
+# performance was within one SEM of the peak performance.
+
+#find max performance across ranks in the average across oris,models and folds
+foldmean    = np.nanmean(R2_cv,axis=(0,3,4,5))
+maxperf     = np.nanmax(foldmean,axis=1)
+
+#find variance across folds for each ranks in the average across oris,models and folds
+foldvar     = np.nanmean(R2_cv,axis=(0,3,4))
+semperf     = np.nanmean(np.nanstd(foldvar,axis=2) / np.sqrt(kfold),axis=1) #find max performance across ranks in the average across oris,models and folds
+
+dim         = np.argmax(foldmean > (maxperf[:,np.newaxis] - semperf[:,np.newaxis]),axis=1)
+dim         = dim.astype(float)
+dim[dim==0] = np.nan
+
 
 #%% Plot R2 for different number of V1 and PM neurons
 R2_mean     = np.nanmean(R2_cv,axis=(0,3,4,5))
+clrs_popsizes = sns.color_palette("rocket",len(popsizes))
 
-fig,ax = plt.subplots(1,1,figsize=(5,4))
+fig,axes = plt.subplots(1,2,figsize=(8,4))
+ax = axes[0]
+handles = []
+for ipopsize,popsize in enumerate(popsizes):
+    # tempdata = np.nanmean(corr_CC1_vars[:,:,ipopsize,:],axis=(0))
+    # tempdata = np.nanmean(R2_cv[:,ipopsize,:,:,:,:],axis=(0,2,3,4))
+    tempdata    = np.nanmean(R2_cv[:,ipopsize,:,:,:,:],axis=(0,3,4)).T
+    handles.append(shaded_error(x=range(1,ndims+1),y=tempdata,error='sem',ax=ax,color=clrs_popsizes[ipopsize]))
+    ax.plot(dim[ipopsize],np.nanmean(tempdata[:,dim[ipopsize]],axis=0)+0.005,marker='v',color=clrs_popsizes[ipopsize])
 
-sns.heatmap(R2_mean.T,xticklabels=popsizes,yticklabels=popsizes,annot=True,cmap='RdYlGn',
-            vmin=0,vmax=0.15,ax=ax,cbar_kws={'label':'R2 (cv)'})
-ax.invert_yaxis()
-ax.set_xlabel('# of V1 neurons')
-ax.set_ylabel('# of PM neurons')
-# ax.set_title('RRR prediction PM from V1')
-ax.set_title('Ridge prediction PM from V1')
+ax.set_ylim([0,0.25])
+ax.set_xticks(np.arange(0,26,5))
+ax.axhline(y=0,color='k',linestyle='--')
+ax.legend(handles,popsizes,title='Population size',loc='best',frameon=False,fontsize=9,ncol=2)
+
+ax.set_xlabel('Rank')
+ax.set_ylabel('RRR R2')
+ax.set_title('RRR prediction V1-PM')
+
+# Does the dimensionality increase with increasing number of neurons?
+ax = axes[1]
+ax.scatter(popsizes,dim,color=clrs_popsizes,marker='o',s=40)
+ax.plot(popsizes,dim,color='grey',linestyle='-',linewidth=0.5)
+
+ax.plot(popsizes,popsizes**0.5,color='r',linestyle='--',linewidth=1)
+ax.text(50,15,'$n^{1/2}$',color='r',fontsize=12)
+ax.plot(popsizes,popsizes**0.3333,color='g',linestyle='--',linewidth=1)
+ax.text(500,5,'$n^{1/3}$',color='g',fontsize=12)
+
+ax.set_ylim([0,25])
+ax.set_ylabel('Dimensionality')
+ax.set_xlabel('Population size')
+
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'R2_Ridge_PopSize_%dsessions.png' % nSessions), format = 'png')
+fig.savefig(os.path.join(savedir,'R2_RRR_PopSize_%dsessions.png' % nSessions), format = 'png')
+
 
 
 #%% Are CCA and RRR capturing the same signal?
