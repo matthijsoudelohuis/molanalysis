@@ -372,7 +372,6 @@ def filter_nearlabeled(ses,radius=50):
 
     return np.any(closemat,axis=0)
 
-
 def get_response_triggered_image(ses, natimgdata):
     
     respmean,imageids   = mean_resp_image(ses)
@@ -380,13 +379,26 @@ def get_response_triggered_image(ses, natimgdata):
     N                   = np.shape(ses.respmat)[0]
 
     # Compute response triggered average image:
-    # N = 100
-    # for iN in range(N):
     ses.RTA             = np.empty((*np.shape(natimgdata)[:2], N))
-    for iN in tqdm(range(N),desc='Computing average response for neuron'):
-        ses.RTA[:, :, iN] = np.average(natimgdata[:,:,imageids], axis=2, weights=respmean[iN, :])
+    weight_sums = np.sum(respmean, axis = 1)
+    ses.RTA = np.tensordot(natimgdata[:,:,imageids], respmean, axes=([2], [1])) / weight_sums
         
     return ses
+
+# def get_response_triggered_image(ses, natimgdata):
+    
+#     respmean,imageids   = mean_resp_image(ses)
+
+#     N                   = np.shape(ses.respmat)[0]
+
+#     # Compute response triggered average image:
+#     # N = 100
+#     # for iN in range(N):
+#     ses.RTA             = np.empty((*np.shape(natimgdata)[:2], N))
+#     for iN in tqdm(range(N),desc='Computing average response for neuron'):
+#         ses.RTA[:, :, iN] = np.average(natimgdata[:,:,imageids], axis=2, weights=respmean[iN, :])
+        
+#     return ses
 
 
 def estimate_rf_IM(ses,show_fig=False): 

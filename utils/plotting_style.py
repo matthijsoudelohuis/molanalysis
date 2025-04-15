@@ -86,10 +86,14 @@ def get_clr_area_labeled(area_labeled):
 
 
 def get_clr_area_labelpairs(area_labelpairs):
-    palette       = {'V1unl-V1unl': sns.xkcd_rgb['mint'],
-        'V1unl-V1lab': sns.xkcd_rgb['light green'],
-        'V1lab-V1lab': sns.xkcd_rgb['chartreuse'],
-        
+    palette       = {
+        # 'V1unl-V1unl': sns.xkcd_rgb['mint'],
+        # 'V1unl-V1lab': sns.xkcd_rgb['light green'],
+        # 'V1lab-V1lab': sns.xkcd_rgb['chartreuse'],
+        'V1unl-V1unl': sns.xkcd_rgb['green'],
+        'V1unl-V1lab': sns.xkcd_rgb['dark cyan'],
+        'V1lab-V1lab': sns.xkcd_rgb['forest green'],
+
         'PMunl-PMunl': sns.xkcd_rgb['lilac'],
         'PMunl-PMlab': sns.xkcd_rgb['orchid'],
         'PMlab-PMlab': sns.xkcd_rgb['plum'],
