@@ -71,6 +71,10 @@ def get_sig_asterisks(pvalue, return_ns=False):
     # Default return if p-value is greater than 1
     return ""
 
+def ax_nticks(ax, n):
+    ax.locator_params(axis='x', nbins=n)
+    ax.locator_params(axis='y', nbins=n)
+    
 
 def add_stat_annotation(ax, x1, x2, y, p, h=None):
     """

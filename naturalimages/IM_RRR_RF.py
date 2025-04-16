@@ -28,9 +28,13 @@ from utils.tuning import *
 from utils.RRRlib import *
 from utils.corr_lib import compute_signal_noise_correlation
 
-# from utils.plot_lib import shaded_error
-
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
+
+#%%
+# TODO:
+# compute noise correlations for the sessions with 100 images repeated 10 times
+# loop over sessions with all neurons included
+# find regression coeff for each session with enough labeled cells
 
 #%% ################################################
 session_list        = np.array([['LPE11086','2023_12_16']])
@@ -214,7 +218,7 @@ cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=0.1,nranks=25,nsub=nsub)
 #%% Show the difference in the distribution of the responses for predicted vs true data:
 plt.hist(Y_hat.flatten(), bins=100, color='red', alpha=0.5)
 plt.hist(resp.flatten(), bins=100, color='blue', alpha=0.5)
-plt.savefig('LowRank_RF_FittedResponses_%s.png' % (sessions[sesidx].sessiondata['session_id'][0]),format='png',dpi=300,bbox_inches='tight')
+plt.savefig(os.path.join(savedir,'LowRank_RF_FittedResponses_%s.png' % (sessions[sesidx].sessiondata['session_id'][0])),format='png',dpi=300,bbox_inches='tight')
 
 #%% Fit the cRF with a 2D gaussian:
 sessions[sesidx].celldata = fit_2dgauss_cRF(cRF, nsub=nsub,celldata=sessions[sesidx].celldata)
@@ -255,7 +259,7 @@ for ial,arealabel in enumerate(arealabels):
         ax.set_yticks([])
         ax.set_axis_off()
         ax.set_title(arealabel + sessions[sesidx].celldata['cell_id'][iN],fontsize=8)
-fig.savefig('ReducedRank_FitRF_example_neurons_arealabel_%s.png' % sessions[sesidx].sessiondata['session_id'][0],format='png',dpi=300,bbox_inches='tight')
+fig.savefig(os.path.join(savedir,'ReducedRank_FitRF_example_neurons_arealabel_%s.png' % sessions[sesidx].sessiondata['session_id'][0]),format='png',dpi=300,bbox_inches='tight')
 
 #%% Compute pairwise correlations matrix of the cRF:
 cRF_reshape             = np.reshape(cRF, (np.shape(cRF)[0]*np.shape(cRF)[1],np.shape(cRF)[2]))
@@ -289,7 +293,7 @@ for i,idx in enumerate(zip(idx_corr[0],idx_corr[1])):
     ax[i,1].set_title(sessions[sesidx].celldata['cell_id'][idx[1]],fontsize=8)
     ax[i,0].text(0.9,0.6,'RF corr: %.2f' % corrmat_triu[idx],fontsize=8,transform=ax[i,0].transAxes)
 fig.tight_layout()
-fig.savefig('ReducedRank_FitRF_example_RF_corr_%s.png' % sessions[sesidx].sessiondata['session_id'][0],format='png',dpi=300,bbox_inches='tight')
+fig.savefig(os.path.join(savedir,'ReducedRank_FitRF_example_RF_corr_%s.png' % sessions[sesidx].sessiondata['session_id'][0]),format='png',dpi=300,bbox_inches='tight')
 
 #%% 
 
@@ -376,7 +380,7 @@ for datatype in ['sig_corr','resid_corr','resp_corr']:
     ax.set_ylim([-0.2,0.6])
     sns.despine(offset=3,top=True,right=True)
     fig.tight_layout()
-    fig.savefig('ReducedRank_FitRF_%s_%s.png' % (datatype,sessions[sesidx].sessiondata['session_id'][0]),format='png',dpi=300,bbox_inches='tight')
+    plt.savefig(os.path.join(savedir,'ReducedRank_FitRF_%s_%s.png' % (datatype,sessions[sesidx].sessiondata['session_id'][0])),format='png',dpi=300,bbox_inches='tight')
 
 #%%
 
@@ -498,7 +502,7 @@ ax.set_ylim([-0.2,0.6])
 # ax.set_ylim([-0.02,0.05])
 sns.despine(fig=fig, top=True, right=True,offset=3)
 fig.tight_layout()
-fig.savefig('RRR_FitRF_corr_dRF_%s_%s.png' % (datatype,sessions[sesidx].sessiondata['session_id'][0]),format='png',dpi=300,bbox_inches='tight')
+fig.savefig(os.path.join(savedir,'RRR_FitRF_corr_dRF_%s_%s.png' % (datatype,sessions[sesidx].sessiondata['session_id'][0])),format='png',dpi=300,bbox_inches='tight')
 
 
 #%% Do some optimizations: lambda,kfold,rank

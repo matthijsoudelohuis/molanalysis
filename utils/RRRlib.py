@@ -124,12 +124,14 @@ def RRR_wrapper(Y, X, nN=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=5):
             Y_hat_train         = X_train @ B_hat_train
 
             # decomposing and low rank approximation of A
-            U, s, V = linalg.svd(Y_hat_train)
+            U, s, V = linalg.svd(Y_hat_train, full_matrices=False)
             
             S = linalg.diagsvd(s,U.shape[0],s.shape[0])
 
             for r in range(nranks):
-                Y_hat_rr_test       = X_test @ B_hat_train @ V[:r,:].T @ V[:r,:] #project test data onto low rank subspace
+                B_rrr               = B_hat_train @ V[:r,:].T @ V[:r,:] #project beta coeff into low rank subspace
+
+                Y_hat_rr_test       = X_test @ B_rrr #project test data onto low rank predictive subspace
 
                 R2_cv_folds[r,imf,ikf] = EV(Y_test,Y_hat_rr_test)
 
