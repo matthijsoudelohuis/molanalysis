@@ -14,7 +14,7 @@ from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.metrics import r2_score
 import seaborn as sns
 from tqdm import tqdm
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from scipy import ndimage
 from scipy.stats import zscore,ttest_rel
 from utils.imagelib import load_natural_images

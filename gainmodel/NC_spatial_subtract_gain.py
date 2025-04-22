@@ -16,7 +16,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from loaddata.session_info import filter_sessions,load_sessions
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace_smooth_with_Fsig
 

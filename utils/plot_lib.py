@@ -1,9 +1,25 @@
+"""
+This script contains some plotting functions used in the analysis of mesoscope data
+Matthijs Oude Lohuis, 2023-2026, Champalimaud Center
+"""
+
 import numpy as np
+from operator import itemgetter
+from  matplotlib.colors import LinearSegmentedColormap
+import pandas as pd
+import os
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 import warnings
-from utils.plotting_style import *
+
+desired_width = 600
+pd.set_option('display.width', desired_width)
+pd.set_option("display.max_columns", 14)
+
+def my_savefig(fig,savedir,filename):
+    fig.savefig(os.path.join(savedir,filename +  '.png'),format = 'png',dpi=300,bbox_inches='tight',transparent=True)
+    fig.savefig(os.path.join(savedir,filename +  '.pdf'),format = 'pdf',dpi=300,bbox_inches='tight',transparent=True)
 
 
 def shaded_error(x,y,yerror=None,ax=None,center='mean',error='std',color='black',
@@ -402,4 +418,255 @@ def plot_stim_dec_spatial_proj(X, celldata, trialdata, W, sbins, labeled= ['unl'
     plt.tight_layout()
     return fig
 
+################################################################
+## Series of function that spit out lists of colors for different combinations of 
+## areas, protocols, mice, stimuli, etc. 
 
+def get_clr_areas(areas):
+    palette       = {'V1'  : sns.xkcd_rgb['seaweed'],
+                    'PM' : sns.xkcd_rgb['barney'],
+                    'AL' : sns.xkcd_rgb['clear blue'],
+                    'RSP' : sns.xkcd_rgb['orangered']}
+    return itemgetter(*areas)(palette)
+
+def sort_areas(areas):
+    areas_order = ['V1', 'PM', 'AL', 'RSP']
+    areas = [x for x in areas_order if x in areas]
+    return areas
+
+def get_clr_area_pairs(areapairs):
+    palette       = {'V1-V1'  : sns.xkcd_rgb['seaweed'],
+                    'PM-V1' : sns.xkcd_rgb['peacock blue'],
+                    'V1-PM' : sns.xkcd_rgb['orangered'],
+                    'PM-PM' : sns.xkcd_rgb['barney'],
+                    ' ' : sns.xkcd_rgb['black']}
+    return itemgetter(*areapairs)(palette)
+
+def get_clr_labeled():
+    # clrs            = ['black','red']
+    return ['gray','indianred']
+
+   
+def get_clr_deltaoris(deltaoris):
+    # c = ["darkred","darkgreen"]
+    # v = [0,1.]
+    # l = list(zip(v,c))
+    # cmap=LinearSegmentedColormap.from_list('rg',l, N=256)
+    # colors = cmap((45-np.mod(deltaoris,90))/45)
+    # c = ["darkgreen","darkblue","darkred"]
+    c = ["darkred","darkblue","darkgreen"]
+    v = [0,.5,1.]
+    l = list(zip(v,c))
+    cmap=LinearSegmentedColormap.from_list('gbr',l, N=256)
+
+    # cmap = sns.color_palette('viridis', as_cmap=True)
+    # colors = cmap((90-np.mod(deltaoris,180))/90)
+    colors = cmap(np.abs(90-deltaoris)/90)
+
+    return colors
+
+def get_clr_labelpairs(pairs):
+    palette       = {'unl-unl': sns.xkcd_rgb['grey'],
+        'unl-lab' : sns.xkcd_rgb['rose'],
+        'lab-unl' : sns.xkcd_rgb['orange'],
+        'lab-lab' : sns.xkcd_rgb['red'],
+        ' ' : sns.xkcd_rgb['black']}
+    # palette       = {'0-0': sns.xkcd_rgb['grey'],
+    #     '0-1' : sns.xkcd_rgb['rose'],
+    #     '1-0' : sns.xkcd_rgb['rose'],
+    #     '1-1' : sns.xkcd_rgb['red']}
+    return itemgetter(*pairs)(palette)
+
+def get_clr_area_labeled(area_labeled):
+    palette       = {'V1unl': sns.xkcd_rgb['seaweed'],
+        'V1lab' : sns.xkcd_rgb['rose'],
+        'PMunl' : sns.xkcd_rgb['barney'],
+        'PMlab' : sns.xkcd_rgb['red'],
+        'V1_UNL': sns.xkcd_rgb['seaweed'],
+        'V1_LAB' : sns.xkcd_rgb['rose'],
+        'PM_UNL' : sns.xkcd_rgb['barney'],
+        'PM_LAB' : sns.xkcd_rgb['red'],
+        'ALunl': sns.xkcd_rgb['clear blue'],
+        'ALlab' : sns.xkcd_rgb['burnt orange'],
+        'RSPunl' : sns.xkcd_rgb['sienna'],
+        'RSPlab' : sns.xkcd_rgb['crimson']}
+    return itemgetter(*area_labeled)(palette)
+
+
+def get_clr_area_labelpairs(area_labelpairs):
+    palette       = {
+        # 'V1unl-V1unl': sns.xkcd_rgb['mint'],
+        # 'V1unl-V1lab': sns.xkcd_rgb['light green'],
+        # 'V1lab-V1lab': sns.xkcd_rgb['chartreuse'],
+        'V1unl-V1unl': sns.xkcd_rgb['green'],
+        'V1unl-V1lab': sns.xkcd_rgb['dark cyan'],
+        'V1lab-V1lab': sns.xkcd_rgb['forest green'],
+
+        'PMunl-PMunl': sns.xkcd_rgb['lilac'],
+        'PMunl-PMlab': sns.xkcd_rgb['orchid'],
+        'PMlab-PMlab': sns.xkcd_rgb['plum'],
+        
+        'V1unl-PMunl': sns.xkcd_rgb['tangerine'],
+        'V1unl-PMlab': sns.xkcd_rgb['orange brown'],
+        'V1lab-PMunl': sns.xkcd_rgb['reddish orange'],
+        'V1lab-PMlab': sns.xkcd_rgb['crimson'],
+        
+        'PMunl-V1unl': sns.xkcd_rgb['dark sea green'],
+        'PMunl-V1lab': sns.xkcd_rgb['minty green'],
+        'PMlab-V1unl': sns.xkcd_rgb['teal blue'],
+        'PMlab-V1lab': sns.xkcd_rgb['true blue'],
+                    }
+    
+    return itemgetter(*area_labelpairs)(palette)
+
+def get_clr_layerpairs(pairs):
+    palette       = {'L2/3-L2/3': sns.xkcd_rgb['teal'],
+        'L2/3-L4': sns.xkcd_rgb['neon blue'],
+        'L2/3-L5': sns.xkcd_rgb['lilac'],
+        'L4-L2/3': sns.xkcd_rgb['peach'],
+        'L4-L4': sns.xkcd_rgb['powder blue'],
+        'L4-L5': sns.xkcd_rgb['navy'],
+        'L5-L2/3': sns.xkcd_rgb['deep purple'],
+        'L5-L4': sns.xkcd_rgb['light grey'],
+        'L5-L5': sns.xkcd_rgb['royal blue'],
+        ' ' : sns.xkcd_rgb['black']}
+    return itemgetter(*pairs)(palette)
+
+def get_clr_recombinase(enzymes):
+    palette       = {'non': 'gray',
+        'cre' : 'orangered',
+        'flp' : 'indianred'}
+    return itemgetter(*enzymes)(palette)
+
+def get_clr_protocols(protocols):
+    palette       = {'GR': sns.xkcd_rgb['pinky red'],
+                    'GN': sns.xkcd_rgb['bright blue'],
+                    'SP' : sns.xkcd_rgb['coral'],
+                    'RF' : sns.xkcd_rgb['emerald'],
+                    'IM' : sns.xkcd_rgb['very dark green'],
+                    'DM' : sns.xkcd_rgb['grape'],
+                    'DN' : sns.xkcd_rgb['emerald'],
+                    'DP' : sns.xkcd_rgb['neon blue']
+}
+    return itemgetter(*protocols)(palette)
+
+def get_clr_thrbins(Z):
+    """
+    Returns colors for threshold bins. The colors are chosen such that they are
+    sorted by increasing brightness. The first color is black, the last color is
+    orange.
+    ----------
+    Z : number of conditions (catch, max + nbins_noise).
+    -------
+    clrs_Z :         List of colors for the threshold bins.
+    labels_Z :         List of labels for the threshold bins.
+    """
+    # plotcolors = [sns. sns.color_palette("inferno",C)
+    clrs_Z = ['black']  # Start with black
+    clrs_Z += sns.color_palette("magma", n_colors=Z-2)  # Add 5 colors from the magma palette
+    clrs_Z.append('orange')  # Add orange at the end
+
+    if Z == 5: 
+        labels_Z = ['catch','sub','thr','sup','max']
+    elif Z == 6:
+        labels_Z = ['catch','sub','thr','sup','max']
+    elif Z == 7:
+        labels_Z = ['catch','imp','sub','thr','sup','sat','max']
+
+    return clrs_Z,labels_Z
+
+def get_clr_stimuli_vr(stimuli):
+    stims           = ['A','B','C','D']
+    clrs            = sns.color_palette('husl', 4)
+    palette         = {stims[i]: clrs[i] for i in range(len(stims))}
+    return itemgetter(*stimuli)(palette)
+
+def get_clr_stimuli_vr_norm(stimuli):
+    stims           = [0,1,2,3]
+    clrs            = sns.color_palette('husl', 4)
+    palette         = {stims[i]: clrs[i] for i in range(len(stims))}
+    return itemgetter(*stimuli)(palette)
+
+def get_clr_stimuli_vr(stimuli):
+    stims           = ['A','B','C','D']
+    clrs            = sns.color_palette('husl', 4)
+    palette         = {stims[i]: clrs[i] for i in range(len(stims))}
+    return itemgetter(*stimuli)(palette)
+
+def get_clr_blocks(blocks):
+    # clrs            = ['#ff8274','#74f1ff']
+    clrs            = sns.color_palette('Greys', 2)
+    return clrs
+
+def get_clr_gratingnoise_stimuli(oris,speeds):
+    cmap1        = np.array([[160,0,255], #oris
+                            [0,255,115],
+                            [255,164,0]])
+    cmap1       = cmap1 / 255
+    cmap2       = np.array([0.2,0.6,1]) #speeds
+
+    clrs = np.empty((3,3,3))
+    labels = np.empty((3,3),dtype=object)
+    for iO,ori in enumerate(oris):
+        for iS,speed in enumerate(speeds):
+            clrs[iO,iS,:] = cmap1[iO,] * cmap2[iS]
+            labels[iO,iS] = '%d deg - %d deg/s' % (ori,speed)     
+
+    clrs            = np.reshape(sns.color_palette('dark', 9),(3,3,3))
+    # cmap1           = plt.colormaps['tab10']((0,0.5,1))[:,:3]
+    # cmap2           = plt.colormaps['Accent']((0,0.5,1))[:,:3]
+
+    # clrs = np.empty((3,3,3))
+    # for i in range(3):
+    #     for j in range(3):
+    #         clrs[i,j,:] = np.mean((cmap1[i,:],cmap2[j,:]),axis=0)
+
+    # clrs = clrs - np.min(clrs)
+    # clrs = clrs / np.max(clrs)
+    
+    return clrs,labels
+
+
+def get_clr_GN_svars(labels):
+    palette       = {'Ori': '#2e17c4',
+                'Speed' : '#17c42e',
+                'Running' : '#c417ad',
+                'RunSpeed' : '#c417ad',
+                'Random' : '#021011',
+                'videoME' : '#adc417',
+                'MotionEnergy' : '#adc417'}
+    return itemgetter(*labels)(palette)
+
+
+def get_clr_outcome(outcomes):
+    palette       = {'CR': '#070f7a',
+                    'MISS' : '#806900',
+                    'HIT' : '#0b7a07',
+                    'FA' : '#7a070b'}
+    # palette       = {'CR': '#89A6FA',
+    #         'MISS' : '#FADB89',
+    #         'HIT' : '#89FA95',
+    #         'FA' : '#FA89AD'}
+    # palette       = {'CR': '#0026C7',
+    #             'MISS' : '#C79400',
+    #             'HIT' : '#00C722',
+    #             'FA' : '#C70028'}
+    return itemgetter(*outcomes)(palette)
+
+def get_clr_psy(signals):
+    # clrs            = sns.color_palette('Blues', len(signals))
+    # clrs            = sns.color_palette('plasma', len(signals))
+    clrs            = sns.color_palette('inferno', len(signals))
+    # palette         = {stims[i]: clrs[i] for i in range(len(stims))}
+    return clrs
+
+def get_clr_animal_id(animal_ids):
+    # clrs            = sns.color_palette('inferno', len(signals))
+
+    clrs = sns.color_palette(palette='tab10', n_colors=len(animal_ids))
+
+    # animal_ids  = np.array(['LPE10884', 'LPE11081', 'LPE11086', 'LPE11495', 'LPE11622',
+    #    'LPE11623', 'LPE11997', 'LPE11998', 'LPE12013', 'LPE12223',
+    #    'LPE12385'], dtype=object)
+    
+    return clrs

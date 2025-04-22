@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
 from utils.plot_lib import *
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.tuning import mean_resp_gn,mean_resp_gr,mean_resp_image 
 from utils.rf_lib import filter_nearlabeled
 from utils.pair_lib import *

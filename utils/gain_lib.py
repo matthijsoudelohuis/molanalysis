@@ -14,7 +14,7 @@ from sklearn.metrics import r2_score
 from scipy.stats import vonmises
 from loaddata.session import Session
 from utils.psth import compute_respmat
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 
 
 def plot_respmat(orientations, datasets, labels,prefori):

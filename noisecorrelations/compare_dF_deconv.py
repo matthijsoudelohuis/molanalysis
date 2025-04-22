@@ -19,7 +19,7 @@ from tqdm import tqdm
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_respmat
 from utils.tuning import compute_tuning, compute_prefori
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.psth import compute_tensor,compute_respmat
 from utils.corr_lib import *
 from utils.explorefigs import plot_excerpt,plot_PCA_gratings,plot_tuned_response

@@ -201,23 +201,14 @@ def report_sessions(sessions):
 
 def load_neural_performing_sessions(calciumversion='deconv'):
     #Get signal as relative to psychometric curve for all sessions:
-    sessions,nSessions = filter_sessions(protocols='DN',min_cells=100) #Load specified list of sessions
+    sessions,nSessions = filter_sessions(protocols='DN',min_cells=1) #Load specified list of sessions
     np.random.seed(0)
     sessions = noise_to_psy(sessions,filter_engaged=True,bootstrap=True)
     # plot_psycurve(sessions,filter_engaged=True)
 
-    # Include sessions based on performance: psychometric curve for the noise #############
-    sessiondata = pd.concat([ses.sessiondata for ses in sessions])
-    zmin_thr = -0.3
-    zmax_thr = 0.3
-    guess_thr = 0.4
+    idx_ses = get_idx_performing_sessions(sessions)
 
-    idx_ses = np.all((sessiondata['noise_zmin']<=zmin_thr,
-                    sessiondata['noise_zmax']>=zmax_thr,
-                    sessiondata['guess_rate']<=guess_thr),axis=0)
-    print('Filtered %d/%d DN sessions based on performance' % (np.sum(idx_ses),len(idx_ses)))
-
-    #
+    # Filter sessions:
     sessions = [sessions[i] for i in np.where(idx_ses)[0]]
     nSessions = len(sessions)
 

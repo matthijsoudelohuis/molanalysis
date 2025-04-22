@@ -21,7 +21,7 @@ from utils.corr_lib import *
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_respmat
 from utils.tuning import compute_tuning_wrapper
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.gain_lib import * 
 from utils.plot_lib import shaded_error
 

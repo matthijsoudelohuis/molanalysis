@@ -28,7 +28,7 @@ from statannotations.Annotator import Annotator
 from scipy.optimize import curve_fit
 
 from loaddata.session_info import filter_sessions,load_sessions
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.plot_lib import shaded_error,my_ceil,my_floor
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace_smooth_with_Fsig

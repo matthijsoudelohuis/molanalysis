@@ -16,7 +16,7 @@ from scipy.stats import zscore, pearsonr
 
 from sklearn.preprocessing import minmax_scale
 from sklearn import preprocessing
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from scipy.signal import medfilt
 

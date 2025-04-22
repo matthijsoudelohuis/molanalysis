@@ -19,7 +19,7 @@ from scipy.stats import binned_statistic
 from scipy.interpolate import interp1d
 from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 from utils.psth import compute_tensor_space,compute_respmat_space
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 
 # from utils import compute_dprime
 savedir = 'T:\\OneDrive\\PostDoc\\Figures\\Behavior - VR\\'

@@ -20,7 +20,7 @@ os.chdir('e:\\Python\\molanalysis\\')
 from loaddata.get_data_folder import get_local_drive
 from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 from utils.psth import compute_tensor_space,compute_respmat_space
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 from utils.plot_lib import *
 from utils.regress_lib import *

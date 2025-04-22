@@ -31,7 +31,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from utils.RRRlib import LM,Rss,EV
 from loaddata.get_data_folder import get_local_drive
 from loaddata.session_info import filter_sessions,load_sessions
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.explorefigs import plot_excerpt
 from utils.tuning import *
 

@@ -12,33 +12,18 @@ os.chdir('e:\\Python\\molanalysis\\')
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-
-# from loaddata import * #get all the loading data functions (filter_sessions,load_sessions)
-from loaddata.session_info import filter_sessions,load_sessions
-from loaddata.get_data_folder import get_local_drive
-
-from scipy import stats
-from scipy.stats import zscore
-from utils.psth import *
-from sklearn.decomposition import PCA
-from sklearn.impute import SimpleImputer
-from sklearn.metrics import roc_auc_score as AUC
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
-from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-from sklearn import preprocessing
-from sklearn import linear_model
-from sklearn.preprocessing import minmax_scale
-from scipy.signal import medfilt
-from sklearn.preprocessing import StandardScaler
-
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patches
-from utils.plotting_style import * #get all the fixed color schemes
-from matplotlib.lines import Line2D
+from scipy.stats import zscore
+from sklearn.impute import SimpleImputer
+from sklearn import preprocessing
+
+from loaddata.session_info import filter_sessions,load_sessions
+from loaddata.get_data_folder import get_local_drive
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
+from utils.psth import *
 from detection.plot_neural_activity_lib import *
-from detection.example_cells import get_example_cells
 from utils.plot_lib import * # get support functions for plotting
 from utils.regress_lib import * # get support functions for regression
 from utils.dimreduc_lib import * # get support functions for dimensionality reduction
@@ -67,12 +52,14 @@ sessions,nSessions = filter_sessions(protocol,only_session_id=session_list,load_
                          load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
 #%%
-minlabcells = 25
-sessions,nSessions = filter_sessions(protocol,min_lab_cells_PM=minlabcells,min_lab_cells_V1=minlabcells,load_behaviordata=True,load_videodata=True,
-                         load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
+minlabcells = 20
+minlabcells = 0
+sessions,nSessions = filter_sessions(protocol,min_lab_cells_PM=minlabcells,min_lab_cells_V1=minlabcells,min_cells=1,
+                        load_behaviordata=True,load_videodata=True,load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
 #%% 
 # sessions,nSessions,sbins = load_neural_performing_sessions()
+idx_ses = get_idx_performing_sessions(sessions,zmin_thr=0,zmax_thr=0,guess_thr=0.4,filter_engaged=True)()
 
 #%% ### Show for all sessions which region of the psychometric curve the noise spans #############
 sessions = noise_to_psy(sessions,filter_engaged=True)
@@ -87,7 +74,7 @@ for i in range(nSessions):
 ## Parameters for spatial binning
 s_pre       = -80  #pre cm
 s_post      = 80   #post cm
-binsize     = 10     #spatial binning in cm
+binsize     = 10   #spatial binning in cm
 
 for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
@@ -158,6 +145,13 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
 
 print(np.nanmean(R2_cv))
 
+#%%
+areas       = ['V1','PM','AL','RSP']
+print('Number of cells in each area for all the sessions:')
+for ises,ses in enumerate(sessions):
+    for area in areas:
+        print('%d: %s: %d' % (ises,area,np.sum(ses.celldata['roi_name']==area)))
+
 #%% 
 labeled     = ['unl','lab']
 nlabels     = 2
@@ -168,16 +162,16 @@ clrs_areas  = get_clr_areas(areas)
 clrs_vars   = sns.color_palette('inferno', 3)
 
 #%% Does performance increase with increasing number of neurons? Predicting PM from V1 with different number of V1 and PM neurons
-popsizes            = np.array([5,10,20,50,100,200])
+popsizes            = np.array([5,10,20,50,100,200,500])
 # popsizes            = np.array([5,10,20,50,100])
 npopsizes           = len(popsizes)
 nranks              = 25
-nmodelfits          = 5 #number of times new neurons are resampled 
+nmodelfits          = 20 #number of times new neurons are resampled 
 kfold               = 5
 R2_cv               = np.full((nSessions,npopsizes),np.nan)
 optim_rank          = np.full((nSessions,npopsizes),np.nan)
 
-idx_sbin            = (sbins>-20) & (sbins<50)
+idx_sbin            = (sbins>=-20) & (sbins<=50)
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
     # idx_T               = ses.trialdata['Orientation']==0
@@ -230,8 +224,9 @@ ax.set_xlabel('Population size')
 ax.set_xticks(popsizes)
 
 plt.tight_layout()
+fig.savefig(os.path.join(savedir,'RRR_R2_and_Rank_PopSize_V1PM_%dsessions.png' % nSessions), format = 'png')
 
-#%% Does performance increase with increasing number of neurons? Predicting PM from V1 with different number of V1 and PM neurons
+#%% Does performance or rank differ for hits and misses:
 
 npopsize            = 100
 nranks              = 25
@@ -241,53 +236,81 @@ R2_cv               = np.full((nSessions,2),np.nan)
 optim_rank          = np.full((nSessions,2),np.nan)
 
 # idx_sbin            = (sbins>=-10) & (sbins<=30)
-idx_sbin            = (sbins>=-20) & (sbins<=50)
+idx_sbin            = sbins>-1000
 min_trials          = 50 #minimum number of trials for each category to be included
+# source_area = 'V1'
+target_area = 'PM'
+source_area = 'PM'
+# target_area = 'AL'
+# target_area = 'V1'
 
-for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='RRR for hits and misses'):
+    #Subsample the same number of trials/samples for hits and misses
+    idx_T_resp = np.empty((len(ses.trialdata['stimcat']),2),dtype=bool)
+    for iresp in [0,1]: #get the number of trials for both responses
+        # idx_T_resp[:,iresp]               = np.all((np.isin(ses.trialdata['stimcat'],['N','M']),
+        idx_T_resp[:,iresp]               = np.all((np.isin(ses.trialdata['stimcat'],['N']),
+                                    ses.trialdata['lickResponse']==iresp),axis=0)
+    nsamples = np.min(np.sum(idx_T_resp,axis=0)) * idx_sbin.sum() #number of samples (trials x timebins)
+
     for iresp in [0,1]:
         # idx_T               = ses.trialdata['Orientation']==0
 
         idx_T               = np.all((ses.trialdata['stimcat']=='N',
                                 ses.trialdata['lickResponse']==iresp),axis=0)
         
-        idx_T               = np.all((np.isin(ses.trialdata['stimcat'],['N','M']),
-                            ses.trialdata['lickResponse']==iresp),axis=0)
+        # idx_T               = np.all((np.isin(ses.trialdata['stimcat'],['N','M']),
+                            # ses.trialdata['lickResponse']==iresp),axis=0)
         
         # idx_T               = ses.trialdata['lickResponse']==iresp
 
-        idx_areax           = np.where(np.all((ses.celldata['roi_name']=='V1',
+        idx_areax           = np.where(np.all((ses.celldata['roi_name']==source_area,
                                 ses.celldata['noise_level']<20),axis=0))[0]
-        idx_areay           = np.where(np.all((ses.celldata['roi_name']=='PM',
+        idx_areay           = np.where(np.all((ses.celldata['roi_name']==target_area,
                                 ses.celldata['noise_level']<20),axis=0))[0]
         
         # X                   = sessions[ises].respmat[np.ix_(idx_areax,idx_T)].T
         # Y                   = sessions[ises].respmat[np.ix_(idx_areay,idx_T)].T
-        X                   = sessions[ises].stensor[np.ix_(idx_areax,idx_T,idx_sbin)].reshape(len(idx_areax),-1).T
-        Y                   = sessions[ises].stensor[np.ix_(idx_areay,idx_T,idx_sbin)].reshape(len(idx_areay),-1).T
-
         if len(idx_areax)>npopsize and len(idx_areay)>npopsize and np.sum(idx_T)>=min_trials:
-            R2_cv[ises,iresp],optim_rank[ises,iresp]             = RRR_wrapper(Y, X, nN=npopsize,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+            X                   = sessions[ises].stensor[np.ix_(idx_areax,idx_T,idx_sbin)].reshape(len(idx_areax),-1).T
+            Y                   = sessions[ises].stensor[np.ix_(idx_areay,idx_T,idx_sbin)].reshape(len(idx_areay),-1).T
+
+            R2_cv[ises,iresp],optim_rank[ises,iresp]             = RRR_wrapper(Y, X, nN=npopsize,nK=nsamples,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
 
 #%% Plot R2 for different number of V1 and PM neurons
 fig,axes = plt.subplots(1,2,figsize=(6,3),sharex=False)
 ax = axes[0]
 ax.scatter(R2_cv[:,0],R2_cv[:,1], marker='o', color='k')
 ax.plot([0,1],[0,1],color='grey',linestyle='--')
-ax.set_xlim([0,0.25])
-ax.set_ylim([0,0.25])
-ax.set_title('R2 (RRR V1->PM)')
+ax.set_ylim([0,my_ceil(np.nanmax(R2_cv),1)] )
+ax.set_xlim([0,my_ceil(np.nanmax(R2_cv),1)] )
+ax.set_title('R2 (RRR %s->%s)' % (source_area,target_area))
 ax.set_xlabel('Misses)')
 ax.set_ylabel('Hits)')
 
+t,p = ttest_rel(R2_cv[:,0],R2_cv[:,1],nan_policy='omit')
+print('Paired t-test (R2): p=%.3f' % p)
+if p<0.05:
+    ax.text(0.1,0.2,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=12,color='red')
+
 ax = axes[1]
 ax.scatter(optim_rank[:,0],optim_rank[:,1], marker='o', color='k')
-ax.set_xlim([0,10])
-ax.set_ylim([0,10])
-ax.plot([0,10],[0,10],color='grey',linestyle='--')
-ax.set_title('Rank (RRR V1->PM)')
+ax.set_xlim([0,np.nanmax(optim_rank)+1])
+ax.set_ylim([0,np.nanmax(optim_rank)+1])
+ax.plot([0,20],[0,20],color='grey',linestyle='--')
+ax.set_title('Rank (RRR %s->%s)' % (source_area,target_area))
 ax.set_xlabel('Misses')
 ax.set_ylabel('Hits')
+
+t,p = ttest_rel(optim_rank[:,0],optim_rank[:,1],nan_policy='omit')
+print('Paired t-test (rank): p=%.3f' % p)
+if p<0.05:
+    ax.text(0.1,0.2,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=12,color='red')
+
+# fig.savefig(os.path.join(savedir,'RRR_R2_Rank_%s%s_HitsMisses_Stim_%dsessions.png' % 
+fig.savefig(os.path.join(savedir,'RRR_R2_Rank_%s%s_HitsMisses_Thr_%dsessions.png' % 
+                         (source_area,target_area,len(sessions))), 
+            format = 'png',bbox_inches='tight',dpi=300)
 
 #%% print how many V1lab and PMlab cells there are in the loaded sessions:
 print('V1 labeled cells:\n')

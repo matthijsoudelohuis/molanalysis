@@ -27,7 +27,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from matplotlib.lines import Line2D
 plt.rcParams['svg.fonttype'] = 'none'
 

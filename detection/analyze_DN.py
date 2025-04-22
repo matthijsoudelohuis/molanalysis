@@ -24,7 +24,7 @@ from scipy.stats import zscore, pearsonr
 from sklearn import preprocessing
 from sklearn import linear_model
 from sklearn.preprocessing import minmax_scale
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from scipy.signal import medfilt
 
 from sklearn.decomposition import PCA

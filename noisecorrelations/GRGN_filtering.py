@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from loaddata.session_info import filter_sessions,load_sessions
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.plot_lib import shaded_error
 from utils.corr_lib import *
 from utils.tuning import *

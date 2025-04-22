@@ -25,7 +25,7 @@ from loaddata.session_info import filter_sessions,load_sessions
 from loaddata.get_data_folder import get_local_drive
 from utils.explorefigs import plot_excerpt
 from utils.psth import *
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 from utils.plot_lib import * # get support functions for plotting
 from detection.plot_neural_activity_lib import *

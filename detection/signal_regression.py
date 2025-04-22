@@ -34,7 +34,7 @@ from sklearn.preprocessing import StandardScaler
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from matplotlib.lines import Line2D
 from utils.behaviorlib import * # get support functions for beh analysis 
 from detection.plot_neural_activity_lib import *

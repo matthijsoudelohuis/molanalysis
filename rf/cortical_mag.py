@@ -11,7 +11,7 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.rf_lib import *
 from loaddata.get_data_folder import get_local_drive
 from utils.corr_lib import compute_pairwise_anatomical_distance
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - RF\\')
 

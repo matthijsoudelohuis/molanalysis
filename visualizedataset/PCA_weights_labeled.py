@@ -40,7 +40,7 @@ from scipy.stats import ttest_rel
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.tuning import compute_tuning, compute_prefori
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.explorefigs import plot_PCA_gratings,plot_PCA_images
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PCA - Images and gratings\\')

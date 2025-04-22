@@ -7,7 +7,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 
 #%% ###################################################
 import math, os
-os.chdir('c:\\Python\\molanalysis')
+os.chdir('e:\\Python\\molanalysis')
 from loaddata.get_data_folder import get_local_drive
 # os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 
@@ -23,7 +23,7 @@ from sklearn.cross_decomposition import CCA
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from utils.tuning import compute_tuning
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.explorefigs import *
 from utils.plot_lib import shaded_error
 from utils.CCAlib import *
@@ -111,7 +111,7 @@ plt.ylabel('PCA 1 (PM)')
 plt.text(5,40,'r=%1.2f' % np.corrcoef(Xp_1[0,:],Xp_2[0,:], rowvar = False)[0,1],fontsize=12)
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir,'PCA_corr_example' + '.png'), format = 'png')
-
+mysavefig(fig,savedir,'PCA_corr_example')
 
 #%% 
 

@@ -22,7 +22,7 @@ from sklearn.metrics import r2_score
 
 from preprocessing.locate_rf import *
 from loaddata.session_info import filter_sessions,load_sessions
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.imagelib import load_natural_images #
 from utils.tuning import *
 from utils.RRRlib import *

@@ -25,7 +25,7 @@ from dPCA import dPCA
 
 import seaborn as sns
 import matplotlib.pyplot as plt
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.plot_lib import * #get all the support functions for plotting
 from utils.behaviorlib import * # get support functions for beh analysis 
 from detection.plot_neural_activity_lib import *

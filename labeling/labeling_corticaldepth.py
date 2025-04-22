@@ -3,6 +3,7 @@ Analyzes stack of GCaMP and tdtomato expressing cells using cellpose software (P
 Matthijs Oude Lohuis, 2023, Champalimaud Foundation
 """
 
+#%% Import packages
 import os
 import numpy as np
 os.chdir('e:\\Python\\molanalysis\\')
@@ -14,10 +15,10 @@ from matplotlib.patches import Rectangle
 from cellpose import models
 from utils.imagelib import im_norm8
 from sklearn.preprocessing import minmax_scale
-from utils.plotting_style import *
+from utils.plot_lib import *
 from utils.plot_lib import shaded_error
 
-## Directories: 
+#%% Directories: 
 rawdatadir      = 'F:\\Stacks\\'
 savedir         = 'E:\\OneDrive\\PostDoc\\Figures\\Labeling\\Stack\\'
 
@@ -41,7 +42,7 @@ recomblist = np.array([['NSH07429','flp'], #which recombinase is causing express
 ['LPE12223','flp'],
 ['LPE12385','cre']])
 
-## Pretrained models to label tdtomato expressing cells:
+#%% Pretrained models to label tdtomato expressing cells:
 # model_red       = models.CellposeModel(pretrained_model = 'E:\\Python\\cellpose\\redlib_tiff\\trainingdata\\
 # models\\redcell_20231107')
 model_red       = models.CellposeModel(pretrained_model = 'E:\\Python\\cellpose\\models\\redcell_20231107')
@@ -156,12 +157,16 @@ def plot_depthprofile(data,ax,clr):
     data_mean = np.nanmean(data,axis=1)
     data_err = np.nanstd(data,axis=1) / np.sqrt(np.shape(data)[1])
 
-    ax.plot(data,slicedepths,c=clr,linewidth=0.5)
-    h, = ax.plot(data_mean,slicedepths,c=clr,linewidth=2)
-    # h, = shaded_error(ax,slicedepths,data,center='mean',error='std',color=clr)
+    ax.plot(data,slicedepths,c=clr,linewidth=0.25)
+    h, = ax.plot(data_mean,slicedepths,c=clr,linewidth=3)
+    # h = shaded_error(slicedepths,data.T,center='mean',error='std',color=clr,ax=ax)
+    # h, = ax.plot(x,ycenter,color=color,linestyle=linestyle,label=label,linewidth=linewidth)
+    # ax.fill_between(x, ycenter-yerror, ycenter+yerror,color=color,alpha=alpha)
+    ax.fill_betweenx(slicedepths,data_mean-data_err, data_mean+data_err,color=clr,alpha=0.4)
+
     return h
 
-#################################################################
+#%% ################################################################
 ## Get animal information and slice parameters:
 
 animal_ids      = [f.name for f in os.scandir(rawdatadir) if f.is_dir() and f.name.startswith(('LPE','NSH'))]
@@ -173,7 +178,7 @@ slicedepths     = np.linspace(0,10*(nslices-1),nslices)
 # animal_ids = ['LPE12223', 'LPE12385']
 
 #%% ################################################################
-## Load data and run model for all animals 
+## Load the raw data and run model for all animals 
 
 for iA,animal_id in enumerate(animal_ids): #for each animal
 
@@ -207,24 +212,33 @@ for iA,animal_id in enumerate(animal_ids): #for each animal
 clrs_areas          = get_clr_areas(['V1','PM'])
 
 ### Figure with depth profile: 
-fig,(ax1,ax2)   = plt.subplots(1,2,figsize=(6,7),sharey=True)
+fig,(ax1,ax2)   = plt.subplots(1,2,figsize=(4,5),sharey=True)
 handles = []
 handles.append(plot_depthprofile(minmax_scale(dataV1[0,:,:], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_areas[0]))
 handles.append(plot_depthprofile(minmax_scale(dataPM[0,:,:], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_areas[1]))
 ax1.set_xlabel('Fluorescence')
 ax1.set_title('Fluorescence')
+ax1.set_ylim([0,750])
+ax2.set_ylim([0,750])
 ax1.invert_yaxis()
 ax1.set_ylabel('Cortical Depth')
 
 handles = []
+# handles.append(plot_depthprofile(minmax_scale(dataV1[1,:,:], feature_range=(0, 1), axis=0, copy=True),ax2,clrs_areas[0]))
+# handles.append(plot_depthprofile(minmax_scale(dataPM[1,:,:], feature_range=(0, 1), axis=0, copy=True),ax2,clrs_areas[1]))
 handles.append(plot_depthprofile(dataV1[1,:,:],ax2,clrs_areas[0]))
 handles.append(plot_depthprofile(dataPM[1,:,:],ax2,clrs_areas[1]))
 ax2.set_xlabel('#Labeled cells')
 ax2.legend(handles,['V1','PM'],frameon=False)
 ax2.set_title('#Labeled cells')
+
+sns.despine(fig=fig, top=True, right=True, offset=3)
 plt.tight_layout()
 
-fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals.png' % nanimals))
+fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals.png' % nanimals), 
+            dpi=300,format = 'png',bbox_inches='tight')
+fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals.pdf' % nanimals),
+            dpi=300,format = 'pdf',bbox_inches='tight')
 
 #%% #############################################################################
 ###################   Make figure with cre and flp separate: #################
@@ -234,7 +248,7 @@ clrs_enzymes        = get_clr_recombinase(['cre','flp'])
 clrs_enzymes = [sns.xkcd_rgb['orangered'],sns.xkcd_rgb['clear blue']]
 
 ### Figure with depth profile: 
-fig,(ax1,ax2,ax3,ax4)   = plt.subplots(1,4,figsize=(9,7),sharey=True)
+fig,(ax1,ax2,ax3,ax4)   = plt.subplots(1,4,figsize=(8,6),sharey=True)
 
 idx_V1cre = recomblist[np.isin(recomblist[:,0],animal_ids),1]=='cre'
 dataV1_fluo = dataV1[0,:,:]
@@ -243,6 +257,7 @@ handles.append(plot_depthprofile(minmax_scale(dataV1_fluo[:,idx_V1cre], feature_
 handles.append(plot_depthprofile(minmax_scale(dataV1_fluo[:,~idx_V1cre], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_enzymes[1]))
 ax1.set_xlabel('Fluorescence')
 ax1.set_title('Fluorescence V1')
+ax1.set_ylim([0,750])
 ax1.invert_yaxis()
 ax1.set_ylabel('Cortical Depth')
 
@@ -269,8 +284,12 @@ ax4.set_xlabel('#Labeled cells')
 ax4.set_title('#Labeled cells PM')
 ax4.legend(handles,['cre','flp'],frameon=False)
 plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True, offset=3)
 
-fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals_splitrecombinase.png' % nanimals))
+fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals_splitrecombinase.png' % nanimals), 
+            dpi=300,format = 'png',bbox_inches='tight')
+fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals_splitrecombinase.pdf' % nanimals),
+            dpi=300,format = 'pdf',bbox_inches='tight')
 
 #%% ###################################################################
 ##### Show example planes alongside it:
@@ -280,7 +299,7 @@ explanes_depths     = [70,180,320,450]
 vmin                = 0
 vmax                = 200
 
-fig = plt.figure(figsize=(9,7))
+fig = plt.figure(figsize=(8,6))
 ax1 = fig.add_subplot(1,4,1)
 
 handles = []
@@ -288,6 +307,7 @@ handles.append(plot_depthprofile(minmax_scale(dataV1[0,:,:], feature_range=(0, 1
 handles.append(plot_depthprofile(minmax_scale(dataPM[0,:,:], feature_range=(0, 1), axis=0, copy=True),ax1,clrs_areas[1]))
 ax1.set_xlabel('Fluorescence')
 ax1.set_title('Fluorescence')
+ax1.set_ylim([0,750])
 ax1.invert_yaxis()
 ax1.set_ylabel('Cortical Depth')
 for d in explanes_depths:
@@ -301,6 +321,7 @@ handles.append(plot_depthprofile(dataPM[1,:,:],ax2,clrs_areas[1]))
 ax2.set_xlabel('#Labeled cells')
 ax2.legend(handles,['V1','PM'],frameon=False)
 ax2.set_title('#Labeled cells')
+ax2.set_ylim([0,750])
 ax2.invert_yaxis()
 ax2.set_ylabel('')
 ax2.legend(handles,['V1','PM'],frameon=False)
@@ -323,6 +344,7 @@ for i,d in enumerate(explanes_depths):
     imdata              = np.average(Data[1::2,:,:], axis=0)
 
     ax.imshow(imdata,cmap='gray',vmin=vmin,vmax=vmax)
+    ax.text(0.1,0.9,u'%.0f \xb5m' % d,ha='left',va='top',color='w',fontsize=10)
     ax.set_axis_off()
     ax.set_aspect('auto')
     ax.add_patch(Rectangle((0,0),512,512,edgecolor = clrs_areas[0],
@@ -341,81 +363,18 @@ for i,d in enumerate(explanes_depths):
 
     ax = plt.subplot(4,4,i*4+4)
     ax.imshow(imdata,cmap='gray',vmin=vmin,vmax=vmax)
+    ax.text(0.1,0.9,u'%.0f \xb5m' % d,ha='left',va='top',color='w',fontsize=10)
     ax.set_axis_off()
     ax.set_aspect('auto')
     ax.add_patch(Rectangle((0,0),512,512,edgecolor =clrs_areas[1],
             linewidth = 3, fill=False))
     if i==0: 
          ax.set_title('PM')
+
 plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True, offset=3)
 
-fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals_example_planes.png' % nanimals))
-
-
-
-
-
-# # direc = 'W:\\Users\\Matthijs\\Rawdata\\LPE10192\\2023_10_10\\'
-
-# nslices         = len(os.listdir(os.path.join(direc,'STACK_PM')))
-# slicedepths     = np.linspace(0,10*(nslices-1),nslices)
-# nchannels       = 2 #whether image has both red and green channel acquisition (PMT)
-
-# ### V1 stack loading:
-# greenstack_V1  = np.empty([512,512,nslices])
-# redstack_V1    = np.empty([512,512,nslices])
-# for i,x in enumerate(os.listdir(os.path.join(direc,'STACK_V1'))):
-#     if x.endswith(".tif"):
-#             fname = Path(os.path.join(direc,'STACK_V1',x))
-#             reader = imread(str(fname)) # amazing - this librarty needs str
-#             Data = reader.data()
-#             greenstack_V1[:,:,i] = np.average(Data[0::2,:,:], axis=0)
-#             redstack_V1[:,:,i] = np.average(Data[1::2,:,:], axis=0)
-
-# ### PM stack loading:
-# greenstack_PM  = np.empty([512,512,nslices])
-# redstack_PM    = np.empty([512,512,nslices])
-
-# for i,x in enumerate(os.listdir(os.path.join(direc,'STACK_PM'))):
-#     if x.endswith(".tif"):
-#             fname = Path(os.path.join(direc,'STACK_PM',x))
-#             reader = imread(str(fname)) # amazing - this librarty needs str
-#             Data = reader.data()
-#             greenstack_PM[:,:,i] = np.average(Data[0::2,:,:], axis=0)
-#             redstack_PM[:,:,i] = np.average(Data[1::2,:,:], axis=0)
-
-
-
-# chan = [[1,0]] # grayscale=0, R=1, G=2, B=3 # channels = [cytoplasm, nucleus]
-# diam = 12
-
-# # model_type='cyto' or 'nuclei' or 'cyto2'
-# model_red = models.CellposeModel(pretrained_model = 'T:\\Python\\cellpose\\testdir\\models\\MOL_20230814_redcells')
-
-
-# nTdTomCells_V1       = np.zeros(nslices)
-# nTdTomCells_PM       = np.zeros(nslices)
-
-# ### Get number of tdTomato labeled cells (using cellpose):
-# for i in range(nslices): 
-#     print(i)
-#     img_red_V1 = np.zeros((512, 512, 3), dtype=np.uint8)
-#     img_red_V1[:,:,0] = normalize8(redstack_V1[:,:,i])
-
-#     masks_cp_red, flows, styles = model_red.eval(img_red_V1, diameter=diam, channels=chan)
-#     nTdTomCells_V1[i]      = len(np.unique(masks_cp_red))-1 #zero is counted as unique
-
-#     img_red_PM = np.zeros((512, 512, 3), dtype=np.uint8)
-#     img_red_PM[:,:,0] = normalize8(redstack_PM[:,:,i])
-
-#     masks_cp_red, flows, styles = model_red.eval(img_red_PM, diameter=diam, channels=chan)
-#     nTdTomCells_PM[i]      = len(np.unique(masks_cp_red))-1 #zero is counted as unique
-
-
-# ### Get the mean fluorescence for each plane:
-# meanF2_V1       = [np.mean(redstack_V1[:,:,i]) for i in range(nslices)]
-# meanF1_V1       = [np.mean(greenstack_V1[:,:,i]) for i in range(nslices)]
-
-# meanF2_PM       = [np.mean(redstack_PM[:,:,i]) for i in range(nslices)]
-# meanF1_PM       = [np.mean(greenstack_PM[:,:,i]) for i in range(nslices)]
-# %%
+fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals_example_planes.png' % nanimals), 
+            dpi=300,format = 'png',bbox_inches='tight')
+fig.savefig(os.path.join(savedir,'Labeling_Depth_%danimals_example_planes.pdf' % nanimals),
+            dpi=300,format = 'pdf',bbox_inches='tight')

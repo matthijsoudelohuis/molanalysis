@@ -17,7 +17,7 @@ from statannotations.Annotator import Annotator
 
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from sklearn import preprocessing
-from utils.plotting_style import *
+from utils.plot_lib import *
 from utils.rf_lib import filter_nearlabeled
 from utils.psth import compute_tensor,compute_respmat
 

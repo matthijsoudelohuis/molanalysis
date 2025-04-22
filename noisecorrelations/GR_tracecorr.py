@@ -21,7 +21,7 @@ from statannotations.Annotator import Annotator
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_respmat
 from utils.tuning import compute_tuning, compute_prefori
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.explorefigs import plot_PCA_gratings,plot_PCA_gratings_3D,plot_excerpt
 from utils.plot_lib import shaded_error
 from utils.RRRlib import regress_out_behavior_modulation

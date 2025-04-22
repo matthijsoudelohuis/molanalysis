@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat,compute_tensor_space,compute_respmat_space
 from loaddata.get_data_folder import get_local_drive
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.plot_lib import *
 from utils.behaviorlib import * # get support functions for beh analysis 
 from utils.regress_lib import * # get support functions for decoding

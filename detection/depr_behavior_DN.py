@@ -17,7 +17,7 @@ import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 from loaddata.session_info import filter_sessions,load_sessions,report_sessions
-from utils.plotting_style import * # get all the fixed color schemes
+from utils.plot_lib import * # get all the fixed color schemes
 from utils.behaviorlib import * # get support functions for beh analysis 
 
 savedir = 'D:\\OneDrive\\PostDoc\\Figures\\Detection\\'

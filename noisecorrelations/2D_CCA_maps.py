@@ -24,8 +24,7 @@ from scipy.stats import zscore
 from scipy.stats import binned_statistic,binned_statistic_2d
 
 from loaddata.session_info import filter_sessions,load_sessions
-from utils.plotting_style import * #get all the fixed color schemes
-from utils.plot_lib import shaded_error
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled
 from utils.tuning import compute_tuning, compute_prefori

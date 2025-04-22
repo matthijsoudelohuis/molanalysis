@@ -20,7 +20,7 @@ from sklearn.decomposition import PCA,FactorAnalysis
 from sklearn.model_selection import KFold
 from scipy.stats import zscore, pearsonr,spearmanr
 from rastermap import Rastermap, utils
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 
 # %matplotlib inline
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\PCA - Images and gratings\\'

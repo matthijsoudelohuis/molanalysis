@@ -21,7 +21,7 @@ from sklearn.metrics import r2_score
 
 #personal libs:
 from utils.plot_lib import *
-from utils.plotting_style import * # get all the fixed color schemes
+from utils.plot_lib import * # get all the fixed color schemes
 
 # def filter_engaged(sessions):
 #     for ises,ses in enumerate(sessions):
@@ -120,7 +120,7 @@ def plot_psycurve(sessions,filter_engaged=False):
         ax.text(params[0], 1.05, f'Threshold: {params[0]:.0f}%', ha='center', va='center', transform=ax.get_xaxis_transform())
         ax.text(0.6, 0.6, f'{ses.sessiondata["animal_id"][0]}\n{ses.sessiondata["sessiondate"][0]} \nStim {ses.sessiondata["stim"][0]}', ha='left', va='top', transform=ax.transAxes)
         plt.tight_layout()
-    # return
+    return fig
 
 def plot_all_psycurve(sessions,filter_engaged=False):
     ## Plot the results
@@ -212,7 +212,6 @@ def fit_psycurve(trialdata,printoutput=False,bootstrap=False):
     
     return params,r2
 
-
 def noise_to_psy(sessions,filter_engaged=True,bootstrap=False):
 
     for ises,ses in enumerate(sessions):
@@ -233,6 +232,19 @@ def noise_to_psy(sessions,filter_engaged=True,bootstrap=False):
 
     return sessions
 
+def get_idx_performing_sessions(sessions,zmin_thr=0,zmax_thr=0,guess_thr=0.4,filter_engaged=True):
+
+    sessiondata     = pd.concat([ses.sessiondata for ses in sessions])
+
+    if 'noise_zmin' not in sessiondata.columns:
+        sessions        = noise_to_psy(sessions,filter_engaged=filter_engaged,bootstrap=True)
+        sessiondata     = pd.concat([ses.sessiondata for ses in sessions])
+
+    idx_ses         = np.all((sessiondata['noise_zmin']<=zmin_thr,
+                    sessiondata['noise_zmax']>=zmax_thr,
+                    sessiondata['guess_rate']<=guess_thr),axis=0)
+    print('Filtered %d/%d DN sessions based on performance' % (np.sum(idx_ses),len(idx_ses)))
+    return idx_ses
 
 def calc_runPSTH(ses,s_pre = -75, s_post = 75, binsize = 5):
     """

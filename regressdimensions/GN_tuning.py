@@ -24,7 +24,7 @@ from statannotations.Annotator import Annotator
 from loaddata.session_info import filter_sessions,load_sessions
 # from utils.psth import compute_respmat
 from utils.tuning import *
-from utils.plotting_style import * #get all the fixed color schemes
+from utils.plot_lib import * #get all the fixed color schemes
 from utils.plot_lib import shaded_error
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\NoiseRegression\\GN_Stimuli\\')
