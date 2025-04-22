@@ -2,6 +2,7 @@
 import numpy as np
 from sklearn.decomposition import PCA, FactorAnalysis
 from utils.RRRlib import *
+from utils.shuffle_lib import my_shuffle
 
 def remove_dim(data,remove_method,remove_rank):
 
@@ -80,3 +81,64 @@ def var_along_dim(data,weights):
     var_tot     = np.var(data, axis=0).sum() # compute total variance of original data
     ev          = var_proj / var_tot # compute proportion of variance explained 
     return ev
+def estimate_dimensionality(X):
+    """
+    Estimate the dimensionality of a data set X using a PCA approach.
+    
+    The dimensionality is estimated by computing the number of principal components
+    required to explain a certain proportion of the variance (default 95%).
+    
+    Parameters
+    ----------
+    X : array (n_samples, n_features)
+        Data to analyze
+    
+    Returns
+    -------
+    n_components : int
+        Estimated number of components
+
+    # Example usage:
+    # X = np.random.rand(100, 50)  # Replace with your actual data
+    # dimensionality_estimates = estimate_dimensionality(X)
+    # print(dimensionality_estimates)
+
+    """
+    def pca_variance_explained(X, variance_threshold=0.95):
+        pca = PCA()
+        pca.fit(X)
+        cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
+        return np.argmax(cumulative_variance >= variance_threshold) + 1
+    
+    def pca_shuffled_data(X):
+        # X_shuffled = my_shuffle(X, random_state=0)
+        X_shuffled = my_shuffle(X, method='random')
+        pca_original = PCA().fit(X)
+        pca_shuffled = PCA().fit(X_shuffled)
+        return np.sum(pca_original.explained_variance_ > np.max(pca_shuffled.explained_variance_))
+    
+    def parallel_analysis_pca(X):
+        n_samples, n_features = X.shape
+        n_iter = 100
+        eigenvalues = np.zeros((n_iter, n_features))
+        for i in range(n_iter):
+            X_random = my_shuffle(X, method='random')
+            pca_random = PCA().fit(X_random)
+            eigenvalues[i, :] = pca_random.explained_variance_
+        mean_eigenvalues = np.mean(eigenvalues, axis=0)
+        pca = PCA().fit(X)
+        return np.sum(pca.explained_variance_ > mean_eigenvalues)
+    
+    def participation_ratio(X):
+        pca = PCA().fit(X)
+        explained_variance = pca.explained_variance_
+        return (np.sum(explained_variance) ** 2) / np.sum(explained_variance ** 2)
+    
+    results = {
+        "pca_95_variance_explained": pca_variance_explained(X),
+        "pca_shuffled_data": pca_shuffled_data(X),
+        "parallel_analysis_pca": parallel_analysis_pca(X),
+        "participation_ratio_above_1": participation_ratio(X)
+    }
+    
+    return results

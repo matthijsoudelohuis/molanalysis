@@ -184,6 +184,15 @@ class Session():
                                         self.videodata['ts'],self.trialdata['tOnset'],
                                         t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "motion energy")
         
+        self.respmat_videopc = compute_respmat(self.videodata['motionenergy'],
+                                        self.videodata['ts'],self.trialdata['tOnset'],
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "motion energy")
+        
+        nPCs = 30
+        self.respmat_videopc = compute_respmat(self.videodata[['videoPC_' + str(i) for i in range(nPCs)]],
+                                        self.videodata['ts'],self.trialdata['tOnset'],
+                                        t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "motion PCs")
+        
         if 'pupil_xpos' in self.videodata:
             self.respmat_pupilx = compute_respmat(self.videodata['pupil_xpos'],
                                                 self.videodata['ts'], self.trialdata['tOnset'],
@@ -193,7 +202,6 @@ class Session():
             self.respmat_pupily = compute_respmat(self.videodata['pupil_ypos'],
                                                 self.videodata['ts'], self.trialdata['tOnset'],
                                                 t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil y position')
-
         
         if 'pupil_area' in self.videodata:
             self.respmat_pupilarea = compute_respmat(self.videodata['pupil_area'],

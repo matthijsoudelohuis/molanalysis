@@ -90,7 +90,7 @@ def RRR_wrapper(Y, X, nN=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=5):
     # U is of shape K x r, S is of shape r x r, V is of shape r x M
     # Y_hat_rr,U,S,V     = RRR(Y, X, B_hat, r)
 
-    kf      = KFold(n_splits=kfold)
+    kf      = KFold(n_splits=kfold,shuffle=True)
 
     # Data format: 
     K,N     = np.shape(X)
@@ -105,8 +105,8 @@ def RRR_wrapper(Y, X, nN=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=5):
     R2_cv_folds = np.full((nranks,nmodelfits,kfold),np.nan)
 
     for imf in range(nmodelfits):
-        idx_areax_sub       = np.random.choice(N,nN,replace=False)
-        idx_areay_sub       = np.random.choice(M,nN,replace=False)
+        idx_areax_sub           = np.random.choice(N,nN,replace=False)
+        idx_areay_sub           = np.random.choice(M,nN,replace=False)
 
         X_sub                   = X[:,idx_areax_sub]
         Y_sub                   = Y[:,idx_areay_sub]
@@ -267,7 +267,8 @@ def xval_rank(Y, X, lam, ranks, K=5):
             EV_rrr[k,i] = EV(Y[test_ix], Y_hat_lr_test)
     return Rsss_lm, Rsss_rrr,EV_rrr
 
-def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2,lam=0.8):
+def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=None,nranks=None,lam=0,perCond=False):
+    
     if X is None:
         X,Xlabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
 
@@ -276,19 +277,66 @@ def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=2,lam=
         
     assert X.shape[0] == Y.shape[0],'number of samples of calcium activity and interpolated behavior data do not match'
 
-    ## LM model run
-    B_hat           = LM(Y, X, lam=lam)
+    if rank is None:
+        if nranks is None: 
+            nranks = X.shape[1]
+        
+        kfold = 5
 
-    Y_hat         = X @ B_hat
+        R2_cv_folds = np.full((nranks,kfold),np.nan)
+        kf = KFold(n_splits=kfold,shuffle=True)
+        for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
+            X_train, X_test     = X[idx_train], X[idx_test]
+            Y_train, Y_test     = Y[idx_train], Y[idx_test]
 
-    # decomposing and low rank approximation of Y_hat
-    U, s, V = linalg.svd(Y_hat)
-    S = linalg.diagsvd(s,U.shape[0],s.shape[0])
-    #construct low rank subspace prediction
-    Y_hat_rr       = U[:,:rank] @ S[:rank,:rank] @ V[:rank,:]
+            B_hat_train         = LM(Y_train,X_train, lam=lam)
 
-    Y_out           = Y - Y_hat_rr #subtract prediction
+            Y_hat_train         = X_train @ B_hat_train
 
-    print("EV of behavioral modulation: %1.4f" % EV(Y,Y_hat_rr))
+            # decomposing and low rank approximation of A
+            U, s, V = linalg.svd(Y_hat_train, full_matrices=False)
 
-    return Y_out
+            S = linalg.diagsvd(s,U.shape[0],s.shape[0])
+            for r in range(nranks):
+                B_rrr               = B_hat_train @ V[:r,:].T @ V[:r,:] #project beta coeff into low rank subspace
+                Y_hat_rr_test       = X_test @ B_rrr #project test data onto low rank predictive subspace
+                R2_cv_folds[r,ikf] = EV(Y_test,Y_hat_rr_test)
+
+        repmean,rank = rank_from_R2(R2_cv_folds,nranks,kfold)
+
+    if perCond:
+        Y_hat_rr = np.zeros(Y.shape)
+        conds = np.unique(ses.trialdata['stimCond'])
+        for ic in conds:
+            idx_c = ses.trialdata['stimCond']==ic
+
+            B_hat           = LM(Y[idx_c,:],X[idx_c,:],lam=lam)
+
+            Y_hat           = X[idx_c,:] @ B_hat
+
+            # decomposing and low rank approximation of Y_hat
+            U, s, V = linalg.svd(Y_hat)
+            S = linalg.diagsvd(s,U.shape[0],s.shape[0])
+
+            #construct low rank subspace prediction
+            Y_hat_rr[idx_c,:]       = U[:,:rank] @ S[:rank,:rank] @ V[:rank,:]
+
+        Y_out           = Y - Y_hat_rr #subtract prediction
+    else:
+
+        B_hat           = LM(Y,X,lam=lam)
+
+        Y_hat           = X @ B_hat
+
+        # decomposing and low rank approximation of Y_hat
+        U, s, V = linalg.svd(Y_hat)
+        S = linalg.diagsvd(s,U.shape[0],s.shape[0])
+
+        #construct low rank subspace prediction
+        Y_hat_rr       = U[:,:rank] @ S[:rank,:rank] @ V[:rank,:]
+
+        Y_out           = Y - Y_hat_rr #subtract prediction
+
+    # print("EV of behavioral modulation: %1.4f" % EV(Y,Y_hat_rr))
+
+    return Y_out,rank
