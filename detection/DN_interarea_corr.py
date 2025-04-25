@@ -452,6 +452,43 @@ fig.tight_layout()
 # fig.savefig(os.path.join(savedir,'RRR_RRR_time_R2.png'), 
             # format = 'png', bbox_inches='tight')  
 
+            
+#%% plot the results:
+narealabelpairs             = len(arealabelpairs)
+clrs_arealabelpairs         = get_clr_area_pairs(arealabelpairs)
+lstyle_hitmiss              = ['--','-']
+
+bincenters = sbins[(bin_starts+window_size/2).astype(int)]
+# fig,axes = plt.subplots(narealabelpairs,1,figsize=(3.5,2*narealabelpairs))
+fig,axes = plt.subplots(1,narealabelpairs,figsize=(narealabelpairs*3,3))
+axes = axes.flatten()
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax = axes[iapl]
+    for ihitmiss in [0,1]:
+        tempdata = dec_time_projcorr[iapl,ihitmiss,:]
+        handles.append(ax.plot(bincenters,np.nanmean(tempdata,axis=0),
+                                label=area, color=get_clr_areas([area]),linestyle=lstyle_hitmiss[ihitmiss])[0])
+        ax.fill_between(bincenters,np.nanmean(tempdata,axis=0)-np.nanstd(tempdata,axis=0),
+                        np.nanmean(tempdata,axis=0)+np.nanstd(tempdata,axis=0),alpha=0.3,color=get_clr_areas([area]))
+    if iapl==0:
+        ax.set_ylabel('R2 (RRR)')
+        ax.legend(handles=handles,labels=['Miss','Hit'],frameon=False,fontsize=8,loc='upper left')
+    ax.set_title(arealabelpair,fontsize=10,color=clrs_arealabelpairs[iapl])
+    if iapl==narealabelpairs-1:
+        ax.set_xticks(bincenters[::2])
+        ax.set_xlabel('Position (cm)')
+    else:
+        ax.set_xticks(bincenters[::2],labels=[])
+    add_stim_resp_win(ax)
+    # ax.set_ylim([0,0.1])
+    ax.set_xlim(np.percentile(bincenters,[0,100]))
+sns.despine(top=True,right=True,offset=3)
+
+# fig.suptitle('Time-resolved decoding of communication strength')
+fig.tight_layout()
+# fig.savefig(os.path.join(savedir,'RRR_RRR_time_R2.png'), 
+            # format = 'png', bbox_inches='tight')  
+
 #%% plot the results:
 narealabelpairs             = len(arealabelpairs)
 clrs_arealabelpairs         = get_clr_area_pairs(arealabelpairs)
