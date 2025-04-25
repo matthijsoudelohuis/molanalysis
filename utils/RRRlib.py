@@ -75,7 +75,7 @@ def RRR(Y, X, B_hat, r):
 
     return Y_hat_rr,U,S,V
 
-def RRR_wrapper(Y, X, nN=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=5):
+def RRR_wrapper(Y, X, nN=None,nM=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=5):
     # Input: 
     # Y is activity in area 2, X is activity in area 1
 
@@ -97,16 +97,17 @@ def RRR_wrapper(Y, X, nN=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=5):
     M       = np.shape(Y)[1]
 
     nN  = nN or min(M,N)
+    nM  = nM or min(M,N)
     nK  = nK or K
 
-    assert nN<=M and nN<=N, "number of subsampled neurons must be smaller than M and N"
+    assert nM<=M and nN<=N, "number of subsampled neurons must be smaller than M and N"
     assert nK<=K, "number of subsampled timepoints must be smaller than number of timepoints"
 
     R2_cv_folds = np.full((nranks,nmodelfits,kfold),np.nan)
 
     for imf in range(nmodelfits):
         idx_areax_sub           = np.random.choice(N,nN,replace=False)
-        idx_areay_sub           = np.random.choice(M,nN,replace=False)
+        idx_areay_sub           = np.random.choice(M,nM,replace=False)
 
         X_sub                   = X[:,idx_areax_sub]
         Y_sub                   = Y[:,idx_areay_sub]

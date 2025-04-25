@@ -655,135 +655,11 @@ plt.savefig(os.path.join(savedir,'PCA_CCA_EV_Ratio_%dsessions.png' % nSessions),
 
 
 
+# RRR
 
 
 
 
-
-
-
-#%% 
-
-######  ######  ######  
-#     # #     # #     # 
-#     # #     # #     # 
-######  ######  ######  
-#   #   #   #   #   #   
-#    #  #    #  #    #  
-#     # #     # #     # 
-
-#%% 
-
-
-
-
-
-
-
-
-
-
-
-
-#%% get optimal lambda
-nsampleneurons  = 200
-lambdas         = np.logspace(-6, 5, 10)
-# lambdas         = np.array([0,0.01,0.1,1])
-nlambdas        = len(lambdas)
-r               = 15
-kfold           = 10
-nranks          = 50
-
-R2_cv           = np.full((nSessions,nlambdas,nranks,kfold),np.nan)
-
-for ises,ses in enumerate(sessions):
-    # idx_T               = ses.trialdata['Orientation']==0
-    idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
-    idx_areax           = np.where(np.all((ses.celldata['roi_name']=='V1',
-                            ses.celldata['noise_level']<20),axis=0))[0]
-    idx_areay           = np.where(np.all((ses.celldata['roi_name']=='PM',
-                            ses.celldata['noise_level']<20),axis=0))[0]
-
-    if len(idx_areax)>nsampleneurons and len(idx_areay)>nsampleneurons:
-
-        idx_areax_sub       = np.random.choice(idx_areax,nsampleneurons,replace=False)
-        idx_areay_sub       = np.random.choice(idx_areay,nsampleneurons,replace=False)
-
-        X                   = sessions[ises].respmat[np.ix_(idx_areax_sub,idx_T)].T
-        Y                   = sessions[ises].respmat[np.ix_(idx_areay_sub,idx_T)].T
-        
-        X                   = zscore(X,axis=0)  #Z score activity for each neuron across trials/timepoints
-        Y                   = zscore(Y,axis=0)
-
-        # Explanation of steps
-        # X is of shape K x N (samples by features), Y is of shape K x M
-        # K is the number of samples, N is the number of neurons in area 1,
-        # M is the number of neurons in area 2
-
-        # multiple linear regression, B_hat is of shape N x M:
-        # B_hat               = LM(Y,X, lam=lam) 
-        #RRR: do SVD decomp of Y_hat, 
-        # U is of shape K x r, S is of shape r x r, V is of shape r x M
-        # Y_hat_rr,U,S,V     = RRR(Y, X, B_hat, r) 
-
-        for ilam,lam in enumerate(lambdas):
-            # cross-validation version
-            # R2_cv   = np.zeros(kfold)
-            kf      = KFold(n_splits=kfold)
-            for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
-                
-                X_train, X_test     = X[idx_train], X[idx_test]
-                Y_train, Y_test     = Y[idx_train], Y[idx_test]
-
-                B_hat_train         = LM(Y_train,X_train, lam=lam)
-
-                Y_hat_train         = X_train @ B_hat_train
-
-                # decomposing and low rank approximation of A
-                U, s, V = linalg.svd(Y_hat_train)
-                S = linalg.diagsvd(s,U.shape[0],s.shape[0])
-
-                # for r in range(nranks):
-                    # Y_hat_rr_train = U[:,:r] @ S[:r,:r] @ V[:r,:]
-                    # print(EV(Y_train,Y_hat_rr_train))
-
-                for r in range(nranks):
-                    Y_hat_rr_test       = X_test @ B_hat_train @ V[:r,:].T @ V[:r,:] #project test data onto low rank subspace
-
-                    R2_cv[ises,ilam,r,ikf] = EV(Y_test,Y_hat_rr_test)
-
-#%% 
-rankdata = np.full((nSessions,nlambdas),np.nan)
-for ises,ses in enumerate(sessions):
-    for ilam,lam in enumerate(lambdas):
-        rankdata[ises,ilam] = rank_from_R2(R2_cv[ises,ilam,:,:],nranks,kfold)
-
-#%% plot the results:
-lambdacolors = sns.color_palette('magma',nlambdas)
-
-fig,axes = plt.subplots(1,2,figsize=(6,3))
-ax  = axes[0]
-for ilam,lam in enumerate(lambdas):
-    tempdata = np.nanmean(R2_cv[:,ilam,:,:],axis=(0,2))
-    ax.plot(range(nranks),tempdata,color=lambdacolors[ilam],linewidth=1)
-ax.set_xlabel('rank')
-ax.set_ylabel('R2')
-
-ax = axes[1]
-for ises,ses in enumerate(sessions):
-    ax.plot(lambdas,rankdata[ises,:],color='grey',linewidth=1)
-ax.plot(lambdas,np.nanmean(rankdata,axis=0),color='k',linewidth=1.5)
-ax.scatter(lambdas,np.nanmean(rankdata,axis=0),s=100,marker='.',color=lambdacolors)
-# for ilam,lam in enumerate(lambdas):
-#     tempdata = np.nanmean(rankdata,axis=0)
-#     ax.plot(range(nranks),tempdata,color=lambdacolors[ilam],linewidth=1)
-ax.set_xlabel('lambda')
-ax.set_xscale('log')
-ax.set_ylabel('estimated rank')
-ax.set_ylim([0,np.max(rankdata)+1])
-
-plt.tight_layout()
-plt.savefig(os.path.join(savedir,'RRR_Lam_Rank_%dneurons.png' % nsampleneurons), format = 'png')
 
 #%% Test wrapper function:
 nsampleneurons  = 20
@@ -807,67 +683,6 @@ for ises,ses in enumerate(sessions):
     R2_cv[ises],optim_rank[ises]             = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
 
 
-#%% Does performance increase with increasing number of neurons? Predicting PM from V1 with different number of V1 and PM neurons
-
-popsizes            = np.array([5,10,20,50,100,200,500])
-# popsizes            = np.array([5,10,20,50,100])
-npopsizes           = len(popsizes)
-nranks              = 25
-nmodelfits          = 5 #number of times new neurons are resampled 
-kfold               = 5
-R2_cv               = np.full((nSessions,npopsizes),np.nan)
-optim_rank          = np.full((nSessions,npopsizes),np.nan)
-
-for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
-    # idx_T               = ses.trialdata['Orientation']==0
-    idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
-    idx_areax           = np.where(np.all((ses.celldata['roi_name']=='V1',
-                            ses.celldata['noise_level']<20),axis=0))[0]
-    idx_areay           = np.where(np.all((ses.celldata['roi_name']=='PM',
-                            ses.celldata['noise_level']<20),axis=0))[0]
-    
-    X                   = sessions[ises].respmat[np.ix_(idx_areax,idx_T)].T
-    Y                   = sessions[ises].respmat[np.ix_(idx_areay,idx_T)].T
-    for ipop,pop in enumerate(popsizes):
-        if len(idx_areax)>=pop and len(idx_areay)>=pop:
-            R2_cv[ises,ipop],optim_rank[ises,ipop]             = RRR_wrapper(Y, X, nN=pop,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
-
-
-#%% Plot R2 for different number of V1 and PM neurons
-clrs_popsizes = sns.color_palette("rocket",len(popsizes))
-
-fig,axes = plt.subplots(1,2,figsize=(6,3),sharex=True)
-ax = axes[0]
-ax.scatter(popsizes, np.nanmean(R2_cv,axis=0), marker='o', color=clrs_popsizes)
-# ax.plot(popsizes, np.nanmean(R2_cv,axis=0),color='k', linewidth=2)
-shaded_error(popsizes,R2_cv,center='mean',error='sem',color='k',ax=ax)
-ax.set_ylim([0,0.25])
-ax.set_xticks(popsizes)
-ax.axhline(y=0,color='k',linestyle='--')
-
-ax.set_xlabel('Population size')
-ax.set_ylabel('RRR R2')
-# ax.set_xscale('log')
-
-# Does the dimensionality increase with increasing number of neurons?
-ax = axes[1]
-ax.scatter(popsizes, np.nanmean(optim_rank,axis=0), marker='o', color=clrs_popsizes)
-shaded_error(popsizes,optim_rank,center='mean',error='sem',color='k',ax=ax)
-
-ax.plot(popsizes,popsizes**0.5,color='r',linestyle='--',linewidth=1)
-ax.text(50,10,'$n^{1/2}$',color='r',fontsize=12)
-ax.plot(popsizes,popsizes**0.3333,color='g',linestyle='--',linewidth=1)
-ax.text(50,2,'$n^{1/3}$',color='g',fontsize=12)
-
-ax.set_ylim([0,20])
-ax.set_ylabel('Dimensionality')
-ax.set_xlabel('Population size')
-ax.set_xticks(popsizes)
-
-sns.despine(top=True,right=True,offset=3)
-plt.tight_layout()
-# fig.savefig(os.path.join(savedir,'R2_RRR_Rank_PopSize_V1PM_%dsessions_log.png' % nSessions), format = 'png')
-fig.savefig(os.path.join(savedir,'R2_RRR_Rank_PopSize_V1PM_%dsessions.png' % nSessions), format = 'png')
 
 
 #%% Validate regressing out behavior: 
@@ -997,9 +812,6 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
 
             if len(idx_areax)>=nsampleneurons and len(idx_areay)>=nsampleneurons:
                 R2_cv[iapl,irbhv,ises],optim_rank[iapl,irbhv,ises]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
-
-#%%
-
 
 
 #%% 

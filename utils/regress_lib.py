@@ -145,7 +145,8 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
     if len(np.unique(Yfull)) == 2:
         ev      = var_along_dim(Xfull,weights)
     else:
-        ev = None
+        # ev = None
+        ev      = var_along_dim(Xfull,weights)
 
     return performance_avg,weights,projs,ev
 

@@ -38,14 +38,10 @@ calciumversion      = 'dF'
 session_list = np.array([['LPE12385', '2024_06_15']])
 # session_list = np.array([['LPE12385', '2024_06_16']])
 session_list = np.array([['LPE12013', '2024_04_25']])
-# session_list = np.array([['LPE11997', '2024_04_16']])
-# session_list = np.array([['LPE11998', '2024_04_30']])
-# session_list = np.array([['LPE11622', '2024_02_22']])
-# session_list = np.array([['LPE10884', '2023_12_15']])
-# session_list = np.array([['LPE10884', '2024_01_16']])
 session_list = np.array([['LPE11997', '2024_04_16'],
                          ['LPE11622', '2024_02_21'],
                          ['LPE11998', '2024_04_30'],
+                         ['LPE12385', '2024_06_15'],
                          ['LPE12013','2024_04_25']])
 
 sessions,nSessions = filter_sessions(protocol,only_session_id=session_list,load_behaviordata=True,load_videodata=True,
@@ -53,21 +49,11 @@ sessions,nSessions = filter_sessions(protocol,only_session_id=session_list,load_
 
 #%%
 minlabcells = 20
-minlabcells = 0
 sessions,nSessions = filter_sessions(protocol,min_lab_cells_PM=minlabcells,min_lab_cells_V1=minlabcells,min_cells=1,
                         load_behaviordata=True,load_videodata=True,load_calciumdata=True,calciumversion=calciumversion) #Load specified list of sessions
 
-#%% 
-# sessions,nSessions,sbins = load_neural_performing_sessions()
-idx_ses = get_idx_performing_sessions(sessions,zmin_thr=0,zmax_thr=0,guess_thr=0.4,filter_engaged=True)()
-
 #%% ### Show for all sessions which region of the psychometric curve the noise spans #############
 sessions = noise_to_psy(sessions,filter_engaged=True)
-
-#%% 
-for i in range(nSessions):
-    sessions[i].calciumdata = sessions[i].calciumdata.apply(zscore,axis=0)
-
 
 #%% ############################### Spatial Tensor #################################
 ## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
@@ -153,6 +139,8 @@ for ises,ses in enumerate(sessions):
         print('%d: %s: %d' % (ises,area,np.sum(ses.celldata['roi_name']==area)))
 
 #%% 
+labeled     = ['unl','lab']
+nlabels     = 2
 areas       = ['V1','PM','AL','RSP']
 areas       = ['V1','PM']
 nareas      = len(areas)
@@ -310,57 +298,331 @@ fig.savefig(os.path.join(savedir,'RRR_R2_Rank_%s%s_HitsMisses_Thr_%dsessions.png
                          (source_area,target_area,len(sessions))), 
             format = 'png',bbox_inches='tight',dpi=300)
 
+#%% print how many V1lab and PMlab cells there are in the loaded sessions:
+print('V1 labeled cells:')
+for ses in sessions:
+    print('%d' % np.sum(ses.celldata['arealabel']=='V1lab'))
 
+print('\nPM labeled cells:')
+for ses in sessions:
+    print('%d' % np.sum(ses.celldata['arealabel']=='PMlab'))
 
-#%% Time-resolved RRR across time bins (decoding communication strength over time)
-window_size         = 3       # number of time bins per window
-step_size           = 1       # step between windows
-timebins            = np.arange(len(sbins))
-bin_starts          = np.arange(0, len(timebins) - window_size + 1, step_size)
+#%% Parameters for RRR between size-matched populations of V1 and PM labeled and unlabeled neurons
+arealabelpairs  = ['V1unl-PMunl',
+                    'V1unl-PMlab',
+                    'V1lab-PMunl',
+                    'V1lab-PMlab',
+                    'PMunl-V1unl',
+                    'PMunl-V1lab',
+                    'PMlab-V1unl',
+                    'PMlab-V1lab']
 
-arealabelpairs      = ['V1-PM','PM-V1']
+clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
 narealabelpairs     = len(arealabelpairs)
-nsampleneurons      = 100
-min_trials          = 50
+
+nsampleneurons      = 25
+
 lam                 = 0
 nranks              = 25
-nmodelfits          = 5 #number of times new neurons are resampled 
+nmodelfits          = 10 #number of times new neurons are resampled 
 kfold               = 5
 
-nhitmiss            = 2
+R2_cv               = np.full((narealabelpairs,nSessions),np.nan)
+optim_rank          = np.full((narealabelpairs,nSessions),np.nan)
+
+filter_nearby       = True
+
+idx_sbin            = (sbins>=-20) & (sbins<=50)
+min_trials          = 50 #minimum number of trials for each category to be included
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
+        idx_T               = np.isin(ses.trialdata['stimcat'],['N','M'])
+        # idx_T               = np.all((np.isin(ses.trialdata['stimcat'],['N','M'])),axis=0)
+        
+        for iapl, arealabelpair in enumerate(arealabelpairs):
+            
+            alx,aly = arealabelpair.split('-')
+            if filter_nearby:
+                idx_nearby  = filter_nearlabeled(ses,radius=50)
+            else:
+                idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+
+            idx_areax           = np.where(np.all((ses.celldata['arealabel']==alx,
+                                    ses.celldata['noise_level']<20,	
+                                    idx_nearby),axis=0))[0]
+            idx_areay           = np.where(np.all((ses.celldata['arealabel']==aly,
+                                    ses.celldata['noise_level']<20,	
+                                    idx_nearby),axis=0))[0]
+        
+            X                   = sessions[ises].stensor[np.ix_(idx_areax,idx_T,idx_sbin)].reshape(len(idx_areax),-1).T
+            Y                   = sessions[ises].stensor[np.ix_(idx_areay,idx_T,idx_sbin)].reshape(len(idx_areay),-1).T
+
+            if len(idx_areax)>=nsampleneurons and len(idx_areay)>=nsampleneurons and np.sum(idx_T)>=min_trials:
+                R2_cv[iapl,ises],optim_rank[iapl,ises]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+
+
+#%% Plot the number of dimensions per area pair
+datatoplot = R2_cv
+arealabelpairs2 = [al.replace('-','-\n') for al in arealabelpairs]
+
+fig, axes = plt.subplots(1,2,figsize=(8,3.5))
+ax=axes[0]
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax.scatter(np.ones(nSessions)*iapl + np.random.randn(nSessions)*0.1,datatoplot[iapl,:],color='k',marker='o',s=10)
+    ax.errorbar(iapl+0.25,np.nanmean(datatoplot[iapl,:]),np.nanstd(datatoplot[iapl,:])/np.sqrt(nSessions),color=clrs_arealabelpairs[iapl],marker='o',zorder=10)
+ax.plot(datatoplot,'k',linewidth=0.15,alpha=0.5)
+ax.set_xticks(range(narealabelpairs))
+ax.set_ylabel('R2 (cv)')
+ax.set_ylim([0,my_ceil(np.nanmax(datatoplot),2)])
+ax.set_xlabel('Population pair')
+ax.set_title('Performance at optimal rank')
+
+ax=axes[1]
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax.scatter(np.ones(nSessions)*iapl + np.random.randn(nSessions)*0.2,
+               optim_rank[iapl,:],color='k',marker='o',s=10)
+    ax.errorbar(iapl+0.25,np.nanmean(optim_rank[iapl,:]),np.nanstd(optim_rank[iapl,:])/np.sqrt(nSessions),color=clrs_arealabelpairs[iapl],marker='o',zorder=10)
+ax.plot(optim_rank,'k',linewidth=0.15,alpha=0.5)
+ax.set_xticks(range(narealabelpairs))
+ax.set_ylabel('Number of dimensions')
+ax.set_ylim([0,my_ceil(np.nanmax(optim_rank),0)+1])
+ax.set_yticks(np.arange(0,10,2))
+ax.set_xlabel('Population pair')
+ax.set_title('Dimensionality')
+
+sns.despine(top=True,right=True,offset=3)
+axes[0].set_xticklabels(arealabelpairs2,fontsize=7)
+axes[1].set_xticklabels(arealabelpairs2,fontsize=7)
+
+fig.savefig(os.path.join(savedir,'RRR_cvR2_V1PM_LabUnl_%dsessions.png' % nSessions))
+
+#%% Plot the number of dimensions per area pair
+
+arealabelpairs2 = [al.replace('-','-\n') for al in arealabelpairs]
+
+fig, axes = plt.subplots(1,2,figsize=(7,3),sharey=True,sharex=True)
+ax=axes[0]
+
+for iapl in [1,2,3]:
+    ax.scatter(R2_cv[0,:],R2_cv[iapl,:],marker='o', color=clrs_arealabelpairs[iapl],s=20)
+    t,p = ttest_rel(R2_cv[0,:],R2_cv[iapl,:],nan_policy='omit')
+    if p<0.05:
+        # ax.text(0.6,0.1+0.01*iapl,'%s (%s)' % (get_sig_asterisks(p),arealabelpairs2[iapl]),transform=ax.transAxes,
+        ax.text(0.6,0.1+0.1*iapl,'%s' % (get_sig_asterisks(p)),transform=ax.transAxes,
+                ha='center',va='center',fontsize=25,color=clrs_arealabelpairs[iapl])
+ax.legend(arealabelpairs[1:4],frameon=True,loc='upper right',fontsize=7,ncol=1,title=arealabelpairs[0] + ' vs.')
+ax.plot([0,1],[0,1],color='grey',linestyle='--')
+ax.set_xlim([0,my_ceil(np.nanmax(R2_cv),2)])
+ax.set_ylim([0,my_ceil(np.nanmax(R2_cv),2)])
+
+ax.set_xlabel('Unlabeled \n(%s)' % arealabelpairs[0])
+ax.set_ylabel('labeled population')
+ax.set_title('Feedforward (V1->PM)')
+
+ax=axes[1]
+for iapl in [5,6,7]:
+    ax.scatter(R2_cv[4,:],R2_cv[iapl,:],marker='o', color=clrs_arealabelpairs[iapl],s=20)
+    t,p = ttest_rel(R2_cv[4,:],R2_cv[iapl,:],nan_policy='omit')
+    if p<0.05:
+        ax.text(0.6,0.1+0.1*(iapl-4),'%s' % (get_sig_asterisks(p)),transform=ax.transAxes,
+                ha='center',va='center',fontsize=25,color=clrs_arealabelpairs[iapl])
+ax.legend(arealabelpairs[5:],frameon=True,loc='upper right',fontsize=7,ncol=1,title=arealabelpairs[4] + 'vs.')
+ax.plot([0,1],[0,1],color='grey',linestyle='--')
+ax.set_xlim([0,my_ceil(np.nanmax(R2_cv),2)])
+ax.set_ylim([0,my_ceil(np.nanmax(R2_cv),2)])
+ax_nticks(ax,3)
+ax.set_xlabel('Unlabeled \n(%s)' % arealabelpairs[4])
+ax.set_ylabel('labeled population')
+ax.set_title('Performance at optimal rank')
+ax.set_title('Feedback (PM->V1)')
+
+# ax=axes[1]
+# for iapl in [1,2,3]:
+#     ax.scatter(optim_rank[0,:],optim_rank[iapl,:],marker='o', color=clrs_arealabelpairs[iapl],s=15)
+#     t,p = ttest_rel(optim_rank[0,:],optim_rank[iapl,:],nan_policy='omit')
+#     print(p)
+#     if p<0.05:
+#         # ax.text(0.6,0.1+0.01*iapl,'%s (%s)' % (get_sig_asterisks(p),arealabelpairs2[iapl]),transform=ax.transAxes,
+#         ax.text(0.6,0.1+0.01*iapl,'%s' % (get_sig_asterisks(p)),transform=ax.transAxes,
+#                 ha='center',va='center',fontsize=25,color=clrs_arealabelpairs[iapl])
+
+# ax.plot([0,10],[0,10],color='grey',linestyle='--')
+# ax.set_xlim([0,np.nanmax(optim_rank)+1])
+# ax.set_ylim([0,np.nanmax(optim_rank)+1])
+
+# ax.set_xlabel(arealabelpairs[0])
+# ax.set_ylabel(arealabelpairs[1:4])
+# ax.set_title('Dimensionality')
+
+sns.despine(top=True,right=True,offset=3)
+fig.savefig(os.path.join(savedir,'RRR_cvR2_V1PM_LabUnl_%dsessions_scatter.png' % nSessions))
+
+#%% Same but for hits and misses separately:
+arealabelpairs  = ['V1unl-PMunl',
+                    'V1unl-PMlab',
+                    'V1lab-PMunl',
+                    'V1lab-PMlab',
+                    'PMunl-V1unl',
+                    'PMunl-V1lab',
+                    'PMlab-V1unl',
+                    'PMlab-V1lab']
+
+clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
+narealabelpairs     = len(arealabelpairs)
+
+nsampleneurons      = 25
+
+lam                 = 0
+nranks              = 25
+nmodelfits          = 10 #number of times new neurons are resampled 
+kfold               = 5
+
+R2_cv               = np.full((narealabelpairs,2,nSessions),np.nan)
+optim_rank          = np.full((narealabelpairs,2,nSessions),np.nan)
+
+filter_nearby       = True
+
+idx_sbin            = (sbins>=-20) & (sbins<=50)
+min_trials          = 50 #minimum number of trials for each category to be included
+
+def min_pop_size(ses):
+    arealabels      = ['V1lab','PMlab']
+
+    popsizes        = []
+    for ial, al in enumerate(arealabels):
+        popsizes.append(np.sum(np.all((ses.celldata['arealabel']==al,
+                            ses.celldata['noise_level']<20),axis=0)))
+    return np.min(popsizes)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
+    
+    # Sampling the same minimal number of neurons from each population (v1lab, v1unl, pmunl, pmlab)
+    nsampleneurons  = min_pop_size(ses)
+    # print(nsampleneurons)
+    
+    #Subsample the same number of trials/samples for hits and misses
+    idx_T_resp = np.empty((len(ses.trialdata['stimcat']),2),dtype=bool)
+    for iresp in [0,1]: #get the number of trials for both responses
+        idx_T_resp[:,iresp]               = np.all((np.isin(ses.trialdata['stimcat'],['N','M']),
+                                    ses.trialdata['lickResponse']==iresp),axis=0)
+    nsamples = np.min(np.sum(idx_T_resp,axis=0)) * idx_sbin.sum() #number of samples (trials x timebins)
+
+    for iresp in [0,1]:
+        # idx_T               = np.all((ses.trialdata['stimcat']=='N',
+                                # ses.trialdata['lickResponse']==iresp),axis=0)
+        
+        idx_T               = np.all((np.isin(ses.trialdata['stimcat'],['N','M']),
+                            ses.trialdata['lickResponse']==iresp),axis=0)
+        
+        for iapl, arealabelpair in enumerate(arealabelpairs):
+            
+            alx,aly = arealabelpair.split('-') #get source and target area label
+
+            if filter_nearby:
+                idx_nearby  = filter_nearlabeled(ses,radius=50)
+            else:
+                idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+
+            idx_areax           = np.where(np.all((ses.celldata['arealabel']==alx,
+                                    ses.celldata['noise_level']<20,	
+                                    idx_nearby),axis=0))[0]
+            idx_areay           = np.where(np.all((ses.celldata['arealabel']==aly,
+                                    ses.celldata['noise_level']<20,	
+                                    idx_nearby),axis=0))[0]
+        
+            X                   = sessions[ises].stensor[np.ix_(idx_areax,idx_T,idx_sbin)].reshape(len(idx_areax),-1).T
+            Y                   = sessions[ises].stensor[np.ix_(idx_areay,idx_T,idx_sbin)].reshape(len(idx_areay),-1).T
+
+            if len(idx_areax)>=nsampleneurons and len(idx_areay)>=nsampleneurons and np.sum(idx_T)>=min_trials:
+                R2_cv[iapl,iresp,ises],optim_rank[iapl,iresp,ises]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=nsamples,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+
+#%% 
+R2_cv[iapl,iresp,ises],optim_rank[iapl,iresp,ises]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+
+#%% Plot R2 for different number of V1 and PM neurons
+arealabelpairs2     = [al.replace('-','-\n') for al in arealabelpairs]
+
+fig,axes = plt.subplots(1,2,figsize=(8,4))
+ax = axes[0]
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax.scatter(R2_cv[iapl,0,:],R2_cv[iapl,1,:], marker='o', color=clrs_arealabelpairs[iapl])
+    # ax.scatter(R2_cv[:,0],R2_cv[:,1], marker='o', color='k')
+    t,p = ttest_rel(R2_cv[iapl,0,:],R2_cv[iapl,1,:],nan_policy='omit')
+    print(p)
+    if p<0.05:
+        ax.text(0.6,0.1+0.01*iapl,'%s' % get_sig_asterisks(p),transform=ax.transAxes,
+                ha='center',va='center',fontsize=25,color=clrs_arealabelpairs[iapl])
+ax.legend(arealabelpairs2,frameon=False,fontsize=7,ncol=2)
+ax.plot([0,1],[0,1],color='grey',linestyle='--')
+ax.set_xlim([0,my_ceil(np.nanmax(R2_cv),1)])
+ax.set_ylim([0,my_ceil(np.nanmax(R2_cv),1)])
+ax.set_title('R2 (RRR)')
+ax.set_xlabel('Misses')
+ax.set_ylabel('Hits')
+
+ax = axes[1]
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax.scatter(optim_rank[iapl,0,:]+np.random.rand(nSessions)*0.3,optim_rank[iapl,1,:]+np.random.rand(nSessions)*0.3, marker='o', color=clrs_arealabelpairs[iapl])
+    # ax.scatter(R2_cv[:,0],R2_cv[:,1], marker='o', color='k')
+    t,p = ttest_rel(optim_rank[iapl,0,:],optim_rank[iapl,1,:],nan_policy='omit')
+    if p<0.05:
+        ax.text(0.8,0.1+0.05*iapl,'%s' % get_sig_asterisks(p),transform=ax.transAxes,
+                ha='center',va='center',fontsize=15,color=clrs_arealabelpairs[iapl])
+ax.legend(arealabelpairs2,frameon=False,fontsize=7,ncol=2)
+ax.set_xlim([0,10])
+ax.set_ylim([0,10])
+ax.plot([0,10],[0,10],color='grey',linestyle='--')
+ax.set_title('Rank (RRR)')
+ax.set_xlabel('Misses')
+ax.set_ylabel('Hits')
+
+#%% Time-resolved RRR across time bins (decoding communication strength over time)
+window_size = 3       # number of time bins per window
+step_size   = 1       # step between windows
+timebins    = np.arange(len(sbins))
+bin_starts  = np.arange(0, len(timebins) - window_size + 1, step_size)
+
+arealabelpairs = ['V1unl-PMunl',
+                    'PMunl-V1unl']
+arealabelpairs  = ['V1unl-PMunl',
+                    'V1unl-PMlab',
+                    'V1lab-PMunl',
+                    'V1lab-PMlab',
+                    'PMunl-V1unl',
+                    'PMunl-V1lab',
+                    'PMlab-V1unl',
+                    'PMlab-V1lab']
+narealabelpairs = len(arealabelpairs)
+nsampleneurons  = 25
+
 # shape: [narealabelpairs, 2 (hit/miss), nSessions, nTimeWindows]
-RRR_time_R2       = np.full((narealabelpairs, nhitmiss, nSessions, len(bin_starts)), np.nan)
-RRR_time_Rank     = np.full((narealabelpairs, nhitmiss, nSessions, len(bin_starts)), np.nan)
+R2_timecv       = np.full((narealabelpairs, 2, nSessions, len(bin_starts)), np.nan)
+Rank_timecv   = np.full((narealabelpairs, 2, nSessions, len(bin_starts)), np.nan)
 
-# shape: [narealabelpairs, 2 (source/target), 2 (hit/miss), nSessions, nTimeWindows]
-dec_time_signalR2       = np.full((narealabelpairs, 2, nhitmiss, nSessions, len(bin_starts)), np.nan)
-dec_time_neuralR2       = np.full((narealabelpairs, 2,nhitmiss, nSessions, len(bin_starts)), np.nan)
-dec_time_projcorr       = np.full((narealabelpairs, nhitmiss, nSessions, len(bin_starts)), np.nan)
-dec_model_name          = 'Ridge'
-dec_lam                 = 100
-
-for ises, ses in tqdm(enumerate(sessions), total=nSessions, desc='Time-resolved RRR + decoding'):
+for ises, ses in tqdm(enumerate(sessions), total=nSessions, desc='Time-resolved RRR decoding'):
     for iresp in [0,1]:  # 0=miss, 1=hit
 
-        idx_T = np.all((np.isin(ses.trialdata['stimcat'],['N']),
-        # idx_T = np.all((np.isin(ses.trialdata['stimcat'],['N','M']),
+        idx_T = np.all((np.isin(ses.trialdata['stimcat'],['N','M']),
                         ses.trialdata['lickResponse']==iresp), axis=0)
-
-        s_idx_T           = ses.trialdata['signal'][idx_T].to_numpy()
 
         if np.sum(idx_T) < min_trials:
             continue  # Skip sessions with too few trials
 
         for iapl, arealabelpair in enumerate(arealabelpairs):
             # print('Processing %s' % arealabelpair)
-            alx, aly    = arealabelpair.split('-')
+            alx, aly = arealabelpair.split('-')
 
-            idx_areax   = np.where(np.all((ses.celldata['roi_name']==alx,
+            if filter_nearby:
+                idx_nearby = filter_nearlabeled(ses, radius=50)
+            else:
+                idx_nearby = np.ones(len(ses.celldata), dtype=bool)
+
+            idx_areax = np.where(np.all((ses.celldata['arealabel']==alx,
                                          ses.celldata['noise_level']<20,
-                                         ), axis=0))[0]
-            idx_areay   = np.where(np.all((ses.celldata['roi_name']==aly,
+                                         idx_nearby), axis=0))[0]
+            idx_areay = np.where(np.all((ses.celldata['arealabel']==aly,
                                          ses.celldata['noise_level']<20,
-                                         ), axis=0))[0]
+                                         idx_nearby), axis=0))[0]
 
             if len(idx_areax) < nsampleneurons or len(idx_areay) < nsampleneurons:
                 continue
@@ -371,71 +633,40 @@ for ises, ses in tqdm(enumerate(sessions), total=nSessions, desc='Time-resolved 
                 X = ses.stensor[np.ix_(idx_areax, idx_T, idx_bin)].reshape(len(idx_areax), -1).T
                 Y = ses.stensor[np.ix_(idx_areay, idx_T, idx_bin)].reshape(len(idx_areay), -1).T
 
-                # R2_rep, rank = RRR_wrapper(Y, X,
-                #                         nN=nsampleneurons,
-                #                         nK=None,
-                #                         lam=lam,
-                #                         nranks=nranks,
-                #                         kfold=kfold,
-                #                         nmodelfits=nmodelfits)
+                R2_rep, rank = RRR_wrapper(Y, X,
+                                        nN=nsampleneurons,
+                                        nK=None,
+                                        lam=lam,
+                                        nranks=nranks,
+                                        kfold=kfold,
+                                        nmodelfits=nmodelfits)
 
                 # Store max R2 across ranks (or select based on rank strategy)
-                RRR_time_R2[iapl, iresp, ises, itw] = R2_rep
-                RRR_time_Rank[iapl, iresp, ises, itw] = rank
-
-                stemp   = copy.deepcopy(s_idx_T)
-
-                # stemp = np.tile(stemp, len(idx_bin))
-                stemp = np.repeat(stemp, len(idx_bin))
-
-                idx_areax_sub  = np.random.choice(np.where(idx_areax)[0],size=nsampleneurons,replace=False)
-                idx_areay_sub  = np.random.choice(np.where(idx_areay)[0],size=nsampleneurons,replace=False)
-                
-                X = ses.stensor[np.ix_(idx_areax_sub, idx_T, idx_bin)].reshape(len(idx_areax_sub), -1).T
-                Y = ses.stensor[np.ix_(idx_areay_sub, idx_T, idx_bin)].reshape(len(idx_areay_sub), -1).T
-
-                # X               = np.nanmean(ses.stensor[np.ix_(idx_areax_sub, idx_T, idx_bin)], axis=2).T
-                # Y               = np.nanmean(ses.stensor[np.ix_(idx_areay_sub, idx_T, idx_bin)], axis=2).T
-
-                X,stemp,_           = prep_Xpredictor(X,stemp) #zscore, set columns with all nans to 0, set nans to 0
-                Y,stemp,_           = prep_Xpredictor(Y,stemp) #zscore, set columns with all nans to 0, set nans to 0
-                
-                r2_x,w_x,p_x,ev_x   = my_decoder_wrapper(X,stemp,model_name=dec_model_name,kfold=kfold,lam=dec_lam,
-                                                            subtract_shuffle=True,norm_out=True)
-                r2_y,w_y,p_y,ev_y   = my_decoder_wrapper(Y,stemp,model_name=dec_model_name,kfold=kfold,lam=dec_lam,
-                                                            subtract_shuffle=True,norm_out=True)
-                                
-                dec_time_signalR2[iapl,0,iresp, ises, itw] = r2_x
-                dec_time_signalR2[iapl,1,iresp, ises, itw] = r2_y
-                
-                dec_time_neuralR2[iapl,0,iresp, ises, itw] = ev_x
-                dec_time_neuralR2[iapl,1,iresp, ises, itw] = ev_y
-
-                dec_time_projcorr[iapl,iresp, ises, itw]   = np.corrcoef(p_x,p_y)[0,1]
-
+                R2_timecv[iapl, iresp, ises, itw] = R2_rep
+                Rank_timecv[iapl, iresp, ises, itw] = rank
 
 #%% plot the results:
-narealabelpairs             = len(arealabelpairs)
-clrs_arealabelpairs         = get_clr_area_pairs(arealabelpairs)
+narealabelpairs = len(arealabelpairs)
 
 # set to nan all sessions of which either hit or miss has nan
-hasnan = np.logical_or(np.isnan(RRR_time_R2[0,0,:,0]),np.isnan(RRR_time_R2[0,1,:,0]))
-RRR_time_R2[:, :, hasnan,:] = np.nan
+hasnan = np.logical_or(np.isnan(R2_timecv[0,0,:,0]),np.isnan(R2_timecv[0,1,:,0]))
+R2_timecv[:, :, hasnan,:] = np.nan
 
+# R2_timecv  # shape = [arealabels x hit/miss x sessions x timebins]
 bincenters = sbins[(bin_starts+window_size/2).astype(int)]
 # fig,axes = plt.subplots(narealabelpairs,1,figsize=(3.5,2*narealabelpairs))
-fig,axes = plt.subplots(1,narealabelpairs,figsize=(narealabelpairs*3,3))
+fig,axes = plt.subplots(2,4,figsize=(10,4))
 axes = axes.flatten()
 for iapl, arealabelpair in enumerate(arealabelpairs):
     ax = axes[iapl]
     handles = []
-    handles.append(ax.plot(bincenters,np.nanmean(RRR_time_R2[iapl,0,:],axis=0),label=arealabelpair, color=clrs_arealabelpairs[iapl],linestyle='--')[0])
-    handles.append(ax.plot(bincenters,np.nanmean(RRR_time_R2[iapl,1,:],axis=0),label=arealabelpair, color=clrs_arealabelpairs[iapl],linestyle='-')[0])
+    handles.append(ax.plot(bincenters,np.nanmean(R2_timecv[iapl,0,:],axis=0),label=arealabelpair, color=clrs_arealabelpairs[iapl],linestyle='--')[0])
+    handles.append(ax.plot(bincenters,np.nanmean(R2_timecv[iapl,1,:],axis=0),label=arealabelpair, color=clrs_arealabelpairs[iapl],linestyle='-')[0])
     if iapl==0:
         ax.set_ylabel('R2 (RRR)')
         ax.legend(handles=handles,labels=['Miss','Hit'],frameon=False,fontsize=8,loc='upper left')
-    ax.fill_between(bincenters,np.nanmean(RRR_time_R2[iapl,0,:],axis=0)-np.nanstd(RRR_time_R2[iapl,0,:],axis=0),np.nanmean(RRR_time_R2[iapl,0,:],axis=0)+np.nanstd(RRR_time_R2[iapl,0,:],axis=0),alpha=0.3,color=clrs_arealabelpairs[iapl])
-    ax.fill_between(bincenters,np.nanmean(RRR_time_R2[iapl,1,:],axis=0)-np.nanstd(RRR_time_R2[iapl,1,:],axis=0),np.nanmean(RRR_time_R2[iapl,1,:],axis=0)+np.nanstd(RRR_time_R2[iapl,1,:],axis=0),alpha=0.3,color=clrs_arealabelpairs[iapl])
+    ax.fill_between(bincenters,np.nanmean(R2_timecv[iapl,0,:],axis=0)-np.nanstd(R2_timecv[iapl,0,:],axis=0),np.nanmean(R2_timecv[iapl,0,:],axis=0)+np.nanstd(R2_timecv[iapl,0,:],axis=0),alpha=0.3,color=clrs_arealabelpairs[iapl])
+    ax.fill_between(bincenters,np.nanmean(R2_timecv[iapl,1,:],axis=0)-np.nanstd(R2_timecv[iapl,1,:],axis=0),np.nanmean(R2_timecv[iapl,0,:],axis=0)+np.nanstd(R2_timecv[iapl,0,:],axis=0),alpha=0.3,color=clrs_arealabelpairs[iapl])
     ax.set_title(arealabelpair,fontsize=10,color=clrs_arealabelpairs[iapl])
     if iapl==narealabelpairs-1:
         ax.set_xticks(bincenters[::2])
@@ -443,61 +674,11 @@ for iapl, arealabelpair in enumerate(arealabelpairs):
     else:
         ax.set_xticks(bincenters[::2],labels=[])
     add_stim_resp_win(ax)
-    ax.set_ylim([0,0.1])
+    ax.set_ylim([0,0.06])
     ax.set_xlim(np.percentile(bincenters,[0,100]))
 sns.despine(top=True,right=True,offset=3)
 
 # fig.suptitle('Time-resolved decoding of communication strength')
 fig.tight_layout()
-# fig.savefig(os.path.join(savedir,'RRR_RRR_time_R2.png'), 
-            # format = 'png', bbox_inches='tight')  
-
-#%% plot the results:
-narealabelpairs             = len(arealabelpairs)
-clrs_arealabelpairs         = get_clr_area_pairs(arealabelpairs)
-lstyle_hitmiss              = ['--','-']
-bincenters = sbins[(bin_starts+window_size/2).astype(int)]
-
-fig,axes = plt.subplots(2,narealabelpairs,figsize=(narealabelpairs*3,2*3),sharex=True,sharey=True)
-# axes = axes.flatten()
-for iapl, arealabelpair in enumerate(arealabelpairs):
-    areasplit    = arealabelpair.split('-')
-    for iarea,area in enumerate(areasplit):
-        ax = axes[iarea,iapl]
-        handles = []
-        for ihitmiss in [0,1]:
-            tempdata = dec_time_signalR2[iapl,iarea,ihitmiss,:]
-            handles.append(ax.plot(bincenters,np.nanmean(tempdata,axis=0),
-                                    label=area, color=get_clr_areas([area]),linestyle=lstyle_hitmiss[ihitmiss])[0])
-            ax.fill_between(bincenters,np.nanmean(tempdata,axis=0)-np.nanstd(tempdata,axis=0),
-                            np.nanmean(tempdata,axis=0)+np.nanstd(tempdata,axis=0),alpha=0.3,color=get_clr_areas([area]))
-        if iapl==0:
-            ax.set_ylabel('Signal R2')
-            ax.legend(handles=handles,labels=['Miss','Hit'],frameon=False,fontsize=8,loc='upper left')
-        ax.set_title(area,fontsize=10,color=clrs_arealabelpairs[iapl])
-        if iapl==narealabelpairs-1:
-            ax.set_xticks(bincenters[::2])
-            ax.set_xlabel('Position (cm)')
-        else:
-            ax.set_xticks(bincenters[::2],labels=[])
-        add_stim_resp_win(ax)
-        # ax.set_ylim([0,0.1])
-        ax.set_xlim(np.percentile(bincenters,[0,100]))
-sns.despine(top=True,right=True,offset=3)
-
-# fig.suptitle('Time-resolved decoding of communication strength')
-fig.tight_layout()
-# fig.savefig(os.path.join(savedir,'RRR_RRR_time_R2.png'), 
-            # format = 'png', bbox_inches='tight')  
-
-#%%
-
-
-        #   dec_time_signalR2[iapl,0,iresp, ises, itw] = r2_x
-        #             dec_time_neuralR2[iapl,0,iresp, ises, itw] = r2_y
-
-        #             dec_time_signalR2[iapl,1,iresp, ises, itw] = ev_x
-        #             dec_time_neuralR2[iapl,1,iresp, ises, itw] = ev_y
-
-        #             dec_time_projcorr[iapl,iresp, ises, itw]   = np.corrcoef(p_x,p_y)[0,1]
-
+fig.savefig(os.path.join(savedir,'RRR_R2_timecv.png'), 
+            format = 'png', bbox_inches='tight')  

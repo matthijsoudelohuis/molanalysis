@@ -92,7 +92,6 @@ def get_sig_asterisks(pvalue, return_ns=False):
 def ax_nticks(ax, n):
     ax.locator_params(axis='x', nbins=n)
     ax.locator_params(axis='y', nbins=n)
-    
 
 def add_stat_annotation(ax, x1, x2, y, p, h=None):
     """
