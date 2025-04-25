@@ -46,7 +46,8 @@ def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
             model = SVM.SVC(kernel='linear', C=lambda_)
             score_fun = 'accuracy'
         elif model_name == 'LDA':
-            model = LDA(n_components=1,solver='eigen', shrinkage=np.clip(lambda_,0,1))
+            n_components = np.unique(y).size-1
+            model = LDA(n_components=n_components,solver='eigen', shrinkage=np.clip(lambda_,0,1))
             score_fun = 'accuracy'
         elif model_name in ['Ridge', 'Lasso']:
             model = getattr(sklearn.linear_model,model_name)(alpha=lambda_)
@@ -82,7 +83,8 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
     elif model_name == 'SVM':
         model = SVM.SVC(kernel='linear', C=lam)
     elif model_name == 'LDA':
-        model = LDA(n_components=1,solver='eigen', shrinkage=np.clip(lam,0,1))
+        n_components = np.unique(Yfull).size-1
+        model = LDA(n_components=n_components,solver='eigen', shrinkage=np.clip(lam,0,1))
     elif model_name == 'GBC': #Gradient Boosting Classifier
         model = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1,max_depth=10, random_state=0,max_features='sqrt')
     elif model_name in ['Ridge', 'Lasso']:

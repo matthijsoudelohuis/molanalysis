@@ -173,12 +173,12 @@ nareas = len(areas)
 
 
 
-
 # %% 
 # sessions,nSessions   = filter_sessions(protocols = 'GR',only_all_areas=areas,min_lab_cells_V1=20,min_lab_cells_PM=20)
 sessions,nSessions   = filter_sessions(protocols = 'GR',only_all_areas=areas,filter_areas=areas)
 # sessions,nSessions   = filter_sessions(protocols = 'GN',only_all_areas=areas,filter_areas=areas)
 sessions,nSessions   = filter_sessions(protocols = ['GN','GR'],only_all_areas=areas,filter_areas=areas)
+# sessions,nSessions   = filter_sessions(protocols = ['GN','GR'],filter_areas=areas)
 
 #%%  Load data properly:        
 # calciumversion = 'deconv'

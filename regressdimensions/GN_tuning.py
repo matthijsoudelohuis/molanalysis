@@ -44,6 +44,22 @@ for ises in range(nSessions):    # iterate over sessions
                                 calciumversion='deconv')
 
 #%% ######### Compute average response, tuning metrics, and responsive fraction per session ##################
+ises = 0
+oris, speeds    = [np.unique(sessions[ises].trialdata[col]).astype('int') for col in ('centerOrientation', 'centerSpeed')]
+noris           = len(oris) 
+nspeeds         = len(speeds)
+areas           = np.array(['AL', 'PM', 'RSP', 'V1'], dtype=object)
+redcells        = np.array([0, 1])
+redcelllabels   = np.array(['unl', 'lab'])
+clrs,labels     = get_clr_gratingnoise_stimuli(oris,speeds)
+
+for ises in range(nSessions):
+    resp_mean,resp_res      = mean_resp_gn(sessions[ises])
+    sessions[ises].celldata['tuning_var'] = compute_tuning_var(resp_mat=sessions[ises].respmat,resp_res=resp_res)
+    sessions[ises].celldata['pref_ori'],sessions[ises].celldata['pref_speed'] = get_pref_orispeed(resp_mean,oris,speeds)
+
+
+#%% ######### Compute average response, tuning metrics, and responsive fraction per session ##################
 oris, speeds    = [np.unique(sessions[ises].trialdata[col]).astype('int') for col in ('centerOrientation', 'centerSpeed')]
 areas           = np.array(['AL', 'PM', 'RSP', 'V1'], dtype=object)
 redcells        = np.array([0, 1])
