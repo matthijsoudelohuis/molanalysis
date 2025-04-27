@@ -51,7 +51,7 @@ def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumd
 
 def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     load_videodata=False, calciumversion='dF',only_animal_id=None,
-                    only_session_id=None,
+                    only_session_id=None,min_noise_trials=None,
                     min_cells=None, min_lab_cells_V1=None, min_lab_cells_PM=None, 
                     filter_areas=None,min_trials=None, session_rf=None,
                     any_of_areas=None,only_all_areas=None,has_pupil=False,
@@ -127,6 +127,10 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                 # SELECT BASED ON # TRIALS
                 if min_trials is not None:
                     sesflag = sesflag and len(ses.trialdata) >= min_trials
+
+                # SELECT BASED ON # TRIALS
+                if min_noise_trials is not None:
+                    sesflag = sesflag and np.sum(ses.trialdata['stimcat']=='N') >= min_noise_trials
 
                 # SELECT BASED ON # CELLS
                 if sesflag and min_cells is not None:

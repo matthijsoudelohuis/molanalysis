@@ -9,6 +9,8 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 import math
 import pandas as pd
 import os
+os.chdir('e:\\Python\\molanalysis\\')
+
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
@@ -35,7 +37,8 @@ protocol            = ['DN']
 calciumversion      = 'deconv'
 
 sessions,nSessions  = filter_sessions(protocol,load_calciumdata=True,load_behaviordata=True,
-                                      load_videodata=True,calciumversion=calciumversion,min_cells=100)
+                                      load_videodata=True,calciumversion=calciumversion,min_noise_trials=350)
+
 
 #%% 
 sessions,nSessions,sbins = load_neural_performing_sessions()
@@ -64,7 +67,7 @@ sessions = calc_stimresponsive_neurons(sessions,sbins)
 
 #%%
 
-#%% Define the number of folds for cross-validation
+#%% Define the parameters for decoding
 kfold           = 5
 # lam             = 0.08
 lam             = 0.8
@@ -579,4 +582,318 @@ testwin         = [0,25]
 fig = plot_dec_perf_hitmiss_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,testwin=testwin)
 plt.suptitle('Decoding %s' % decode_var,fontsize=14)
 plt.savefig(os.path.join(savedir, 'Dec_%s_hitmiss_V1PM_Labeled_%dsessions.png' % (decode_var,nSessions)), format='png')
+
+
+
+
+
+
+
+
+
+
+
+
+
+#%% ########################## Load data #######################
+protocol            = ['DN']
+calciumversion      = 'deconv'
+
+sessions,nSessions  = filter_sessions(protocol,load_calciumdata=True,load_behaviordata=True,
+                                      load_videodata=True,calciumversion=calciumversion,min_noise_trials=350)
+
+#%% ############################### Spatial Tensor #################################
+## Construct spatial tensor: 3D 'matrix' of K trials by N neurons by S spatial bins
+## Parameters for spatial binning
+s_pre       = -80  #pre cm
+s_post      = 80   #post cm
+sbinsize     = 10     #spatial binning in cm
+
+for i in range(nSessions):
+    sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
+                                       sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=sbinsize,method='binmean')
+
+    sessions[i].stensor[np.isnan(sessions[i].stensor)] = np.nanmean(sessions[i].stensor)
+
+#%% print how much of the tensor is nan: 
+
+for i in range(nSessions):
+    print(f"Session {i}, {np.isnan(sessions[i].stensor).sum() / np.prod(sessions[i].stensor.shape) * 100:.2f}% of the tensor is nan")
+
+#%% #################### Compute spatial behavioral variables ####################################
+for ises,ses in enumerate(sessions): # running across the trial:
+    sessions[ises].behaviordata['runspeed'] = medfilt(sessions[ises].behaviordata['runspeed'], kernel_size=51)
+    [sessions[ises].runPSTH,sbins]     = calc_runPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=sbinsize)
+    [sessions[ises].pupilPSTH,sbins]   = calc_pupilPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=sbinsize)
+    [sessions[ises].videomePSTH,sbins] = calc_videomePSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=sbinsize)
+    [sessions[ises].lickPSTH,sbins]    = calc_lickPSTH(sessions[ises],s_pre=s_pre,s_post=s_post,binsize=sbinsize)
+
+
+#%% Parameters for decoding from size-matched populations of the different areas
+arealabels      = ['V1unl','PMunl','ALunl','RSPunl']
+clrs_arealabels = get_clr_area_labeled(arealabels)
+narealabels     = len(arealabels)
+kfold           = 5
+# lam             = 0.08
+lam             = 1
+nmintrialscond  = 10
+nmodelfits      = 10
+nminneurons     = 100 #how many neurons in a population to include the session
+nsampleneurons  = 100
+
+#%% Decoding projection:
+
+arealabels      = ['V1unl','PMunl','ALunl','RSPunl']
+clrs_arealabels = get_clr_area_labeled(arealabels)
+
+ises        = 2
+ses         = sessions[ises]
+
+var         = 'signal'
+decvars     = np.array(['signal','noise','choice'])
+ndecvars    = len(decvars)
+
+filter_nearby = False
+
+# Loop through each session
+# for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding response across sessions'):
+neuraldata = copy.deepcopy(ses.stensor)
+
+K = len(ses.trialdata)
+S = len(sbins)
+
+nsampleneurons = 250
+
+# neural_proj = np.full((np.sum(idx_T),len(sbins),narealabels,nmodelfits),np.nan)
+neural_proj = np.full((ndecvars,K,S,narealabels,nmodelfits),np.nan)
+neural_r2   = np.full((ndecvars,S,narealabels,nmodelfits),np.nan)
+dec_perf    = np.full((ndecvars,K,S,narealabels,nmodelfits),np.nan)
+
+for ivar,var in enumerate(decvars):
+    if var=='signal':
+        idx_T       = np.isin(ses.trialdata['stimcat'],['N'])
+
+        # idx_T       = np.all((np.isin(ses.trialdata['stimcat'],['N']),
+                    # ses.trialdata['engaged']==1),axis=0)
+        y_idx_T     = ses.trialdata['signal'][idx_T].to_numpy()
+        idx_S       = (sbins>=0) & (sbins<=20)
+        y_idx_T           = zscore(y_idx_T)
+
+    elif var=='noise':
+        idx_T       = np.all((np.isin(ses.trialdata['stimcat'],['C','N']),
+                                # np.isin(ses.trialdata['trialOutcome'],['HIT','CR']),
+                                ses.trialdata['engaged']==1),axis=0)
+        y_idx_T           = (ses.trialdata['stimcat'][idx_T] == 'N').to_numpy()
+        idx_S       = (sbins>=0) & (sbins<=20)
+
+    elif var=='max':
+        idx_T       = np.all((np.isin(ses.trialdata['stimcat'],['C','M']),
+                                # np.isin(ses.trialdata['trialOutcome'],['HIT','CR']),
+                                ses.trialdata['engaged']==1),axis=0)
+        y_idx_T           = (ses.trialdata['stimcat'][idx_T] == 'M').to_numpy()
+        idx_S       = (sbins>=0) & (sbins<=20)
+    elif var=='choice':
+        for isig,sig in enumerate(np.unique(ses.trialdata['signal'])):
+            idx_T = ses.trialdata['signal']==sig
+            neuraldata[:,idx_T,:] -= np.nanmean(neuraldata[:,idx_T,:],axis=1,keepdims=True)
+
+        #Correct setting: stimulus trials during engaged part of the session:
+        idx_T       = np.all((ses.trialdata['engaged']==1,np.isin(ses.trialdata['stimcat'],['N'])), axis=0)
+        y_idx_T     = ses.trialdata['lickResponse'][idx_T].to_numpy()
+        idx_S       = (sbins>=30) & (sbins<=50)
+        
+    if var=='signal':
+        lam         = 500
+        model_name  = 'Ridge'
+    else:
+        lam         = 0.1
+        model_name  = 'LOGR'
+
+    for ial, arealabel in enumerate(arealabels):
+        if filter_nearby:
+            idx_nearby  = filter_nearlabeled(ses,radius=50)
+        else:
+            idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+            
+        idx_N       = np.all((ses.celldata['arealabel']==arealabel,
+                                ses.celldata['noise_level']<20,	
+                                idx_nearby),axis=0)
+        
+        if len(y_idx_T) >= nmintrialscond and np.sum(idx_N) >= nsampleneurons:
+            temp = np.empty(nmodelfits)
+            for imf in range(nmodelfits):
+
+                idx_Ns      = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+
+                Xfull       = neuraldata[idx_Ns,:,:]
+                Xfull       -= np.nanmean(Xfull,axis=(1,2),keepdims=True)
+                Xfull       /= np.nanstd(Xfull,axis=(1,2),keepdims=True)
+
+                # For the axis determination, get the mean for the desired spatial window and trial set:
+                X           = np.nanmean(Xfull[np.ix_(np.ones(len(idx_Ns),dtype=bool),idx_T,idx_S)],axis=2)
+                X           = X.T # Transpose to K x N (samples x features)
+                
+                #Get the weight vector:
+                _,W,_,ev   = my_decoder_wrapper(X,y_idx_T,model_name=model_name,kfold=kfold,lam=lam,
+                                                        subtract_shuffle=False,norm_out=False)
+                
+                #Project the full tensor  onto the weight vector:
+                neural_proj[ivar,:,:,ial,imf]   = np.tensordot(Xfull,W,axes=([0],[0]))
+
+                for ibin, bincenter in enumerate(sbins):
+                    neural_r2[ivar,ibin,ial,imf] = var_along_dim(Xfull[:,:,ibin].T,W)
+
+#%% 
+
+def get_proj_mean_signalbins(data,trialdata,sbins,sigtype,nbins_noise,zmin,zmax,splithitmiss=True,min_ntrials=10,autobin=False):
+
+    lickresp    = [0,1]
+    D           = len(lickresp)
+
+    Z           = nbins_noise + 2
+
+    S           = len(sbins)
+
+    edges       = np.linspace(zmin,zmax,nbins_noise+1)
+    centers     = np.stack((edges[:-1],edges[1:]),axis=1).mean(axis=1)
+    if sigtype == 'signal_psy':
+        plotcenters = np.hstack((centers[0]-2*np.mean(np.diff(centers)),centers,centers[-1]+2*np.mean(np.diff(centers))))
+    elif sigtype=='signal': 
+        plotcenters = np.hstack((0,centers,100))
+
+    if splithitmiss: 
+        data_mean    = np.full((Z,S,D),np.nan)
+    else: 
+        data_mean    = np.full((Z,S),np.nan)
+
+    for ises,ses in enumerate(sessions):
+        if autobin:
+            edges       = np.linspace(np.min(trialdata[sigtype][trialdata['stimcat']=='N']),
+                                      np.max(trialdata[sigtype][trialdata['stimcat']=='N']),nbins_noise+1)
+            idx_T_all = get_idx_noisebins(trialdata,sigtype,edges)
+
+        else: 
+            idx_T_all = get_idx_noisebins(trialdata,sigtype,edges)
+
+        if splithitmiss:
+            for iZ in range(Z):
+                for ilr,lr in enumerate(lickresp):
+                    idx_T = np.all((idx_T_all[:,iZ],
+                                trialdata['lickResponse']==lr,
+                                trialdata['engaged']==1), axis=0)
+                    if np.sum(idx_T)>=min_ntrials:
+                        data_mean[iZ,:,ilr]        = np.nanmean(data[idx_T,:],axis=0)
+        else: 
+            for iZ in range(Z):
+                data_mean[iZ,:]      = np.nanmean(data[idx_T_all[:,iZ],:],axis=0)
+
+    return data_mean,plotcenters
+
+#%% 
+clrs_vars = ['g','b','k']
+fig,axes = plt.subplots(1,narealabels,figsize=(3*narealabels,2.5),sharex=True,sharey='row')
+for ial in range(narealabels):
+    ax = axes[ial]
+    for ivar in range(ndecvars):
+        shaded_error(sbins,neural_r2[ivar,:,ial,:].T,error='std',color=clrs_vars[ivar],ax=ax)
+        ax.set_xlim([-60,75])
+    add_stim_resp_win(ax)
+    ax.set_title(arealabels[ial])
+sns.despine(fig=fig, top=True, right=True,offset=5)
+
+#%% 
+nbins_noise = 5
+data_mean = np.full((ndecvars,nbins_noise+2,len(sbins),narealabels,nmodelfits),np.nan)
+for ivar, var in enumerate(decvars):
+    for ial, arealabel in enumerate(arealabels):
+        for imf in range(nmodelfits): 
+            data_mean[ivar,:,:,ial,imf],p = get_proj_mean_signalbins(neural_proj[ivar,:,:,ial,imf],ses.trialdata,sbins,'signal',nbins_noise,0,0,splithitmiss=False,min_ntrials=10,autobin=True)
+
+#%% 
+clrset = sns.color_palette('magma',nbins_noise+2)
+fig,axes = plt.subplots(ndecvars,narealabels,figsize=(3*narealabels,2.5*ndecvars),sharex=True,sharey='row')
+for ivar in range(ndecvars):
+    for ial in range(narealabels):
+        ax = axes[ivar,ial]
+        for isig in range(1,nbins_noise+1):
+        # for isig in range(nbins_noise+2):
+            shaded_error(sbins,data_mean[ivar,isig,:,ial,:].T,error='std',color=clrset[isig],ax=ax)
+        ax.set_xlim([-60,75])
+        add_stim_resp_win(ax)
+sns.despine(fig=fig, top=True, right=True,offset=5)
+
+#%% With splitting hits and misses: 
+nbins_noise = 5
+data_mean = np.full((ndecvars,nbins_noise+2,len(sbins),2,narealabels,nmodelfits),np.nan)
+for ivar, var in enumerate(decvars):
+    for ial, arealabel in enumerate(arealabels):
+        for imf in range(nmodelfits): 
+            data_mean[ivar,:,:,:,ial,imf],p = get_proj_mean_signalbins(neural_proj[ivar,:,:,ial,imf],
+                        ses.trialdata,sbins,'signal',nbins_noise,0,0,splithitmiss=True,min_ntrials=2,autobin=True)
+
+#%% 
+lsstyles = ['--','-']
+clrset = sns.color_palette('magma',nbins_noise+2)
+fig,axes = plt.subplots(ndecvars,narealabels,figsize=(3*narealabels,2.5*ndecvars),sharex=True,sharey='row')
+for ivar in range(ndecvars):
+    for ial in range(narealabels):
+        ax = axes[ivar,ial]
+        # for isig in range(nbins_noise+2):
+        for isig in range(1,nbins_noise+1):
+            for ihit in range(2):
+                shaded_error(sbins,data_mean[ivar,isig,:,ihit,ial,:].T,error='std',
+                             color=clrset[isig],linestyle=lsstyles[ihit],ax=ax)
+        ax.set_xlim([-60,75])
+        add_stim_resp_win(ax)
+sns.despine(fig=fig, top=True, right=True,offset=5)
+
+
+# neural_proj = np.full((ndecvars,K,S,narealabels,nmodelfits),np.nan)
+
+#%% 
+idx_stim = (sbins>=0) & (sbins<=20)
+idx_resp = (sbins>=30) & (sbins<=50)
+
+sig_proj = np.nanmean(neural_proj[:,:,idx_stim,:,:],axis=(2,4))[0]
+choice_proj = np.nanmean(neural_proj[:,:,idx_resp,:,:],axis=(2,4))[2]
+
+mrkrs = ['x','v']
+clrs_hitmiss = ['r','b']
+fig,axes = plt.subplots(1,narealabels,figsize=(3*narealabels,2.5),sharex=True,sharey='row')
+for ial in range(narealabels):
+    ax = axes[ial]
+    for ihit in range(2):
+        # idx_T       = np.all((ses.trialdata['engaged']==1,
+        idx_T       = np.all((
+                              np.isin(ses.trialdata['stimcat'],['N']),
+                              ses.trialdata['lickResponse']==ihit), axis=0)
+        
+        ax.scatter(sig_proj[idx_T,ial],choice_proj[idx_T,ial],8,alpha=0.7,
+                   color=clrs_hitmiss[ihit],marker=mrkrs[ihit])
+    ax.set_title(arealabels[ial])
+sns.despine(fig=fig, top=True, right=True,offset=5)
+
+
+
+#%% 
+
+for ibin, bincenter in enumerate(sbins):            # Loop through each spatial bin
+    # temp = np.empty(nmodelfits)
+    # for imf in range(nmodelfits):
+        y   = copy.deepcopy(y_idx_T)
+
+        if np.sum(idx_N) >= nsampleneurons:
+            # idx_Ns = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+            idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
+        else:
+            idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=True)
+
+        X       = neuraldata[np.ix_(idx_Ns,idx_T,sbins==bincenter)].squeeze()
+        X       = X.T
+
+        X,y,idx_nan   = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+        temp[imf],tempw,tempproj,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,
+                                                subtract_shuffle=False,norm_out=False)
+        neural_proj[idx_nan,ibin,ial,imf]   = tempproj
 
