@@ -38,19 +38,22 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
 
 #%% ################################################
 session_list        = np.array([['LPE11086','2023_12_16']])
+session_list        = np.array([['LPE13959','2025_02_24']])
 
 #%% Load sessions lazy: 
 sessions,nSessions   = filter_sessions(protocols = ['IM'],only_session_id=session_list)
 sessions,nSessions   = filter_sessions(protocols = ['IM'],min_lab_cells_V1=50,min_lab_cells_PM=50)
+sessions,nSessions   = filter_sessions(protocols = ['IM'],min_cells=3000)
 
 #%%   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
     # sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,calciumversion='deconv')
+    # sessions[ises].load_respmat(calciumversion='dF',keepraw=False)
     sessions[ises].load_respmat(calciumversion='deconv',keepraw=False)
 
 #%% ### Load the natural images:
-natimgdata = load_natural_images(onlyright=False)
-# natimgdata = load_natural_images(onlyright=True)
+# natimgdata = load_natural_images(onlyright=False)
+natimgdata = load_natural_images(onlyright=True)
 
 #%% Compute tuning metrics:
 for ses in sessions: 
@@ -173,6 +176,61 @@ def lowrank_RF_cv(Y, IMdata, lam=0.05,nranks=25,nsub=3,kfold=2):
     return cRF,Y_hat
 
 
+def linear_RF_cv(Y, IMdata, lam=0.05,nsub=3,kfold=2):
+    """
+    Compute a linear approximation of the receptive field (RF) from the natural image responses
+    Crossvalidated version
+    Parameters
+    ----------
+    Y : array with shape (K,N)
+        The neural responses to N natural images
+    IMdata : array with shape (H, W, K)
+        The natural image data of shape H x W x K 
+        where H is the height of the image, W is the width of the image, and K is the number of images
+    lam : float, default=0.05
+        The regularization parameter for the multiple linear regression
+    nsub : int, default=3
+        The downsampling factor for the natural images
+
+    Returns
+    -------
+    cRF : array with shape (Ly, Lx, N)
+        The linear approximation of the receptive field
+    Y_hat : array with shape (K,N)
+        The predicted neural responses
+    """
+
+    IMdata              = IMdata[::nsub, ::nsub, :]         #subsample the natural images
+    Ly,Lx,K             = np.shape(IMdata)                  #get dimensions
+    X                   = np.reshape(IMdata, (Ly*Lx, K)).T  #X is now pixels by images matrix
+    X                   = X / np.linalg.norm(X, axis=0)     # normalize the pixels in each image
+    assert np.shape(Y)[0] == np.shape(X)[0], 'Number of neuronal responses does not match number of images'
+
+    K,N                 = np.shape(Y)        # K is the number of images, N is the number of neurons
+    Y_hat               = np.full((K,N),np.nan)
+
+    kf = KFold(n_splits=kfold, shuffle=True)
+
+    B_hat_folds = np.full((Ly*Lx,N,kfold),np.nan)
+
+    for i, (train_index, test_index) in enumerate(kf.split(X)):
+
+        X_train, X_test = X[train_index], X[test_index]
+        Y_train, Y_test = Y[train_index], Y[test_index]
+
+        B_hat               = LM(Y_train, X_train, lam=lam)     #fit multiple linear regression (with ridge penalty)
+
+        Y_hat[test_index,:] = X_test @ B_hat         #predict the trial to trial response from the low rank coefficients
+        
+        B_hat_folds[:,:,i] = B_hat
+
+    B_hat   = np.nanmean(B_hat_folds, axis=2)
+
+    cRF         = np.reshape(B_hat, (Ly,Lx, N)) #reshape the low rank coefficients to the image space
+
+    return cRF,Y_hat
+
+
 #%% Fit each cRF with a 2D gaussian:
 def fit_2dgauss_cRF(cRF, nsub,celldata):
     N = np.shape(cRF)[2]
@@ -197,7 +255,7 @@ def fit_2dgauss_cRF(cRF, nsub,celldata):
     return celldata
 
 #%% On the trial to trial response: RRR to get RF
-sesidx  = 4
+sesidx  = 0
 nsub    = 4
 resp    = sessions[sesidx].respmat.T
 
@@ -229,9 +287,7 @@ print('Fraction of variance explained: %1.3f' % EV(resp,Y_hat))
 sessions[sesidx].celldata['RF_R2'] = r2_score(resp,Y_hat,multioutput='raw_values')
 print('Average per neuron fraction of variance explained: %1.3f' % np.mean(sessions[sesidx].celldata['RF_R2']))
 
-#%% Fit the cRF with a 2D gaussian:
-sessions[sesidx].celldata = fit_2dgauss_cRF(cRF, nsub=nsub,celldata=sessions[sesidx].celldata)
-
+#%% Add area labels:
 # sessions[sesidx].celldata['arealabel'] = sessions[sesidx].celldata['roi_name'] + sessions[sesidx].celldata['labeled']
 
 #%% Show example neurons for different populations:
@@ -242,8 +298,7 @@ nN              = 6 #number of example neurons to show
 fig,axes = plt.subplots(nN,narealabels,figsize=(3*narealabels,1*nN))
 for ial,arealabel in enumerate(arealabels):
     idx_neurons = np.where(np.all((sessions[sesidx].celldata['arealabel']==arealabel,
-                                   sessions[sesidx].celldata['noise_level']<100),axis=0))[0]
-
+                                   ),axis=0))[0]
     # idx_neurons = idx_neurons[np.argsort(sessions[sesidx].celldata['tuning_SNR'][idx_neurons])][-nN:]
     # idx_neurons = idx_neurons[np.argsort(-sessions[sesidx].celldata['tuning_SNR'][idx_neurons])][:nN]
     idx_neurons = idx_neurons[np.argsort(-sessions[sesidx].celldata['RF_R2'][idx_neurons])][:nN]
@@ -507,25 +562,50 @@ fig.savefig(os.path.join(savedir,'RRR_FitRF_corr_dRF_%s_%s.png' % (datatype,sess
 
 #%% Do some optimizations: lambda,kfold,rank
 
+
+
+#%% On the trial to trial response: RRR to get RF
+sesidx  = 1
+nsub    = 3
+resp    = sessions[sesidx].respmat.T
+#remove gain modulation by the population rate:
+# resp = resp / np.mean(resp, axis=1, keepdims=True)
+#normalize the response for each neuron to the maximum:
+resp = zscore(resp, axis=0)
+# resp = resp / np.percentile(resp, 90,axis=0)
+
+IMdata = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]
+
 #%% Optimize lambda:
-lams        = np.array([0.1,1,2,5,10])
+lams        = np.array([0,0.01,0.1,1,2,10])
+lams        = np.logspace(-2,1,10)
 EV_lams     = np.full((len(lams)),np.nan)
 
 for i, lam in enumerate(lams):
-    cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=lam,nranks=25,nsub=nsub)
-    EV_lams[i] = EV(resp,Y_hat)
+    cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=lam,nranks=50,nsub=nsub)
+    # cRF,Y_hat = linear_RF_cv(resp, IMdata,lam=lam,nsub=nsub)
+    
+    # EV_lams[i] = EV(resp,Y_hat)
     # EV_lams[i] = r2_score(resp,Y_hat)
+    # EV_lams[i] = 1 - np.var(resp - Y_hat)/np.var(resp)
+    EV_lams[i] = np.mean(r2_score(resp,Y_hat,multioutput='raw_values'))
 
+fig, ax = plt.subplots()
 plt.plot(lams,EV_lams)
+plt.xticks(lams)
+ax.set_xscale('log')
+ax.set_ylim([-0.1,0.2])
 
 #%% Rank increases EV, but flattens out around 25
-ranks        = np.array([5,25,50,100])
+ranks        = np.array([1,5,25,50,100,200])
 EV_ranks     = np.full((len(ranks)),np.nan)
 
 for i, rank in enumerate(ranks):
-    cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=2,nranks=rank,nsub=nsub)
+    cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=0.1,nranks=rank,nsub=nsub)
     # EV_ranks[i] = EV(resp,Y_hat)
-    EV_ranks[i] = r2_score(resp,Y_hat)
+    # EV_ranks[i] = r2_score(resp,Y_hat)
+    # EV_lams[i] = 1 - np.var(resp - Y_hat)/np.var(resp)
+    EV_ranks[i] = np.mean(r2_score(resp,Y_hat,multioutput='raw_values'))
 
 plt.plot(ranks,EV_ranks)
 
@@ -534,13 +614,249 @@ subs        = np.array([2,3,4,5])
 EV_nsubs     = np.full((len(subs)),np.nan)
 
 for i, nsub in enumerate(subs):
-    cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=1,nranks=25,nsub=nsub,kfold=2)
-    EV_nsubs[i] = EV(resp,Y_hat)
+    cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=0.1,nranks=100,nsub=nsub,kfold=2)
+    # EV_nsubs[i] = EV(resp,Y_hat)
+    EV_nsubs[i] = np.mean(r2_score(resp,Y_hat,multioutput='raw_values'))
 
 plt.plot(subs,EV_nsubs)
 
 
 
 
+
+#%% On the trial to trial response: RRR to get RF
+
+#NOTES:
+# For the reconstruction it worked really well to divide by population rate, zscore
+# Then fit the data with lam=0.05, nranks=50, nsub=3
+
+sesidx  = 2
+nsub    = 2
+resp    = sessions[sesidx].respmat.T
+lam     = 0.1
+
+K,N     = np.shape(resp)
+
+#remove gain modulation by the population rate:
+# poprate = np.mean(resp, axis=1)
+# popcoupling = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(N)]
+# resp  = resp / np.outer(poprate,popcoupling)
+#alternatively just by dividing by poprate:
+resp = resp / np.mean(resp, axis=1, keepdims=True)
+
+#normalize the response for each neuron to the maximum:
+resp = zscore(resp, axis=0)
+
+# resp = np.clip(resp,0.2,np.inf)
+# resp_F = np.sqrt(resp_F)
+# resp_F = np.log(resp_F+1)
+# resp_F -= np.mean(resp_F, axis=1, keepdims=True)
+
+IMdata = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]
+
+# cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=0.05,nranks=100,nsub=nsub)
+cRF,Y_hat = linear_RF_cv(resp, IMdata,lam=lam,nsub=nsub)
+
+RF_R2 = r2_score(resp,Y_hat,multioutput='raw_values')
+sessions[sesidx].celldata['RF_R2'] = RF_R2
+plt.hist(RF_R2,bins=100)
+print(np.mean(RF_R2))
+
+#%% Show the difference in the distribution of the responses for predicted vs true data:
+plt.hist(Y_hat.flatten(), bins=np.arange(-1,1,0.01), color='red', alpha=0.5)
+plt.hist(resp.flatten(), bins=np.arange(-1,1,0.01), color='blue', alpha=0.5)
+
+#%% Show example neurons for different populations:
+arealabels      = ['V1unl','V1lab','PMunl','PMlab']
+narealabels     = len(arealabels)
+nN              = 6 #number of example neurons to show
+
+fig,axes = plt.subplots(nN,narealabels,figsize=(3*narealabels,1*nN))
+for ial,arealabel in enumerate(arealabels):
+    idx_neurons = np.where(np.all((sessions[sesidx].celldata['arealabel']==arealabel,
+                                   ),axis=0))[0]
+    idx_neurons = idx_neurons[np.argsort(-sessions[sesidx].celldata['RF_R2'][idx_neurons])][:nN]
+
+    for i,iN in enumerate(idx_neurons):
+        ax = axes[i,ial]
+        lim = np.max(np.abs(cRF[:,:,iN]))*1.2
+        ax.imshow(cRF[:,:,iN],cmap='bwr',vmin=-lim,
+                            vmax=lim)
+        # ax.plot(sessions[sesidx].celldata['rf_az_RRR'][iN]/nsub,
+                # sessions[sesidx].celldata['rf_el_RRR'][iN]/nsub,'k+',markersize=9)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_axis_off()
+        ax.set_title(arealabel + sessions[sesidx].celldata['cell_id'][iN],fontsize=8)
+
+#%% Reconstruct images from the RF:
+
+idx_N = RF_R2>0.01
+idx_N = RF_R2>0.0
+
+# arealabel = 'V1lab'
+# arealabel = 'V1unl'
+# arealabel = 'PMunl'
+# arealabel = 'PMlab'
+# idx_N = sessions[sesidx].celldata['arealabel']==arealabel
+
+IMdata              = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]
+IMdata              = IMdata[::nsub, ::nsub, :]         #subsample the natural images
+
+resp_F              = copy.deepcopy(resp)
+# plt.hist(resp_F.flatten(),bins=np.arange(-0.5,5.5,0.01),color='blue',alpha=0.5)
+
+resp_F = np.clip(resp_F,np.percentile(resp_F,0),np.percentile(resp_F,99.99))
+IMdata_hat          = np.tensordot(cRF[:,:,idx_N],resp_F[:,idx_N],axes=[2,1])
+
+#%% Average the reconstructions for each image:
+unique_images   = np.unique(sessions[sesidx].trialdata['ImageNumber'])
+nUnImages       = len(unique_images)
+
+Lx              = IMdata.shape[0]
+Ly              = IMdata.shape[1]
+IMdata_mean     = np.zeros((Lx,Ly,nUnImages))
+IMdata_hat_mean = np.zeros((Lx,Ly,nUnImages))
+
+for iIM,IM in enumerate(unique_images):
+    IMdata_mean[:,:,iIM]        = np.mean(IMdata[:,:,sessions[sesidx].trialdata['ImageNumber']==IM],axis=2)
+    IMdata_hat_mean[:,:,iIM]    = np.mean(IMdata_hat[:,:,sessions[sesidx].trialdata['ImageNumber']==IM],axis=2)
+
+R2_IM   = np.zeros(nUnImages)
+for im in range(nUnImages):
+    R2_IM[im] = np.corrcoef(IMdata_mean[:,:,im].flatten(),IMdata_hat_mean[:,:,im].flatten())[0,1]
+    # R2_IM[im] = np.corrcoef(IMdata_mean[:,:,im].flatten(),IMdata_hat_mean[:,:,im].flatten())[0,1]**2
+plt.hist(R2_IM,bins=100)
+print(np.mean(R2_IM))
+
+#%% 
+neximages = 8
+eximages = np.argsort(-R2_IM)[:neximages]
+# eximages = np.argsort(R2_IM)[:neximages]
+fig,axes = plt.subplots(neximages,2,figsize=(3,neximages))
+for iIM,IM in enumerate(eximages):
+    ax = axes[iIM,0]
+    ax.imshow(IMdata_mean[:,:,IM],cmap='gray',aspect=1)
+    ax.axis('off')
+    if iIM==0: 
+        ax.set_title('True Image')
+    
+    # reconstruction = np.tensordot(cRF,resp[im,:],axes=[2,0])
+    ax = axes[iIM,1]
+    ax.imshow(IMdata_hat_mean[:,:,IM],cmap='gray',aspect=1)
+    ax.axis('off')
+    if iIM==0: 
+        ax.set_title('Reconstruction')
+plt.savefig(os.path.join(savedir,'BestReconstructions_%s_%s.png' % (arealabel,sessions[sesidx].sessiondata['session_id'][0])),format='png',dpi=300,bbox_inches='tight')
+
+#%% 
+
+IMdata_mean_hp = np.zeros(IMdata_mean.shape)
+for im in range(nUnImages):
+    IMdata_mean_hp[:,:,im] = IMdata_mean[:,:,im]-ndimage.gaussian_filter(IMdata_mean[:,:,im],sigma=2.5)
+
+fig,axes = plt.subplots(neximages,2,figsize=(3,neximages))
+for iIM,IM in enumerate(eximages):
+    ax = axes[iIM,0]
+    ax.imshow(IMdata_mean[:,:,IM],cmap='gray',aspect=1)
+    ax.axis('off')
+    ax = axes[iIM,1]
+    ax.imshow(IMdata_mean_hp[:,:,IM],cmap='gray',aspect=1)
+    ax.axis('off')
+
+#%% 
+R2_IM_hp   = np.zeros(nUnImages)
+R2_IM   = np.zeros(nUnImages)
+for im in range(nUnImages):
+    R2_IM_hp[im] = np.corrcoef(IMdata_mean_hp[:,:,im].flatten(),IMdata_hat_mean[:,:,im].flatten())[0,1]
+    R2_IM[im] = np.corrcoef(IMdata_mean[:,:,im].flatten(),IMdata_hat_mean[:,:,im].flatten())[0,1]
+    # R2_IM[im] = np.corrcoef(IMdata_mean[:,:,im].flatten(),IMdata_hat_mean[:,:,im].flatten())[0,1]**2
+plt.hist(R2_IM,bins=100,alpha=0.5)
+plt.hist(R2_IM_hp,bins=100,alpha=0.5)
+print(np.mean(R2_IM))
+plt.legend(['No HP','HP'])
+
+
+#%% Show the reconstruction of the same images with different populations: 
+
+
+
+
+
+
+
+
+#%% Get the correlation between the origial and reconstructed images per trial:
+IMdata              = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]
+IMdata              = IMdata[::nsub, ::nsub, :]         #subsample the natural images
+
+R2_pertrial   = np.zeros(5600)
+for im in range(5600):
+    R2_pertrial[im] = np.corrcoef(IMdata[:,:,im].flatten(),IMdata_hat[:,:,im].flatten())[0,1]
+plt.hist(R2_pertrial,bins=100)
+
+eximages = np.argsort(-R2_pertrial)[:neximages]
+
+#%% 
+fig,axes = plt.subplots(neximages,2,figsize=(3,neximages))
+for iIM,IM in enumerate(eximages):
+    ax = axes[iIM,0]
+    # ax.imshow(IMdata_mean_hp[:,:,IM],cmap='gray',aspect=1)
+    ax.imshow(IMdata[:,:,IM],cmap='gray',aspect=1)
+    ax.axis('off')
+    if iIM==0: 
+        ax.set_title('True Image')
+    
+    # reconstruction = np.tensordot(cRF,resp[im,:],axes=[2,0])
+    ax = axes[iIM,1]
+    ax.imshow(IMdata_hat[:,:,IM],cmap='gray',aspect=1)
+    ax.axis('off')
+    if iIM==0: 
+        ax.set_title('Reconstruction')
+
+#%% Plot the R2_pertrial over the courrse of the whole session, i.e. per trial:
+fig = plt.figure(figsize=(12,3))
+# plt.plot(R2_pertrial,color='k',linewidth=0.5)
+plt.plot(R2_pertrial,marker='.',markersize=1,color='k',linewidth=0.1)
+plt.xlabel('Trial #')
+plt.xticks([0,2800,5600])
+plt.xlim([0,5600])
+plt.ylim([0,0.8])
+plt.ylabel('R2 per trial')
+plt.title('Reconstruction')
+sns.despine(offset=3,top=True,right=True,trim=True)
+plt.savefig(os.path.join(savedir,'R2_pertrial_session_%s.png' % (sessions[sesidx].sessiondata['session_id'][0])),format='png',dpi=300,bbox_inches='tight')
+
+#%% Is reconstruction correlated to different variables: 
+from scipy.stats import pearsonr as pearsonr
+
+poprate = np.mean(zscore(sessions[sesidx].respmat.T,axis=0), axis=1)
+
+varlabels = np.array(['trial number','poprate','runspeed','pupil area','video ME'])
+varcolors = ['b','g','r','c','m']
+vardata = np.stack((sessions[sesidx].trialdata['TrialNumber'],
+                        poprate,
+                        sessions[sesidx].respmat_runspeed,
+                        sessions[sesidx].respmat_pupilarea,
+                        sessions[sesidx].respmat_videome,))
+
+fig,axes = plt.subplots(1,len(varlabels),figsize=(12,3),sharey=True)
+
+for ivar,var in enumerate(varlabels):
+    xdata = vardata[ivar,:]
+    ax = axes[ivar]
+    ax.scatter(xdata,R2_pertrial,c=varcolors[ivar],s=2,alpha=0.5)
+    r,p = pearsonr(xdata,R2_pertrial)
+    ax.text(0.05,0.95,'r=%.2f, p=%.2e' % (r,p),transform=ax.transAxes)
+    ax.set_xlabel(var)
+    ax.set_ylim([0,1])
+    ax.set_xlim(np.percentile(xdata,0.2),np.percentile(xdata,99.8))
+    # ax_nticks(ax,5)
+    if ivar==0: 
+        ax.set_ylabel('R2 per trial')
+
+fig.tight_layout()
+sns.despine(offset=3,top=True,right=True,trim=True)
+my_savefig(fig,savedir,'R2_pertrial_vs_variables_%s.png' % (sessions[sesidx].sessiondata['session_id'][0]))
 
 
