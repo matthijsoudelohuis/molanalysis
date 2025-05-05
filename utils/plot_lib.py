@@ -93,7 +93,7 @@ def ax_nticks(ax, n):
     ax.locator_params(axis='x', nbins=n)
     ax.locator_params(axis='y', nbins=n)
 
-def add_stat_annotation(ax, x1, x2, y, p, h=None):
+def add_stat_annotation(ax, x1, x2, y, p, h=None,**kwargs):
     """
     Add statistical annotation to plot.
 
@@ -121,7 +121,7 @@ def add_stat_annotation(ax, x1, x2, y, p, h=None):
         h = y / 10
     ax.plot([x1, x1, x2, x2], [y, y + h, y + h, y], lw=1.5, c='k')
     ax.text((x1 + x2) * .5, y + h, get_sig_asterisks(p, return_ns=True),
-            ha='center', va='bottom', size=8)
+            ha='center', va='bottom', **kwargs)
 
 
 def add_stim_resp_win(ax,colors=['k','b'],linestyles=['--','--'],linewidth=1):

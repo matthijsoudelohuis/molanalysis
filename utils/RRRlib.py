@@ -14,6 +14,8 @@ from sklearn.decomposition import PCA
 from sklearn.decomposition import FastICA as ICA
 from sklearn.model_selection import KFold
 from scipy.stats import zscore
+from sklearn.impute import SimpleImputer
+from scipy.sparse.linalg import svds
 
 def EV(Y,Y_hat):
     e = Y - Y_hat
@@ -97,7 +99,7 @@ def RRR_wrapper(Y, X, nN=None,nM=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits
     M       = np.shape(Y)[1]
 
     nN  = nN or min(M,N)
-    nM  = nM or min(M,N)
+    nM  = nM or nN or min(M,N)
     nK  = nK or K
 
     assert nM<=M and nN<=N, "number of subsampled neurons must be smaller than M and N"
@@ -125,8 +127,11 @@ def RRR_wrapper(Y, X, nN=None,nM=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits
             Y_hat_train         = X_train @ B_hat_train
 
             # decomposing and low rank approximation of A
-            U, s, V = linalg.svd(Y_hat_train, full_matrices=False)
+            # U, s, V = linalg.svd(Y_hat_train, full_matrices=False)
             
+            U, s, V = svds(Y_hat_train,k=np.min((nranks,nN,nM))-1,which='LM')
+            U, s, V = U[:, ::-1], s[::-1], V[::-1, :]
+
             S = linalg.diagsvd(s,U.shape[0],s.shape[0])
 
             for r in range(nranks):
@@ -268,22 +273,35 @@ def xval_rank(Y, X, lam, ranks, K=5):
             EV_rrr[k,i] = EV(Y[test_ix], Y_hat_lr_test)
     return Rsss_lm, Rsss_rrr,EV_rrr
 
-def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=None,nranks=None,lam=0,perCond=False):
+def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=None,nranks=None,lam=0,perCond=False,kfold = 5):
     
     if X is None:
-        X,Xlabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
+        idx_T   = np.ones(len(ses.trialdata),dtype=bool)
+        X       = np.stack((ses.respmat_videome[idx_T],
+                        ses.respmat_runspeed[idx_T],
+                        ses.respmat_pupilarea[idx_T],
+                        ses.respmat_pupilx[idx_T],
+                        ses.respmat_pupily[idx_T]),axis=1)
+        X       = np.column_stack((X,ses.respmat_videopc[:nvideoPCs,idx_T].T))
+        X       = zscore(X,axis=0,nan_policy='omit')
+
+        si      = SimpleImputer()
+        X       = si.fit_transform(X)
+
+        # X,Xlabels = construct_behav_matrix_ts_F(ses,nvideoPCs=nvideoPCs)
 
     if Y is None:
-        Y = ses.calciumdata.to_numpy()
-        
+        # Y = ses.calciumdata.to_numpy()
+
+        Y               = ses.respmat[:,idx_T].T
+        Y               = zscore(Y,axis=0,nan_policy='omit')
+
     assert X.shape[0] == Y.shape[0],'number of samples of calcium activity and interpolated behavior data do not match'
 
     if rank is None:
         if nranks is None: 
             nranks = X.shape[1]
         
-        kfold = 5
-
         R2_cv_folds = np.full((nranks,kfold),np.nan)
         kf = KFold(n_splits=kfold,shuffle=True)
         for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
@@ -295,8 +313,10 @@ def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=None,n
             Y_hat_train         = X_train @ B_hat_train
 
             # decomposing and low rank approximation of A
-            U, s, V = linalg.svd(Y_hat_train, full_matrices=False)
-
+            # U, s, V = linalg.svd(Y_hat_train, full_matrices=False)
+            U, s, V = svds(Y_hat,k=nranks,which='LM')
+            U, s, V = U[:, ::-1], s[::-1], V[::-1, :]
+    
             S = linalg.diagsvd(s,U.shape[0],s.shape[0])
             for r in range(nranks):
                 B_rrr               = B_hat_train @ V[:r,:].T @ V[:r,:] #project beta coeff into low rank subspace
@@ -316,7 +336,10 @@ def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=None,n
             Y_hat           = X[idx_c,:] @ B_hat
 
             # decomposing and low rank approximation of Y_hat
-            U, s, V = linalg.svd(Y_hat)
+            # U, s, V = linalg.svd(Y_hat)
+            U, s, V = svds(Y_hat,k=rank)
+            U, s, V = U[:, ::-1], s[::-1], V[::-1, :]
+
             S = linalg.diagsvd(s,U.shape[0],s.shape[0])
 
             #construct low rank subspace prediction
@@ -330,7 +353,10 @@ def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=None,n
         Y_hat           = X @ B_hat
 
         # decomposing and low rank approximation of Y_hat
-        U, s, V = linalg.svd(Y_hat)
+        # U, s, V = linalg.svd(Y_hat,full_matrices=False)
+        U, s, V = svds(Y_hat,k=rank)
+        U, s, V = U[:, ::-1], s[::-1], V[::-1, :]
+
         S = linalg.diagsvd(s,U.shape[0],s.shape[0])
 
         #construct low rank subspace prediction
@@ -340,4 +366,4 @@ def regress_out_behavior_modulation(ses,X=None,Y=None,nvideoPCs = 30,rank=None,n
 
     # print("EV of behavioral modulation: %1.4f" % EV(Y,Y_hat_rr))
 
-    return Y_out,rank
+    return Y,Y_hat_rr,Y_out,rank,EV(Y,Y_hat_rr)

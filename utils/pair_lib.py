@@ -19,7 +19,8 @@ def compute_pairwise_metrics(sessions):
 
 def compute_pairwise_anatomical_distance(sessions):
 
-    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing pairwise anatomical distance for each session: '):
+    for ises in range(len(sessions)):
+    # for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing pairwise anatomical distance for each session: '):
         ## Compute euclidean distance matrix based on soma center:
         
         N                              = len(sessions[ises].celldata) #get dimensions of response matrix
@@ -30,6 +31,7 @@ def compute_pairwise_anatomical_distance(sessions):
         y = sessions[ises].celldata['yloc'].to_numpy()
         z = sessions[ises].celldata['depth'].to_numpy()
         b = np.array((x,y,z)) #store this vector for fast linalg norm computation
+        
         for i in range(N): #compute distance from each neuron to all others:
             a = np.array((x[i],y[i],z[i]))
             sessions[ises].distmat_xyz[i,:] = np.linalg.norm(a[:,np.newaxis]-b,axis=0)
@@ -46,8 +48,8 @@ def compute_pairwise_anatomical_distance(sessions):
     return sessions
 
 def compute_pairwise_delta_rf(sessions,rf_type='F'):
-
-    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing pairwise delta receptive field for each session: '):
+    for ises in range(len(sessions)):
+    # for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing pairwise delta receptive field for each session: '):
         N           = len(sessions[ises].celldata) #get dimensions of response matrix
 
         ## Compute euclidean distance matrix based on receptive field:

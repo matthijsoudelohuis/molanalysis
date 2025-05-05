@@ -61,8 +61,8 @@ nranks          = 50
 R2_cv           = np.full((nSessions,nlambdas,nranks,kfold),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different labmdas'):
-    # idx_T               = ses.trialdata['Orientation']==0
-    idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
+    idx_T               = ses.trialdata['Orientation']==0
+    # idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
     idx_areax           = np.where(np.all((ses.celldata['roi_name']=='V1',
                             ses.celldata['noise_level']<20),axis=0))[0]
     idx_areay           = np.where(np.all((ses.celldata['roi_name']=='PM',
@@ -112,10 +112,23 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
 
                     R2_cv[ises,ilam,r,ikf] = EV(Y_test,Y_hat_rr_test)
 
-#%% 
+
+#%% plot the results for lam = 0
+lambdacolors = sns.color_palette('magma',nlambdas)
+
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+for ilam,lam in enumerate([lambdas[0]]):
+    tempdata = np.nanmean(R2_cv[:,ilam,:,:],axis=(0,2))
+    ax.plot(range(nranks),tempdata,color=lambdacolors[ilam],linewidth=1)
+ax.set_xlabel('rank')
+ax.set_ylabel('Test R2')
+ax.set_xticks(range(nranks+5)[::5])
+sns.despine(ax=ax,top=True,right=True,trim=True)
+# ax.legend(my_ceil(np.log10(lambdas),1),frameon=False,ncol=2,title='lambda (10^x)')
+
+#%% Compute optimal rank:
 R2data = np.full((nSessions,nlambdas),np.nan)
 rankdata = np.full((nSessions,nlambdas),np.nan)
-
 for ises,ses in enumerate(sessions):
     if np.sum(np.isnan(R2_cv[ises,:,:,:]))>0:
         continue

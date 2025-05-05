@@ -709,6 +709,61 @@ def plot_dec_perf_hitmiss_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,te
     plt.tight_layout()
     return fig
 
+
+# Show the decoding performance across space for the different populations:
+def plot_dec_perf_hitmiss_arealabel2(dec_perf,sbins,arealabels,clrs_arealabels,testwin=[0,25]):
+
+    ylow = 0.45 if np.nanmin(dec_perf)>.25 else -0.05
+    ymax = 1.0 if np.nanmax(dec_perf)>.75 else 0.5
+    ychance = .5 if np.nanmin(dec_perf)>.25 else 0.0
+    
+    fig,axes    = plt.subplots(1,len(arealabels)*2,figsize=(2.5*len(arealabels)*2,3),sharex=False,sharey=True,gridspec_kw={'width_ratios': np.tile([3,1],len(arealabels))})
+    markersize  = 30
+
+    statdata    = np.nanmean(dec_perf[(sbins>=testwin[0]) & (sbins<=testwin[1]),:,:,:],axis=0)
+
+    nSessions   = dec_perf.shape[-1]
+    # statdata    = np.nanmean(dec_perf[(sbins>=11) & (sbins<=20),:,:],axis=0)
+    for ial,arealabel in enumerate(arealabels):
+        ax = axes[ial*2]
+        handles = []
+        for ilr in range(2):
+            handles.append(shaded_error(sbins,dec_perf[:,ial,ilr,:].T,color=clrs_arealabels[ial],
+                                linestyle=['--','-'][ilr],alpha=0.25,linewidth=1.5,error='sem',ax=ax))
+        ax.legend(loc='upper left',fontsize=9,frameon=False,handles=handles,labels=['Hits','Misses'])
+        # ax.legend(leg_lines, leg_labels, loc='center left', frameon=False, fontsize=9)
+        # ax.add_artist(firstlegend)
+        ax.set_title(arealabel)
+        ax.set_ylabel('Decoding performance')
+        ax.set_xlabel('Position relative to stim (cm)')
+        add_stim_resp_win(ax)
+        ax.set_xticks([-50,-25,0,25,50,75])
+        ax.set_ylim([ylow,ymax])
+        ax.set_xlim([-50,75])
+
+        ax = axes[ial*2+1]
+        ax.plot([0,1],statdata[ial,:,:],color='k',linewidth=0.25)
+        ax.scatter(np.zeros(nSessions),statdata[ial,0,:],color='k',marker='.',s=markersize)
+        ax.scatter(np.ones(nSessions),statdata[ial,1,:],color='k',marker='.',s=markersize)
+        ax.scatter([0,1],np.nanmean(statdata[ial,:,:],axis=1),color=clrs_arealabels[ial],marker='o',s=markersize*2,zorder=10)
+        ax.errorbar([0,1],np.nanmean(statdata[ial,:,:],axis=1),np.nanstd(statdata[ial,:,:],axis=1)/np.sqrt(nSessions),
+                    color='k',capsize=0,elinewidth=2,zorder=0)
+
+        t,pval = ttest_rel(statdata[ial,0,:],statdata[ial,1,:],nan_policy='omit')
+        ax.text(0.5, ymax-0.1, '%s' % get_sig_asterisks(pval,return_ns=True), color='k', ha='center', fontsize=12)
+
+        # ax.set_xticks([0,1,2,3],np.tile(arealabels[:2],2),fontsize=7)
+        ax.set_xticks([0,1],['Misses','Hits'],fontsize=7)
+
+        ax.axhline(ychance,color='k',linestyle='--',linewidth=1)
+        ax.text(0.5, ychance-0.05, 'Chance', color='gray', ha='center', fontsize=8)
+        ax.set_xlim([-0.3,1.3])
+
+    sns.despine(offset=3,trim=True)
+
+    plt.tight_layout()
+    return fig
+
 ####### #     #  #####  ####### ######  ### #     #  #####  
 #       ##    # #     # #     # #     #  #  ##    # #     # 
 #       # #   # #       #     # #     #  #  # #   # #       

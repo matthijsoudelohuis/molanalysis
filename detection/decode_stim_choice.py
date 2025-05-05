@@ -37,7 +37,7 @@ protocol            = ['DN']
 calciumversion      = 'deconv'
 
 sessions,nSessions  = filter_sessions(protocol,load_calciumdata=True,load_behaviordata=True,
-                                      load_videodata=True,calciumversion=calciumversion,min_noise_trials=350)
+                                      load_videodata=True,calciumversion=calciumversion)
 
 
 #%% 
@@ -53,6 +53,7 @@ sbinsize     = 10     #spatial binning in cm
 for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
                                        sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=sbinsize,method='binmean')
+    sessions[i].stensor[np.isnan(sessions[i].stensor)] = np.nanmean(sessions[i].stensor)
 
 #%% #################### Compute spatial behavioral variables ####################################
 for ises,ses in enumerate(sessions): # running across the trial:
@@ -395,7 +396,7 @@ plt.hist(ncells.flatten(),np.arange(0,1100,25))
 
 #%% Decoding threshold stimulus presence:
 decode_var      = 'noise'
-decode_var      = 'max'
+# decode_var      = 'max'
 # decode_var      = 'choice'
 # testwin           = [20,50] 
 
@@ -415,6 +416,7 @@ testwin         = [0,25]
 nmodelfits      = 10
 nmintrialscond  = 10
 nminneurons     = 100
+nsampleneurons  = 100
 
 lam             = 100
 
@@ -428,10 +430,40 @@ fig = plot_dec_perf_area(dec_perf,sbins,arealabels,clrs_arealabels,testwin=testw
 plt.suptitle('Decoding %s' % decode_var,fontsize=14)
 plt.savefig(os.path.join(savedir, 'Dec_%s_Area_Unlabeled_%dsessions.png' % (decode_var,nSessions)), format='png')
 
-#%% Start decoding from differently sized populations: 
+#%% Decoding threshold stimulus strength
+decode_var      = 'signal'
+testwin         = [0,25]
+nmodelfits      = 5
+
+#%% Show figure of decoding performance for hits and misses:
+dec_perf = decvar_cont_hitmiss_from_arealabel_wrapper(sessions,sbins,arealabels,var=decode_var,nmodelfits=nmodelfits,
+                                         kfold=kfold,lam=lam,nmintrialscond=nmintrialscond,
+                                         nminneurons=nminneurons,nsampleneurons=nsampleneurons)
+
+#%%
+testwin         = [0,25]
+# fig = plot_dec_perf_hitmiss_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,testwin=testwin)
+fig = plot_dec_perf_hitmiss_arealabel2(dec_perf,sbins,arealabels,clrs_arealabels,testwin=testwin)
+plt.suptitle('Decoding %s' % decode_var,fontsize=14)
+plt.savefig(os.path.join(savedir, 'Dec_%s_HitMiss_Area_Unlabeled_%dsessions.png' % (decode_var,nSessions)), format='png')
 
 
+#%% Decoding threshold stimulus presence:
+decode_var      = 'noise'
+# decode_var      = 'max'
+# decode_var      = 'choice'
+# testwin           = [20,50] 
 
+dec_perf = decvar_hitmiss_from_arealabel_wrapper(sessions,sbins,arealabels,var=decode_var,nmodelfits=nmodelfits,
+                                         kfold=kfold,lam=lam,nmintrialscond=nmintrialscond,
+                                         nminneurons=nminneurons,nsampleneurons=nsampleneurons,filter_nearby=False)
+
+#%%
+testwin         = [0,25]
+# fig = plot_dec_perf_hitmiss_arealabel(dec_perf,sbins,arealabels,clrs_arealabels,testwin=testwin)
+fig = plot_dec_perf_hitmiss_arealabel2(dec_perf,sbins,arealabels,clrs_arealabels,testwin=testwin)
+plt.suptitle('Decoding %s' % decode_var,fontsize=14)
+plt.savefig(os.path.join(savedir, 'Dec_%s_HitMiss_Area_Unlabeled_%dsessions.png' % (decode_var,nSessions)), format='png')
 
 
 #%%
@@ -598,6 +630,7 @@ plt.savefig(os.path.join(savedir, 'Dec_%s_hitmiss_V1PM_Labeled_%dsessions.png' %
 #%% ########################## Load data #######################
 protocol            = ['DN']
 calciumversion      = 'deconv'
+# calciumversion      = 'dF'
 
 sessions,nSessions  = filter_sessions(protocol,load_calciumdata=True,load_behaviordata=True,
                                       load_videodata=True,calciumversion=calciumversion,min_noise_trials=350)
@@ -613,12 +646,8 @@ for i in range(nSessions):
     sessions[i].stensor,sbins    = compute_tensor_space(sessions[i].calciumdata,sessions[i].ts_F,sessions[i].trialdata['stimStart'],
                                        sessions[i].zpos_F,sessions[i].trialnum_F,s_pre=s_pre,s_post=s_post,binsize=sbinsize,method='binmean')
 
-    sessions[i].stensor[np.isnan(sessions[i].stensor)] = np.nanmean(sessions[i].stensor)
-
-#%% print how much of the tensor is nan: 
-
-for i in range(nSessions):
     print(f"Session {i}, {np.isnan(sessions[i].stensor).sum() / np.prod(sessions[i].stensor.shape) * 100:.2f}% of the tensor is nan")
+    sessions[i].stensor[np.isnan(sessions[i].stensor)] = np.nanmean(sessions[i].stensor)
 
 #%% #################### Compute spatial behavioral variables ####################################
 for ises,ses in enumerate(sessions): # running across the trial:
@@ -657,19 +686,19 @@ filter_nearby = False
 
 # Loop through each session
 # for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Decoding response across sessions'):
-neuraldata = copy.deepcopy(ses.stensor)
 
 K = len(ses.trialdata)
 S = len(sbins)
 
-nsampleneurons = 250
+nsampleneurons = 200
 
-# neural_proj = np.full((np.sum(idx_T),len(sbins),narealabels,nmodelfits),np.nan)
 neural_proj = np.full((ndecvars,K,S,narealabels,nmodelfits),np.nan)
 neural_r2   = np.full((ndecvars,S,narealabels,nmodelfits),np.nan)
 dec_perf    = np.full((ndecvars,K,S,narealabels,nmodelfits),np.nan)
 
 for ivar,var in enumerate(decvars):
+    neuraldata = copy.deepcopy(ses.stensor)
+
     if var=='signal':
         idx_T       = np.isin(ses.trialdata['stimcat'],['N'])
 
@@ -847,9 +876,6 @@ for ivar in range(ndecvars):
         add_stim_resp_win(ax)
 sns.despine(fig=fig, top=True, right=True,offset=5)
 
-
-# neural_proj = np.full((ndecvars,K,S,narealabels,nmodelfits),np.nan)
-
 #%% 
 idx_stim = (sbins>=0) & (sbins<=20)
 idx_resp = (sbins>=30) & (sbins<=50)
@@ -863,8 +889,8 @@ fig,axes = plt.subplots(1,narealabels,figsize=(3*narealabels,2.5),sharex=True,sh
 for ial in range(narealabels):
     ax = axes[ial]
     for ihit in range(2):
-        # idx_T       = np.all((ses.trialdata['engaged']==1,
-        idx_T       = np.all((
+        idx_T       = np.all((ses.trialdata['engaged']==1,
+        # idx_T       = np.all((
                               np.isin(ses.trialdata['stimcat'],['N']),
                               ses.trialdata['lickResponse']==ihit), axis=0)
         
@@ -873,27 +899,39 @@ for ial in range(narealabels):
     ax.set_title(arealabels[ial])
 sns.despine(fig=fig, top=True, right=True,offset=5)
 
-
+#%%
+# neural_proj = np.full((ndecvars,K,S,narealabels,nmodelfits),np.nan)
+# neural_r2   = np.full((ndecvars,S,narealabels,nmodelfits),np.nan)
+# dec_perf    = np.full((ndecvars,K,S,narealabels,nmodelfits),np.nan)
 
 #%% 
+ivar = 0
+areacorr_mat = np.full((narealabels,narealabels,S,2),np.nan)
+projdata_fitmean = np.nanmean(neural_proj[ivar,:,:,:,:],axis=3)
 
-for ibin, bincenter in enumerate(sbins):            # Loop through each spatial bin
-    # temp = np.empty(nmodelfits)
-    # for imf in range(nmodelfits):
-        y   = copy.deepcopy(y_idx_T)
+for ialx in range(narealabels):
+    for ialy in range(narealabels):
+        for ihit in range(2):
+            idx_T       = np.all((ses.trialdata['engaged']==1,
+                              np.isin(ses.trialdata['stimcat'],['N']),
+                              ses.trialdata['lickResponse']==ihit), axis=0)
+            for ibin in range(S):
+                datax = projdata_fitmean[idx_T,ibin,ialx]
+                datay = projdata_fitmean[idx_T,ibin,ialy]
 
-        if np.sum(idx_N) >= nsampleneurons:
-            # idx_Ns = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
-            idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=False)
-        else:
-            idx_Ns  = np.random.choice(np.where(idx_N)[0],size=nsampleneurons,replace=True)
+                datax = neural_proj[ivar,idx_T,ibin,ialx,3]
+                datay = neural_proj[ivar,idx_T,ibin,ialy,3]
+                areacorr_mat[ialx,ialy,ibin,ihit] = np.corrcoef(datax,datay)[0,1]
 
-        X       = neuraldata[np.ix_(idx_Ns,idx_T,sbins==bincenter)].squeeze()
-        X       = X.T
-
-        X,y,idx_nan   = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
-
-        temp[imf],tempw,tempproj,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,
-                                                subtract_shuffle=False,norm_out=False)
-        neural_proj[idx_nan,ibin,ial,imf]   = tempproj
-
+#%% 
+lsstyles = ['--','-']
+fig,axes = plt.subplots(narealabels,narealabels,figsize=(3*narealabels,2.5*narealabels),sharex=True,sharey='row')
+for ialx in range(narealabels):
+    for ialy in range(narealabels):
+        ax = axes[ialx,ialy]
+        for ihit in range(2):
+            ax.plot(sbins,areacorr_mat[ialx,ialy,:,ihit],color=clrs_arealabels[ialx],ls = lsstyles[ihit],label='Hit' if ihit==1 else 'Miss')
+        ax.set_xlim([-60,75])
+        add_stim_resp_win(ax)
+        ax.axhline(0,ls='--',color='k',alpha=0.5)
+sns.despine(fig=fig, top=True, right=True,offset=5)

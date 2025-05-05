@@ -14,6 +14,9 @@ import copy
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+from statannotations.Annotator import Annotator
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.plot_lib import * #get all the fixed color schemes
@@ -22,7 +25,7 @@ from utils.tuning import *
 from utils.gain_lib import * 
 from scipy.stats import binned_statistic,binned_statistic_2d
 
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\')
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\')
 
 #%% #############################################################################
 session_list        = np.array([['LPE10919','2023_11_06']])
@@ -74,7 +77,7 @@ for ises in range(nSessions):
 celldata = pd.concat([sessions[ises].celldata for ises in range(nSessions)]).reset_index(drop=True)
 
 thr_still   = 0.5 #max running speed for still trials
-thr_moving  = 1 #min running speed for moving trials
+thr_moving  = 1   #min running speed for moving trials
 
 nOris       = 16
 nCells      = len(celldata)
@@ -122,11 +125,11 @@ for ises in range(nSessions):
 
 #%% ########### Make the figure ##################################################################
 redcells            = np.unique(celldata['redcell'])
-redcell_labels      = ['Unl','Lab']
+redcell_labels      = ['unl','lab']
 areas               = ['V1','PM']
 clrs_areas          = get_clr_areas(areas)
 
-fig,axes = plt.subplots(2,2,figsize=(5,5),sharex=True,sharey=True)
+fig,axes = plt.subplots(2,2,figsize=(4,4),sharex=True,sharey=True)
 for iarea,area in enumerate(areas):
     for ired,redcell in enumerate(redcells):
         ax = axes[iarea,ired]
@@ -140,13 +143,16 @@ for iarea,area in enumerate(areas):
             ax.legend(handles=handles,labels=['Still','Running'],frameon=False,loc='upper right')
         if iarea==1: 
             ax.set_xlabel(u'Δ Pref Ori')
-        ax.set_xticks(oris[::2],oris[::2],rotation=45)
         if ired==0: 
             ax.set_ylabel('Normalized Response')
-        ax.set_title('%s - %s' % (area,redcell_labels[ired]))
+        ax.set_title('%s%s' % (area,redcell_labels[ired]))
         ax.set_ylim([0,3.2])
 plt.tight_layout()
-fig.savefig(os.path.join(savedir,'SharedGain','RunningModulation_V1PM_LabUnl_' + str(nSessions) + 'sessions.png'), format = 'png')
+sns.despine(fig=fig, top=True, right=True,offset=3)
+axes[1,0].set_xticks(oris[::2],oris[::2],rotation=45,fontsize=6)
+axes[1,1].set_xticks(oris[::2],oris[::2],rotation=45,fontsize=6)
+
+my_savefig(fig,savedir,'RunningModulation_V1PM_LabUnl_' + str(nSessions) + 'sessions')
 
 #%% Is the gain modulation similar for labeled and unlabeled, and for V1 and PM?
 arealabels = ['V1unl','V1lab','PMunl','PMlab']
@@ -188,17 +194,18 @@ fig.savefig(os.path.join(savedir,'SharedGain','Gain_V1PM_LabUnl_' + str(nSession
 
 N = len(celldata)
 data_gainregress = np.full((N,3),np.nan)
-for iN in range(N):
+for iN in tqdm(range(N),total=N,desc='Fitting gain for each neuron'):
     b = linregress(mean_resp_speedsplit[iN,:,0,0],mean_resp_speedsplit[iN,:,1,0])
     data_gainregress[iN,:] = b[:3]
 
 #%% Show some neurons
 
+nbyn = 3
 # neuronsel = np.random.choice(np.where(celldata['tuning_var']>0.05)[0],size=25,replace=False)
-neuronsel = np.random.choice(np.where(data_gainregress[:,2]>0.75)[0],size=25,replace=False)
-fig, axes = plt.subplots(5,5,figsize=(8,8),sharex=True,sharey=True)
+neuronsel = np.random.choice(np.where(data_gainregress[:,2]>0.75)[0],size=nbyn**2,replace=False)
+fig, axes = plt.subplots(nbyn,nbyn,figsize=(nbyn*1.5,nbyn*1.5),sharex=True,sharey=True)
 for iN,N in enumerate(neuronsel):
-    ax = axes[iN//5,iN%5]
+    ax = axes[iN//nbyn,iN%nbyn]
     ax.plot(mean_resp_speedsplit[N,:,0,0],mean_resp_speedsplit[N,:,1,0],'.',color='black',alpha=0.8)
     ax.plot([0,3],[0,3],'grey',ls='--',linewidth=1)
     xvals = np.arange(-1,3,0.1)
@@ -208,11 +215,11 @@ ax.set_xlim([-0.25,3])
 ax.set_ylim([-0.25,3])
 ax.set_xticks([0,3])
 ax.set_yticks([0,3])
-axes[2,0].set_ylabel('Running (Norm. Response)')
-axes[4,2].set_xlabel('Still (Norm. Response)')
+axes[nbyn//2,0].set_ylabel('Running (Norm. Response)')
+axes[nbyn-1,nbyn//2].set_xlabel('Still (Norm. Response)')
 sns.despine(fig=fig, top=True, right=True,offset=3)
 fig.suptitle('Gain Modulation - Individual neurons')
-fig.savefig(os.path.join(savedir,'SharedGain','Gain_ExampleNeurons' + str(nSessions) + 'sessions.png'), 
+fig.savefig(os.path.join(savedir,'Gain_ExampleNeurons' + str(nSessions) + 'sessions.png'), 
             bbox_inches='tight',format = 'png')
 
 #%%
@@ -220,10 +227,6 @@ arealabels = ['V1unl','V1lab','PMunl','PMlab']
 clrs_arealabels = get_clr_area_labeled(arealabels)
 minrvalue = 0.2
 mintuningvar = 0.0
-
-import pandas as pd
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
 
 df = pd.DataFrame(np.c_[data_gainregress, celldata[['arealabel', 'session_id']]], columns=['slope', 'intercept', 'rvalue', 'arealabel', 'session_id'])
 
@@ -243,15 +246,16 @@ df['rvalue'] = pd.to_numeric(df['rvalue'], errors='coerce')
 testpairs   = [('V1unl','V1lab'),
              ('PMunl','PMlab'),
              ('V1unl','PMunl')]
-
-from statannotations.Annotator import Annotator
-
-fig,axes = plt.subplots(1,2,figsize=(7,4))
+fig,axes = plt.subplots(1,2,figsize=(6,4))
 for ivar,var in enumerate(['slope','intercept']):
+    ax = axes[ivar]
+    sns.violinplot(data=df,x='arealabel',y=var,ax=ax,palette=clrs_arealabels,order=arealabels,hueorder=arealabels,inner=None)
+
     for ial,arealabel in enumerate(arealabels):
-        ax = axes[ivar]
         xdata = df[var][df['arealabel']==arealabel]
-        sns.violinplot(x=ial,y=xdata,ax=ax,color=clrs_arealabels[ial],inner=None)
+
+        # # sns.violinplot(x=[ial] * len(xdata),y=xdata,ax=ax,color=clrs_arealabels[ial],inner=None,position=ial)
+        # sns.violinplot(x=ial,y=xdata,ax=ax,color=clrs_arealabels[ial],inner=None)
         median = np.median(xdata)
         q25    = np.percentile(xdata,25)
         q75    = np.percentile(xdata,75)
@@ -259,26 +263,24 @@ for ivar,var in enumerate(['slope','intercept']):
         ax.plot([ial],[median],marker='o',color='k',alpha=0.5)
     if ivar==0:
         ax.axhline(1,color='k',ls='--',alpha=0.5)
+    if ivar==1:
+        ax.axhline(0,color='k',ls='--',alpha=0.5)
     ax.set_title(var)
     ax.set_xticks(np.arange(4),arealabels,fontsize=8,rotation=45)
-    ax.set_ylim([-1,7.5])
+    ax.set_ylim([-1,np.percentile(df[var],98)])
+    ax.set_ylabel('')
 
     for itp,(area1,area2) in enumerate(testpairs):
         xdata = df[var][df['arealabel'].isin([area1,area2])]
         t,p = stats.ttest_ind(xdata[df['arealabel']==area1],xdata[df['arealabel']==area2])
         area1_loc = arealabels.index(area1)
         area2_loc = arealabels.index(area2)
-        add_stat_annotation(ax, area1_loc, area2_loc, 5.5+itp*0.25, p, h=0.25)
+        add_stat_annotation(ax, area1_loc, area2_loc, np.percentile(df[var],95)+itp*0.25, p, h=0.25, 
+                            size = 12,color='k')
 
-    # # Fit the Linear Mixed Model
-    # model = smf.mixedlm(var + " ~ C(arealabel, Treatment('V1unl'))", df, groups=df["session_id"]).fit()
-
-    # # mod = smf.mixedlm(var + ' ~ C(arealabel)', data=df, groups=df['session_id'])
-    # # res = model.fit()
-    # print(model.summary())
-    # model.f_test
-fig.savefig(os.path.join(savedir,'SharedGain','GainPopulation_V1PM_LabUnl_' + str(nSessions) + 'sessions.png'), 
-            bbox_inches='tight',format = 'png')
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True, offset=3,trim=True)
+my_savefig(fig,savedir,'GainPopulation_V1PM_LabUnl_' + str(nSessions) + 'sessions',formats=['png'])
 
 #%% Subtracting gain removes tuned gain modulation in mean response:
 redcells            = np.unique(celldata['redcell'])
@@ -355,14 +357,16 @@ handles = []
 handles.append(shaded_error(ax=ax,x=oris,y=data[:,iap,:,0].squeeze(),center='mean',error='std',color=clrs[0]))
 handles.append(shaded_error(ax=ax,x=oris,y=data[:,iap,:,1].squeeze(),center='mean',error='std',color=clrs[1]))
 handles.append(shaded_error(ax=ax,x=oris,y=data[:,iap,:,2].squeeze(),center='mean',error='std',color=clrs[2]))
-ax.set_xticks(oris[::2],oris[::2],rotation=45)
-ax.set_xlabel('Delta Pref. Ori')
+ax.set_xlabel(r'$\Delta$ Pref. Ori')
 ax.set_ylabel('NoiseCorrelation')
 ax.set_ylim([0,my_ceil(np.nanmax(data[:,iap,:,:]),2)])
 ax.set_title('')
 ax.legend(handles,perc_labels,frameon=False,loc='upper right',fontsize=8)
+sns.despine(trim=False,top=True,right=True,offset=3)
+ax.set_xticks(oris[::2],oris[::2].astype(int),rotation=45)
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'PairwiseCorrelations','NC_deltaOri_V1_tuningperc' + '.png'), format = 'png')
+my_savefig(fig, savedir, 'NC_deltaOri_V1_tuningperc', formats = ['png'])
+# plt.savefig(os.path.join(savedir,'PairwiseCorrelations','NC_deltaOri_V1_tuningperc' + '.png'), format = 'png')
 
 #%% Show within and across area tuning dependent correlations:
 clrs_areapairs = get_clr_area_pairs(areapairs)
@@ -375,11 +379,13 @@ ax.set_xlabel('Delta Ori')
 ax.set_xticks(oris[::2],oris[::2],rotation=45)
 ax.set_ylabel('NoiseCorrelation')
 ax.set_ylim([0.01,my_ceil(np.nanmax(data[:,:,:,0]),2)])
-ax.set_ylim([0.02,0.08])
+ax.set_ylim([0.02,0.06])
 ax.set_title('')
 ax.legend(handles,areapairs,frameon=False,loc='upper right')
+sns.despine(trim=False,top=True,right=True,offset=3)
+ax.set_xticks(oris[::2],oris[::2].astype(int),rotation=45)
 plt.tight_layout()
-plt.savefig(os.path.join(savedir,'PairwiseCorrelations','NC_deltaOri_areapairs' + '.png'), format = 'png')
+my_savefig(fig, savedir, 'NC_deltaOri_areapairs', formats = ['png'])
 
 #%% #########################################################################################
 data = np.empty((nSessions,len(oris),2)) #for each session, combination of delta pref store the mean noise corr for all and for with and without gain subtraction
@@ -416,7 +422,106 @@ plt.savefig(os.path.join(savedir,'PairwiseCorrelations','NC_deltaOri_subgainmode
 
 #%% 
 
+# plt.plot(data[idx_ses_2,:,0])
 
+idx_ses_1 = 3
+idx_ses_2 = 6
+
+alloris                            = np.sort(sessions[ises].trialdata['Orientation'].unique())
+
+
+oris1                           = sessions[idx_ses_1].trialdata['Orientation']
+poprate1                        = np.nanmean(zscore(sessions[idx_ses_1].respmat,axis=1),axis=0)
+resp_meanori1,respmat_res1      = mean_resp_gr(sessions[idx_ses_1])
+prefori1                        = alloris[np.argmax(resp_meanori1,axis=1)]
+
+oris2                           = sessions[idx_ses_2].trialdata['Orientation']
+poprate2                        = np.nanmean(zscore(sessions[idx_ses_2].respmat,axis=1),axis=0)
+resp_meanori2,respmat_res2      = mean_resp_gr(sessions[idx_ses_2])
+prefori2                        = alloris[np.argmax(resp_meanori2,axis=1)]
+
+sort_idx_trials = np.lexsort((poprate1, oris1))[::-1]
+respmat_res1 = respmat_res1[:,sort_idx_trials]
+oris1 = oris1[sort_idx_trials]
+
+sort_idx_trials = np.lexsort((poprate2, oris2))[::-1]
+respmat_res2 = respmat_res2[:,sort_idx_trials]
+oris2 = oris2[sort_idx_trials]
+
+fig,axes = plt.subplots(1,2,figsize=(8,4))
+axes[0].imshow(respmat_res1,vmin=0,vmax=100,aspect='auto')
+axes[1].imshow(respmat_res2,vmin=0,vmax=100,aspect='auto')
+
+
+#%% Compute noise correlations from residuals:
+M = np.shape(respmat_res1)[0]
+N = np.shape(respmat_res2)[0]
+
+respmat_res = np.concatenate((respmat_res1,respmat_res2),axis=0)
+
+# noise_corr = np.empty((M+N,M+N,len(oris)))  
+# for i,ori in enumerate(oris):
+    # noise_corr[:,:,i] = np.corrcoef(respmat_res[:,oris1==ori])
+# twoses_noise_corr       = np.mean(noise_corr,axis=2)
+
+twoses_noise_corr       = np.corrcoef(respmat_res)
+
+plt.imshow(twoses_noise_corr,vmin=0,vmax=0.15,aspect='auto')
+
+#%% #########################################################################################
+# Plot noise correlations as a function of the difference in preferred orientation
+# for different percentiles of how strongly tuned neurons are
+
+areapairs = ['V1-V1','PM-PM','V1-PM']
+data = np.empty((len(areapairs),len(oris))) #for each session, combination of delta pref store the mean noise corr for all and for the top and bottom tuned percentages
+
+delta_pref  = np.abs(np.subtract.outer(np.concatenate((prefori1,prefori2)),np.concatenate((prefori1,prefori2))))
+sesidx      = np.concatenate((np.zeros(M,dtype=bool),np.ones(N,dtype=bool))) #np.zeros(M+N,dtype=bool)
+roi_names   = np.concatenate((sessions[idx_ses_1].celldata['roi_name'],sessions[idx_ses_2].celldata['roi_name']))
+tunevar     = np.concatenate((sessions[idx_ses_1].celldata['tuning_var'],sessions[idx_ses_2].celldata['tuning_var'])) 
+
+for iap,areapair in enumerate(areapairs):
+    area1,area2     = areapair.split('-')
+    areafilter      = np.outer(roi_names==area1, roi_names==area2)
+
+    tunefilter      = np.ones(areafilter.shape).astype(bool)
+
+    tunefilter    = np.meshgrid(tunevar>0.01,tunevar>0.01)
+    tunefilter    = np.logical_and(tunefilter[0],tunefilter[1])
+
+    nanfilter       = np.all((~np.isnan(twoses_noise_corr),~np.isnan(delta_pref)),axis=0)
+
+    diffsesfilter   = np.outer(sesidx==0,sesidx==1)
+
+    cellfilter      = np.all((areafilter,tunefilter,nanfilter,diffsesfilter),axis=0)
+    # cellfilter      = np.all((diffsesfilter,nanfilter),axis=0)
+    data[iap,:]     = binned_statistic(x=delta_pref[cellfilter].flatten(),
+                                            values=twoses_noise_corr[cellfilter].flatten(),statistic='mean',bins=binedges)[0]
+    # data[iap,:]     = binned_statistic(x=delta_pref.flatten(),
+                                            # values=twoses_noise_corr.flatten(),statistic='mean',bins=binedges)[0]
+
+plt.plot(oris,data[iap,:])
+
+#%% Noise correlations across V1-PM from different sessions:
+clrs = sns.color_palette('husl', 2)
+clrs = ['black','grey']
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+iap = 2
+handles = []
+ax.plot(oris,data[iap,:].squeeze(),color=clrs_areapairs[iap],lw=2)
+ax.set_xlabel('$\Delta$ Pref. Ori')
+ax.set_ylabel('Noise Correlation')
+ax.set_ylim([0.02,my_ceil(np.nanmax(data),2)])
+ax.set_title('Noise correlations across V1 and PM from different \nsessions when sorted along population rate',
+             fontsize=11)
+# ax.legend(frameon=False,loc='upper right')
+ax_nticks(ax,3)
+sns.despine(top=True,right=True,offset=5)
+ax.set_xticks(oris[::2],oris[::2].astype(int),rotation=45)
+plt.tight_layout()
+my_savefig(fig, savedir, 'NC_deltaOri_V1-PM_diffses', formats = ['png'])
+
+# plt.savefig(os.path.join(savedir,'PairwiseCorrelations','NC_deltaOri_subgainmodel' + '.png'), format = 'png')
 
 
 

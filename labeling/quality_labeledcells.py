@@ -23,7 +23,7 @@ from utils.psth import compute_tensor,compute_respmat
 
 #%% Load the data from all passive protocols:
 protocols            = ['GR','GN','IM']
-protocols            = ['DN']
+# protocols            = ['DN']
 
 sessions,nsessions            = filter_sessions(protocols,min_cells=1)
 
@@ -32,7 +32,7 @@ sessions,nsessions            = filter_sessions(protocols,min_cells=1)
 # sessions,nsessions  = load_sessions(protocol = 'GR',session_list=session_list)
 
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Labeling\\'
-savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Labeling\\DN\\'
+# savedir = 'E:\\OneDrive\\PostDoc\\Figures\\Labeling\\DN\\'
 
 #%% #### reset threshold if necessary:
 threshold = 0.5
@@ -294,14 +294,60 @@ plt.legend(ax.get_legend_handles_labels()[0][:4],areas, loc='best')
 plt.savefig(os.path.join(savedir,'Ncellpose_depth_area_%dplanes' % len(planedata) + '.png'), format = 'png',bbox_inches='tight')
 
 #%% Select only cells nearby labeled cells to ensure fair comparison of quality metrics:
-
-celldata = pd.concat([ses.celldata[filter_nearlabeled(ses,radius=50)] for ses in sessions]).reset_index(drop=True)
+celldata = pd.concat([ses.celldata[filter_nearlabeled(ses,radius=25)] for ses in sessions]).reset_index(drop=True)
 # celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+celldata = celldata[celldata['noise_level']<20]
 
-#%% ##################### Calcium trace skewness for labeled vs unlabeled cells:
+#%% ##################### Cell properties for labeled vs unlabeled cells:
+order = [0,1] #for statistical testing purposes
+pairs = [(0,1)]
+# order = ['non','flp','cre'] #for statistical testing purposes
+# pairs = [('non','flp'),('non','cre')]
+order = ['unl','lab'] #for statistical testing purposes
+pairs = [('unl','lab')]
+
+# fields = ["skew","noise_level","event_rate","radius","npix_soma","meanF","meanF_chan2"]
+fields = ["skew","noise_level","event_rate","radius","npix_soma","meanF"]
+fields = ["meanF","noise_level","event_rate","skew"]
+
+nfields = len(fields)
+fig,axes   = plt.subplots(1,nfields,figsize=(nfields*2,3))
+
+import copy
+celldataclip = copy.deepcopy(celldata)
+
+for i in range(nfields):
+    ax = axes[i]
+    celldataclip[fields[i]] = np.clip(celldata[fields[i]],np.nanpercentile(celldata[fields[i]],0.0),
+                                      np.nanpercentile(celldata[fields[i]],99))
+    sns.violinplot(data=celldataclip,y=fields[i],x="labeled",palette=['gray','red'],ax=axes[i])
+    # sns.violinplot(data=celldata,y=fields[i],x="recombinase",palette=['gray','orangered','indianred'],ax=ax)
+    ax.set_ylim(np.nanpercentile(celldataclip[fields[i]],[0.1,99.9]))
+
+    ax.set_xlabel('labeled')
+    ax.set_ylabel('')
+    ax.set_ylim(0,ax.get_ylim()[1]*1.1)
+
+    annotator = Annotator(ax, pairs, data=celldata, x="labeled", y=fields[i], order=order)
+    # annotator = Annotator(ax, pairs, data=celldata, x="recombinase", y=fields[i], order=order)
+    annotator.configure(test='Mann-Whitney', text_format='star', loc='inside',verbose=False)
+    annotator.apply_and_annotate()
+    g  = np.nanmean(celldata.loc[celldata['labeled']=='lab',fields[i]]) /  np.nanmean(celldata.loc[celldata['labeled']=='unl',fields[i]])
+    print('{0}: ratio = {1:.1f}%'.format(fields[i],(g-1)*100))
+    ax.set_title('%s\n (%+1.1f%%)' % (fields[i],(g-1)*100),fontsize=10) #fields[i])
+    # ax.set_title(fields[i])
+
+sns.despine(trim=True,top=True,right=True,offset=3)
+# labelcounts = celldata.groupby(['recombinase'])['recombinase'].count()
+# plt.suptitle('Quality comparison non-labeled ({0}), cre-labeled ({1}) and flp-labeled ({2}) cells'.format(
+    # labelcounts[labelcounts.index=='non'][0],labelcounts[labelcounts.index=='cre'][0],labelcounts[labelcounts.index=='flp'][0]))
+plt.tight_layout()
+my_savefig(fig,savedir,'Quality_Metrics_%dnearbycells_%dsessions' % (len(celldata),nsessions))
+
+
+#%% ##################### Cell properties for labeled vs unlabeled cells:
 # order = [0,1] #for statistical testing purposes
 # pairs = [(0,1)]
-
 order = ['non','flp','cre'] #for statistical testing purposes
 pairs = [('non','flp'),('non','cre')]
 
@@ -312,18 +358,21 @@ nfields = len(fields)
 fig,axes   = plt.subplots(1,nfields,figsize=(12,4))
 
 for i in range(nfields):
+    ax = axes[i]
     # sns.violinplot(data=celldata,y=fields[i],x="redcell",palette=['gray','red'],ax=axes[i])
-    sns.violinplot(data=celldata,y=fields[i],x="recombinase",palette=['gray','orangered','indianred'],ax=axes[i])
-    axes[i].set_ylim(np.nanpercentile(celldata[fields[i]],[0.1,99.9]))
+    sns.violinplot(data=celldata,y=fields[i],x="recombinase",palette=['gray','orangered','indianred'],ax=ax)
+    ax.set_ylim(np.nanpercentile(celldata[fields[i]],[0.1,99.9]))
 
-    annotator = Annotator(axes[i], pairs, data=celldata, x="recombinase", y=fields[i], order=order)
-    annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
+    annotator = Annotator(ax, pairs, data=celldata, x="recombinase", y=fields[i], order=order)
+    annotator.configure(test='Mann-Whitney', text_format='star', loc='inside',verbose=False)
     annotator.apply_and_annotate()
 
-    axes[i].set_xlabel('labeled')
-    axes[i].set_ylabel('')
-    axes[i].set_title(fields[i])
+    ax.set_xlabel('labeled')
+    ax.set_ylabel('')
+    ax.set_title(fields[i])
+    # ax.set_ylim(np.nanpercentile(celldata[fields[i]],[0.1,99.8]))
 
+sns.despine(trim=True,top=True,right=True,offset=3)
 labelcounts = celldata.groupby(['recombinase'])['recombinase'].count()
 plt.suptitle('Quality comparison non-labeled ({0}), cre-labeled ({1}) and flp-labeled ({2}) cells'.format(
     labelcounts[labelcounts.index=='non'][0],labelcounts[labelcounts.index=='cre'][0],labelcounts[labelcounts.index=='flp'][0]))
@@ -345,15 +394,18 @@ plt.savefig(os.path.join(savedir,'Quality_Metrics_Heatmap_%dcells_%dsessions' % 
 #%% 
 
 
+
+
 #%% Load all sessions from certain protocols: 
 # sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
 sessions,nSessions   = filter_sessions(protocols = ['GR'],filter_areas=['V1','PM']) 
 
 session_list        = np.array([['LPE10919','2023_11_06']])
 # session_list        = np.array([['LPE10885','2023_10_23']])
-sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
+# sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
+# sessions,nSessions   = filter_sessions(protocols = ['GR'],only_session_id=session_list,filter_areas=['V1','PM']) 
 
-#%% Remove two sessions with too much drift in them:
+#%% Remove sessions with too much drift in them:
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
 # sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE09665_2023_03_21']))[0]
