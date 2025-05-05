@@ -43,7 +43,7 @@ session_list        = np.array([['LPE13959','2025_02_24']])
 #%% Load sessions lazy: 
 sessions,nSessions   = filter_sessions(protocols = ['IM'],only_session_id=session_list)
 sessions,nSessions   = filter_sessions(protocols = ['IM'],min_lab_cells_V1=50,min_lab_cells_PM=50)
-sessions,nSessions   = filter_sessions(protocols = ['IM'],min_cells=3000)
+sessions,nSessions   = filter_sessions(protocols = ['IM'],min_cells=2000)
 
 #%%   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
@@ -630,10 +630,11 @@ plt.plot(subs,EV_nsubs)
 # For the reconstruction it worked really well to divide by population rate, zscore
 # Then fit the data with lam=0.05, nranks=50, nsub=3
 
-sesidx  = 2
+sesidx  = 5
+print(sessions[sesidx].sessiondata['session_id'][0])
 nsub    = 2
 resp    = sessions[sesidx].respmat.T
-lam     = 0.1
+lam     = 0.5
 
 K,N     = np.shape(resp)
 
@@ -689,16 +690,20 @@ for ial,arealabel in enumerate(arealabels):
         ax.set_axis_off()
         ax.set_title(arealabel + sessions[sesidx].celldata['cell_id'][iN],fontsize=8)
 
+fig.tight_layout()
+my_savefig(fig,savedir,sessions[sesidx].sessiondata['session_id'][0] + '_RFs')
+
 #%% Reconstruct images from the RF:
 
 idx_N = RF_R2>0.01
 idx_N = RF_R2>0.0
 
-# arealabel = 'V1lab'
+arealabel = 'V1lab'
 # arealabel = 'V1unl'
 # arealabel = 'PMunl'
 # arealabel = 'PMlab'
-# idx_N = sessions[sesidx].celldata['arealabel']==arealabel
+idx_N = sessions[sesidx].celldata['arealabel']==arealabel
+# print(np.sum(idx_N))
 
 IMdata              = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]
 IMdata              = IMdata[::nsub, ::nsub, :]         #subsample the natural images
@@ -750,7 +755,6 @@ for iIM,IM in enumerate(eximages):
 plt.savefig(os.path.join(savedir,'BestReconstructions_%s_%s.png' % (arealabel,sessions[sesidx].sessiondata['session_id'][0])),format='png',dpi=300,bbox_inches='tight')
 
 #%% 
-
 IMdata_mean_hp = np.zeros(IMdata_mean.shape)
 for im in range(nUnImages):
     IMdata_mean_hp[:,:,im] = IMdata_mean[:,:,im]-ndimage.gaussian_filter(IMdata_mean[:,:,im],sigma=2.5)
@@ -828,7 +832,7 @@ sns.despine(offset=3,top=True,right=True,trim=True)
 plt.savefig(os.path.join(savedir,'R2_pertrial_session_%s.png' % (sessions[sesidx].sessiondata['session_id'][0])),format='png',dpi=300,bbox_inches='tight')
 
 #%% Is reconstruction correlated to different variables: 
-from scipy.stats import pearsonr as pearsonr
+from scipy.stats import pearsonr, binned_statistic
 
 poprate = np.mean(zscore(sessions[sesidx].respmat.T,axis=0), axis=1)
 
@@ -845,8 +849,13 @@ fig,axes = plt.subplots(1,len(varlabels),figsize=(12,3),sharey=True)
 for ivar,var in enumerate(varlabels):
     xdata = vardata[ivar,:]
     ax = axes[ivar]
+    # ax.scatter(xdata,R2_pertrial,c=varcolors[ivar],s=2,alpha=0.5)
+    gdat = binned_statistic(xdata,R2_pertrial,bins=10)
+    binmeans = (gdat.bin_edges[1:]+gdat.bin_edges[:-1])/2
+    ax.plot(binmeans,gdat.statistic,color='k',linewidth=2)
     ax.scatter(xdata,R2_pertrial,c=varcolors[ivar],s=2,alpha=0.5)
     r,p = pearsonr(xdata,R2_pertrial)
+
     ax.text(0.05,0.95,'r=%.2f, p=%.2e' % (r,p),transform=ax.transAxes)
     ax.set_xlabel(var)
     ax.set_ylim([0,1])
