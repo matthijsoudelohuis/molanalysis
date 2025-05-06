@@ -81,7 +81,8 @@ def var_along_dim(data,weights):
     var_tot     = np.var(data, axis=0).sum() # compute total variance of original data
     ev          = var_proj / var_tot # compute proportion of variance explained 
     return ev
-def estimate_dimensionality(X):
+
+def estimate_dimensionality(X,method='participation_ratio'):
     """
     Estimate the dimensionality of a data set X using a PCA approach.
     
@@ -104,6 +105,7 @@ def estimate_dimensionality(X):
     # print(dimensionality_estimates)
 
     """
+       
     def pca_variance_explained(X, variance_threshold=0.95):
         pca = PCA()
         pca.fit(X)
@@ -134,11 +136,15 @@ def estimate_dimensionality(X):
         explained_variance = pca.explained_variance_
         return (np.sum(explained_variance) ** 2) / np.sum(explained_variance ** 2)
     
-    results = {
-        "pca_95_variance_explained": pca_variance_explained(X),
-        "pca_shuffled_data": pca_shuffled_data(X),
-        "parallel_analysis_pca": parallel_analysis_pca(X),
-        "participation_ratio_above_1": participation_ratio(X)
-    }
-    
-    return results
+    if method == 'pca_ev':
+        return pca_variance_explained(X)
+    elif method == 'pca_shuffle':
+        return pca_shuffled_data(X)
+    elif method == 'parallel_analysis':
+        return parallel_analysis_pca(X)
+    elif method == 'participation_ratio':
+        return participation_ratio(X)
+    elif method == 'FA':
+        print('Not yet implemented')
+    else:
+        raise ValueError('Unknown method')

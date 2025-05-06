@@ -629,10 +629,13 @@ plt.plot(subs,EV_nsubs)
 #NOTES:
 # For the reconstruction it worked really well to divide by population rate, zscore
 # Then fit the data with lam=0.05, nranks=50, nsub=3
+# Later update: reduced rank is not necessary, is only limiting, nsub2 is better but 
+# slower. Lam depends on df/deconv and needs to be optimized with crossval. Furthermore 
+# lambda biases towards low or high frequency reconstruction. 
 
 sesidx  = 5
 print(sessions[sesidx].sessiondata['session_id'][0])
-nsub    = 2
+nsub    = 2 #without subsampling really slow, i.e. nsub=1
 resp    = sessions[sesidx].respmat.T
 lam     = 0.5
 
@@ -647,11 +650,6 @@ resp = resp / np.mean(resp, axis=1, keepdims=True)
 
 #normalize the response for each neuron to the maximum:
 resp = zscore(resp, axis=0)
-
-# resp = np.clip(resp,0.2,np.inf)
-# resp_F = np.sqrt(resp_F)
-# resp_F = np.log(resp_F+1)
-# resp_F -= np.mean(resp_F, axis=1, keepdims=True)
 
 IMdata = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]
 
@@ -698,11 +696,11 @@ my_savefig(fig,savedir,sessions[sesidx].sessiondata['session_id'][0] + '_RFs')
 idx_N = RF_R2>0.01
 idx_N = RF_R2>0.0
 
-arealabel = 'V1lab'
+# arealabel = 'V1lab'
 # arealabel = 'V1unl'
 # arealabel = 'PMunl'
 # arealabel = 'PMlab'
-idx_N = sessions[sesidx].celldata['arealabel']==arealabel
+# idx_N = sessions[sesidx].celldata['arealabel']==arealabel
 # print(np.sum(idx_N))
 
 IMdata              = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]

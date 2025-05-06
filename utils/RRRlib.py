@@ -143,7 +143,7 @@ def RRR_wrapper(Y, X, nN=None,nM=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits
 
     repmean,rank = rank_from_R2(R2_cv_folds.reshape([nranks,nmodelfits*kfold]),nranks,nmodelfits*kfold)
 
-    return repmean,rank
+    return repmean,rank,R2_cv_folds
 
 def rank_from_R2(data,nranks,nrepetitions):
     """

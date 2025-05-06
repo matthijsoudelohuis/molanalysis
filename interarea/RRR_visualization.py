@@ -228,6 +228,8 @@ my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%dsessions.png' % nSessions,fo
 
 #%% Plot the number of dimensions per area pair
 def plot_RRR_R2_regressout(R2data,rankdata,arealabelpairs,clrs_arealabelpairs):
+    narealabelpairs         = len(arealabelpairs)
+    # clrs_arealabelpairs     = get_clr_area_labeled(arealabelpairs)
     fig, axes = plt.subplots(2,2,figsize=(8,6))
 
     statpairs = [(0,1),(0,2),(0,3),
@@ -299,3 +301,123 @@ def plot_RRR_R2_regressout(R2data,rankdata,arealabelpairs,clrs_arealabelpairs):
     axes[1,0].set_xticklabels(arealabelpairs2,fontsize=7)
     axes[1,1].set_xticklabels(arealabelpairs2,fontsize=7)
     return fig
+
+
+#%% 
+
+#%% ###################################################
+
+
+
+
+#%% Perform RRR on raw calcium data: 
+
+ises = 1
+ses = sessions[ises]
+
+
+
+
+#%% Fit:
+nN                  = 200
+nM                  = 200
+nranks              = 5
+lam                 = 0
+
+# idx_T               = ses.trialdata['Orientation']==0
+excerpt_length      = 1000
+t_start             = np.random.choice(ses.ts_F,1,replace=False)[0]
+idx_T               = (ses.ts_F>t_start) & (ses.ts_F<t_start+excerpt_length)
+ts                  = ses.ts_F[idx_T]
+nTs                 = np.sum(idx_T)
+
+idx_areax           = np.where(np.all((ses.celldata['roi_name']=='V1',
+                        ses.celldata['noise_level']<10),axis=0))[0]
+idx_areay           = np.where(np.all((ses.celldata['roi_name']=='PM',
+                        ses.celldata['noise_level']<10),axis=0))[0]
+
+idx_areax_sub       = np.random.choice(idx_areax,nN,replace=False)
+idx_areay_sub       = np.random.choice(idx_areay,nM,replace=False)
+
+X                   = sessions[ises].calciumdata.to_numpy()[np.ix_(idx_T,idx_areax_sub)]
+Y                   = sessions[ises].calciumdata.to_numpy()[np.ix_(idx_T,idx_areay_sub)]
+
+X                   = zscore(X,axis=0)  #Z score activity for each neuron across trials/timepoints
+Y                   = zscore(Y,axis=0)
+
+Y_hat_rr               = np.full((nTs,nM,nranks),np.nan)  
+
+
+B_hat         = LM(Y,X, lam=lam)
+
+Y_hat         = X @ B_hat
+
+# decomposing and low rank approximation of A
+U, s, V = linalg.svd(Y_hat)
+S = linalg.diagsvd(s,U.shape[0],s.shape[0])
+
+for r in range(nranks):
+    Y_hat_rr[:,:,r]       = X @ B_hat @ V[:r,:].T @ V[:r,:] #project test data onto low rank subspace
+
+sourceweights = np.mean(np.abs(B_hat @ V[:r,:].T @ V[:r,:]),axis=1)
+targetweights = np.mean(np.abs(B_hat @ V[:r,:].T @ V[:r,:]),axis=0)
+
+r = nranks-1
+targetweights = r2_score(Y,Y_hat_rr[:,:,r],multioutput='raw_values') + (r2_score(Y,Y_hat_rr[:,:,r],multioutput='raw_values') - r2_score(Y,Y_hat_rr[:,:,1],multioutput='raw_values'))
+
+
+#%% Identify a chunk in time where there is a high prediction for high rank across areas:
+window_size = 10
+window_step = 1
+nTs = len(ts)
+nWindows = int(np.ceil((nTs-window_size)/window_step))
+variance_explained = np.full((nWindows,nranks),np.nan)  
+
+t_starts = np.empty(nWindows)
+for iw in range(nWindows):
+    t_starts[iw] = ts[0]+iw*window_step
+    t_end = t_starts[iw]+window_size
+    idx_window = (ts>=t_starts[iw]) & (ts<t_end)
+    Y_window = Y[idx_window]
+    for r in range(nranks):
+        variance_explained[iw,r] = EV(Y_window,Y_hat_rr[idx_window,:,r])
+
+plt.plot(t_starts,variance_explained)
+
+example_tstart = t_starts[np.nanargmax(variance_explained[:,1])]
+
+#%% Make figure
+scale = 0.15
+lw = 0.75
+nshowneurons = 10
+nrankstoplot = 5
+fig,axes = plt.subplots(1,2,figsize=(10,5),sharex=True,sharey=True)
+ax = axes[0]
+
+source_example_neurons = np.argsort(-sourceweights)[:nshowneurons]
+for i,iN in enumerate(source_example_neurons):
+    ax.plot(ts,X[:,iN]*scale+i,color='k',lw=lw)
+ax.set_title('Source Activity (V1)')
+ax.set_ylabel('Neurons')
+ax.axis('off')
+ax.add_artist(AnchoredSizeBar(ax.transData, 1,
+            "1 Sec", loc=4, frameon=False))
+
+target_example_neurons = np.argsort(-targetweights)[:nshowneurons]
+clrs_ranks = sns.color_palette('magma',n_colors=nrankstoplot)
+ax = axes[1]
+plothandles = []
+for r in range(1,nrankstoplot):
+    plothandles.append(plt.Line2D([0], [0], color=clrs_ranks[r], lw=lw))
+ax.legend(plothandles,['1','2','3','4','5'],title='Rank Prediction',frameon=False,fontsize=8,ncol=2,loc='upper left')	
+for i,iN in enumerate(target_example_neurons):
+    ax.plot(ts,Y[:,iN]*scale+i,color='k',lw=lw)
+ax.set_title('Target Activity (PM)')
+ax.set_xlim([example_tstart-10,example_tstart+20])
+ax.axis('off')
+
+my_savefig(fig,savedir,'V1PM_LowRank_Excerpt_%s_Rank%d.png' % (ses.sessiondata['session_id'][0],0),formats=['png']) 
+for r in range(1,nrankstoplot):
+    for i,iN in enumerate(target_example_neurons):
+        ax.plot(ts,Y_hat_rr[:,iN,r]*scale+i,color=clrs_ranks[r],lw=lw)
+    my_savefig(fig,savedir,'V1PM_LowRank_Excerpt_%s_Rank%d.png' % (ses.sessiondata['session_id'][0],r+1),formats=['png']) 

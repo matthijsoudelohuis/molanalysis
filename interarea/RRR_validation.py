@@ -629,3 +629,206 @@ plt.tight_layout()
 
 my_savefig(fig,savedir,'R2Rank_WithinAcross_GR_%dneurons.png' % nsampleneurons,formats=['png'])
 
+
+
+
+
+#%% Using trial averaged or using timepoint fluctuations:
+
+#%% 
+session_list        = np.array([['LPE12223','2024_06_10'], #GR
+                                ['LPE10919','2023_11_06']]) #GR
+sessions,nSessions   = filter_sessions(protocols = 'GR',only_session_id=session_list)
+sessions,nSessions   = filter_sessions(protocols = 'GR')
+
+
+#%%  Load data properly:        
+calciumversion = 'dF'
+# calciumversion = 'deconv'
+
+## Construct tensor: 3D 'matrix' of K trials by N neurons by T time bins
+## Parameters for temporal binning
+t_pre       = -1    #pre s
+t_post      = 2     #post s
+binsize     = 0.2   #temporal binsize in s
+
+for ises in range(nSessions):
+
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion=calciumversion,keepraw=True)
+
+    [sessions[ises].tensor,t_axis]     = compute_tensor(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'], 
+                                 t_pre, t_post, binsize,method='nearby')
+
+#%% 
+
+
+#%% 
+R2_cv_ori           = np.full((nOris,nSessions,nmodelfits),np.nan)
+R2_cv_all           = np.full((nSessions,nmodelfits),np.nan)
+R2_cv_oriT          = np.full((nOris,nSessions,nmodelfits),np.nan)
+R2_cv_allT          = np.full((nSessions,nmodelfits),np.nan)
+
+kfold               = 10
+lam                 = 500
+nmodelfits          = 5
+Nsub                = 50
+r                   = 10 #rank for RRR
+
+pca                 = PCA(n_components=25)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model'):    # iterate over sessions
+    idx_areax       = np.where(np.all((ses.celldata['roi_name']=='V1',
+                                                ses.celldata['noise_level']<20),axis=0))[0]
+    idx_areay       = np.where(np.all((ses.celldata['roi_name']=='PM',
+                                            ses.celldata['noise_level']<20),axis=0))[0]
+
+    for iori,ori in enumerate(oris): # loop over orientations 
+        idx_T               = ses.trialdata['Orientation']==ori
+
+        for imf in range(nmodelfits):
+
+            idx_areax_sub       = np.random.choice(idx_areax,Nsub,replace=False)
+            idx_areay_sub       = np.random.choice(idx_areay,Nsub,replace=False)
+
+            X                   = ses.respmat[np.ix_(idx_areax_sub,idx_T)].T
+            Y                   = ses.respmat[np.ix_(idx_areay_sub,idx_T)].T
+            
+            X                   = zscore(X,axis=0)  #Z score activity for each neuron across trials/timepoints
+            Y                   = zscore(Y,axis=0)
+
+            X                   = pca.fit_transform(X)
+            Y                   = pca.fit_transform(Y)
+
+            R2_kfold    = np.zeros((kfold))
+            kf          = KFold(n_splits=kfold)
+            for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
+                X_train, X_test     = X[idx_train], X[idx_test]
+                Y_train, Y_test     = Y[idx_train], Y[idx_test]
+
+                B_hat_train         = LM(Y_train,X_train, lam=lam)
+                
+                B_hat_lr            = RRR(Y_train, X_train, B_hat_train, r, mode='right')
+
+                Y_hat_test_rr       = X_test @ B_hat_lr
+
+                R2_kfold[ikf]       = EV(Y_test,Y_hat_test_rr) * np.sum(pca.explained_variance_ratio_)
+            R2_cv_ori[iori,ises,imf] = np.average(R2_kfold)
+
+    for iori,ori in enumerate(oris): # loop over orientations 
+        idx_T               = ses.trialdata['Orientation']==ori
+
+        for imf in range(nmodelfits):
+
+            idx_areax_sub       = np.random.choice(idx_areax,Nsub,replace=False)
+            idx_areay_sub       = np.random.choice(idx_areay,Nsub,replace=False)
+
+            X                   = ses.tensor[np.ix_(idx_areax_sub,idx_T,np.ones(len(t_axis)).astype(bool))]
+            Y                   = ses.tensor[np.ix_(idx_areay_sub,idx_T,np.ones(len(t_axis)).astype(bool))]
+
+            X                   = zscore(np.reshape(X,[Nsub,-1]).T,axis=0)  #Z score activity for each neuron across trials/timepoints
+            Y                   = zscore(np.reshape(Y,[Nsub,-1]).T,axis=0)  #Z score activity for each neuron across trials/timepoints
+            
+            # X                   = zscore(X,axis=0)  #Z score activity for each neuron across trials/timepoints
+            # Y                   = zscore(Y,axis=0)
+
+            X                   = pca.fit_transform(X)
+            Y                   = pca.fit_transform(Y)
+
+            R2_kfold    = np.zeros((kfold))
+            kf          = KFold(n_splits=kfold)
+            for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
+                X_train, X_test     = X[idx_train], X[idx_test]
+                Y_train, Y_test     = Y[idx_train], Y[idx_test]
+
+                B_hat_train         = LM(Y_train,X_train, lam=lam)
+                
+                B_hat_lr            = RRR(Y_train, X_train, B_hat_train, r, mode='right')
+
+                Y_hat_test_rr       = X_test @ B_hat_lr
+
+                R2_kfold[ikf]       = EV(Y_test,Y_hat_test_rr) * np.sum(pca.explained_variance_ratio_)
+            R2_cv_oriT[iori,ises,imf] = np.average(R2_kfold)
+
+    idx_T               = np.ones(ses.trialdata['Orientation'].shape[0],dtype=bool)
+
+    for imf in range(nmodelfits):
+
+        idx_areax_sub       = np.random.choice(idx_areax,Nsub,replace=False)
+        idx_areay_sub       = np.random.choice(idx_areay,Nsub,replace=False)
+
+        # X                   = ses.respmat[np.ix_(idx_areax_sub,idx_T)].T
+        # Y                   = ses.respmat[np.ix_(idx_areay_sub,idx_T)].T
+        
+        _,respmat_res       = mean_resp_gr(ses,trialfilter=None)
+
+        X                   = respmat_res[np.ix_(idx_areax_sub,idx_T)].T
+        Y                   = respmat_res[np.ix_(idx_areay_sub,idx_T)].T
+
+        X                   = zscore(X,axis=0)  #Z score activity for each neuron across trials/timepoints
+        Y                   = zscore(Y,axis=0)
+
+        X                   = pca.fit_transform(X)
+        Y                   = pca.fit_transform(Y)
+
+        R2_kfold    = np.zeros((kfold))
+        kf          = KFold(n_splits=kfold)
+        for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
+            X_train, X_test     = X[idx_train], X[idx_test]
+            Y_train, Y_test     = Y[idx_train], Y[idx_test]
+
+            B_hat_train         = LM(Y_train,X_train, lam=lam)
+            
+            B_hat_lr            = RRR(Y_train, X_train, B_hat_train, r, mode='right')
+
+            Y_hat_test_rr       = X_test @ B_hat_lr
+
+            R2_kfold[ikf]       = EV(Y_test,Y_hat_test_rr) * np.sum(pca.explained_variance_ratio_)
+        R2_cv_all[ises,imf] = np.average(R2_kfold)
+
+    for imf in range(nmodelfits):
+
+        idx_areax_sub       = np.random.choice(idx_areax,Nsub,replace=False)
+        idx_areay_sub       = np.random.choice(idx_areay,Nsub,replace=False)
+
+        X                   = ses.tensor[np.ix_(idx_areax_sub,idx_T,np.ones(len(t_axis)).astype(bool))]
+        Y                   = ses.tensor[np.ix_(idx_areay_sub,idx_T,np.ones(len(t_axis)).astype(bool))]
+
+        X                   = zscore(np.reshape(X,[Nsub,-1]).T,axis=0)  #Z score activity for each neuron across trials/timepoints
+        Y                   = zscore(np.reshape(Y,[Nsub,-1]).T,axis=0)  #Z score activity for each neuron across trials/timepoints
+        
+        X                   = pca.fit_transform(X)
+        Y                   = pca.fit_transform(Y)
+
+        R2_kfold    = np.zeros((kfold))
+        kf          = KFold(n_splits=kfold)
+        for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
+            X_train, X_test     = X[idx_train], X[idx_test]
+            Y_train, Y_test     = Y[idx_train], Y[idx_test]
+
+            B_hat_train         = LM(Y_train,X_train, lam=lam)
+            
+            B_hat_lr            = RRR(Y_train, X_train, B_hat_train, r, mode='right')
+
+            Y_hat_test_rr       = X_test @ B_hat_lr
+
+            R2_kfold[ikf]       = EV(Y_test,Y_hat_test_rr) * np.sum(pca.explained_variance_ratio_)
+        R2_cv_allT[ises,imf] = np.average(R2_kfold)
+
+#%% Plot the results for the different data types:
+plotdata = np.vstack((np.nanmean(R2_cv_ori,axis=(0,2)),np.nanmean(R2_cv_oriT,axis=(0,2)),
+                      np.nanmean(R2_cv_all,axis=(1)),np.nanmean(R2_cv_allT,axis=(1)))) #
+labels = ['time-averaged\n(per ori)','tensor\n(per ori)', 'time-averaged\n(all trials)','tensor\n(all trials)']
+fig,axes = plt.subplots(1,1,figsize=(4,3))
+ax = axes
+ax.plot(plotdata,color='k',linewidth=2,marker='o')
+ax.set_xticks(np.arange(len(labels)),labels,fontsize=8)
+ax.set_ylabel('R2')
+ax.set_ylim([0,0.2])
+ax.set_title('Which data to use?')
+sns.despine(fig=fig, top=True, right=True,offset=5)
+plt.savefig(os.path.join(savedir,'RRR_R2_difftypes.png'), format = 'png', bbox_inches='tight')
+
+
+
+
