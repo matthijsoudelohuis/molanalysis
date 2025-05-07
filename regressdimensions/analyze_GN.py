@@ -16,7 +16,7 @@ os.chdir('e:\\Python\\molanalysis')
 
 #### linear approaches: regression and dimensionality reduction 
 from numpy import linalg
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score,accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from sklearn.decomposition import PCA
@@ -26,12 +26,11 @@ from sklearn import linear_model
 from sklearn.preprocessing import minmax_scale, StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-
-from utils.regress_lib import *
 from sklearn.preprocessing import LabelEncoder
 
 #Personal libs:
 from utils.RRRlib import LM,Rss,EV
+from utils.regress_lib import *
 from loaddata.get_data_folder import get_local_drive
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.plot_lib import * #get all the fixed color schemes
@@ -39,6 +38,8 @@ from utils.explorefigs import plot_excerpt
 from utils.tuning import *
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\NoiseRegression\\')
+
+#%% 
 randomseed  = 5
 calciumversion = 'dF'
 calciumversion = 'deconv'
@@ -47,18 +48,32 @@ calciumversion = 'deconv'
 #Sessions with good receptive field mapping in both V1 and PM:
 session_list        = np.array([['LPE11998','2024_05_02'], #GN
                                 ['LPE12013','2024_05_02']]) #GN
+
 #%% Load sessions lazy: 
-minlabcells = 25
-sessions,nSessions   = filter_sessions(protocols = ['GN'],filter_areas=['V1','PM'],
-                                       min_lab_cells_V1=minlabcells,min_lab_cells_PM=minlabcells)
+minlabcells = 0
+sessions,nSessions   = filter_sessions(protocols = ['GN'],min_lab_cells_V1=minlabcells,min_lab_cells_PM=minlabcells)
 
 #%% Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion=calciumversion)
-    
+                                calciumversion=calciumversion,keepraw=False)
+
 #%% Compute tuning metrics:
 sessions = compute_tuning_wrapper(sessions)
+
+#%% 
+   #    #     #  #####  #     # ####### ######     ######  ####### ### #     # ####### 
+  # #   ##    # #     # #     # #     # #     #    #     # #     #  #  ##    #    #    
+ #   #  # #   # #       #     # #     # #     #    #     # #     #  #  # #   #    #    
+#     # #  #  # #       ####### #     # ######     ######  #     #  #  #  #  #    #    
+####### #   # # #       #     # #     # #   #      #       #     #  #  #   # #    #    
+#     # #    ## #     # #     # #     # #    #     #       #     #  #  #    ##    #    
+#     # #     #  #####  #     # ####### #     #    #       ####### ### #     #    #    
+
+
+#%% Show different stimulus conditions, the anchor points: 
+
+
 
 #%% ## 
 # idx_V1 = np.where(sessions[ises].celldata['roi_name']=='V1')[0]
@@ -66,51 +81,54 @@ sessions = compute_tuning_wrapper(sessions)
 idx_V1 = sessions[ises].celldata['roi_name']=='V1'
 idx_PM = sessions[ises].celldata['roi_name']=='PM'
 
-#%% ########## PCA on trial-averaged responses ############
-######### plot result as scatter by orientation ########
-
-respmat_zsc = zscore(sessions[ises].respmat,axis=1) # zscore for each neuron across trial responses
-
-pca         = PCA(n_components=15) #construct PCA object with specified number of components
-Xp          = pca.fit_transform(respmat_zsc.T).T #fit pca to response matrix (n_samples by n_features)
-#dimensionality is now reduced from N by K to ncomp by K
-
 oris, speeds    = [np.unique(sessions[ises].trialdata[col]).astype('int') for col in ('centerOrientation', 'centerSpeed')]
 noris           = len(oris) 
 nspeeds         = len(speeds)
 areas           = np.array(['PM', 'V1'], dtype=object)
 clrs,labels     = get_clr_gratingnoise_stimuli(oris,speeds)
 
-ori_ind         = [np.argwhere(np.array(sessions[ises].trialdata['centerOrientation']) == ori)[:, 0] for ori in oris]
-speed_ind       = [np.argwhere(np.array(sessions[ises].trialdata['centerSpeed']) == speed)[:, 0] for speed in speeds]
 
-shade_alpha      = 0.2
-lines_alpha      = 0.8
+# #%% LDA of all trials
+# colors,labels = get_clr_gratingnoise_stimuli(oris,speeds)
 
-# handles = []
-projections = [(0, 1), (1, 2), (0, 2)]
-projections = [(0, 1), (1, 2), (3, 4)]
-fig, axes = plt.subplots(1, 3, figsize=[9, 3], sharey='row', sharex='row')
-for ax, proj in zip(axes, projections):
-    for iO, ori in enumerate(oris):                                #plot orientation separately with diff colors
-        for iS, speed in enumerate(speeds):                       #plot speed separately with diff colors
-            idx = np.intersect1d(ori_ind[iO],speed_ind[iS])
-            x = Xp[proj[0],idx]                          #get all data points for this ori + speed along first PC of projection pairs
-            y = Xp[proj[1],idx]                          #and the second
+# areas = ['V1', 'PM']
+# plotdim = 0
+# ises = 4
 
-            # x = Xp[proj[0],ori_ind[io]]                          #get all data points for this ori along first PC or projection pairs
-            # y = Xp[proj[1],ori_ind[io]]                          #and the second
-            # handles.append(ax.scatter(x, y, color=clrs[iO,iS,:], s=sessions[ises].respmat_runspeed[idx], alpha=0.8))     #each trial is one dot
-            ax.scatter(x, y, color=clrs[iO,iS,:], s=sessions[ises].respmat_runspeed[idx], alpha=0.8)    #each trial is one dot
-            ax.set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
-            ax.set_ylabel('PC {}'.format(proj[1]+1))
+# lda = LinearDiscriminantAnalysis(n_components=2,shrinkage='auto',solver='eigen')
+# lda = LinearDiscriminantAnalysis(n_components=2)
 
-axes[2].legend(labels.flatten(),fontsize=8,bbox_to_anchor=(1,1))
-sns.despine(fig=fig, top=True, right=True)
-plt.tight_layout()
-# plt.savefig(os.path.join(savedir,'GN_Stimuli','PCA_allStim_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+# arealabels = ['V1unl', 'PMunl', 'V1lab', 'PMlab']
+# fig, axes = plt.subplots(1, len(areas), figsize=[4*len(areas), 4])
+# # fig, axes = plt.subplots(1, len(arealabels), figsize=[4*len(arealabels), 4])
+# for iax, area in enumerate(areas):
+#     idx_N           = np.where(np.all((sessions[ises].celldata['roi_name']==area,
+#                                     sessions[ises].celldata['noise_level']<20,	
+#                                     ),axis=0))[0]
+    
+#     X               = sessions[ises].respmat[idx_N, :].T
+#     X               = zscore(X, axis=0)
+    
+#     Y               = sessions[ises].trialdata['stimCond'] #get orixspeed center condition
+#     Y               = LabelEncoder().fit_transform(Y) #convert to labels
+    
+#     X_projected     = lda.fit_transform(X, Y)
+    
+#     for iOri, ori in enumerate(oris):
+#         for iSpd, spd in enumerate(speeds):
+#             idx_T = np.logical_and(sessions[ises].trialdata['centerOrientation'] == ori, sessions[ises].trialdata['centerSpeed'] == spd)
+#             axes[iax].scatter(X_projected[idx_T,0], X_projected[idx_T,1], color=colors[iOri,iSpd,:], marker='o', alpha=0.5)
 
-#%% LDA of all trials
+#     # print('Accuracy ori: {:.2f}%'.format(accuracy_score(sessions[ises].trialdata['centerOrientation'], y_pred_ori)*100))
+#     # print('Accuracy spd: {:.2f}%'.format(accuracy_score(sessions[ises].trialdata['centerSpeed'], y_pred_spd)*100))
+#     axes[iax].set_title(area)
+#     axes[iax].set_xlabel('LDA 1')
+#     axes[iax].set_ylabel('LDA 2')
+#     axes[iax].legend(labels.flatten(),fontsize=8,bbox_to_anchor=(1,1))
+# sns.despine(fig=fig, top=True, right=True, offset = 3)
+# plt.tight_layout()
+
+#%% LDA splitting ori and stf of all trials
 from sklearn.metrics import accuracy_score
 
 colors,labels = get_clr_gratingnoise_stimuli(oris,speeds)
@@ -121,15 +139,10 @@ ises = 0
 
 lda_ori = LinearDiscriminantAnalysis()
 lda_spd = LinearDiscriminantAnalysis()
-arealabels = ['V1unl', 'PMunl', 'V1lab', 'PMlab']
-# fig, axes = plt.subplots(1, len(areas), figsize=[4*len(areas), 4])
-fig, axes = plt.subplots(1, len(arealabels), figsize=[4*len(arealabels), 4])
-# for iax, area in enumerate(areas):
-for iax, area in enumerate(arealabels):
-    idx_N           = np.where(np.all((sessions[ises].celldata['arealabel']==area,
-                                    sessions[ises].celldata['noise_level']<100,	
-                                    ),axis=0))[0]
-    # idx     = sessions[ises].celldata['roi_name'] == area
+
+fig, axes = plt.subplots(1, len(areas), figsize=[4*len(areas), 4])
+for iax, area in enumerate(areas):
+    idx_N     = sessions[ises].celldata['roi_name'] == area
     
     # X       = respmat_zsc[idx, :]
     X       = sessions[ises].respmat[idx_N, :]
@@ -159,63 +172,140 @@ for iax, area in enumerate(arealabels):
     axes[iax].legend(labels.flatten(),fontsize=8,bbox_to_anchor=(1,1))
 sns.despine(fig=fig, top=True, right=True, offset = 3)
 plt.tight_layout()
-my_savefig(fig,savedir,'LDA_ori_speed_allStim_dim' + str(plotdim+1) + '_' + sessions[ises].sessiondata['session_id'][0])
+# my_savefig(fig,savedir,'LDA_ori_speed_allStim_dim' + str(plotdim+1) + '_' + sessions[ises].sessiondata['session_id'][0])
 # plt.savefig(os.path.join(savedir,'LDA_ori_speed_allStim_dim' + str(plotdim) + '_' + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
-
-#%% Decoding with LDA of trialdata['stimCond'] for all sessions and different neural populations
-nsampleneurons  = 25
+#%% Decoding with LDA of with different dimensions: 
+nsampleneurons  = 50
 nmodelfits      = 5
+ndiffcomps      = 8
+lam = 0.5
 
-areas           = ['V1', 'PM']
-arealabels      = ['V1unl', 'PMunl', 'V1lab', 'PMlab']
-narealabels     = len(arealabels)
+dec_perf        = np.full((ndiffcomps,nSessions,nmodelfits),np.nan)
 
-dec_perf        = np.full((nSessions,len(arealabels),nmodelfits),np.nan)
-
-for ises in range(nSessions):
+for ises in tqdm(range(nSessions),desc='LDA Decoding Stim Cond',total=nSessions):
     idx_T           = np.ones(len(sessions[ises].trialdata['Orientation']),dtype=bool)
-    for iax, area in enumerate(arealabels):
-        idx_N           = np.where(np.all((sessions[ises].celldata['arealabel']==area,
-                                        # sessions[ises].celldata['noise_level']<20,	
-                                        ),axis=0))[0]
 
-        for imf in range(nmodelfits):
-            idx_N_sub       = np.random.choice(idx_N,nsampleneurons,replace=False) #take random subset of neurons
+    idx_N           = np.where(np.all((sessions[ises].celldata['roi_name']=='V1',
+                                    sessions[ises].celldata['noise_level']<20,	
+                                    ),axis=0))[0]
+    if len(idx_N) < nsampleneurons:
+        continue
+    for imf in range(nmodelfits):
+        idx_N_sub       = np.random.choice(idx_N,nsampleneurons,replace=False) #take random subset of neurons
 
-            X               = sessions[ises].respmat[np.ix_(idx_N_sub,idx_T)].T #get trialaveraged activity of these neurons
-            
-            X               = zscore(X,axis=0)  #Z score activity for each neuron
+        X               = sessions[ises].respmat[np.ix_(idx_N_sub,idx_T)].T #get trialaveraged activity of these neurons
+        X               = zscore(X,axis=0)  #Z score activity for each neuron
 
-            Y               = sessions[ises].trialdata['stimCond'] #get orixspeed center condition
-            Y               = LabelEncoder().fit_transform(Y) #convert to labels
-        
-            # print(find_optimal_lambda(X,Y,model_name='LDA',kfold=5))
+        Y               = sessions[ises].trialdata['stimCond'] #get orixspeed center condition
+        Y               = LabelEncoder().fit_transform(Y) #convert to labels
+    
+        # print(find_optimal_lambda(X,Y,model_name='LDA',kfold=5))
+        for icomp in range(ndiffcomps):
+            dec_perf[icomp,ises,imf],_,_,_ = my_decoder_wrapper(X,Y,model_name='LDA',kfold=5,lam=lam,subtract_shuffle=False,
+                            scoring_type='accuracy_score',norm_out=False,n_components=icomp+1)
+            # print(dec_perf[icomp,ises,imf])
 
-            dec_perf[ises,iax,imf],_,_,_ = my_decoder_wrapper(X,Y,model_name='LDA',kfold=5,lam=0.01,subtract_shuffle=False,
-                          scoring_type='accuracy_score',norm_out=False)
-
-#%% Plot decoding performance:
-fig, ax = plt.subplots(1, 1, figsize=[3,3])
-for iax, area in enumerate(arealabels):
-    for ises in range(nSessions):
-        ax.plot([iax], [np.nanmean(dec_perf[ises,iax,:])], 'o', color=get_clr_area_labeled([area]), alpha=0.8)
-    ax.errorbar([iax+.25], [np.nanmean(dec_perf[:,iax,:])], yerr=[np.nanstd(dec_perf[:,iax,:])], color=get_clr_area_labeled([area]), alpha=0.8, fmt='o', capsize=3)
-ax.set_xlabel('Population')
-ax.set_ylabel('Decoding performance')
-ax.set_xticks(range(narealabels),arealabels)
+#%% Plot performance across n_components
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+# ax.plot(range(1,ndiffcomps+1),np.nanmean(dec_perf,axis=(1,2)),color='k',alpha=0.5)
+shaded_error(range(1,ndiffcomps+1),np.nanmean(dec_perf,axis=1).T,color='k',alpha=0.5,ax=ax)
+ax.set_xlabel('Number of components')
+ax.set_xticks(range(1,ndiffcomps+1))
+ax.set_ylabel('LDA Anchor Decoding performance')
 ax.set_ylim([0,1])
 ax.axhline(1/9,linestyle='--',color='k',alpha=0.5)
 sns.despine(fig=fig, top=True, right=True, offset = 3)
 plt.tight_layout()
-my_savefig(fig,savedir,'Decoding_OriSpeed_V1PMlabeled_%dsessions' % nSessions)
+my_savefig(fig,savedir,'Decoding_StimCond_Vary_nComponents_V1_%dsessions' % nSessions)
+
+#%% Decoding with LDA of trialdata['stimCond'] for all sessions and different neural populations
+popsizes   = np.array([10,20,50,100,200,500])
+# sampleneurons   = np.array([10,20])
+nmodelfits      = 5
+lam             = 0.5
+
+arealabels      = ['V1unl', 'PMunl', 'V1lab', 'PMlab','ALunl','RSPunl']
+narealabels     = len(arealabels)
+
+dec_perf        = np.full((len(arealabels),len(popsizes),nSessions,nmodelfits),np.nan)
+
+for ises in tqdm(range(nSessions),desc='LDA Decoding Stim Cond',total=nSessions):
+    idx_T           = np.ones(len(sessions[ises].trialdata['stimCond']),dtype=bool)
+    Y               = sessions[ises].trialdata['stimCond'] #get orixspeed center condition
+    Y               = LabelEncoder().fit_transform(Y) #convert to labels
+    
+    for iax, area in enumerate(arealabels):
+        idx_N           = np.where(np.all((sessions[ises].celldata['arealabel']==area,
+                                        # sessions[ises].celldata['noise_level']<20,	
+                                        ),axis=0))[0]
+        for ipop, pop in enumerate(popsizes):	
+            if len(idx_N) < pop:
+                continue
+            for imf in range(nmodelfits):
+                idx_N_sub       = np.random.choice(idx_N,pop,replace=False) #take random subset of neurons
+
+                X               = sessions[ises].respmat[np.ix_(idx_N_sub,idx_T)].T #get trialaveraged activity of these neurons
+                X               = zscore(X,axis=0)  #Z score activity for each neuron
+
+                # print(find_optimal_lambda(X,Y,model_name='LDA',kfold=5))
+                dec_perf[iax,ipop,ises,imf],_,_,_ = my_decoder_wrapper(X,Y,model_name='LDA',kfold=5,lam=lam,subtract_shuffle=False,
+                                scoring_type='accuracy_score',norm_out=False)
+
+#%% Plot performance across population size: 
+fig,ax = plt.subplots(1,1,figsize=[3.5,3.5],sharex=True,sharey=True)
+handles = []
+for iax, area in enumerate(arealabels):
+    handles.append(shaded_error(popsizes,np.nanmean(dec_perf[iax,:,:,:],axis=2).T,color=get_clr_area_labeled([area]),
+                 linewidth=1.5,alpha=0.25,error='sem',ax=ax))
+ax.set_xlabel('Population size')
+ax.set_xticks(popsizes)
+ax.set_xticks([10,100,200,500])
+ax.set_ylabel('LDA Anchor Decoding performance')
+ax.set_ylim([0,1])
+ax.axhline(1/9,linestyle='--',color='k',alpha=0.5)
+sns.despine(fig=fig, top=True, right=True, offset = 3)
+ax.legend(handles,arealabels,frameon=False,loc='center right',fontsize=8)
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True, offset = 3)
+my_savefig(fig,savedir,'Decoding_StimCond_DiffPops_AreaLabeled_%dsessions' % nSessions)
+
+#%% 
+
+
+# #%% Plot decoding performance at a specific population size:
+# fig, ax = plt.subplots(1, 1, figsize=[3,3])
+# for iax, area in enumerate(arealabels):
+#     for ises in range(nSessions):
+#         ax.plot([iax], [np.nanmean(dec_perf[ises,iax,:])], 'o', color=get_clr_area_labeled([area]), alpha=0.8)
+#     ax.errorbar([iax+.25], [np.nanmean(dec_perf[:,iax,:])], yerr=[np.nanstd(dec_perf[:,iax,:])], color=get_clr_area_labeled([area]), alpha=0.8, fmt='o', capsize=3)
+# ax.set_xlabel('Population')
+# ax.set_ylabel('Decoding performance')
+# ax.set_xticks(range(narealabels),arealabels)
+# ax.set_ylim([0,1])
+# ax.axhline(1/9,linestyle='--',color='k',alpha=0.5)
+# sns.despine(fig=fig, top=True, right=True, offset = 3)
+# plt.tight_layout()
+# my_savefig(fig,savedir,'Decoding_OriSpeed_V1PMlabeled_%dsessions' % nSessions)
+
+
+      # ### ####### ####### ####### ######     #     # ###  #####  #     #    #    #       ### #######    #    ####### ### ####### #     # 
+      #  #     #       #    #       #     #    #     #  #  #     # #     #   # #   #        #       #    # #      #     #  #     # ##    # 
+      #  #     #       #    #       #     #    #     #  #  #       #     #  #   #  #        #      #    #   #     #     #  #     # # #   # 
+      #  #     #       #    #####   ######     #     #  #   #####  #     # #     # #        #     #    #     #    #     #  #     # #  #  # 
+#     #  #     #       #    #       #   #       #   #   #        # #     # ####### #        #    #     #######    #     #  #     # #   # # 
+#     #  #     #       #    #       #    #       # #    #  #     # #     # #     # #        #   #      #     #    #     #  #     # #    ## 
+ #####  ###    #       #    ####### #     #       #    ###  #####   #####  #     # ####### ### ####### #     #    #    ### ####### #     # 
+
+
 
 #%% Define variables for external regression dimensions:
-slabels     = ['Ori','Speed','RunSpeed','videoME']
+slabels     = ['Ori','STF','RunSpeed','videoME']
 scolors     = get_clr_GN_svars(slabels)
 
 #%% ################## PCA unsupervised display of noise around center for each condition #################
+ises = 9
 S   = np.vstack((sessions[ises].trialdata['deltaOrientation'],
                sessions[ises].trialdata['deltaSpeed'],
                sessions[ises].respmat_runspeed,
@@ -224,14 +314,21 @@ NS          = np.shape(S)[0]
 
 cmap = plt.get_cmap('hot')
 proj = (0, 1) 
-# proj = (1, 2)
-proj = (2, 3)
+proj = (1, 2)
+# proj = (2, 3)
 # proj = (3, 4)
 
+pca         = PCA(n_components=15) #construct PCA object with specified number of components
+
+ori_ind         = [np.argwhere(np.array(sessions[ises].trialdata['centerOrientation']) == ori)[:, 0] for ori in oris]
+speed_ind       = [np.argwhere(np.array(sessions[ises].trialdata['centerSpeed']) == speed)[:, 0] for speed in speeds]
+
 for iSvar in range(NS):
-    fig, axes = plt.subplots(3, 3, figsize=[9, 9])
+    fig, axes = plt.subplots(3, 3, figsize=[6,6])
     for iO, ori in enumerate(oris):                                #plot orientation separately with diff colors
         for iS, speed in enumerate(speeds):                       #plot speed separately with diff colors
+            ax          = axes[iO,iS]
+
             idx         = np.intersect1d(ori_ind[iO],speed_ind[iS])
             
             Xp          = pca.fit_transform(sessions[ises].respmat[:,idx].T).T #fit pca to response matrix (n_samples by n_features)
@@ -243,17 +340,18 @@ for iSvar in range(NS):
             
             c = cmap(minmax_scale(S[iSvar,idx], feature_range=(0, 1)))[:,:3]
 
-            sns.scatterplot(x=x, y=y, c=c,ax = axes[iO,iS],s=10,legend = False,edgecolor =None)
-            plt.title(slabels[iSvar])
-            axes[iO,iS].set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
-            axes[iO,iS].set_ylabel('PC {}'.format(proj[1]+1))
+            sns.scatterplot(x=x, y=y, c=c,ax = ax,s=10,legend = False,edgecolor =None)
+            # plt.title(slabels[iSvar])
+            ax.set_xlabel('PC {}'.format(proj[0]+1))            #give labels to axes
+            ax.set_ylabel('PC {}'.format(proj[1]+1))
+            ax.axis('off')
     plt.suptitle(slabels[iSvar],fontsize=15)
-    sns.despine(fig=fig, top=True, right=True)
+    # sns.despine(fig=fig, top=True, right=True)
     plt.tight_layout()
-    plt.savefig(os.path.join(savedir,'GN_PCA','PCA' + str(proj) + '_color' + slabels[iSvar] + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+    # plt.savefig(os.path.join(savedir,'GN_PCA','PCA' + str(proj) + '_color' + slabels[iSvar] + sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-#%% ################## Regression of behavioral variables onto neural data #############
-###### First identify single neurons that are correlated with behavioral variables ####
+#%% ################## Regression of sensory and behavioral variables onto neural data #############
+# First identify single neurons that are correlated with behavioral variables ####
 # i.e. the covariance/correlation between neuronal responses and delta orientation/speed:
 # So for each stimulus condition (ori x speed combination) we compute the covariance/correlation 
 
@@ -281,27 +379,6 @@ for iN in tqdm(range(N),desc='Computing correlations for neuron'):
 # for ises in range(nSessions):
 sessions[ises].celldata['pref_ori_corr_ori'],sessions[ises].celldata['pref_speed_corr_ori'] = get_pref_orispeed(corrmat[:,0,:,:].squeeze(),oris,speeds)
 sessions[ises].celldata['pref_ori_corr_speed'],sessions[ises].celldata['pref_speed_corr_speed'] = get_pref_orispeed(corrmat[:,1,:,:].squeeze(),oris,speeds)
-
-# #%% Is the normalized response to a certain stimulus condition related to the amount of correlation to the jitter
-# # This is to be expected somewhat, that a neuron is sensitive to stimulus perturbations at the stimulus it responds to,
-# # HOwever, likely the sharpest part of the tuning curve is outside its preferred stimulus
-
-# fig,axes = plt.subplots(1,2,figsize=(6,3))
-# for ises in range(nSessions):
-#     resp_mean,resp_res      = mean_resp_gn(sessions[ises])
-#     nCells                  = np.shape(resp_mean)[0]
-#     resp_mean               = np.reshape(resp_mean,(nCells,noris*nspeeds))
-#     resp_mean               = minmax_scale(resp_mean,feature_range=(0,1),axis=1)
-    
-#     corr_ori                 = np.reshape(np.abs(sessions[ises].corr_ori),(nCells,noris*nspeeds))
-#     corr_speed               = np.reshape(np.abs(sessions[ises].corr_speed),(nCells,noris*nspeeds))
-    
-#     axes[0].scatter(resp_mean,corr_ori,s=8,alpha=0.3)
-#     axes[1].scatter(resp_mean,corr_speed,s=8,alpha=0.3)
-#     axes[0].text(0.7,0.5+ises*0.05,s='r=%1.3f' % np.corrcoef(resp_mean.flatten(),corr_ori.flatten())[0,1])
-#     axes[1].text(0.7,0.5+ises*0.05,s='r=%1.3f' % np.corrcoef(resp_mean.flatten(),corr_speed.flatten())[0,1])
-#     axes[0].set_ylim([0,0.8])
-#     axes[1].set_ylim([0,0.8])
 
 #%% #### and plot as density #################################
 fig,ax = plt.subplots(1,1,figsize=(2.5,2.5))
@@ -348,7 +425,317 @@ sns.despine()
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'Examplecells_correlated_with_Svars_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
 
+
+
+
+      # ### ####### ####### ####### ######     ######  #######  #####  ######  #######  #####   #####  ### ####### #     # 
+      #  #     #       #    #       #     #    #     # #       #     # #     # #       #     # #     #  #  #     # ##    # 
+      #  #     #       #    #       #     #    #     # #       #       #     # #       #       #        #  #     # # #   # 
+      #  #     #       #    #####   ######     ######  #####   #  #### ######  #####    #####   #####   #  #     # #  #  # 
+#     #  #     #       #    #       #   #      #   #   #       #     # #   #   #             #       #  #  #     # #   # # 
+#     #  #     #       #    #       #    #     #    #  #       #     # #    #  #       #     # #     #  #  #     # #    ## 
+ #####  ###    #       #    ####### #     #    #     # #######  #####  #     # #######  #####   #####  ### ####### #     # 
+
+
 #%% ###### Population regression of noise around each center stimulus (for all sessions)
+
+popsizes   = np.array([10,20,50,100,200,500])
+# popsizes   = np.array([10,20])
+nmodelfits      = 5
+kfold           = 2
+lam             = 50
+nvars           = 4
+
+lams = [3e3,2e2,7e1,7e1]
+lams = [2e2,2e2,7e1,7e1]
+
+arealabels      = np.array(['V1unl', 'PMunl', 'V1lab', 'PMlab','ALunl','RSPunl'])
+narealabels     = len(arealabels)
+dec_perf        = np.full((len(arealabels),len(popsizes),nvars,noris,nspeeds,nSessions,nmodelfits),np.nan)
+
+for ises in tqdm(range(nSessions),desc='LDA Decoding Stim Cond',total=nSessions):
+# for ises in tqdm(range(4),desc='Jitter Regression Decoding per stimulus condition',total=nSessions):
+    S           = np.vstack((sessions[ises].trialdata['deltaOrientation'],
+                sessions[ises].trialdata['logdeltaSpeed'],
+                sessions[ises].respmat_runspeed,
+                sessions[ises].respmat_videome))
+    
+    for iori, ori in enumerate(oris):                                #plot orientation separately with diff colors
+        for ispeed, speed in enumerate(speeds):    
+            idx_T           = np.all((sessions[ises].trialdata['centerSpeed']==speed,
+                                      sessions[ises].trialdata['centerOrientation']==ori,
+                                      sessions[ises].trialdata['TrialNumber']>10),axis=0)
+
+            for iax, area in enumerate(arealabels):
+                idx_N           = np.where(np.all((sessions[ises].celldata['arealabel']==area,
+                                                sessions[ises].celldata['noise_level']<20,	
+                                                ),axis=0))[0]
+                for ipop,pop in enumerate(popsizes):	
+                    if len(idx_N) < pop:
+                        continue
+                    for imf in range(nmodelfits):
+                        idx_N_sub       = np.random.choice(idx_N,pop,replace=False) #take random subset of neurons
+
+                        X               = sessions[ises].respmat[np.ix_(idx_N_sub,idx_T)].T #get trialaveraged activity of these neurons
+                        X               = zscore(X,axis=0)  #Z score activity for each neuron
+
+                        for ivar in range(nvars):
+                            Y               = S[ivar,idx_T]
+                            Y               = zscore(Y)
+                            # lam = find_optimal_lambda(X,Y,model_name='Ridge',kfold=kfold)
+                            lam = lams[ivar]
+                            # dec_perf[iax,ipop,ivar,istim,ises,imf],_,_,_ = my_decoder_wrapper(X,Y,model_name='Ridge',kfold=kfold,lam=lam,subtract_shuffle=True,
+                                        # scoring_type='r2_score',norm_out=True)
+                        
+                            dec_perf[iax,ipop,ivar,iori,ispeed,ises,imf],_,_,_ = my_decoder_wrapper(X,Y,model_name='Ridge',kfold=kfold,lam=lam,
+                                                    subtract_shuffle=False,scoring_type='r2_score',norm_out=False)
+
+#%% Plot performance across population size: 
+fig,axes = plt.subplots(1,NS,figsize=[3.5*NS,3.5],sharex=True,sharey=True)
+handles = []
+for ivar in range(NS):
+    ax = axes[ivar]
+    for iax, area in enumerate(arealabels):
+        datatoplot = dec_perf[iax,:,ivar,:,:,:,:] #subselecting for this area and this variable, 5 dims left
+        meantoplot = np.nanmean(datatoplot,axis=(1,2,3,4)) #averaging across orientations, speeds, sessions, modelfits
+        ax.plot(popsizes,meantoplot,'o-',color=get_clr_area_labeled([area]),alpha=0.5)
+        # handles.append(shaded_error(popsizes,np.nanmean(dec_perf[iax,:,:,:],axis=2).T,color=get_clr_area_labeled([area]),
+                    # linewidth=1.5,alpha=0.2,5error='sem',ax=ax))
+    if ivar == 0:
+        ax.set_xlabel('Population size')
+        ax.set_ylabel('Jitter Regression (cvR2)')
+    ax.set_title(slabels[ivar])
+    ax.set_xticks([10,100,200,500])
+    if ivar==0:
+        ax.legend(arealabels,frameon=False,loc='upper left',fontsize=8)
+    ax.axhline(0,linestyle='--',color='k',alpha=0.5)
+    ax.set_ylim([-0.1,0.8])
+sns.despine(fig=fig, top=True, right=True, offset = 3)
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True, trim=True, offset = 3)
+my_savefig(fig,savedir,'Decoding_StimCond_DiffPops_AreaLabeled_%dsessions' % nSessions)
+
+#%% Plot performance across population size: 
+# fig,axes = plt.subplots(1,NS,figsize=[3.5*NS,3.5],sharex=True,sharey=True)
+popidx = 4
+alidxtoplot = [0,1,4] #only show select number of areas, not labeled pops for example
+alidxtoplot = [0,1,4,5] #only show select number of areas
+
+fig,axes = plt.subplots(1,4,figsize=[2*4,3.5],sharex=False,sharey=True)
+
+varidx = 0 #ori jitter decoding
+
+ax = axes[0]
+handles = []
+# for iax, area in enumerate(arealabels[alidxtoplot]):
+for iax, area in zip(alidxtoplot,arealabels[alidxtoplot]):
+    datatoplot = dec_perf[iax,popidx,varidx,:,:,:,:] #subselecting for this area, 50 neurons, and ori decoding, 4 dims left
+    meantoplot = np.nanmean(datatoplot,axis=(1,2,3)) #averaging across speeds, sessions, modelfits, result is mean for each speed cond
+    # ax.plot(range(3),meantoplot,'o-',color=get_clr_area_labeled([area]),alpha=0.5)
+    errortoplot = np.nanstd(np.nanmean(datatoplot,axis=(1,3)),axis=1)/np.sqrt(nSessions) #averaging across orientations, speeds, sessions, modelfits
+    # errortoplot = np.nanstd(datatoplot,axis=(1,2,3))/np.sqrt(nSessions) #averaging across orientations, speeds, sessions, modelfits
+    handles.append(shaded_error(range(3),meantoplot,errortoplot,color=get_clr_area_labeled([area]),ax=ax,alpha=0.25,linewidth=1.5))
+ax.set_xticks([0,1,2],oris)
+ax.set_ylabel('Jitter Regression (cvR2)')
+ax.set_xlabel('Center Orientation')
+ax.set_title('Ori Jitter')
+ax.legend(handles,arealabels[alidxtoplot],frameon=False,loc='upper left',fontsize=9)
+
+varidx = 1 #grating speed jitter decoding
+ax = axes[1]
+for iax, area in zip(alidxtoplot,arealabels[alidxtoplot]):
+    datatoplot = dec_perf[iax,popidx,varidx,:,:,:,:] #subselecting for this area, 50 neurons, and ori decoding, 4 dims left
+    meantoplot = np.nanmean(datatoplot,axis=(1,2,3)) #averaging across speeds, sessions, modelfits
+    # ax.plot(range(3),meantoplot,'o-',color=get_clr_area_labeled([area]),alpha=0.5)
+    errortoplot = np.nanstd(np.nanmean(datatoplot,axis=(1,3)),axis=1)/np.sqrt(nSessions) #averaging across orientations, speeds, sessions, modelfits
+    # errortoplot = np.nanstd(datatoplot,axis=(1,2,3))/np.sqrt(nSessions) #averaging across orientations, speeds, sessions, modelfits
+    shaded_error(range(3),meantoplot,errortoplot,color=get_clr_area_labeled([area]),ax=ax,alpha=0.25,linewidth=1.5)
+ax.set_xticks([0,1,2],oris)
+ax.set_xlabel('Center Orientation')
+ax.set_title('Grating Speed Jitter')
+
+varidx = 0 #ori jitter decoding
+ax = axes[2]
+for iax, area in zip(alidxtoplot,arealabels[alidxtoplot]):
+    datatoplot = dec_perf[iax,popidx,varidx,:,:,:,:] #subselecting for this area, 50 neurons, and ori decoding, 4 dims left
+    meantoplot = np.nanmean(datatoplot,axis=(0,2,3)) #averaging across orientations, sessions, modelfits
+    # ax.plot(range(3),meantoplot,'o-',color=get_clr_area_labeled([area]),alpha=0.5)
+    errortoplot = np.nanstd(np.nanmean(datatoplot,axis=(1,3)),axis=1)/np.sqrt(nSessions) #averaging across orientations, speeds, sessions, modelfits
+    # errortoplot = np.nanstd(datatoplot,axis=(1,2,3))/np.sqrt(nSessions) #averaging across orientations, speeds, sessions, modelfits
+    shaded_error(range(3),meantoplot,errortoplot,color=get_clr_area_labeled([area]),ax=ax,alpha=0.25,linewidth=1.5)
+ax.set_title('Ori Jitter')
+ax.set_xticks([0,1,2],speeds)
+ax.set_xlabel('Center Grating Speed')
+
+varidx = 1 #grating speed jitter decoding
+ax = axes[3]
+for iax, area in zip(alidxtoplot,arealabels[alidxtoplot]):
+    datatoplot = dec_perf[iax,popidx,varidx,:,:,:,:] #subselecting for this area, 50 neurons, and ori decoding, 4 dims left
+    meantoplot = np.nanmean(datatoplot,axis=(0,2,3)) #averaging across orientations, sessions, modelfits
+    # ax.plot(range(3),meantoplot,'o-',color=get_clr_area_labeled([area]),alpha=0.5)
+    errortoplot = np.nanstd(np.nanmean(datatoplot,axis=(1,3)),axis=1)/np.sqrt(nSessions) #averaging across orientations, speeds, sessions, modelfits
+    # errortoplot = np.nanstd(datatoplot,axis=(1,2,3))/np.sqrt(nSessions) #averaging across orientations, speeds, sessions, modelfits
+    shaded_error(range(3),meantoplot,errortoplot,color=get_clr_area_labeled([area]),ax=ax,alpha=0.25,linewidth=1.5)
+ax.set_title('Grating Speed Jitter')
+ax.set_xticks([0,1,2],speeds)
+ax.set_xlabel('Center Grating Speed')
+
+for ax in axes:
+    ax.axhline(0,linestyle='--',color='k',alpha=0.5)
+    ax.set_xlim([-0.25,2.25])
+ax.set_ylim([-0.06,0.35])
+ax.set_yticks([0,0.15,0.3])
+
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True, trim=True, offset = 3)
+my_savefig(fig,savedir,'Decoding_PerOri_PerSpeed_AreaLabeled_%dsessions_%dneurons' % (nSessions,popsizes[popidx]),formats=['png'])
+
+
+#%% 
+
+
+
+
+#%% ###### Population regression of noise around each center stimulus (for all sessions)
+arealabels      = np.array(['V1unl', 'V1lab', 'PMunl', 'PMlab','ALunl','RSPunl'])
+popsizes        = np.array([10,20,50,100,200,500])
+popsizes        = np.array([20,200])
+
+nmodelfits      = 5
+kfold           = 2
+lam             = 50
+nvars           = 4
+
+lams        = [3e3,2e2,7e1,7e1]
+lams        = [2e2,2e2,7e1,7e1]
+
+model_name  = 'Ridge'
+narealabels             = len(arealabels)
+decdim_crosscorr        = np.full((narealabels,narealabels,len(popsizes),nvars,noris,nspeeds,nSessions,nmodelfits),np.nan)
+decdim_crosscorr_res    = np.full((narealabels,narealabels,len(popsizes),nvars,noris,nspeeds,nSessions,nmodelfits),np.nan)
+dec_perf                = np.full((len(arealabels),len(popsizes),nvars,noris,nspeeds,nSessions,nmodelfits),np.nan)
+
+for ises in tqdm(range(nSessions),desc='Multiarea jitter regression',total=nSessions):
+# for ises in tqdm(range(2),desc='Jitter Regression Decoding per stimulus condition',total=nSessions):
+    # Define neural data parameters
+    S           = np.vstack((sessions[ises].trialdata['deltaOrientation'],
+                sessions[ises].trialdata['logdeltaSpeed'],
+                sessions[ises].respmat_runspeed,
+                sessions[ises].respmat_videome))
+    
+    for iori, ori in enumerate(oris):                                #plot orientation separately with diff colors
+        for ispeed, speed in enumerate(speeds):    
+            idx_T           = np.all((sessions[ises].trialdata['centerSpeed']==speed,
+                                      sessions[ises].trialdata['centerOrientation']==ori,
+                                      sessions[ises].trialdata['TrialNumber']>10),axis=0)
+            for ipop,pop in enumerate(popsizes):	
+                for imf in range(nmodelfits):
+                    datamat         = np.full((np.sum(idx_T),pop,narealabels),np.nan) #data, samples x neurons x areas
+                    projmat         = np.full((np.sum(idx_T),narealabels,nvars),np.nan)
+                    projmat_res     = np.full((np.sum(idx_T),narealabels,nvars),np.nan)
+                    for iax, area in enumerate(arealabels):
+                        idx_N           = np.where(np.all((sessions[ises].celldata['arealabel']==area,
+                                                sessions[ises].celldata['noise_level']<20,	
+                                                ),axis=0))[0]
+                        if len(idx_N) < pop:
+                            continue
+                        idx_N_sub       = np.random.choice(idx_N,pop,replace=False) #take random subset of neurons
+
+                        X               = sessions[ises].respmat[np.ix_(idx_N_sub,idx_T)].T #get trialaveraged activity of these neurons
+                        X               = zscore(X,axis=0)  #Z score activity for each neuron
+                        datamat[:,:,iax] = X
+
+                        for ivar in range(nvars):
+                            Y               = S[ivar,idx_T]
+                            Y               = zscore(Y)
+                            # lam = find_optimal_lambda(X,Y,model_name='Ridge',kfold=kfold)
+                            lam = lams[ivar]
+
+                            dec_perf[iax,ipop,ivar,iori,ispeed,ises,imf],_,projmat[:,iax,ivar],_ = my_decoder_wrapper(X,Y,model_name='Ridge',kfold=kfold,lam=lam,
+                                                    subtract_shuffle=False,scoring_type='r2_score',norm_out=False)
+                            projmat_res[:,iax,ivar] = projmat[:,iax,ivar] - Y
+
+                    for ivar in range(nvars):
+                        temp = pd.DataFrame(projmat[:,:,ivar]).corr().to_numpy()
+                        np.fill_diagonal(temp,np.nan) #remove correlation area with itself
+                        decdim_crosscorr[:,:,ipop,ivar,iori,ispeed,ises,imf]        = temp
+                        # decdim_crosscorr[:,:,ipop,ivar,iori,ispeed,ises,imf]        = pd.DataFrame(projmat[:,:,ivar]).corr()
+                        # decdim_crosscorr_res[:,:,ipop,ivar,iori,ispeed,ises,imf]    = pd.DataFrame(projmat_res[:,:,ivar]).corr() 
+
+#%% Remove session with wrong alignment of video data:
+sessiondata = pd.concat([sessions[i].sessiondata for i in range(nSessions)],axis=0)
+sesidx = np.where(sessiondata['session_id']=='LPE12013_2024_05_07')[0][0]
+dec_perf[:,:,:,:,:,sesidx,:] = np.nan
+decdim_crosscorr[:,:,:,:,:,:,sesidx,:] = np.nan
+
+#%%
+fig,axes = plt.subplots(1,nvars,figsize=[3.5*nvars,3.5],sharex=True,sharey=True)
+popidx = 1
+for ivar in range(nvars):
+    ax = axes[ivar]
+    meantoplot = np.nanmean(decdim_crosscorr[:,:,popidx,ivar,:,:,:,:],axis=(2,3,4,5))
+    np.fill_diagonal(meantoplot,np.nan)
+    ax.imshow(meantoplot,cmap='magma',vmin=0,vmax=.5)
+    ax.set_xticks(np.arange(narealabels),arealabels,rotation=45)
+    ax.set_yticks(np.arange(narealabels),arealabels)
+    ax.set_title(slabels[ivar])
+
+cbar_ax = fig.add_axes([.93,.4,.015,.4])
+fig.colorbar(axes[-1].get_images()[0],cax=cbar_ax,label='Correlation')
+my_savefig(fig,savedir,'MultiArea_Corr_CodingSubspace_allStim_%dneurons,%dsessions' % (popsizes[popidx],nSessions))
+
+#%%
+fig,axes = plt.subplots(1,nvars,figsize=[3.5*nvars,3.5],sharex=True,sharey=True)
+popidx = 0
+for ivar in range(nvars):
+    ax = axes[ivar]
+    meantoplot = np.nanmean(decdim_crosscorr_res[:,:,popidx,ivar,:,:,:,:],axis=(2,3,4,5))
+    np.fill_diagonal(meantoplot,np.nan)
+    ax.imshow(meantoplot,cmap='magma',vmin=0,vmax=1)
+    ax.set_xticks(np.arange(narealabels),arealabels,rotation=45)
+    ax.set_yticks(np.arange(narealabels),arealabels)
+    ax.set_title(slabels[ivar])
+
+
+#%% Taking the product or the sum of the decoding performances per area pair
+from itertools import product
+
+dec_sum     = np.full(np.shape(decdim_crosscorr),np.nan)
+dec_prod   = np.full(np.shape(decdim_crosscorr),np.nan)
+
+for ises, iori, ispeed, ipop, imf, ivar, iax, iay in product(
+    range(nSessions), range(noris), range(nspeeds), range(len(popsizes)), 
+    range(nmodelfits), range(nvars), range(narealabels), range(narealabels)):
+    dec_sum[iax, iay, ipop, ivar, iori, ispeed, ises, imf] = (
+        dec_perf[iax, ipop, ivar, iori, ispeed, ises, imf] + dec_perf[iay, ipop, ivar, iori, ispeed, ises, imf])
+    dec_prod[iax, iay, ipop, ivar, iori, ispeed, ises, imf] = (
+        dec_perf[iax, ipop, ivar, iori, ispeed, ises, imf] * dec_perf[iay, ipop, ivar, iori, ispeed, ises, imf])
+                           
+#%%
+fig,axes = plt.subplots(1,nvars,figsize=[2*nvars,2.5],sharex=True,sharey=True)
+# ax = axes[0]
+popidx = 1
+for ivar in range(nvars):
+    ax = axes[ivar]
+    xdata = np.nanmean(dec_sum[:,:,popidx,ivar,:,:,:,:],axis=-1).flatten() #take only specified population size, average across modelfits
+    ydata = np.nanmean(decdim_crosscorr[:,:,popidx,ivar,:,:,:,:],axis=-1).flatten()
+
+    # xdata = dec_sum[:,:,popidx,ivar,:,:,:,:].flatten()
+    # ydata = decdim_crosscorr[:,:,popidx,ivar,:,:,:,:].flatten()
+    ax.scatter(xdata,ydata,c=scolors[ivar],s=5,alpha=0.3)
+    add_corr_results(ax,xdata,ydata,pos=[0.7,0.1],fontsize=9)
+    ax.set_title(slabels[ivar])
+    if ivar==2:
+        ax.set_xlabel('Pairwise sum of decoding performance')
+    if ivar==0:
+        ax.set_ylabel('Pairwise correlation \nof coding subspace')
+    ax.set_yticks([0,0.5,1])
+    ax.set_xticks([0,0.5,1,1.5])
+    ax.set_xlim([-0.4,1.75])
+sns.despine(fig=fig, top=True, right=True, offset = 3,trim=True)
+plt.tight_layout()
+my_savefig(fig,savedir,'MultiArea_Corr_CodingSubspace_vs_PairwiseSumDecoding_%dneurons,%dsessions' % (popsizes[popidx],nSessions))
+
 
 #%% Decoding with regression of noise around each center stimulus 
 # for all sessions and different neural populations
@@ -422,6 +809,8 @@ for ivar, (ax, varlabel) in enumerate(zip(axes, slabels)):
 plt.tight_layout()
 # plt.savefig(os.path.join(savedir, 'Decoding_%s_per_stimcond.png' % var), format='png')
 my_savefig(fig,savedir,'Decoding_Jitter_DiffStimuli_V1PMlabeled_%dsessions' % nSessions,formats=['png'])
+
+
 
 #%% Debug code: problem with run speed decoding in one session:
 
@@ -714,7 +1103,6 @@ fig.savefig(os.path.join(savedir,'Weights_Area_Redcell_%s' % sessions[ises].sess
 # sessions[ises].trialdata['deltaSpeed']
 
 #%% ## Regression of behavioral activity onto neural data: 
-
 # idx_tuned = np.logical_and(np.logical_or(corrmat[:,0,0,0]>np.percentile(corrmat[:,0,0,0].flatten(),95),
 #     corrmat[:,0,0,0]<np.percentile(corrmat[:,0,0,0].flatten(),5)),   
 #                            sessions[ises].celldata['tuning']>0.4)
@@ -876,7 +1264,6 @@ for iO, ori in enumerate(oris):
             u = coefs[iY,:,iO,iS]
             u = u[:,np.newaxis]
 
-
             model.fit(sc.fit_transform(X))
             model.score
             v = model.components_[0,:]
@@ -922,9 +1309,9 @@ for iO, ori in enumerate(oris):
         # sns.scatterplot(x=Yhat_train[:,0], y=Yhat_train[:,1],color=c,ax = axes[iO,iS],legend = False)
 
         # sns.scatterplot(x=proj_ori, y=proj_speed,color=c,ax = axes[iO,iS],legend = False)
-        axes[iO,iS].set_xlabel('delta Ori')            #give labels to axes
-        axes[iO,iS].set_ylabel('delta Speed')            #give labels to axes
-        axes[iO,iS].set_title('%d deg - %d deg/s' % (ori,speed))       
+        ax.set_xlabel('delta Ori')            #give labels to axes
+        ax.set_ylabel('delta Speed')            #give labels to axes
+        ax.set_title('%d deg - %d deg/s' % (ori,speed))       
 
 sns.despine()
 plt.tight_layout()
@@ -936,7 +1323,7 @@ proj    = (0, 1)
 
 for iO, ori in enumerate(oris):                                #plot orientation separately with diff colors
     for iS, speed in enumerate(speeds):     
-        
+        ax = axes[iO,iS]
         idx     = np.intersect1d(ori_ind[iO],speed_ind[iS])
 
         X       = respmat_zsc[:,idx]
@@ -967,9 +1354,9 @@ for iO, ori in enumerate(oris):                                #plot orientation
 
         sns.scatterplot(x=proj_ori, y=proj_speed,c=c,ax = axes[iO,iS],legend = False)
         # sns.scatterplot(x=proj_ori, y=proj_speed,color=c,ax = axes[iO,iS],legend = False)
-        axes[iO,iS].set_xlabel('delta Ori')            #give labels to axes
-        axes[iO,iS].set_ylabel('delta Speed')            #give labels to axes
-        axes[iO,iS].set_title('%d deg - %d deg/s' % (ori,speed))       
+        ax.set_xlabel('delta Ori')            #give labels to axes
+        ax.set_ylabel('delta Speed')            #give labels to axes
+        ax.set_title('%d deg - %d deg/s' % (ori,speed))       
 
 sns.despine()
 plt.tight_layout()

@@ -66,7 +66,7 @@ def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
     return optimal_lambda
 
 def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_shuffle=True,
-                          scoring_type=None,norm_out=False):
+                          scoring_type=None,norm_out=False,n_components=None):
     if model_name == 'LogisticRegression':
         model_name = 'LOGR'
     assert len(Xfull.shape)==2, 'Xfull must be a matrix of samples by features'
@@ -83,8 +83,10 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
     elif model_name == 'SVM':
         model = SVM.SVC(kernel='linear', C=lam)
     elif model_name == 'LDA':
-        n_components = np.unique(Yfull).size-1
+        if n_components is None: 
+            n_components = np.unique(Yfull).size-1
         model = LDA(n_components=n_components,solver='eigen', shrinkage=np.clip(lam,0,1))
+        # model = LDA(n_components=n_components,solver='svd')
     elif model_name == 'GBC': #Gradient Boosting Classifier
         model = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1,max_depth=10, random_state=0,max_features='sqrt')
     elif model_name in ['Ridge', 'Lasso']:
@@ -142,11 +144,12 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
     model.fit(Xfull,Yfull)
     weights = model.coef_.ravel()
 
-    if len(np.unique(Yfull)) == 2:
+    if np.shape(Xfull)[1] == np.shape(weights)[0]:
+    # if len(np.unique(Yfull)) == 2:
         ev      = var_along_dim(Xfull,weights)
     else:
-        # ev = None
-        ev      = var_along_dim(Xfull,weights)
+        ev = None
+        # ev      = var_along_dim(Xfull,weights)
 
     return performance_avg,weights,projs,ev
 

@@ -449,19 +449,6 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
         dims[ises,1,imf] = estimate_dimensionality(Y,method=dimmethod)
 
 #%% 
-def add_corr_results(ax, x,y):
-    nas = np.logical_or(np.isnan(x), np.isnan(y))
-    r,p = pearsonr(x[~nas], y[~nas])
-
-    print('Correlation (r=%1.2f): p=%.3f' % (r,p))
-    if p<0.05:
-        ax.text(0.2,0.1,'r=%1.2f\np<0.05' % r,transform=ax.transAxes,ha='center',va='center',fontsize=8,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
-    else: 
-        ax.text(0.2,0.1,'p=n.s.',transform=ax.transAxes,ha='center',va='center',fontsize=8,color='k')
-
-from scipy.stats import pearsonr
-
-#%% 
 fig,axes = plt.subplots(2,2,figsize=(5,5),sharex=True,sharey='row')
 ax = axes[0,0]
 ax.scatter(dims[:,0,:],optim_rank[:,0,:],color='r',s=10,alpha=0.5)
@@ -507,15 +494,19 @@ sns.despine(top=True,right=True,offset=3)
 
 my_savefig(fig,savedir,'RRR_Perf_WithinAcross_Dimensionality_%dsessions.png' % nSessions)
 
+#%% 
+fig,axes = plt.subplots(1,1,figsize=(3.5,3.5),sharex=True,sharey='row')
+ax = axes
+ax.scatter(dims[:,0,:],dims[:,1,:],color='r',s=10,alpha=0.5)
+# ax.scatter(dims[:,1,:],optim_rank[:,1,:],color='b',s=10,alpha=0.5)
+ax.set_xlabel('Source Dimensionality')
+ax.set_ylabel('Target Dimensionality')
+ax.set_xlim([np.nanmin(dims)*0.8,np.nanmax(dims)*1.2])
+ax.set_ylim([np.nanmin(dims)*0.8,np.nanmax(dims)*1.2])
+ax_nticks(ax,3)
+add_corr_results(ax,dims.flatten(),optim_rank.flatten())
+
 #%% Is the difference in feedforward vs feedback (V1-PM vs PM-V1) due to different dimensionality?
-
-
-
-
-
-
-
-
 
 
 

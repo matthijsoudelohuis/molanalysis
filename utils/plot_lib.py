@@ -12,6 +12,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 import warnings
+from scipy.stats import pearsonr
 
 desired_width = 600
 pd.set_option('display.width', desired_width)
@@ -240,6 +241,17 @@ def colored_line_between_pts(x, y, c, ax, **lc_kwargs):
     lc.set_array(c)
 
     return ax.add_collection(lc)
+
+def add_corr_results(ax, x,y,pos=[0.2,0.1],fontsize=8):
+    nas = np.logical_or(np.isnan(x), np.isnan(y))
+    r,p = pearsonr(x[~nas], y[~nas])
+
+    print('Correlation (r=%1.2f): p=%.3f' % (r,p))
+    if p<0.05:
+        ax.text(pos[0],pos[1],'r=%1.2f\np<0.05' % r,transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
+    else: 
+        ax.text(pos[0],pos[1],'p=n.s.',transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k')
+
 
 #function to add colorbar for imshow data and axis
 def add_colorbar_outside(im,ax):
@@ -630,8 +642,12 @@ def get_clr_gratingnoise_stimuli(oris,speeds):
 
 def get_clr_GN_svars(labels):
     palette       = {'Ori': '#2e17c4',
+                     'Grating Ori': '#2e17c4',
+                'Grating Speed' : '#17c42e',
                 'Speed' : '#17c42e',
+                'STF'   : '#17c42e',
                 'Running' : '#c417ad',
+                'Locomotion' : '#c417ad',
                 'RunSpeed' : '#c417ad',
                 'Random' : '#021011',
                 'videoME' : '#adc417',
