@@ -55,7 +55,7 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     min_cells=None, min_lab_cells_V1=None, min_lab_cells_PM=None, 
                     filter_areas=None,min_trials=None, session_rf=None,
                     any_of_areas=None,only_all_areas=None,has_pupil=False,
-                    filter_noiselevel=False):
+                    filter_noiselevel=False,im_ses_with_repeats=False):
     """
     This function filters and returns a list of session objects that meet specific 
     criteria based on the input arguments. It allows the user to specify conditions 
@@ -166,6 +166,10 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                     cellfilter = np.array(ses.celldata['noise_level']<20)
                     ses.cellfilter = np.logical_and(ses.cellfilter, cellfilter) if getattr(ses, 'cellfilter', None) is not None else cellfilter
                 
+                # Select based on whether session has subset of natural images with more than 2 repeats:
+                if sesflag and im_ses_with_repeats and protocol == 'IM':
+                    sesflag = sesflag and np.any(ses.trialdata['ImageNumber'].value_counts()>2)
+
                 # SELECT BASED ON WHETHER SESSION HAS PUPIL DATA MEASUREMENTS
                 if sesflag and has_pupil:
                     ses.load_data(load_videodata=True)
