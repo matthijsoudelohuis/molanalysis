@@ -17,13 +17,13 @@ from utils.psth import compute_respmat
 from utils.plot_lib import * #get all the fixed color schemes
 
 
-def plot_respmat(orientations, datasets, labels,prefori):
+def plot_respmat(orientations, datasets, labels, prefori):
     data = datasets[0]
     poprate = np.nanmean(data,axis=0)
 
-    sort_idx_trials = np.lexsort((poprate, orientations))[::-1]
+    sort_idx_trials     = np.lexsort((poprate, orientations))[::-1]
     gain_weights        = np.array([np.corrcoef(poprate,data[n,:])[0,1] for n in range(data.shape[0])])
-    sort_idx_neurons = np.lexsort((gain_weights, prefori))[::-1]
+    sort_idx_neurons    = np.lexsort((gain_weights, prefori))[::-1]
 
     fig,axes = plt.subplots(1, len(datasets),figsize=(3*len(datasets),4))
     if len(datasets) == 1:
