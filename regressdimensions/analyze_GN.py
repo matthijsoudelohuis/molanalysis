@@ -37,7 +37,6 @@ from utils.plot_lib import * #get all the fixed color schemes
 from utils.explorefigs import plot_excerpt
 from utils.tuning import *
 
-
 #%% Settings: 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\NoiseRegression\\')
 randomseed  = 5
@@ -60,7 +59,6 @@ for ises in range(nSessions):    # iterate over sessions
 #%% Compute tuning metrics:
 sessions = compute_tuning_wrapper(sessions)
 
-
 #%% ## Get some variables:
 ises = 0
 oris, speeds    = [np.unique(sessions[ises].trialdata[col]).astype('int') for col in ('centerOrientation', 'centerSpeed')]
@@ -72,6 +70,13 @@ slabels         = ['Ori','STF','RunSpeed','videoME']
 scolors         = get_clr_GN_svars(slabels)
 clrs,labels     = get_clr_gratingnoise_stimuli(oris,speeds)
 NS              = len(slabels)
+
+#%% TODO: 
+# define which session is example V1 LDA, and which PM and use those for example
+# define which session and stimulus condition to use for PCA and regression example
+# improve color scheme for 9 stimulus conditions and use consistently in 1x9 and 3x3 format
+# get optimal lambda for each decoding by optimization
+
 
 
 #%% 

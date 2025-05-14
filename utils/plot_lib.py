@@ -12,7 +12,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 import warnings
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr,ttest_rel
 
 desired_width = 600
 pd.set_option('display.width', desired_width)
@@ -249,6 +249,16 @@ def add_corr_results(ax, x,y,pos=[0.2,0.1],fontsize=8):
     print('Correlation (r=%1.2f): p=%.3f' % (r,p))
     if p<0.05:
         ax.text(pos[0],pos[1],'r=%1.2f\np<0.05' % r,transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
+    else: 
+        ax.text(pos[0],pos[1],'p=n.s.',transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k')
+
+def add_paired_ttest_results(ax, x,y,pos=[0.2,0.1],fontsize=8):
+    nas = np.logical_or(np.isnan(x), np.isnan(y))
+    t,p = ttest_rel(x[~nas], y[~nas])
+
+    print('Paired t-test: p=%.3f' % (p))
+    if p<0.05:
+        ax.text(pos[0],pos[1],'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
     else: 
         ax.text(pos[0],pos[1],'p=n.s.',transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k')
 
