@@ -77,7 +77,53 @@ def RRR(Y, X, B_hat, r):
 
     return Y_hat_rr,U,S,V
 
+def RRR_cvR2(Y, X, rank,lam=0,kfold=5):
+    # Input: 
+    # Y is activity in area 2, X is activity in area 1
+
+    # Function:
+    # X is of shape K x N (samples by features), Y is of shape K x M
+    # K is the number of samples, N is the number of neurons in area 1,
+    # M is the number of neurons in area 2
+
+    # multiple linear regression, B_hat is of shape N x M:
+    # B_hat               = LM(Y,X, lam=lam) 
+    #RRR: do SVD decomp of Y_hat, 
+    # U is of shape K x r, S is of shape r x r, V is of shape r x M
+    # Y_hat_rr,U,S,V     = RRR(Y, X, B_hat, r)
+
+    kf      = KFold(n_splits=kfold,shuffle=True)
+
+    R2_cv_folds = np.full((kfold),np.nan)
+
+    X                   = zscore(X,axis=0)  #Z score activity for each neuron across trials/timepoints
+    Y                   = zscore(Y,axis=0)
+
+    for ikf, (idx_train, idx_test) in enumerate(kf.split(X)):
+        
+        X_train, X_test     = X[idx_train], X[idx_test]
+        Y_train, Y_test     = Y[idx_train], Y[idx_test]
+
+        B_hat_train         = LM(Y_train,X_train, lam=lam)
+
+        Y_hat_train         = X_train @ B_hat_train
+
+        # decomposing and low rank approximation of A
+        # U, s, V = linalg.svd(Y_hat_train, full_matrices=False)
+        
+        U, s, V = svds(Y_hat_train,k=rank,which='LM')
+
+        B_rrr               = B_hat_train @ V.T @ V #project beta coeff into low rank subspace
+
+        Y_hat_rr_test       = X_test @ B_rrr #project test data onto low rank predictive subspace
+
+        R2_cv_folds[ikf] = EV(Y_test,Y_hat_rr_test)
+
+    return np.nanmean(R2_cv_folds)
+
+
 def RRR_wrapper(Y, X, nN=None,nM=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=5):
+    #Reduced rank regression with unknown rank: 
     # Input: 
     # Y is activity in area 2, X is activity in area 1
 

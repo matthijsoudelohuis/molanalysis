@@ -106,13 +106,15 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
     # iterate over files in that directory
     for protocol in protocols:
         for animal_id in os.listdir(os.path.join(get_data_folder(), protocol)):
-            for session_id in os.listdir(os.path.join(get_data_folder(), protocol, animal_id)):
+            for sessiondate in os.listdir(os.path.join(get_data_folder(), protocol, animal_id)):
+                # ses = Session(
+                # protocol=protocol, animal_id=session_list[i, 0], session_id=session_list[i, 1])
 
-                ses = Session(protocol=protocol,
-                              animal_id=animal_id, session_id=session_id)
-                ses.load_data(load_behaviordata=False,
-                              load_calciumdata=False, load_videodata=False)
 
+                ses = Session(protocol=protocol,animal_id=animal_id, sessiondate=sessiondate)
+                ses.load_data(load_behaviordata=False,load_calciumdata=False, load_videodata=False)
+                assert(ses.session_id == animal_id + '_' + sessiondate), "session_id != animal_id + '_' + sessiondate"
+                
                 # go through specified conditions that have to be met for the session to be included:
                 sesflag = True
 
@@ -122,7 +124,7 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
 
                 # SELECT BASED ON SESSION ID
                 if only_session_id is not None:
-                    sesflag = sesflag and session_id in only_session_id
+                    sesflag = sesflag and ses.session_id in only_session_id
 
                 # SELECT BASED ON # TRIALS
                 if min_trials is not None:

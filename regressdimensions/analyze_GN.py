@@ -37,19 +37,18 @@ from utils.plot_lib import * #get all the fixed color schemes
 from utils.explorefigs import plot_excerpt
 from utils.tuning import *
 
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\NoiseRegression\\')
 
-#%% 
+#%% Settings: 
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\NoiseRegression\\')
 randomseed  = 5
 calciumversion = 'dF'
 calciumversion = 'deconv'
 
-#%% #############################################################################
-#Sessions with good receptive field mapping in both V1 and PM:
-session_list        = np.array([['LPE11998','2024_05_02'], #GN
-                                ['LPE12013','2024_05_02']]) #GN
+#%% Load example sessions:
+session_list        = np.array(['LPE11998_2024_05_02','LPE12013_2024_05_02']) #GN
+sessions,nSessions   = filter_sessions(protocols = ['GN'],only_session_id=session_list)
 
-#%% Load sessions lazy: 
+#%% Load all GN sessions: 
 minlabcells = 0
 sessions,nSessions   = filter_sessions(protocols = ['GN'],min_lab_cells_V1=minlabcells,min_lab_cells_PM=minlabcells)
 
@@ -60,6 +59,20 @@ for ises in range(nSessions):    # iterate over sessions
 
 #%% Compute tuning metrics:
 sessions = compute_tuning_wrapper(sessions)
+
+
+#%% ## Get some variables:
+ises = 0
+oris, speeds    = [np.unique(sessions[ises].trialdata[col]).astype('int') for col in ('centerOrientation', 'centerSpeed')]
+noris           = len(oris) 
+nspeeds         = len(speeds)
+areas           = np.array(['PM', 'V1'], dtype=object)
+
+slabels         = ['Ori','STF','RunSpeed','videoME']
+scolors         = get_clr_GN_svars(slabels)
+clrs,labels     = get_clr_gratingnoise_stimuli(oris,speeds)
+NS              = len(slabels)
+
 
 #%% 
    #    #     #  #####  #     # ####### ######     ######  ####### ### #     # ####### 
@@ -72,20 +85,6 @@ sessions = compute_tuning_wrapper(sessions)
 
 
 #%% Show different stimulus conditions, the anchor points: 
-
-
-
-#%% ## 
-# idx_V1 = np.where(sessions[ises].celldata['roi_name']=='V1')[0]
-# idx_PM = np.where(sessions[ises].celldata['roi_name']=='PM')[0]
-idx_V1 = sessions[ises].celldata['roi_name']=='V1'
-idx_PM = sessions[ises].celldata['roi_name']=='PM'
-
-oris, speeds    = [np.unique(sessions[ises].trialdata[col]).astype('int') for col in ('centerOrientation', 'centerSpeed')]
-noris           = len(oris) 
-nspeeds         = len(speeds)
-areas           = np.array(['PM', 'V1'], dtype=object)
-clrs,labels     = get_clr_gratingnoise_stimuli(oris,speeds)
 
 
 # #%% LDA of all trials
@@ -299,11 +298,6 @@ my_savefig(fig,savedir,'Decoding_StimCond_DiffPops_AreaLabeled_%dsessions' % nSe
  #####  ###    #       #    ####### #     #       #    ###  #####   #####  #     # ####### ### ####### #     #    #    ### ####### #     # 
 
 
-
-#%% Define variables for external regression dimensions:
-slabels     = ['Ori','STF','RunSpeed','videoME']
-scolors     = get_clr_GN_svars(slabels)
-
 #%% ################## PCA unsupervised display of noise around center for each condition #################
 ises = 9
 S   = np.vstack((sessions[ises].trialdata['deltaOrientation'],
@@ -439,7 +433,7 @@ plt.savefig(os.path.join(savedir,'Examplecells_correlated_with_Svars_%s' % sessi
 
 #%% ###### Population regression of noise around each center stimulus (for all sessions)
 
-popsizes   = np.array([10,20,50,100,200,500])
+popsizes        = np.array([10,20,50,100,200,500])
 # popsizes   = np.array([10,20])
 nmodelfits      = 5
 kfold           = 2
@@ -453,8 +447,8 @@ arealabels      = np.array(['V1unl', 'PMunl', 'V1lab', 'PMlab','ALunl','RSPunl']
 narealabels     = len(arealabels)
 dec_perf        = np.full((len(arealabels),len(popsizes),nvars,noris,nspeeds,nSessions,nmodelfits),np.nan)
 
-for ises in tqdm(range(nSessions),desc='LDA Decoding Stim Cond',total=nSessions):
-# for ises in tqdm(range(4),desc='Jitter Regression Decoding per stimulus condition',total=nSessions):
+for ises in tqdm(range(nSessions),desc='Jitter regression per stimulus condition',total=nSessions):
+# for ises in tqdm(range(2),desc='Jitter Regression Decoding per stimulus condition',total=nSessions):
     S           = np.vstack((sessions[ises].trialdata['deltaOrientation'],
                 sessions[ises].trialdata['logdeltaSpeed'],
                 sessions[ises].respmat_runspeed,
@@ -483,7 +477,7 @@ for ises in tqdm(range(nSessions),desc='LDA Decoding Stim Cond',total=nSessions)
                             Y               = S[ivar,idx_T]
                             Y               = zscore(Y)
                             # lam = find_optimal_lambda(X,Y,model_name='Ridge',kfold=kfold)
-                            lam = lams[ivar]
+                            lam             = lams[ivar]
                             # dec_perf[iax,ipop,ivar,istim,ises,imf],_,_,_ = my_decoder_wrapper(X,Y,model_name='Ridge',kfold=kfold,lam=lam,subtract_shuffle=True,
                                         # scoring_type='r2_score',norm_out=True)
                         
@@ -513,7 +507,7 @@ for ivar in range(NS):
 sns.despine(fig=fig, top=True, right=True, offset = 3)
 plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True, trim=True, offset = 3)
-my_savefig(fig,savedir,'Decoding_StimCond_DiffPops_AreaLabeled_%dsessions' % nSessions)
+# my_savefig(fig,savedir,'Decoding_StimCond_DiffPops_AreaLabeled_%dsessions' % nSessions)
 
 #%% Plot performance across population size: 
 # fig,axes = plt.subplots(1,NS,figsize=[3.5*NS,3.5],sharex=True,sharey=True)
@@ -609,11 +603,13 @@ nvars           = 4
 lams        = [3e3,2e2,7e1,7e1]
 lams        = [2e2,2e2,7e1,7e1]
 
-model_name  = 'Ridge'
+model_name              = 'Ridge'
 narealabels             = len(arealabels)
 decdim_crosscorr        = np.full((narealabels,narealabels,len(popsizes),nvars,noris,nspeeds,nSessions,nmodelfits),np.nan)
 decdim_crosscorr_res    = np.full((narealabels,narealabels,len(popsizes),nvars,noris,nspeeds,nSessions,nmodelfits),np.nan)
 dec_perf                = np.full((len(arealabels),len(popsizes),nvars,noris,nspeeds,nSessions,nmodelfits),np.nan)
+subspace_R2             = np.full((narealabels,narealabels,len(popsizes),noris,nspeeds,nSessions,nmodelfits),np.nan)
+subspace_rank           = np.full((narealabels,narealabels,len(popsizes),noris,nspeeds,nSessions,nmodelfits),np.nan)
 
 for ises in tqdm(range(nSessions),desc='Multiarea jitter regression',total=nSessions):
 # for ises in tqdm(range(2),desc='Jitter Regression Decoding per stimulus condition',total=nSessions):
@@ -662,9 +658,30 @@ for ises in tqdm(range(nSessions),desc='Multiarea jitter regression',total=nSess
                         # decdim_crosscorr[:,:,ipop,ivar,iori,ispeed,ises,imf]        = pd.DataFrame(projmat[:,:,ivar]).corr()
                         # decdim_crosscorr_res[:,:,ipop,ivar,iori,ispeed,ises,imf]    = pd.DataFrame(projmat_res[:,:,ivar]).corr() 
 
+                    for iax, areax in enumerate(arealabels):
+                        for iay, areay in enumerate(arealabels):
+
+                            if np.all(np.isnan(datamat[:,:,iax])) or np.all(np.isnan(datamat[:,:,iay])):
+                                continue    
+                                
+                            if iax==iay:
+                                continue
+                            
+                            rank    = int(np.round(pop**0.4))
+                            R2      = RRR_cvR2(datamat[:,:,iay], datamat[:,:,iax], rank=5,lam=0,kfold=5)
+                            # print(R2)
+                            # R2,rank,_           = RRR_wrapper(datamat[:,:,iay], datamat[:,:,iax], nN=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=10)
+                            subspace_R2[iax,iay,ipop,iori,ispeed,ises,imf] = R2
+                            subspace_rank[iax,iay,ipop,iori,ispeed,ises,imf] = rank
+
+#%% 
+
+print(np.sum(~np.isnan(subspace_R2)))
+
 #%% Remove session with wrong alignment of video data:
 sessiondata = pd.concat([sessions[i].sessiondata for i in range(nSessions)],axis=0)
 sesidx = np.where(sessiondata['session_id']=='LPE12013_2024_05_07')[0][0]
+sesidx = np.where(sessiondata['animal_id']=='LPE12013')[0]
 dec_perf[:,:,:,:,:,sesidx,:] = np.nan
 decdim_crosscorr[:,:,:,:,:,:,sesidx,:] = np.nan
 
@@ -735,6 +752,33 @@ for ivar in range(nvars):
 sns.despine(fig=fig, top=True, right=True, offset = 3,trim=True)
 plt.tight_layout()
 my_savefig(fig,savedir,'MultiArea_Corr_CodingSubspace_vs_PairwiseSumDecoding_%dneurons,%dsessions' % (popsizes[popidx],nSessions))
+
+#%%
+fig,axes = plt.subplots(1,nvars,figsize=[2*nvars,2.5],sharex=True,sharey=True)
+# ax = axes[0]
+popidx = 0
+for ivar in range(nvars):
+    ax = axes[ivar]
+    xdata = np.nanmean(dec_sum[:,:,popidx,ivar,:,:,:,:],axis=-1).flatten() #take only specified population size, average across modelfits
+    ydata = np.nanmean(subspace_R2[:,:,popidx,:,:,:,:],axis=-1).flatten()
+
+    # xdata = dec_sum[:,:,popidx,ivar,:,:,:,:].flatten()
+    # ydata = decdim_crosscorr[:,:,popidx,ivar,:,:,:,:].flatten()
+    ax.scatter(xdata,ydata,c=scolors[ivar],s=5,alpha=0.3)
+    add_corr_results(ax,xdata,ydata,pos=[0.7,0.1],fontsize=9)
+    ax.set_title(slabels[ivar])
+    if ivar==2:
+        ax.set_xlabel('Pairwise sum of decoding performance')
+    # if ivar==0:
+        # ax.set_ylabel('Pairwise correlation \nof coding subspace')
+    # ax.set_yticks([0,0.5,1])
+    ax.set_xticks([0,0.5,1,1.5])
+    ax.set_xlim([-0.4,1.75])
+sns.despine(fig=fig, top=True, right=True, offset = 3,trim=True)
+plt.tight_layout()
+# my_savefig(fig,savedir,'MultiArea_Corr_CodingSubspace_vs_PairwiseSumDecoding_%dneurons,%dsessions' % (popsizes[popidx],nSessions))
+
+#%% 
 
 
 #%% Decoding with regression of noise around each center stimulus 
@@ -1204,6 +1248,10 @@ plt.tight_layout()
 
 
 #%% ### testing with specific ori and speed which showed effect: 
+
+idx_V1 = sessions[ises].celldata['roi_name']=='V1'
+idx_PM = sessions[ises].celldata['roi_name']=='PM'
+
 dimPCA = 50
 iO = 1
 iS = 1

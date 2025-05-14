@@ -20,15 +20,16 @@ logger = logging.getLogger(__name__)
 
 class Session():
 
-    def __init__(self, protocol='', animal_id='', session_id='', verbose=1):
+    def __init__(self, protocol='', animal_id='', sessiondate='', verbose=1):
         logger.debug(
-            'Initializing Session object for: \n- animal ID: {}' '\n- Session ID: {}\n'.format(animal_id, session_id))
+            'Initializing Session object for: \n- animal ID: {}' '\n- Session ID: {}\n'.format(animal_id, sessiondate))
         self.data_folder = os.path.join(
-            get_data_folder(), protocol, animal_id, session_id)
+            get_data_folder(), protocol, animal_id, sessiondate)
         self.verbose = verbose
         self.protocol = protocol
         self.animal_id = animal_id
-        self.session_id = session_id
+        self.sessiondate = sessiondate  
+        self.session_id = animal_id + '_' + sessiondate
         self.cellfilter = None
 
     def load_data(self, load_behaviordata=False, load_calciumdata=False, load_videodata=False, 
@@ -58,7 +59,7 @@ class Session():
 
             if os.path.exists(os.path.join(self.data_folder,'IMrfdata.csv')):
                 IMrfdata = pd.read_csv(os.path.join(self.data_folder,'IMrfdata.csv'), sep=',', index_col=0)
-                assert np.shape(IMrfdata)[0]==np.shape(self.celldata)[0], 'dimensions of IMrfdata and celldata do not match for sessions {} and {}'.format(self.animal_id, self.session_id)
+                assert np.shape(IMrfdata)[0]==np.shape(self.celldata)[0], 'dimensions of IMrfdata and celldata do not match for sessions {}'.format(self.session_id)
                 self.celldata = self.celldata.join(IMrfdata,lsuffix='_old')
             
             # get only good cells (selected ROIs by suite2p): #not used anymore, only good cells are saved anyways

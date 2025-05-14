@@ -10,7 +10,7 @@ from sklearn.preprocessing import minmax_scale
 from sklearn.metrics import r2_score
 from tqdm import tqdm
 
-os.chdir('c:\\Python\\molanalysis')
+os.chdir('e:\\Python\\molanalysis')
 
 from loaddata.get_data_folder import get_local_drive
 
@@ -146,9 +146,9 @@ session_list        = np.array([['LPE10919','2023_11_06']])
 # session_list        = np.array([['LPE12223','2024_06_10']])
 
 # load sessions lazy: 
-sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
+sessions,nSessions   = filter_sessions(protocols = ['GR'],only_session_id=session_list)
 
-#   Load proper data and compute average trial responses:                      
+#%% Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
                                 calciumversion='deconv',keepraw=True)
@@ -158,10 +158,10 @@ for ises in range(nSessions):    # iterate over sessions
 sessions = compute_tuning_wrapper(sessions)
 
 #%% Filter only well tuned neurons in V1:
-idx                                 = np.all((sessions[ises].celldata['roi_name']=='V1',sessions[ises].celldata['tuning_var']>0.05),axis=0)
-sessions[ises].respmat              = sessions[ises].respmat[idx,:]
-sessions[ises].celldata             = sessions[ises].celldata[idx]
-sessions[ises].calciumdata          = sessions[ises].calciumdata.iloc[:,idx]
+# idx                                 = np.all((sessions[ises].celldata['roi_name']=='V1',sessions[ises].celldata['tuning_var']>0.05),axis=0)
+# sessions[ises].respmat              = sessions[ises].respmat[idx,:]
+# sessions[ises].celldata             = sessions[ises].celldata[idx]
+# sessions[ises].calciumdata          = sessions[ises].calciumdata.iloc[:,idx]
 
 #%% Figure of raw data correlation of population activity, video ME, runspeed, and pupil area:
 lw = 0.25
@@ -188,6 +188,7 @@ ax.plot(stats.zscore(np.nanmean(sessions[ises].respmat[sessions[ises].celldata['
 ax.plot(stats.zscore(sessions[ises].respmat_videome),color='k',linewidth=lw,label='video ME')
 ax.plot(stats.zscore(sessions[ises].respmat_runspeed),color='r',linewidth=lw,label='runspeed')
 ax.plot(stats.zscore(sessions[ises].respmat_pupilarea),color='b',linewidth=lw,label='pupil area')
+# ax.set_xlim([800,900])
 ax.set_xlim([500,650])
 ax.set_ylim([-1.5,4])
 ax.legend(frameon=False,loc='upper right')
@@ -199,8 +200,8 @@ fig.savefig(os.path.join(savedir,'Rate_behavior_across_trials_%s' % sessions[ise
 #%% Correlations between variables:
 df = pd.DataFrame({'pop. rate V1':stats.zscore(np.nanmean(sessions[ises].respmat[sessions[ises].celldata['roi_name']=='V1',:],axis=0)),
                     'pop. rate PM':stats.zscore(np.nanmean(sessions[ises].respmat[sessions[ises].celldata['roi_name']=='PM',:],axis=0)),
-                    'videome':stats.zscore(sessions[ises].respmat_videome),
                     'runspeed':stats.zscore(sessions[ises].respmat_runspeed),
+                    'videome':stats.zscore(sessions[ises].respmat_videome),
                     'pupilarea':stats.zscore(sessions[ises].respmat_pupilarea)})
 
 fig,ax = plt.subplots(1,1,figsize=(3.5,3))
@@ -210,6 +211,7 @@ plt.xticks(rotation=45,fontsize=8)
 plt.yticks(rotation=0,fontsize=8)
 plt.tight_layout()
 fig.savefig(os.path.join(savedir,'Corrmat_rate_behavior_%s' % sessions[ises].sessiondata['session_id'][0] + '.png'), format = 'png')
+
 
 #%% 
 

@@ -58,7 +58,6 @@ def proc_sessiondata(rawdatadir,animal_id,sessiondate,protocol):
     sessions_overview_DE    = pd.read_excel(os.path.join(get_data_folder(),'DE_Sessions_Overview.xlsx'))
     sessions_overview_AKS   = pd.read_excel(os.path.join(get_data_folder(),'AKS_Sessions_Overview.xlsx'))
 
-
     if np.any(np.logical_and(sessions_overview_VISTA["sessiondate"] == sessiondate,sessions_overview_VISTA["protocol"] == protocol)):
         sessions_overview = sessions_overview_VISTA
     elif np.any(np.logical_and(sessions_overview_DE["sessiondate"] == sessiondate,sessions_overview_DE["protocol"] == protocol)):
