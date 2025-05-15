@@ -34,28 +34,23 @@ from utils.gain_lib import *
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Interarea\\CCA\\')
 
-#%% 
-session_list        = np.array([['LPE12223','2024_06_10'], #GR
-                                ['LPE10919','2023_11_06']]) #GR
-# session_list        = np.array([['LPE09665','2023_03_21'], #GR
-                                # ['LPE10919','2023_11_06']]) #GR
+#%% Load an example session: 
+session_list        = np.array(['LPE12223_2024_06_10']) #GR
 
 sessions,nSessions   = filter_sessions(protocols = 'GR',only_session_id=session_list)
 
 #%%  Load data properly:        
-calciumversion = 'dF'
 calciumversion = 'deconv'
-
 for ises in range(nSessions):
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion=calciumversion,keepraw=True)
+                                calciumversion=calciumversion,keepraw=False)
     
 #%% ########################### Compute tuning metrics: ###################################
 sessions = compute_tuning_wrapper(sessions)
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
-#%% Make the 3D figure for original data:
+#%% Make the 3D figure the cone data:
 fig = plot_PCA_gratings_3D(sessions[0],thr_tuning=0)
 axes = fig.get_axes()
 axes[0].view_init(elev=-45, azim=0, roll=-10)

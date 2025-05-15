@@ -433,7 +433,7 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
     ori_ind = [np.argwhere(np.array(ori) == iori)[:, 0] for iori in oris]
 
     pal = sns.color_palette('husl', len(oris))
-    pal = np.tile(sns.color_palette('husl', int(len(oris)/2)), (2, 1))
+    pal = np.tile(sns.color_palette('husl', 8), (2, 1))
     if size == 'runspeed':
         sizes = (ses.respmat_runspeed - np.percentile(ses.respmat_runspeed, 5)) / \
             (np.percentile(ses.respmat_runspeed, 95) -
@@ -442,6 +442,8 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
         sizes = (ses.respmat_videome - np.percentile(ses.respmat_videome, 5)) / \
             (np.percentile(ses.respmat_videome, 95) -
              np.percentile(ses.respmat_videome, 5))
+    elif size == 'uniform':
+        sizes = np.ones_like(ses.respmat_runspeed)*0.5
 
     fig = plt.figure(figsize=[len(areas)*4, 4])
     # fig,axes = plt.figure(1, len(areas), figsize=[len(areas)*3, 3])
@@ -449,7 +451,7 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
     for iarea, area in enumerate(areas):
         # ax = axes[iarea]
         idx_area = ses.celldata['roi_name'] == area
-        idx_tuned = ses.celldata['tuning_var'] > thr_tuning
+        idx_tuned = ses.celldata['tuning_var'] >= thr_tuning
         idx = np.logical_and(idx_area, idx_tuned)
         # zscore for each neuron across trial responses
         respmat_zsc = zscore(ses.respmat[idx, :], axis=1)
