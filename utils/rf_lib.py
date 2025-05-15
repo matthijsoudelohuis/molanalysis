@@ -362,15 +362,17 @@ def plot_delta_rf_projections(sessions,areapairs,projpairs,filter_near=False):
     return fig
 
 
-def filter_nearlabeled(ses,radius=50):
+def filter_nearlabeled(ses,radius=50,only_V1_PM=False):
 
     if not hasattr(ses,'distmat_xyz'):
         [ses] = compute_pairwise_metrics([ses])
     temp = ses.distmat_xyz.copy()
     np.fill_diagonal(temp,0)  #this is to include the labeled neurons themselves
     closemat = temp[ses.celldata['redcell']==1,:] <= radius
-
-    return np.any(closemat,axis=0)
+    idx = np.any(closemat,axis=0)
+    if not only_V1_PM:
+        idx = np.logical_or(idx, ~ses.celldata['roi_name'].isin(['V1','PM']))
+    return idx
 
 def get_response_triggered_image(ses, natimgdata):
     
