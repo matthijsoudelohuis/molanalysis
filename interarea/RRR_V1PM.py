@@ -29,6 +29,7 @@ from utils.explorefigs import *
 from utils.CCAlib import *
 from utils.corr_lib import *
 from utils.tuning import compute_tuning_wrapper
+from utils.RRRlib import *
 from utils.regress_lib import *
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Interarea\\RRR\\WithinAcross')
@@ -77,17 +78,16 @@ areas = ['V1','PM','AL','RSP']
 nareas = len(areas)
 
 
-# areas = ['V1','PM']
-# nareas = len(areas)
-
-
-
 # %% 
 # sessions,nSessions   = filter_sessions(protocols = 'GR',only_all_areas=areas,min_lab_cells_V1=20,min_lab_cells_PM=20)
-# sessions,nSessions   = filter_sessions(protocols = 'GR',only_all_areas=areas,filter_areas=areas)
-# sessions,nSessions   = filter_sessions(protocols = 'GN',only_all_areas=areas,filter_areas=areas)
 # sessions,nSessions   = filter_sessions(protocols = ['GN','GR'],only_all_areas=areas,filter_areas=areas)
 sessions,nSessions   = filter_sessions(protocols = ['GN','GR'],filter_areas=areas)
+
+#%% Remove sessions with too much drift in them:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
 
 #%%  Load data properly:        
 calciumversion = 'deconv'
@@ -97,7 +97,7 @@ for ises in range(nSessions):
                                 calciumversion=calciumversion,keepraw=False)
 
 
-#%% Test wrapper function: (should be fast, just one model fit etc.)
+#%% Test wrapper function: (should be fast, just one model fit etc. EV around .08 or 0.1)
 nsampleneurons  = 20
 nranks          = 25
 nmodelfits      = 1 #number of times new neurons are resampled 
@@ -106,7 +106,6 @@ R2_cv           = np.full((nSessions),np.nan)
 optim_rank      = np.full((nSessions),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for session:'):
-    # idx_T               = ses.trialdata['Orientation']==0
     idx_T               = np.ones(len(ses.trialdata['stimCond']),dtype=bool)
     idx_areax           = np.where(np.all((ses.celldata['roi_name']=='V1',
                             ses.celldata['noise_level']<20),axis=0))[0]
@@ -119,7 +118,6 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
     R2_cv[ises],optim_rank[ises],_      = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
 
 print(np.nanmean(R2_cv))
-
 
 
 #%% Perform RRR: 
@@ -551,7 +549,7 @@ optim_rank          = np.full((narealayerpairs,nSessions),np.nan)
 R2_cv_folds         = np.full((narealayerpairs,nSessions,nranks,nmodelfits,kfold),np.nan)
 filter_nearby       = False
 
-for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for populations'):
     idx_T               = np.ones(len(ses.trialdata['stimCond']),dtype=bool)
         
     for ialp, arealayerpair in enumerate(arealayerpairs):
@@ -584,7 +582,7 @@ fig,axes = plt.subplots(1,3,figsize=(7.5,2.5))
 ax = axes[0]
 handles = []
 for ialp, arealayerpair in enumerate(arealayerpairs):
-    handles.append(shaded_error(np.arange(nranks),datatoplot[:,ialp,:],color=clrs_arealayerpairs[ialp],error='sem',ax=ax))
+    handles.append(shaded_error(np.arange(nranks),datatoplot[ialp,:,:],color=clrs_arealayerpairs[ialp],error='sem',ax=ax))
 # handles.append(shaded_error(np.arange(nranks),datatoplot[:,1,:],color=clrs_areapairs[1],error='sem',ax=ax))
 
 ax.legend(handles,arealayerpairs,frameon=False,fontsize=6,loc='upper left',ncol=2)
@@ -597,47 +595,131 @@ ax.set_ylim([0,0.35])
 ax.set_yticks([0,0.1,0.2,0.3])
 ax.set_xlim([0,nranks])
 
+datatoplot = R2_cv
+# datatoplot  = datatoplot / np.nanmean(datatoplot,axis=0)[np.newaxis,:] #normalize to whole dataset
 ax = axes[1]
 for ialp, arealayerpair in enumerate(arealayerpairs):
-    ax.scatter(np.ones(nSessions)*ialp,R2_cv[ialp,:],color=clrs_arealayerpairs[ialp],s=10)
-    ax.errorbar(ialp+0.2,np.nanmean(R2_cv[ialp,:]),np.nanstd(R2_cv[ialp,:])/np.sqrt(nSessions),color=clrs_arealayerpairs[ialp],capsize=3)
+    ax.scatter(np.ones(nSessions)*ialp,datatoplot[ialp,:],color=clrs_arealayerpairs[ialp],s=4)
+    ax.errorbar(ialp+0.25,np.nanmean(datatoplot[ialp,:]),np.nanstd(datatoplot[ialp,:])/np.sqrt(np.sum(~np.isnan(datatoplot[ialp,:]))),marker='.',markersize=10,color=clrs_arealayerpairs[ialp],capsize=0)
+ax.set_ylim([0,ax.get_ylim()[1]])
+ax.set_ylabel('R2')
+
+datatotest = datatoplot[:,~np.any(np.isnan(datatoplot),axis=0)]
+pairs = list(itertools.combinations(arealayerpairs,2))
+
+df = pd.DataFrame({'R2':  datatotest.flatten(),
+                       'arealayerpair':np.repeat(arealayerpairs,np.shape(datatotest)[1])})
+
+annotator = Annotator(ax, pairs, data=df, x='arealayerpair', y='R2', order=arealayerpairs)
+annotator.configure(test='t-test_paired', text_format='star', loc='inside',verbose=False,
+                    comparisons_correction=None,alpha=0.05,
+                    # hide_non_significant=True,
+                    pvalue_thresholds=[[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"]]
+                    )
+annotator.apply_and_annotate()
 
 ax = axes[2]
+datatoplot = optim_rank
 for ialp, arealayerpair in enumerate(arealayerpairs):
-    ax.scatter(np.ones(nSessions)*ialp,optim_rank[ialp,:],color=clrs_arealayerpairs[ialp],s=10)
-    ax.errorbar(ialp+0.2,np.nanmean(optim_rank[ialp,:]),np.nanstd(optim_rank[ialp,:])/np.sqrt(nSessions),color=clrs_arealayerpairs[ialp],capsize=3)
+    ax.scatter(np.ones(nSessions)*ialp,datatoplot[ialp,:],color=clrs_arealayerpairs[ialp],s=4)
+    ax.errorbar(ialp+0.25,np.nanmean(datatoplot[ialp,:]),np.nanstd(datatoplot[ialp,:])/np.sqrt(np.sum(~np.isnan(datatoplot[ialp,:]))),marker='.',markersize=10,color=clrs_arealayerpairs[ialp],capsize=0)
+ax.set_ylim([0,ax.get_ylim()[1]])
+ax.set_ylabel('Rank')
 
 sns.despine(top=True,right=True,offset=3)
-axes[1].set_xticks(range(narealayerpairs),arealayerpairs,rotation=45,ha='right',fontsize=7)
-axes[2].set_xticks(range(narealayerpairs),arealayerpairs,rotation=45,ha='right',fontsize=7)
+axes[1].set_xticks(range(narealayerpairs),arealayerpairs,rotation=45,ha='right',fontsize=6)
+axes[2].set_xticks(range(narealayerpairs),arealayerpairs,rotation=45,ha='right',fontsize=6)
 
 plt.tight_layout()
-# my_savefig(fig,savedir,'RRR_V1PM_ranks_mean_vs_residual')
-
-# ax.scatter(R2_cv[:,0],R2_cv[:,1],color='k',s=10)
-# ax.set_xlabel('V1->PM')
-# ax.set_ylabel('PM->V1')
-# ax.plot([0,1],[0,1],color='k',linestyle='--',linewidth=0.5)
-# ax.set_xlim([0,0.4])
-# ax.set_ylim([0,0.4])
-# t,p = ttest_rel(R2_cv[:,0],R2_cv[:,1],nan_policy='omit')
-# print('Paired t-test (R2): p=%.3f' % p)
-# if p<0.05:
-#     ax.text(0.6,0.2,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=12,color='red')
-# else: 
-#     ax.text(0.6,0.2,'p=%.3f' % p,transform=ax.transAxes,ha='center',va='center',fontsize=12,color='k')
-
-
-
-
-
+# my_savefig(fig,savedir,'RRR_V1PM_Layers_%dsessions' % (nSessions),formats=['png'])
+my_savefig(fig,savedir,'RRR_V1PM_Layers_%dsessions_stats' % (nSessions),formats=['png'])
 
 
 
 #%% 
 
+#     #    #      ######  #     #       #    #          ######   #####  ######  
+#     #   ##      #     # ##   ##      # #   #          #     # #     # #     # 
+#     #  # #      #     # # # # #     #   #  #          #     # #       #     # 
+#     #    #      ######  #  #  #    #     # #          ######   #####  ######  
+ #   #     #      #       #     #    ####### #          #   #         # #       
+  # #      #      #       #     #    #     # #          #    #  #     # #       
+   #     #####    #       #     #    #     # #######    #     #  #####  #       
+
+#%% 
 
 
+
+
+#%% Parameters for decoding from size-matched populations of V1 and PM labeled and unlabeled neurons
+lam                 = 0
+nsampleneurons      = 100
+nranks              = 25
+nmodelfits          = 5 #number of times new neurons are resampled 
+kfold               = 5
+
+R2_cv               = np.full((nareas,nareas,nSessions),np.nan)
+optim_rank          = np.full((nareas,nareas,nSessions),np.nan)
+R2_cv_folds         = np.full((nareas,nareas,nSessions,nranks,nmodelfits,kfold),np.nan)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for populations'):
+    idx_T               = np.ones(len(ses.trialdata['stimCond']),dtype=bool)
+        
+    for iax, areax in enumerate(areas):
+
+        for iay, areay in enumerate(areas):
+            if areax==areay:
+                continue
+            idx_areax           = np.where(np.all((ses.celldata['roi_name']==areax,
+                                    ses.celldata['noise_level']<20),axis=0))[0]
+            idx_areay           = np.where(np.all((ses.celldata['roi_name']==areay,
+                                    ses.celldata['noise_level']<20),axis=0))[0]
+        
+            #Neural data:
+            X           = ses.respmat[np.ix_(idx_areax,idx_T)].T
+            Y           = ses.respmat[np.ix_(idx_areay,idx_T)].T
+
+            if len(idx_areax)>=nsampleneurons and len(idx_areay)>=nsampleneurons:
+                R2_cv[iax,iay,ises],optim_rank[iax,iay,ises],R2_cv_folds[iax,iay,ises,:,:,:]      = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+
+#%% 
+tempR2 = copy.deepcopy(R2_cv)
+temprank = copy.deepcopy(optim_rank)
+
+#Filter only sessions in which all combinations are present:
+for ises in range(nSessions):
+    tempR2[:,:,ises][np.eye(nareas,dtype=bool)] = 1
+idx_ses = np.any(np.isnan(tempR2),axis=(0,1))
+tempR2[:,:,idx_ses] = np.nan
+temprank[:,:,idx_ses] = np.nan
+
+fig,axes = plt.subplots(1,2,figsize=(6,2.7),sharey=False,sharex=False)
+sns.heatmap(np.nanmean(tempR2,axis=2),annot=True,ax=axes[0],cmap='magma',vmin=0,vmax=0.2,
+            xticklabels=areas,yticklabels=areas)
+axes[0].set_title('Avg R2')
+sns.heatmap(np.nanmean(temprank,axis=2),annot=True,ax=axes[1],cmap='magma',vmin=5,vmax=11,
+            xticklabels=areas,yticklabels=areas)
+axes[1].set_title('Avg optimal rank')
+axes[0].set_xlabel('Target area')
+axes[0].set_ylabel('Source area')
+axes[1].set_xlabel('Target area')
+axes[1].set_ylabel('Source area')
+fig.tight_layout()
+my_savefig(fig,savedir,'RRR_R2_rank_allareas_%d_onlyall' % nSessions, formats=['png'])
+# my_savefig(fig,savedir,'RRR_R2_rank_allareas_%d' % nSessions, formats=['png'])
+
+
+
+#%% 
+######  ######  ######     ######  #######  #####  ####### #     # ######  
+#     # #     # #     #    #     # #       #     # #     # ##   ## #     # 
+#     # #     # #     #    #     # #       #       #     # # # # # #     # 
+######  ######  ######     #     # #####   #       #     # #  #  # ######  
+#   #   #   #   #   #      #     # #       #       #     # #     # #       
+#    #  #    #  #    #     #     # #       #     # #     # #     # #       
+#     # #     # #     #    ######  #######  #####  ####### #     # #       
+
+#%% 
 
 
 #%% Compare mean response and taking the residuals:
@@ -702,32 +784,22 @@ sns.despine(top=True,right=True,offset=3)
 plt.tight_layout()
 # my_savefig(fig,savedir,'RRR_V1PM_ranks_mean_vs_residual')
 
-
-#%% 
-######  ######  ######     ######  #######  #####  ####### #     # ######  
-#     # #     # #     #    #     # #       #     # #     # ##   ## #     # 
-#     # #     # #     #    #     # #       #       #     # # # # # #     # 
-######  ######  ######     #     # #####   #       #     # #  #  # ######  
-#   #   #   #   #   #      #     # #       #       #     # #     # #       
-#    #  #    #  #    #     #     # #       #     # #     # #     # #       
-#     # #     # #     #    ######  #######  #####  ####### #     # #       
-
 #%% RRR decomposition of variance:
 
-arealabelpairs  = ['V1unl-V1unl',
-                    'V1unl-V1lab',
-                    'V1lab-V1lab',
-                    'PMunl-PMunl',
-                    'PMunl-PMlab',
-                    'PMlab-PMlab',
-                    'V1unl-PMunl',
-                    'V1unl-PMlab',
-                    'V1lab-PMunl',
-                    'V1lab-PMlab',
-                    'PMunl-V1unl',
-                    'PMunl-V1lab',
-                    'PMlab-V1unl',
-                    'PMlab-V1lab']
+# arealabelpairs  = ['V1unl-V1unl',
+#                     'V1unl-V1lab',
+#                     'V1lab-V1lab',
+#                     'PMunl-PMunl',
+#                     'PMunl-PMlab',
+#                     'PMlab-PMlab',
+#                     'V1unl-PMunl',
+#                     'V1unl-PMlab',
+#                     'V1lab-PMunl',
+#                     'V1lab-PMlab',
+#                     'PMunl-V1unl',
+#                     'PMunl-V1lab',
+#                     'PMlab-V1unl',
+#                     'PMlab-V1lab']
 
 arealabelpairs  = ['V1unl-PMunl',
                     'V1unl-PMlab',
@@ -747,7 +819,7 @@ clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
 narealabelpairs     = len(arealabelpairs)
 
 lam                 = 0
-nsampleneurons      = 500
+nsampleneurons      = 250
 nranks              = 25
 nmodelfits          = 10 #number of times new neurons are resampled 
 kfold               = 5
@@ -855,7 +927,7 @@ rankdata    = np.nanmean(R2_cv_folds[:,:,0,:,:,:],axis=(0,1))
 # _,optimrank =  rank_from_R2(rankdata.reshape([nranks,nmodelfits*kfold]),nranks,nmodelfits*kfold)
 # optimrank = 12
 optimrank   = np.argmax(np.nanmean(R2_cv_folds[:,:,0,:,:,:],axis=(0,1,3,4)))-1
-optimrank   = 15
+optimrank   = 12
 
 datatoplot  = np.nanmean(R2_cv_folds[:,:,:,optimrank,:,:],axis=(-1,-2))
 labelnames  = ['Full','Stimulus','Behavior','Unknown']
@@ -870,7 +942,7 @@ for i in range(4):
     handles.append(ax.plot(range(narealabelpairs),np.nanmean(datatoplot[:,:,i],axis=1),marker='o',linestyle='-',
     color=clrs_decomp[i])[0])
     for iapl in range(narealabelpairs):
-        ax.scatter(np.ones(nSessions)*iapl,datatoplot[iapl,:,i],marker='o',s=3,
+        ax.scatter(np.ones(nSessions)*iapl-0.1+np.random.rand(nSessions)*0.03,datatoplot[iapl,:,i],marker='o',s=3,
                 #    color=clrs_arealabelpairs[iapl])
                    color=clrs_decomp[i])
 ax.legend(handles=handles,labels=labelnames,bbox_to_anchor=(1.05, 1),loc='upper left',frameon=False,fontsize=8)
@@ -884,27 +956,39 @@ ax_nticks(ax,5)
 datatoplot = np.nanmean(R2_cv_folds[:,:,:,optimrank,:,:],axis=(3,4))
 datatoplot = datatoplot[:,:,1:] / datatoplot[:,:,0][:,:,np.newaxis]
 
+pairs = list(itertools.combinations(arealabelpairs,2))
+
 ax = axes[1]
 handles = []
 for i in range(3):
     # handles.append(shaded_error(np.arange(1,nranks),datatoplot[:,i,:],ax=ax,linestyle='-',color=clrs_decomp[i+1],
                 #  error='sem'))
-    handles.append(ax.plot(range(narealabelpairs),np.nanmean(datatoplot[:,:,i],axis=1),linestyle='-',
+    handles.append(ax.plot(range(narealabelpairs),np.nanmean(datatoplot[:,:,i],axis=1),marker='o',linestyle='-',
     color=clrs_decomp[i+1])[0])
 
     for iapl in range(narealabelpairs):
-        ax.scatter(np.ones(nSessions)*iapl,datatoplot[iapl,:,i],marker='o',s=3,
+        ax.scatter(np.ones(nSessions)*iapl-0.1,datatoplot[iapl,:,i],marker='o',s=3,
                 #    color=clrs_arealabelpairs[iapl])
                    color=clrs_decomp[i+1])
 
     if narealabelpairs == 2:
-        ttest,pval = stats.ttest_rel(datatoplot[:,0,i],datatoplot[:,1,i],nan_policy='omit')
+        ttest,pval = stats.ttest_rel(datatoplot[0,:,i],datatoplot[1,:,i],nan_policy='omit')
 
-        add_stat_annotation(ax, 0.1, 0.9, np.nanmean(datatoplot[:,0,i],axis=0)+0.05, pval, h=0.0, color=clrs_decomp[i+1])
-        
-        # annotator = Annotator(ax, [(0,1)], data=datatoplot[:,:,0], x="arealabelpairs", y=0, order=[0,1])
-        # annotator.configure(test='t-test_paired', text_format='star', loc='inside',verbose=False)
-        # annotator.apply_and_annotate()
+        add_stat_annotation(ax, 0.1, 0.9, np.nanmean(datatoplot[0,:,i],axis=0)+0.05, pval, h=0.0, color=clrs_decomp[i+1])
+    else:
+        if i == 2: 
+            datatotest = datatoplot[:,~np.any(np.isnan(datatoplot),axis=(0,2)),i]
+
+            df = pd.DataFrame({'R2':  datatotest.flatten(),
+                                'arealabelpair':np.repeat(arealabelpairs,np.shape(datatotest)[1])})
+
+            annotator = Annotator(ax, pairs, data=df, x='arealabelpair', y='R2', order=arealabelpairs)
+            annotator.configure(test='t-test_paired', text_format='star', loc='inside',verbose=False,
+                                comparisons_correction=None,alpha=0.05,
+                                # hide_non_significant=True,
+                                pvalue_thresholds=[[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"]]
+                                )
+            # annotator.apply_and_annotate()
 
 # handles = ax.lines
 # ax.legend(handles=handles,labels=labelnames[1:],bbox_to_anchor=(1.05, 1),loc='upper left',frameon=False,fontsize=8)
@@ -916,9 +1000,6 @@ axes[0].set_xticks(range(narealabelpairs),arealabelpairs,rotation=45,ha='right',
 axes[1].set_xticks(range(narealabelpairs),arealabelpairs,rotation=45,ha='right',fontsize=7)
 plt.tight_layout()
 my_savefig(fig,savedir,'RRR_V1PM_decomposition_%dneurons' % nsampleneurons,formats=['png'])
-
-
-
 
 
 
