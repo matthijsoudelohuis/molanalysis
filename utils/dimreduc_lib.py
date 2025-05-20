@@ -1,8 +1,13 @@
-
 import numpy as np
 from sklearn.decomposition import PCA, FactorAnalysis
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+from sklearn.decomposition import PCA
+from scipy.linalg import orth, qr, svd
+
 from utils.RRRlib import *
 from utils.shuffle_lib import my_shuffle
+
 
 def remove_dim(data,remove_method,remove_rank):
 
@@ -81,6 +86,127 @@ def var_along_dim(data,weights):
     var_tot     = np.var(data, axis=0).sum() # compute total variance of original data
     ev          = var_proj / var_tot # compute proportion of variance explained 
     return ev
+
+
+def compute_stim_subspace(Y, stimulus, n_components=None):
+    """
+    Estimate stimulus-related subspace using PCA on mean responses.
+    Y: array (samples x features)
+    stimulus: array of stimulus labels (samples,)
+    n_components: how many PCs to keep (default: all)
+    """
+    unique_stim = np.unique(stimulus)
+    means = np.array([Y[stimulus == s].mean(axis=0) for s in unique_stim])  # shape: (n_conditions x n_features)
+
+    pca = PCA(n_components=n_components)
+    pca.fit(means)
+    if n_components is None:
+        n_components = np.argmax(np.cumsum(pca.explained_variance_ratio_) > 0.9)
+    components = pca.components_[:n_components,:]  # shape: (n_components x n_features)
+
+    return components, pca
+
+def project_onto_subspace(Yhat, subspace_basis):
+    """
+    Project Yhat onto the behavior-related subspace.
+    subspace_basis: (k x neurons)
+    """
+    Yhat_centered = Yhat - Yhat.mean(axis=0)
+    projection = Yhat_centered @ subspace_basis.T @ subspace_basis
+    return projection
+
+def compute_behavior_subspace_linear(Y, S, n_components=None):
+    """
+    Estimates behavior-related subspace using linear regression.
+    Projects behavioral data S onto Y to extract subspace.
+    
+    Y: (samples x neurons) - true neural data
+    S: (samples x behavioral features) - e.g. running, pupil, etc.
+    """
+    model = LinearRegression()
+    model.fit(S, Y)  # Predict Y from S
+    W = model.coef_  # shape: (neurons x behavioral_features)
+
+    # The span of W.T defines the behavior-related directions in neural space
+    # Perform SVD to get orthonormal basis
+    U, _, _ = np.linalg.svd(W, full_matrices=False)  # shape: (features x neurons)
+    
+    if n_components is not None:
+        U = U[:, :n_components]
+
+    return U.T  # (n_components x neurons)
+
+def compute_subspace_overlap(U1, U2):
+    """
+    Compute overlap between two subspaces U1 and U2.
+    Each is (k x n_features) with orthonormal rows (subspace bases).
+    
+    Returns:
+    - cosines: singular values = cosines of principal angles
+    - mean_cosine: average overlap
+    - squared_overlap: sum of squared cosines (subspace alignment metric)
+    """
+    # Ensure row vectors (basis vectors) are orthonormal
+    M = U1 @ U2.T  # shape: (k1 x k2)
+    _, s, _ = svd(M)  # s: singular values = cos(theta)
+
+    mean_cosine = np.mean(s)
+    squared_overlap = np.sum(s**2)
+
+    return {
+        'cosines': s,
+        'mean_cosine': mean_cosine,
+        'squared_overlap': squared_overlap
+    }
+
+
+def orthogonalize_subspaces(U1, U2):
+    """
+    Orthogonalize two subspaces U1 and U2 of different dimensionality.
+    
+    Parameters:
+    - U1: np.array of shape (d, k1), where d is the number of features and k1 is the dimensionality of the subspace.
+    - U2: np.array of shape (d, k2), where d is the number of features and k2 is the dimensionality of the subspace.
+    
+    Returns:
+    - U1_orth: np.array of shape (d, k1), orthogonalized U1.
+    - U2_orth: np.array of shape (d, k2), orthogonalized U2.
+
+    # Example usage
+    d = 10  # number of features
+    k1 = 3  # dimensionality of subspace U1
+    k2 = 4  # dimensionality of subspace U2
+
+    # Generate random orthonormal bases for U1 and U2
+    np.random.seed(0)
+    U1 = np.random.randn(d, k1)
+    U2 = np.random.randn(d, k2)
+
+    # Orthogonalize the subspaces
+    U1_orth, U2_orth = orthogonalize_subspaces(U1, U2)
+
+    # Ensure orthogonality
+    print("Orthogonality check between U1 and U2:")
+    print(np.allclose(U1.T @ U2, np.zeros((k1, k2))))
+    print("Orthogonality check between U1_orth and U2_orth:")
+    print(np.allclose(U1_orth.T @ U2_orth, np.zeros((k1, k2))))
+    """
+    
+    # Ensure U1 and U2 are orthonormal bases
+    U1, _ = qr(U1, mode='economic')
+    U2, _ = qr(U2, mode='economic')
+    
+    # Project U1 onto the orthogonal complement of U2
+    P_U2 = U2 @ U2.T
+    U1_proj = U1 - P_U2 @ U1
+    U1_orth, _ = qr(U1_proj, mode='economic')
+    
+    # Project U2 onto the orthogonal complement of the modified U1
+    P_U1_orth = U1_orth @ U1_orth.T
+    U2_proj = U2 - P_U1_orth @ U2
+    U2_orth, _ = qr(U2_proj, mode='economic')
+    
+    return U1_orth, U2_orth
 
 def estimate_dimensionality(X,method='participation_ratio'):
     """

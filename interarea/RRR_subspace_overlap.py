@@ -626,8 +626,8 @@ idx_lab_to_unl = np.array([4,5,6,7]) #vice versa
 
 #%% Make a generalization index: 
 # Divide the performance by the performance on a different population, but from the same type it was trained on
-rankversion = 'optimrank'
-# rankversion = 'avgrank'
+# rankversion = 'optimrank'
+rankversion = 'avgrank'
 
 if rankversion == 'optimrank':
     cross_R2_norm      = copy.deepcopy(cross_pop_R2_optimrank)
@@ -732,15 +732,85 @@ def scatter_cross_pop(ax,arealabels,data,combpairstoplot,color='k'):
 
     idx_x = [arealabels.tolist().index(x) for x in combpairstoplot[0]]
     xdata = data[:,idx_x[0],idx_x[1],idx_x[2]]
-    idx_y = [arealabels.tolist().index(x) for x in combpairstoplot[0]]
-    ydata = data[:,idx_y[0],idx_y[1],idx_y[1]]
-
-    ax.scatter(xdata,ydata,8,color=color,alpha=0.5)
+    idx_y = [arealabels.tolist().index(x) for x in combpairstoplot[1]]
+    ydata = data[:,idx_y[0],idx_y[1],idx_y[2]]
+    # np.clip(xdata,0,0.2,out=xdata)
+    # np.clip(ydata,0,0.2,out=ydata)
+    h = ax.scatter(xdata,ydata,11,color=color,alpha=0.5)
     ax.plot([0,1],[0,1],linestyle='--',color='k',alpha=0.5)
-    ax.set_xlim([0,my_ceil(np.max(np.concatenate([xdata,ydata])),1)])
-    ax.set_ylim([0,my_ceil(np.max(np.concatenate([xdata,ydata])),1)])
-    add_paired_ttest_results(ax, xdata,ydata,pos=[0.2,0.1],fontsize=8)
+    ax.set_xlim([0,my_ceil(np.nanmax(np.concatenate([xdata,ydata])),1)])
+    ax.set_ylim([0,my_ceil(np.nanmax(np.concatenate([xdata,ydata])),1)])
+    # ax.set_xlim([0,0.21])
+    # ax.set_ylim([0,0.21])
+    ax_nticks(ax,3)
+    add_paired_ttest_results(ax, xdata,ydata,pos=[0.8,0.1],fontsize=10)
 
+    return h
+    
+def plot_paired_combpairs_ALRSP(ax,arealabels,data,combpairstoplot1,combpairstoplot2,
+                                combpairstoplot3,combpairstoplot4):
+
+    fig,axes = plt.subplots(1,2,figsize=(5,2.8),sharex=True,sharey=True)
+    ax = axes[0]
+
+    idx_x = [arealabels.tolist().index(x) for x in combpairstoplot1[0]]
+    xdata1 = data[:,idx_x[0],idx_x[1],idx_x[2]]
+    idx_y = [arealabels.tolist().index(x) for x in combpairstoplot1[1]]
+    ydata1 = data[:,idx_y[0],idx_y[1],idx_y[2]]
+    idx_x = [arealabels.tolist().index(x) for x in combpairstoplot2[0]]
+    xdata2 = data[:,idx_x[0],idx_x[1],idx_x[2]]
+    idx_y = [arealabels.tolist().index(x) for x in combpairstoplot2[1]]
+    ydata2 = data[:,idx_y[0],idx_y[1],idx_y[2]]
+
+    ax.scatter(xdata1,ydata1,11,color='b',alpha=0.5)
+    ax.scatter(xdata2,ydata2,11,color='g',alpha=0.5)
+    ax.plot([0,1],[0,1],linestyle='--',color='k',alpha=0.5)
+    ax_nticks(ax,3)
+    add_paired_ttest_results(ax,np.concatenate((xdata1,xdata2)),np.concatenate((ydata1,ydata2)),pos=[0.8,0.1],fontsize=10)
+
+    ax.set_title('Feedforward',fontsize=9)
+    ax.legend(labels=['AL','RSP'],frameon=False,fontsize=11,loc='upper left')
+    my_legend_strip(ax)
+
+    ax.set_xlabel('%s->%s' % (combpairstoplot1[0][0],combpairstoplot1[0][1]))
+    ax.set_ylabel('%s->%s' % (combpairstoplot1[1][0],combpairstoplot1[1][1]))
+
+    ax = axes[1]
+
+    idx_x = [arealabels.tolist().index(x) for x in combpairstoplot3[0]]
+    xdata3 = data[:,idx_x[0],idx_x[1],idx_x[2]]
+    idx_y = [arealabels.tolist().index(x) for x in combpairstoplot3[1]]
+    ydata3 = data[:,idx_y[0],idx_y[1],idx_y[2]]
+    idx_x = [arealabels.tolist().index(x) for x in combpairstoplot4[0]]
+    xdata4 = data[:,idx_x[0],idx_x[1],idx_x[2]]
+    idx_y = [arealabels.tolist().index(x) for x in combpairstoplot4[1]]
+    ydata4 = data[:,idx_y[0],idx_y[1],idx_y[2]]
+
+    ax.scatter(xdata3,ydata3,11,color='b',alpha=0.5)
+    ax.scatter(xdata4,ydata4,11,color='g',alpha=0.5)
+    ax.plot([0,1],[0,1],linestyle='--',color='k',alpha=0.5)
+    add_paired_ttest_results(ax,np.concatenate((xdata3,xdata4)),np.concatenate((ydata3,ydata4)),pos=[0.8,0.1],fontsize=10)
+
+    ax.set_title('Feedback',fontsize=9)
+    ax.set_xlabel('%s->%s' % (combpairstoplot3[0][0],combpairstoplot3[0][1]))
+    ax.set_ylabel('%s->%s' % (combpairstoplot3[1][0],combpairstoplot3[1][1]))
+    allmax = np.nanmax(np.concatenate([xdata1,ydata1,xdata2,ydata2,xdata3,ydata3,xdata4,ydata4]))
+    ax.set_xlim([0,my_ceil(allmax,1)])
+    ax.set_ylim([0,my_ceil(allmax,1)])
+    ax.set_xlim([0,0.25])
+    ax.set_ylim([0,0.25])
+    ax_nticks(ax,5)
+
+    plt.suptitle('Generalization across areas',fontsize=9)
+    sns.despine(top=True,right=True,offset=3,trim=True)
+    plt.tight_layout()
+    return fig
+
+#%% 
+rankversion = 'optimrank'
+data    = copy.deepcopy(cross_pop_R2_optimrank)
+rankversion = 'avgrank'
+data    = np.nanmean(cross_pop_R2[avg_rank],axis=(-1,-2))
 
 #%% Generalization to other target populations:
 # The idea is to compare the R2 performance when predicting neurons from the same populations
@@ -751,62 +821,75 @@ def scatter_cross_pop(ax,arealabels,data,combpairstoplot,color='k'):
 # idx 2: target population trained to predict
 # idx 3: population to generalize to (same as idx 2)
 
-rankversion = 'optimrank'
-fig,axes = plt.subplots(1,2,figsize=(5,3),sharex=True,sharey=True)
-
+fig,axes = plt.subplots(1,2,figsize=(5,2.8),sharex=True,sharey=True)
 ax = axes[0]
 combpairstoplot = np.array([['V1unl','PMunl','PMunl'],
-                            ['V1lab','PMunl','PMunl'],
-                                ])
-scatter_cross_pop(ax,arealabels,cross_pop_R2_optimrank,combpairstoplot,color='b')
+                            ['V1lab','PMunl','PMunl']])
+scatter_cross_pop(ax,arealabels,data,combpairstoplot,color='b')
 ax.set_title('Feedforward',fontsize=9)
+ax.set_xlabel('%s->%s' % (combpairstoplot[0][0],combpairstoplot[0][1]))
+ax.set_ylabel('%s->%s' % (combpairstoplot[1][0],combpairstoplot[1][1]))
 
 ax = axes[1]
 combpairstoplot = np.array([['PMunl','V1unl','V1unl'],
-                            ['PMlab','V1unl','V1unl'],
-                                ])
-scatter_cross_pop(ax,arealabels,cross_pop_R2_optimrank,combpairstoplot,color='g')
+                            ['PMlab','V1unl','V1unl']])
+scatter_cross_pop(ax,arealabels,data,combpairstoplot,color='g')
 ax.set_title('Feedback',fontsize=9)
-
+ax.set_xlabel('%s->%s' % (combpairstoplot[0][0],combpairstoplot[0][1]))
+ax.set_ylabel('%s->%s' % (combpairstoplot[1][0],combpairstoplot[1][1]))
+  
+plt.suptitle('Generalization within area',fontsize=9)
 sns.despine(top=True,right=True,offset=3,trim=True)
-my_savefig(fig,savedir,'Generalization_V1PM_Labeled_Same_%dsessions_%s' % (nSessions,rankversion))
+plt.tight_layout()
+my_savefig(fig,savedir,'Generalization_V1PM_Labeled_Same_%dsessions_%s' % (nSessions,rankversion),formats=['png'])
 
 
 #%% Generalization to other target populations:
 # The idea is to compare the R2 performance when predicting neurons from the same populations
 # but that it was not trained on
 # Are labeled neurons better in generalizing?
-# If the performance is higher, generalizing to a population it was not trained on is better
-# idx 1: source population
-# idx 2: target population trained to predict
-# idx 3: population to generalize to (same as idx 2)
 
-fig,axes = plt.subplots(1,2,figsize=(5,3),sharex=True,sharey=True)
-
-ax = axes[0]
-combpairstoplot = np.array([['V1unl','PMunl','ALunl'],
+combpairstoplot1 = np.array([['V1unl','PMunl','ALunl'],
                             ['V1lab','PMunl','ALunl']])
-scatter_cross_pop(ax,arealabels,cross_pop_R2_optimrank,combpairstoplot,color='b')
-
-combpairstoplot = np.array([['V1unl','PMunl','RSPunl'],
+combpairstoplot2 = np.array([['V1unl','PMunl','RSPunl'],
                             ['V1lab','PMunl','RSPunl']])
-scatter_cross_pop(ax,arealabels,cross_pop_R2_optimrank,combpairstoplot,color='g')
-ax.set_title('Feedforward\n(cross-area generalization)',fontsize=9)
 
-ax = axes[1]
-combpairstoplot = np.array([['PMunl','V1unl','ALunl'],
+combpairstoplot3 = np.array([['PMunl','V1unl','ALunl'],
                             ['PMlab','V1unl','ALunl']])
-scatter_cross_pop(ax,arealabels,cross_pop_R2_optimrank,combpairstoplot,color='b')
-
-combpairstoplot = np.array([['PMunl','V1unl','RSPunl'],
+combpairstoplot4 = np.array([['PMunl','V1unl','RSPunl'],
                             ['PMlab','V1unl','RSPunl']])
-scatter_cross_pop(ax,arealabels,cross_pop_R2_optimrank,combpairstoplot,color='g')
-ax.set_title('Feedback\n(cross-area generalization)',fontsize=9)
 
-sns.despine(top=True,right=True,offset=3,trim=True)
-my_savefig(fig,savedir,'Generalization_cross_area_labeledV1PM_%dsessions_%s' % (nSessions,rankversion))
+fig = plot_paired_combpairs_ALRSP(ax,arealabels,data,combpairstoplot1,combpairstoplot2,
+                                combpairstoplot3,combpairstoplot4)
+
+# my_savefig(fig,savedir,'Generalization_cross_area_labeledV1PM_%dsessions_%s' % (nSessions,rankversion))
+my_savefig(fig,savedir,'Generalization_cross_area_labeledSourceV1PM_%dsessions_%s' % (nSessions,rankversion),formats=['png'])
+
+
+#%% Generalization to other target populations:
+# The idea is to compare the R2 performance when predicting neurons from the same populations
+# but that it was not trained on
+# is predicting labeled neurons better in generalizing?
+
+combpairstoplot1 = np.array([['V1unl','PMunl','ALunl'],
+                            ['V1unl','PMlab','ALunl']])
+combpairstoplot2 = np.array([['V1unl','PMunl','RSPunl'],
+                            ['V1unl','PMlab','RSPunl']])
+
+combpairstoplot3 = np.array([['PMunl','V1unl','ALunl'],
+                            ['PMunl','V1lab','ALunl']])
+combpairstoplot4 = np.array([['PMunl','V1unl','RSPunl'],
+                            ['PMunl','V1lab','RSPunl']])
+
+fig = plot_paired_combpairs_ALRSP(ax,arealabels,data,combpairstoplot1,combpairstoplot2,
+                                combpairstoplot3,combpairstoplot4)
+
+my_savefig(fig,savedir,'Generalization_cross_area_labeledTargetV1PM_%dsessions_%s' % (nSessions,rankversion),formats=['png'])
+
 
 #%% 
+
+
 
 
 
@@ -852,7 +935,6 @@ ax.set_yticks(range(len(arealabels)),arealabels,fontsize=6)
 ax.set_xlabel('Target area')
 ax.set_ylabel('Source area')
 ax.set_title('Optimal Rank',fontsize=12)
-
 
 from sklearn.manifold import TSNE
 data = zscore(data)

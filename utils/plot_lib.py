@@ -6,6 +6,7 @@ Matthijs Oude Lohuis, 2023-2026, Champalimaud Center
 import numpy as np
 from operator import itemgetter
 from  matplotlib.colors import LinearSegmentedColormap
+import matplotlib
 import pandas as pd
 import os
 import seaborn as sns
@@ -262,6 +263,19 @@ def add_paired_ttest_results(ax, x,y,pos=[0.2,0.1],fontsize=8):
     else: 
         ax.text(pos[0],pos[1],'p=n.s.',transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k')
 
+def my_legend_strip(ax):
+    leg = ax.get_legend()
+
+    for i,t in enumerate(leg.texts):
+        if isinstance(leg.legendHandles[i],matplotlib.lines.Line2D):
+            c = leg.legendHandles[i].get_color()
+        elif isinstance(leg.legendHandles[i],matplotlib.collections.PathCollection):
+            c = leg.legendHandles[i].get_facecolor()
+        # c = leg.legendHandles[i].get_facecolor()
+        t.set_color(c)
+    for handle in leg.legendHandles:
+        handle.set_visible(False)
+    leg.get_frame().set_visible(False)
 
 #function to add colorbar for imshow data and axis
 def add_colorbar_outside(im,ax):
@@ -552,6 +566,17 @@ def get_clr_layerpairs(pairs):
         'L5-L2/3': sns.xkcd_rgb['deep purple'],
         'L5-L4': sns.xkcd_rgb['light grey'],
         'L5-L5': sns.xkcd_rgb['royal blue'],
+        ' ' : sns.xkcd_rgb['black']}
+    return itemgetter(*pairs)(palette)
+
+def get_clr_arealayerpairs(pairs):
+    palette       = {
+        'V1L2/3-PML2/3': sns.xkcd_rgb['teal'],
+        'V1L2/3-PML5': sns.xkcd_rgb['lilac'],
+        'PML5-PML2/3': sns.xkcd_rgb['deep purple'],
+        'PML5-V1L2/3': sns.xkcd_rgb['royal blue'],
+        'PML2/3-V1L2/3': sns.xkcd_rgb['powder blue'],
+        'PML2/3-PML5': sns.xkcd_rgb['navy'],
         ' ' : sns.xkcd_rgb['black']}
     return itemgetter(*pairs)(palette)
 

@@ -17,9 +17,12 @@ from scipy.stats import zscore
 from sklearn.impute import SimpleImputer
 from scipy.sparse.linalg import svds
 
+from utils.dimreduc_lib import *
+
 def EV(Y,Y_hat):
-    e = Y - Y_hat
-    ev = 1 - np.trace(e.T @ e) / np.trace(Y.T @ Y) #fraction of variance explained
+    # e = Y - Y_hat
+    # ev = 1 - np.trace(e.T @ e) / np.trace(Y.T @ Y) #fraction of variance explained
+    ev = 1 - np.nanvar(Y-Y_hat) / np.nanvar(Y)
     return ev
 
 def LM(Y, X, lam=0):
@@ -121,7 +124,6 @@ def RRR_cvR2(Y, X, rank,lam=0,kfold=5):
 
     return np.nanmean(R2_cv_folds)
 
-
 def RRR_wrapper(Y, X, nN=None,nM=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=5):
     #Reduced rank regression with unknown rank: 
     # Input: 
@@ -150,6 +152,8 @@ def RRR_wrapper(Y, X, nN=None,nM=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits
 
     assert nM<=M and nN<=N, "number of subsampled neurons must be smaller than M and N"
     assert nK<=K, "number of subsampled timepoints must be smaller than number of timepoints"
+    if nK/np.min([nN,nM]) < 5 and lam==0:
+        print('Warning: number of samples per feature (e.g. trials per neuron) is less than 5 and no regularization is applied. This may result in overfitting.')
 
     R2_cv_folds = np.full((nranks,nmodelfits,kfold),np.nan)
 
@@ -191,6 +195,119 @@ def RRR_wrapper(Y, X, nN=None,nM=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits
 
     return repmean,rank,R2_cv_folds
 
+def RRR_decompose(Y, X, B, S, nN=None,nM=None,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=5):
+    #Reduced rank regression with unknown rank: 
+    # Input: 
+    # Y is activity in area 2, X is activity in area 1
+    # B is behavioral activity
+    # S is stimulus condition
+
+    # Function:
+    # X is of shape K x N (samples by features), Y is of shape K x M
+    # B is of shape K x O (samples by behavioral features), S is of shape K x 1
+    # K is the number of samples, N is the number of neurons in area 1,
+    # M is the number of neurons in area 2
+
+    # multiple linear regression, B_hat is of shape N x M:
+    # B_hat               = LM(Y,X, lam=lam) 
+    #RRR: do SVD decomp of Y_hat, 
+    # U is of shape K x r, S is of shape r x r, V is of shape r x M
+    # Y_hat_rr,U,S,V     = RRR(Y, X, B_hat, r)
+    
+    # Compute a stimulus related and behavior related subspace in area 2 and decompose the predicted 
+    # activity into stimulus related, behavioral related or unknown
+
+    kf      = KFold(n_splits=kfold,shuffle=True)
+
+    # Data format: 
+    K,N     = np.shape(X)
+    M       = np.shape(Y)[1]
+
+    nN  = nN or min(M,N)
+    nM  = nM or nN or min(M,N)
+    nK  = nK or K
+
+    assert nM<=M and nN<=N, "number of subsampled neurons must be smaller than M and N"
+    assert nK<=K, "number of subsampled timepoints must be smaller than number of timepoints"
+    if nK/np.min([nN,nM]) < 5 and lam==0:
+        print('Warning: number of samples per feature (e.g. trials per neuron) is less than 5 and no regularization is applied. This may result in overfitting.')
+
+    R2_cv_folds         = np.full((4,nranks,nmodelfits,kfold),np.nan) # 4 subspaces: full,stim,behav,unknown
+
+    # U_stim,pca          = compute_stim_subspace(Y, S, n_components=5)
+    # U_behav             = compute_behavior_subspace_linear(Y, B, n_components=5)
+
+    # U_stim_orth2, U_behav_orth2 = orthogonalize_subspaces(U_stim.T, U_behav.T)
+    # U_stim_orth2, U_behav_orth2 = U_stim_orth2.T, U_behav_orth2.T
+    # #order of orthogonalization matters so do for both orderings:
+    # U_stim_orth1, U_behav_orth1 = orthogonalize_subspaces(U_behav.T,U_stim.T)
+    # U_stim_orth1, U_behav_orth1 = U_stim_orth1.T, U_behav_orth1.T
+
+    for imf in range(nmodelfits):
+        idx_areax_sub           = np.random.choice(N,nN,replace=False)
+        idx_areay_sub           = np.random.choice(M,nM,replace=False)
+
+        X_sub                   = X[:,idx_areax_sub]
+        Y_sub                   = Y[:,idx_areay_sub]
+        
+        X_sub                   = zscore(X_sub,axis=0)  #Z score activity for each neuron across trials/timepoints
+        Y_sub                   = zscore(Y_sub,axis=0)
+    
+        U_stim,pca              = compute_stim_subspace(Y_sub, S, n_components=None)
+        U_behav                 = compute_behavior_subspace_linear(Y_sub, B, n_components=int(nM**0.35))
+
+        U_stim_orth2, U_behav_orth2 = orthogonalize_subspaces(U_stim.T, U_behav.T)
+        U_stim_orth2, U_behav_orth2 = U_stim_orth2.T, U_behav_orth2.T
+        #order of orthogonalization matters so do for both orderings:
+        U_stim_orth1, U_behav_orth1 = orthogonalize_subspaces(U_behav.T,U_stim.T)
+        U_stim_orth1, U_behav_orth1 = U_stim_orth1.T, U_behav_orth1.T
+
+        for ikf, (idx_train, idx_test) in enumerate(kf.split(X_sub)):
+            
+            X_train, X_test     = X_sub[idx_train], X_sub[idx_test]
+            Y_train, Y_test     = Y_sub[idx_train], Y_sub[idx_test]
+
+            B_hat_train         = LM(Y_train,X_train, lam=lam)
+
+            Y_hat_train         = X_train @ B_hat_train
+
+            # decomposing and low rank approximation of A
+            # U, s, V = linalg.svd(Y_hat_train, full_matrices=False)
+            U, s, V = svds(Y_hat_train,k=np.min((nranks,nN,nM))-1,which='LM')
+            U, s, V = U[:, ::-1], s[::-1], V[::-1, :]
+
+            # S = linalg.diagsvd(s,U.shape[0],s.shape[0])
+
+            for r in range(nranks):
+                B_rrr               = B_hat_train @ V[:r,:].T @ V[:r,:] #project beta coeff into low rank subspace
+
+                Y_hat_rr_test       = X_test @ B_rrr #project test data onto low rank predictive subspace
+
+                R2_cv_folds[0,r,imf,ikf] = EV(Y_test,Y_hat_rr_test)
+# 
+                # Y_hat_stim1          = project_onto_subspace(Y_hat_rr_test, U_stim_orth1[:,idx_areay_sub])
+                Y_hat_stim1          = project_onto_subspace(Y_hat_rr_test, U_stim_orth1)
+                ev1                 = EV(Y_test,Y_hat_stim1)
+                Y_hat_stim2          = project_onto_subspace(Y_hat_rr_test, U_stim_orth2)
+                ev2                 = EV(Y_test,Y_hat_stim2)
+                R2_cv_folds[1,r,imf,ikf] = np.mean([ev1,ev2])
+
+                Y_hat_behav1          = project_onto_subspace(Y_hat_rr_test, U_behav_orth1)
+                ev1                 = EV(Y_test,Y_hat_behav1)
+                Y_hat_behav2          = project_onto_subspace(Y_hat_rr_test, U_behav_orth2)
+                ev2                 = EV(Y_test,Y_hat_behav2)
+                R2_cv_folds[2,r,imf,ikf] = np.mean([ev1,ev2])
+
+        # print(f"Fraction of predicted variance that is behavior-related: {ev_behav / ev_total:.3f}")
+
+    R2_cv_folds[3]     = R2_cv_folds[0] - R2_cv_folds[1] - R2_cv_folds[2]
+
+    # repmean = 
+    # repmean,rank = rank_from_R2(R2_cv_folds.reshape([nranks,nmodelfits*kfold]),nranks,nmodelfits*kfold)
+
+    return R2_cv_folds
+
+
 def rank_from_R2(data,nranks,nrepetitions):
     """
     find rank at which performance first exceeds max performance minus std across repetitions
@@ -229,8 +346,6 @@ def RRR_depricated(Y, X, B_hat, r, mode='left'):
     B_hat_lr = L @ W
     Y_hat_lr = X @ B_hat_lr
     return B_hat_lr
-
-
 
 
 def chunk(A, n_chunks=10):

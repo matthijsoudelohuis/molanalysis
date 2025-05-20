@@ -191,7 +191,6 @@ sns.despine(fig=fig, top=True, right=True,offset=3)
 fig.savefig(os.path.join(savedir,'SharedGain','Gain_V1PM_LabUnl_' + str(nSessions) + 'sessions.png'), format = 'png')
 
 #%% Fit gain coefficient for each neuron and compare labeled and unlabeled neurons:
-
 N = len(celldata)
 data_gainregress = np.full((N,3),np.nan)
 for iN in tqdm(range(N),total=N,desc='Fitting gain for each neuron'):
@@ -199,7 +198,6 @@ for iN in tqdm(range(N),total=N,desc='Fitting gain for each neuron'):
     data_gainregress[iN,:] = b[:3]
 
 #%% Show some neurons
-
 nbyn = 3
 # neuronsel = np.random.choice(np.where(celldata['tuning_var']>0.05)[0],size=25,replace=False)
 neuronsel = np.random.choice(np.where(data_gainregress[:,2]>0.75)[0],size=nbyn**2,replace=False)
@@ -281,6 +279,49 @@ for ivar,var in enumerate(['slope','intercept']):
 plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True, offset=3,trim=True)
 my_savefig(fig,savedir,'GainPopulation_V1PM_LabUnl_' + str(nSessions) + 'sessions',formats=['png'])
+
+#%% is affine modulation only present if a neuron is responsive / tuned: 
+
+celldata = pd.concat([sessions[ises].celldata for ises in range(nSessions)]).reset_index(drop=True)
+
+celldata['gain_slope']      = data_gainregress[:,0]
+celldata['gain_intercept']  = data_gainregress[:,1]
+celldata['gain_rvalue']     = data_gainregress[:,2]
+
+# df = celldata[celldata['gain_rvalue']>0.1]
+df = celldata[celldata['noise_level']<20]
+
+fig,axes = plt.subplots(1,3,figsize=(9,3),sharex=True)
+# xfield = 'tuning_var'
+xfield = 'gOSI'
+
+ax = axes[0]
+# sns.scatterplot(data=df,x=xfield,y='gain_slope',ax=ax,marker='.',color='black',alpha=0.1)
+sns.regplot(data=df,x=xfield,y='gain_slope',ax=ax,marker='o',color='black',
+            scatter_kws={'s': 1, 'alpha':0.1,'facecolor': 'w'},robust=True,ci=None)
+ax.set_ylim([0,np.nanpercentile(df['gain_slope'],97)])
+ax.axhline(1,ls='--',color='red',alpha=0.5)
+
+ax = axes[1]
+sns.regplot(data=df,x=xfield,y='gain_intercept',ax=ax,marker='o',color='black',
+            scatter_kws={'s': 1, 'alpha':0.1,'facecolor': 'w'},robust=True,ci=None)
+# sns.scatterplot(data=df,x=xfield,y='gain_intercept',ax=ax,marker='.',color='black',alpha=0.1)
+ax.set_ylim(np.nanpercentile(df['gain_intercept'],[1,97]))
+ax.axhline(0,ls='--',color='red',alpha=0.5)
+
+ax = axes[2]
+sns.regplot(data=df,x=xfield,y='gain_rvalue',ax=ax,marker='o',color='black',
+            scatter_kws={'s': 1, 'alpha':0.1,'facecolor': 'w'},logx=True,ci=None)
+            # scatter_kws={'s': 1, 'alpha':0.1,'facecolor': 'w'},lowess=True,ci=None)
+# sns.scatterplot(data=df,x=xfield,y='gain_rvalue',ax=ax,marker='.',color='black',alpha=0.1)
+ax.set_ylim([0,1])
+
+ax.set_xlim([0,1])
+ax.set_xticks([0,0.5,1])
+
+sns.despine(fig=fig, top=True, right=True, offset=5,trim=True)
+plt.tight_layout()
+my_savefig(fig,savedir,'GainModulation_vs_Tuning_%s_%dsessions' % (xfield,nSessions) ,formats=['png'])
 
 #%% Subtracting gain removes tuned gain modulation in mean response:
 redcells            = np.unique(celldata['redcell'])
