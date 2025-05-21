@@ -15,7 +15,7 @@ from sklearn.decomposition import PCA
 from scipy.stats import zscore, wilcoxon, ranksums, ttest_rel
 from matplotlib.lines import Line2D
 
-from utils.dimreduc_lib import *
+# from utils.dimreduc_lib import *
 from utils.rf_lib import filter_nearlabeled
 from utils.plot_lib import *
 

@@ -27,6 +27,11 @@ from utils.plot_lib import shaded_error
 
 savedir =  os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\GainModel\\')
 
+#%% Explore this lib as well for multiplicative gain fit with alternating least squares: 
+# https://github.com/jcbyts/V1Locomotion/tree/main
+
+
+
 #%%  
 nNeurons        = 1000
 nTrials         = 3200
