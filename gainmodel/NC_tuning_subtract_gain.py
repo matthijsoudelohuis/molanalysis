@@ -28,14 +28,13 @@ from scipy.stats import binned_statistic,binned_statistic_2d
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\')
 
 #%% #############################################################################
-session_list        = np.array([['LPE10919','2023_11_06']])
-session_list        = np.array([['LPE09665','2023_03_21'], #GR
-                                ['LPE10919','2023_11_06']]) #GR
+session_list        = np.array([['LPE10919_2023_11_06']])
+session_list        = np.array([['LPE09665_2023_03_21'], #GR
+                                ['LPE10919_2023_11_06']]) #GR
 
-session_list        = np.array([['LPE12223','2024_06_10'], #GR
-                                ['LPE10884','2023_10_20']]) #GR
+session_list        = np.array([['LPE12223_2024_06_10'], #GR
+                                ['LPE10884_2023_10_20']]) #GR
 # session_list        = np.array([['LPE12223','2024_06_10']])
-
 
 sessions,nSessions   = filter_sessions(protocols = ['GR'],only_session_id=session_list,filter_areas=['V1','PM']) 
 
@@ -61,6 +60,7 @@ sessions_nogain     = copy.deepcopy(sessions)
 sessions_orig       = compute_signal_noise_correlation(sessions_orig,filter_stationary=False,uppertriangular=False)
 # sessions_nogain     = compute_signal_noise_correlation(sessions_nogain,filter_stationary=False,remove_method='PCA',remove_rank=2)
 sessions_nogain     = compute_signal_noise_correlation(sessions_nogain,filter_stationary=False,uppertriangular=False,remove_method='GM')
+# sessions       = compute_signal_noise_correlation(sessions,filter_stationary=False,uppertriangular=False)
 
 #%% Show reduction in noise correlation matrix with gain subtraction:
 fig,axes = plt.subplots(1,2,figsize=(11,4))
@@ -461,6 +461,8 @@ ax.legend(frameon=False,loc='upper right')
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'PairwiseCorrelations','NC_deltaOri_subgainmodel' + '.png'), format = 'png')
 
+
+
 #%% 
 
 # plt.plot(data[idx_ses_2,:,0])
@@ -567,83 +569,211 @@ my_savefig(fig, savedir, 'NC_deltaOri_V1-PM_diffses', formats = ['png'])
 
 
 
-# #%%  ## Plot negative correlation between dissimilarly strongly tuned neurons 
+#%% Get the average response for each orientation during trials with low, medium or high activity overall in the population
+# Further split neurons in how strongly they are coupled to the population rate
+# Align the response to the preferred orientation for the neurons
 
-# def plot_noise_pair(ses,sourcell,targetcell):
-#     oris = np.arange(0,360,22.5)
-#     pal = sns.color_palette('husl', len(oris))
-#     pal = np.tile(sns.color_palette('husl', int(len(oris)/2)),(2,1))
+npopratequantiles       = 5
+npopcouplingquantiles   = 5
+ntuningquantiles        = 5
+oris                    = np.arange(0,360,22.5)
+noris                   = len(oris)
+data                    = np.full((nSessions,npopratequantiles,npopcouplingquantiles,ntuningquantiles,noris),np.nan)
+tuning_metric           = 'tuning_var'
+for ises,ses in enumerate(sessions):
+    resp                    = stats.zscore(ses.respmat.T,axis=0)
+    # resp                    = ses.respmat.T
+    N                       = np.shape(resp)[1]
+    poprate                 = np.mean(resp, axis=1)
+    popcoupling             = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(N)]
+    pref_ori                = np.array(ses.celldata['pref_ori']/22.5).astype(int)
 
-#     fig,axes = plt.subplots(1,3,figsize=(11,4))
+    popratequantiles        = np.percentile(poprate,range(0,101,100//npopratequantiles))
+    popcouplingquantiles    = np.percentile(popcoupling,range(0,101,100//npopcouplingquantiles))
+    tuningquantiles         = np.percentile(ses.celldata[tuning_metric],range(0,101,100//ntuningquantiles))
 
-#     axes[0].plot(oris,ses.meanresp_orig[sourcecell],c='blue',linewidth=2)
-#     axes[0].plot(oris,ses.meanresp_orig[targetcell],c='red',linewidth=2)
-#     axes[0].set_xticks(oris)
+    for iqrpopcoupling in range(len(popcouplingquantiles)-1):
+        for iqrtuning in range(len(tuningquantiles)-1):
+            idx_N     = np.where(np.all((popcoupling>popcouplingquantiles[iqrpopcoupling],
+                                popcoupling<=popcouplingquantiles[iqrpopcoupling+1],
+                                ses.celldata[tuning_metric]>tuningquantiles[iqrtuning],
+                                ses.celldata[tuning_metric]<=tuningquantiles[iqrtuning+1]),axis=0))[0]
+            # idx_N     = np.where((popcoupling>popcouplingquantiles[iqrpopcoupling]) & (popcoupling<=popcouplingquantiles[iqrpopcoupling+1]))[0]
+            for iqrpoprate in range(len(popratequantiles)-1):
+                # idx_T       = np.where((poprate>popratequantiles[iqrpoprate-1]) & (poprate<=popratequantiles[iqrpoprate]))[0]
+                # idx_T_oris  = sessions[ises].trialdata['Orientation'][idx_T]
+                tunedresp = np.empty((noris,len(idx_N)))
 
-#     for iori,ori in enumerate(oris):
-#         idx_ori = np.where(ses.trialdata['Orientation']==ori)[0]
-#         axes[0].scatter(ses.trialdata['Orientation'][idx_ori],ses.respmat[sourcecell,idx_ori],
-#                         color='blue',s=5,alpha=0.2)
-#         axes[0].scatter(ses.trialdata['Orientation'][idx_ori],ses.respmat[targetcell,idx_ori],
-#                         color='red',s=5,alpha=0.2)
-#         axes[0].get_xticklabels()[iori].set_color(pal[iori])
-#     axes[0].tick_params(axis='x', labelrotation=90)
-#     axes[0].set_xlabel('Ori')
-#     axes[0].set_ylabel('Deconvolved activity')
-#     axes[0].set_title('Tuning Curves')
+                for iori,ori in enumerate(oris):
+                    idx_T = np.all((poprate>popratequantiles[iqrpoprate],
+                                    poprate<=popratequantiles[iqrpoprate+1],
+                                    sessions[ises].trialdata['Orientation']==ori),axis=0
+                                                    )
+                    tunedresp[iori,:] = np.nanmean(resp[np.ix_(idx_T,idx_N)],axis=0)
 
-#     for iori,ori in enumerate(oris):
-#         idx_ori = np.where(ses.trialdata['Orientation']==ori)[0]
-#         axes[1].scatter(ses.respmat[sourcecell,idx_ori],ses.respmat[targetcell,idx_ori],
-#                         c=pal[iori],s=5,alpha=0.2)
+                for iN,N in enumerate(idx_N):
+                    tunedresp[:,iN] = np.roll(tunedresp[:,iN],-pref_ori[N])
 
-#     ses.respmat[sourcecell,:]
-#     axes[1].set_xlabel('Activity Neuron 1')
-#     axes[1].set_ylabel('Activity Neuron 2')
-#     axes[1].set_title('Act. relationship')
-#     # axes[1].text(250,250,r'NC = %1.2f' % ses.noise_corr[sourcecell,targetcell])
+                data[ises,iqrpoprate,iqrpopcoupling,iqrtuning,:] = np.nanmean(tunedresp,axis=1)
 
-#     for iori,ori in enumerate(oris):
-#         idx_ori = np.where(ses.trialdata['Orientation']==ori)[0]
-#         axes[2].scatter(ses.respmat_res[sourcecell,idx_ori],ses.respmat_res[targetcell,idx_ori],
-#                         c=pal[iori],s=5,alpha=0.2)
+#%% ##### Plot orientation tuned response for different quantiles of population rate and coupling
+clrs_popcoupling = sns.color_palette('magma',npopratequantiles)
+fig, axes = plt.subplots(ntuningquantiles,npopcouplingquantiles,figsize=(npopcouplingquantiles*2.5,ntuningquantiles*2.5),sharey=True,sharex=True)
+# ax = axes
+for iqrpopcoupling in range(npopcouplingquantiles):
+    for iqrtuning in range(len(tuningquantiles)-1):
+        ax = axes[iqrtuning,iqrpopcoupling]
+        for iqrpoprate in range(npopratequantiles):
+            ax.plot(oris,np.nanmean(data[:,iqrpoprate,iqrpopcoupling,iqrtuning,:],axis=0),color=clrs_popcoupling[iqrpoprate],lw=2)
+        # ax.set_ylabel('Neuron')
+        ax.axhline(0,color='k',ls='--',lw=1)
+        ax.set_title('Coupling quantile %d' % (iqrpopcoupling+1),fontsize=10)
+# axes[2].set_xlabel('Orientation (deg)')
+# axes[0].set_ylabel('Z-scored response')
+sns.despine(top=True,right=True,offset=5)
+# for ax in axes: 
+    # ax.set_xticks(oris[::2],oris[::2].astype(int),rotation=45)
+plt.tight_layout()
+my_savefig(fig, savedir, 'GainResponse_prefOri_coupling_tuning_quantiles', formats = ['png'])
 
-#     ses.respmat[sourcecell,:]
-#     axes[2].set_xlabel('Residual Neuron 1')
-#     axes[2].set_ylabel('Residual Neuron 2')
-#     axes[2].set_title('Noise correlation (r= %1.2f)' % ses.noise_corr[sourcecell,targetcell])
-#     # axes[2].text(250,250,r'NC = %1.2f' % ses.noise_corr[sourcecell,targetcell])
 
-#     return fig
+#%% 
+# clrs_popcoupling = sns.color_palette('magma',npopratequantiles)
+# ##### Plot orientation tuned response:
+# fig, axes = plt.subplots(1,npopcouplingquantiles,figsize=(npopcouplingquantiles*2.5,2.5),sharey=True,sharex=True)
+# # ax = axes
+# for iqrpopcoupling in range(npopcouplingquantiles):
+#     ax = axes[iqrpopcoupling]
+#     for iqrpoprate in range(npopratequantiles):
+#         ax.plot(oris,np.nanmean(data[:,iqrpoprate,iqrpopcoupling,:],axis=0),color=clrs_popcoupling[iqrpoprate],lw=2)
+#     # ax.set_ylabel('Neuron')
+#     ax.axhline(0,color='k',ls='--',lw=1)
+#     ax.set_title('Coupling quantile %d' % (iqrpopcoupling+1),fontsize=10)
+# axes[2].set_xlabel('Orientation (deg)')
+# axes[0].set_ylabel('Z-scored response')
+# sns.despine(top=True,right=True,offset=5)
+# for ax in axes: 
+#     ax.set_xticks(oris[::2],oris[::2].astype(int),rotation=45)
+# plt.tight_layout()
+# my_savefig(fig, savedir, 'GainResponse_prefOri_coupling_quantiles', formats = ['png'])
 
-# # Find a neuron pair that is strongly tuned, has opposite tuning pref and has negative correlation
-# ises = 0
-# idx = sessions[ises].celldata['tuning_var']>np.percentile(sessions[ises].celldata['tuning_var'],95)
-# N = len(sessions[ises].celldata)
-# signal_filter = np.full((N,N),False)
-# signal_filter[np.ix_(idx,idx)] = True
-# idx = np.all((sessions[ises].noise_corr < -0.1,sessions[ises].delta_pref == 90,signal_filter),axis=0)
-# sourcecells,targetcells = np.where(idx)
-# random_cell = np.random.choice(len(sourcecells))
-# sourcecell,targetcell = sourcecells[random_cell],targetcells[random_cell]
 
-# [sessions[ises].meanresp_orig,sessions[ises].respmat_res] = mean_resp_oris(sessions[ises])
 
-# fig = plot_noise_pair(sessions[ises],sourcecell,targetcell)
-# fig.savefig(os.path.join(savedir,'NoiseCorrelations','NC_example_orthotuning' + '.png'), format = 'png')
 
-# # Find a neuron pair that is strongly tuned, has similar tuning pref and has negative correlation
-# ises = 0
-# idx = sessions[ises].celldata['tuning_var']>np.percentile(sessions[ises].celldata['tuning_var'],95)
-# N = len(sessions[ises].celldata)
-# signal_filter = np.full((N,N),False)
-# signal_filter[np.ix_(idx,idx)] = True
-# idx = np.all((sessions[ises].noise_corr < - 0.1,sessions[ises].delta_pref == 0,signal_filter),axis=0)
-# sourcecells,targetcells = np.where(idx)
-# random_cell = np.random.choice(len(sourcecells))
-# sourcecell,targetcell = sourcecells[random_cell],targetcells[random_cell]
 
-# fig = plot_noise_pair(sessions[ises],sourcecell,targetcell)
-# fig.savefig(os.path.join(savedir,'NoiseCorrelations','NC_example_isotuning2' + '.png'), format = 'png')
+
+#%%  ## Plot negative correlation between dissimilarly strongly tuned neurons 
+def plot_noise_pair(ses,sourcecell,targetcell):
+    oris = np.arange(0,360,22.5)
+    pal = sns.color_palette('husl', len(oris))
+    pal = np.tile(sns.color_palette('husl', int(len(oris)/2)),(2,1))
+
+    # fig,axes = plt.subplots(1,3,figsize=(10,3))
+    fig,axes = plt.subplots(2,2,figsize=(6,6))
+
+    for iN,N in enumerate([sourcecell,targetcell]):
+        ax = axes[iN,0]
+
+        ax.plot(oris,ses.meanresp_orig[N],c='k',linewidth=2)
+
+        for iori,ori in enumerate(oris):
+            idx_ori = np.where(ses.trialdata['Orientation']==ori)[0]
+            ax.scatter(ses.trialdata['Orientation'][idx_ori],ses.respmat[N,idx_ori],
+                            color=pal[iori],s=5,alpha=0.4)
+            # ax.scatter(ses.trialdata['Orientation'][idx_ori],ses.respmat[targetcell,idx_ori],
+            #                 color='red',s=5,alpha=0.2)
+        ax.tick_params(axis='x', labelrotation=90)
+        ax.set_xlabel('Ori')
+        ax.set_ylabel('Deconvolved activity')
+        # ax.set_title('Tuning Curves')
+        ax.set_ylim([0,my_ceil(np.nanpercentile(ses.respmat[N,:],99),-1)])
+        ax.set_yticks([0,ax.get_ylim()[1]])
+        ax.set_xticks(oris[::2],oris[::2].astype(int),rotation=45)
+    ax = axes[0,1]
+    for iori,ori in enumerate(oris):
+        idx_ori = np.where(ses.trialdata['Orientation']==ori)[0]
+        ax.scatter(ses.respmat[sourcecell,idx_ori],ses.respmat[targetcell,idx_ori],
+                        c=pal[iori],s=5,alpha=0.2)
+    ax_nticks(ax,3)
+    ax.set_xlabel('Neuron 1')
+    ax.set_ylabel('Neuron 2')
+    ax.set_title('Activity')
+    # ax.text(250,250,r'NC = %1.2f' % ses.noise_corr[sourcecell,targetcell])
+
+    ax = axes[1,1]
+    for iori,ori in enumerate(oris):
+        idx_ori = np.where(ses.trialdata['Orientation']==ori)[0]
+        ax.scatter(ses.respmat_res[sourcecell,idx_ori],ses.respmat_res[targetcell,idx_ori],
+                        c=pal[iori],s=5,alpha=0.2)
+
+    ax_nticks(ax,3)
+    ax.set_xlabel('Residual Neuron 1')
+    ax.set_ylabel('Residual Neuron 2')
+    ax.set_title('Residual activity')
+    ax.text(0.1,0.8,'r= %1.2f' % ses.noise_corr[sourcecell,targetcell],transform=ax.transAxes,ha='center',va='center',fontsize=10,color='k')
+    # ax.text(250,250,r'NC = %1.2f' % ses.noise_corr[sourcecell,targetcell])
+
+    sns.despine(fig=fig, top=True, right=True, offset=5,trim=True)
+    plt.tight_layout()
+    return fig
+
+
+#%% Find a neuron pair that is strongly tuned, has opposite tuning pref and has negative correlation
+ises = 0
+prctile = 90
+
+idx = sessions[ises].celldata['tuning_var']>np.percentile(sessions[ises].celldata['tuning_var'],prctile)
+N = len(sessions[ises].celldata)
+signal_filter = np.full((N,N),False)
+signal_filter[np.ix_(idx,idx)] = True
+idx = np.all((sessions[ises].noise_corr < -0.05,sessions[ises].delta_pref == 90,signal_filter),axis=0)
+sourcecells,targetcells = np.where(idx)
+random_cell = np.random.choice(len(sourcecells))
+sourcecell,targetcell = sourcecells[random_cell],targetcells[random_cell]
+
+[sessions[ises].meanresp_orig,sessions[ises].respmat_res] = mean_resp_gr(sessions[ises])
+
+fig = plot_noise_pair(sessions[ises],sourcecell,targetcell)
+my_savefig(fig, os.path.join(savedir,'NoiseCorrelations'), 'NC_example_orthotuning_%s_cell%d_%d' % (sessions[ises].session_id,sourcecell,targetcell), formats = ['png']) 
+
+#%% Find a neuron pair that is strongly tuned, has similar tuning pref and has negative correlation
+ises = 0
+idx = sessions[ises].celldata['tuning_var']>np.percentile(sessions[ises].celldata['tuning_var'],prctile)
+N = len(sessions[ises].celldata)
+signal_filter = np.full((N,N),False)
+signal_filter[np.ix_(idx,idx)] = True
+idx = np.all((sessions[ises].noise_corr > 0.5,sessions[ises].delta_pref == 0,signal_filter),axis=0)
+sourcecells,targetcells = np.where(idx)
+random_cell = np.random.choice(len(sourcecells))
+sourcecell,targetcell = sourcecells[random_cell],targetcells[random_cell]
+
+fig = plot_noise_pair(sessions[ises],sourcecell,targetcell)
+my_savefig(fig, os.path.join(savedir,'NoiseCorrelations'), 'NC_example_isotuning_%s_cell%d_%d' % (sessions[ises].session_id,sourcecell,targetcell), formats = ['png']) 
+
+#%%
+oris = np.arange(0,360,22.5)
+
+
+idx_N   = np.all((sessions[ises].noise_corr < -0.05,sessions[ises].delta_pref == 90,signal_filter),axis=0)
+idx_N   = np.where((np.sum(sessions[ises].respmat>0,axis=0) / len(sessions[ises].trialdata)) > 0.9)[0]
+
+idx_N = np.random.choice(idx_N,2,replace=False)
+
+fig,axes = plt.subplots(2,2,figsize=(6,6))
+
+for iN,N in enumerate(idx_N):
+    for iori,ori in enumerate(oris[:2]):
+        ax = axes[iori,iN]
+        idx_ori = np.where(sessions[ises].trialdata['Orientation']==ori)[0]
+        data = sessions[ises].respmat[N,idx_ori][:,np.newaxis]
+        data = data[np.random.choice(np.shape(data)[0],size=50,replace=False)]
+        data = np.sort(data,axis=0)
+
+        ax.imshow(data,aspect=0.1,origin='lower',vmin=0,vmax=np.percentile(data,99),cmap='magma')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_yticklabels([])
+        ax.set_xticklabels([])
+        # ax.set_aspect(0.1)
 
 

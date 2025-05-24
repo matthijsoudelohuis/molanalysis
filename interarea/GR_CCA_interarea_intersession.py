@@ -7,7 +7,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 
 #%% ###################################################
 import math, os
-os.chdir('c:\\Python\\molanalysis')
+os.chdir('e:\\Python\\molanalysis')
 from loaddata.get_data_folder import get_local_drive
 # os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 
@@ -166,6 +166,7 @@ fig = plot_respmat(orientations, datasets, ['original','pop rate gain'],prefori)
 
 #%% 
 
+
 #%% Make a plot of the CCA structure without any sorting of the trials: 
 ises1           = 8
 ises2           = 9
@@ -290,6 +291,7 @@ for ises in range(nSessions):
 
 
 
+
 #%% 
 sessions,nSessions   = filter_sessions(protocols = 'GR',min_trials=3200)
 
@@ -310,8 +312,86 @@ sessions = compute_tuning_wrapper(sessions)
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 
-#%%
+#%% 
+prePCA          = 50
+n_components    = 40
+nsampleneurons  = 500
+nresamples      = 1
+sortmethods     = ['original','random','ori','gain','origain']
 
+nSorts = len(sortmethods)
+test_corr = np.full((nSessions,n_components,nSorts),np.nan)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model with different sortings for session:'):
+
+    idx_V1      = sessions[ises].celldata['roi_name']=='V1'
+    idx_PM      = sessions[ises].celldata['roi_name']=='PM'
+
+    ## Split data into area 1 and area 2:
+    X               = sessions[ises].respmat[idx_V1,:].T
+    Y               = sessions[ises].respmat[idx_PM,:].T
+
+    X               = zscore(X,axis=0)  #Z score activity for each neuron
+    Y               = zscore(Y,axis=0)
+
+    for isort,sortmethod in enumerate(sortmethods):
+        if sortmethod == 'random':
+            sort1 = np.random.permutation(X.shape[0])
+            sort2 = np.random.permutation(X.shape[0])
+        elif sortmethod == 'ori': #sort by orientation, but within orientation randomly
+            sort1           = np.lexsort((np.random.random(X.shape[0]), sessions[ises].trialdata['Orientation']))[::-1]
+            sort2           = np.lexsort((np.random.random(X.shape[0]), sessions[ises].trialdata['Orientation']))[::-1]
+        elif sortmethod == 'gain': #sort by total population rate in that area
+            sort1 = np.argsort(np.nanmean(X,axis=1))
+            sort2 = np.argsort(np.nanmean(Y,axis=1))
+        elif sortmethod == 'origain': #sort by orientation and within that by total population rate in that area
+            sort1           = np.lexsort((np.nanmean(X,axis=1), sessions[ises].trialdata['Orientation']))[::-1]
+            sort2           = np.lexsort((np.nanmean(Y,axis=1), sessions[ises].trialdata['Orientation']))[::-1]
+        elif sortmethod == 'original': #keep original sorting:
+            sort1 = np.arange(X.shape[0])
+            sort2 = np.arange(X.shape[0])
+        else: 
+            raise ValueError('sortmethod not recognized')
+
+        X_s = X[sort1,:]
+        Y_s = Y[sort2,:]
+
+        test_corr[ises,:,isort],_ = CCA_subsample(X_s.T,Y_s.T,nN=np.min([nsampleneurons,X.shape[1],Y.shape[1]]),nK=None,resamples=nresamples,kFold=5,prePCA=prePCA,n_components=n_components)
+
+#%% Make the figure: 
+clrs_sorts = sns.color_palette('tab10',n_colors=nSorts)
+dimticks = np.array([1,5,10,15,20,25,30,35,40,45,50])
+fig,axes = plt.subplots(1,1,figsize=(4,4))
+ax = axes
+handles = []
+for isort,sortmethod in enumerate(sortmethods):
+    handles.append(shaded_error(x=np.arange(n_components),y=test_corr[:,:,isort],error='sem',
+                                color=clrs_sorts[isort],ax=ax))
+ax.legend(handles,sortmethods,loc='upper right',frameon=False,fontsize=10)
+ax.set_ylim([-0.05,1])
+ax.set_yticks([0,0.25,0.5,0.75,1])
+ax.set_xticks(dimticks-1,dimticks)
+ax.set_xlim([0,n_components-1])
+ax.set_xlabel('Dimension')
+ax.set_ylabel('CCA (test correlation)')
+ax.grid(True, which='major', axis='both')
+# ax.grid(True, which='minor', axis='both', linestyle='--', linewidth=0.5)
+sns.despine(fig=fig, top=True, right=True, offset=3,trim=True)
+plt.tight_layout()
+my_savefig(fig,savedir,'CCA_sorts_WithinSession_V1PM_%dsessions' % (nSessions),formats=['png'])
+
+#%% 
+
+
+
+
+
+
+
+
+
+
+#%%
 
 from mvlearn.datasets import sample_joint_factor_model
 from mvlearn.embed import CCA as CCAmv

@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 os.chdir('e:\\Python\\molanalysis')
 from tqdm import tqdm
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 
 from utils.explorefigs import plot_PCA_gratings_3D,plot_PCA_gratings,plot_PCA_gratings_3D_traces
 from loaddata.session_info import filter_sessions,load_sessions
@@ -13,6 +14,9 @@ from utils.tuning import compute_tuning_wrapper
 from utils.gain_lib import * 
 from utils.psth import compute_tensor
 from scipy.stats import zscore
+from utils.plot_lib import shaded_error
+from utils.regress_lib import *
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 
 
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\SharedGain'
@@ -146,8 +150,6 @@ fig = plot_PCA_gratings_3D_traces(sessions[ises],t_axis,thr_tuning=0.00,plotgain
 
 
 #%% 
-from utils.regress_lib import *
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 
 #%% 
 sessions,nSessions   = filter_sessions(protocols = 'GR',filter_areas=['V1'])
@@ -158,12 +160,68 @@ for ises in range(nSessions):
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
                                 calciumversion='deconv',keepraw=False)
 
+
+#%% 
+# Does the standard deviation of the population response on the decoding axis scale linearly with the mean?
+
+# NOT FINISHED!!! 
+# nActBins = 10
+# kfold = 5
+# lam = None
+# lam = 1
+# model_name = 'LOGR'
+# model_name = 'LDA'
+
+# oris = np.sort(pd.Series.unique(sessions[0].trialdata['Orientation']))
+# noris = len(oris)
+
+# decax_sd    = np.full((nSessions,nActBins,noris),np.nan)
+# decax_mean  = np.full((nSessions,nActBins,noris),np.nan)
+
+# for ises,ses in tqdm(enumerate(sessions),desc='Decoding stimulus ori across sessions',total=nSessions):
+#     idx_N           = np.ones(len(ses.celldata)).astype(bool)
+
+#     data            = zscore(ses.respmat, axis=1)
+#     # data                = zscore(ses.respmat[idx, :], axis=1)
+#     poprate         = np.nanmean(data,axis=0)
+
+#     binedges        = np.percentile(poprate,np.linspace(0,100,nActBins+1))
+#     bincenters      = (binedges[1:]+binedges[:-1])/2
+
+#     if lam is None:
+#         y = ses.trialdata['Orientation']
+#         label_encoder = LabelEncoder()
+#         y = label_encoder.fit_transform(y.ravel())  # Convert to 1D array
+#         X = data.T
+#         X,y,_ = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+#         lam = find_optimal_lambda(X,y,model_name=model_name,kfold=kfold)
+
+#     for iap in range(nActBins):
+#         for iori,ori in enumerate(oris):
+#             idx_T = (ses.trialdata['Orientation'] == ori)
+#             idx_T_ortho = (ses.trialdata['Orientation'] != ori)
+
+#             idx_T = (poprate >= binedges[iap]) & (poprate <= binedges[iap+1])
+#             X = data[np.ix_(idx_N,idx_T)].T
+#             y = ses.trialdata['Orientation'][idx_T]
+
+#             label_encoder   = LabelEncoder()
+#             y               = label_encoder.fit_transform(y.ravel())  # Convert to 1D array
+
+#             X,y,_           = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+#             # error_cv[ises,iap],_,_,_   = my_decoder_wrapper(X,y,model_name='LDA',kfold=kfold,lam=lam,norm_out=False,subtract_shuffle=False)
+#             error_cv[ises,iap],_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,norm_out=False,subtract_shuffle=False)
+
+
 #%% Decoding performance as a function of population rate: 
 nActBins = 10
 kfold = 5
 lam = None
 lam = 1
 model_name = 'LOGR'
+scoring_type = 'accuracy_score'
+# scoring_type = 'balanced_accuracy_score'
 
 error_cv = np.full((nSessions,nActBins),np.nan)
 
@@ -174,18 +232,19 @@ for ises,ses in tqdm(enumerate(sessions),desc='Decoding stimulus ori across sess
     # data                = zscore(ses.respmat[idx, :], axis=1)
     poprate             = np.nanmean(data,axis=0)
 
-    # tensor_zsc = copy.deepcopy(ses.tensor)
-    # tensor_zsc -= np.mean(tensor_zsc, axis=(1,2), keepdims=True)
-    # tensor_zsc /= np.std(tensor_zsc, axis=(1,2), keepdims=True)
+    tensor_zsc = copy.deepcopy(ses.tensor)
+    tensor_zsc -= np.mean(tensor_zsc, axis=(1,2), keepdims=True)
+    tensor_zsc /= np.std(tensor_zsc, axis=(1,2), keepdims=True)
 
-    # idx_B = t_axis<=0 #get baseline mean activity 
-    # poprate = np.nanmean(tensor_zsc[:,:,idx_B], axis=(0,2))
+    idx_B = t_axis<=0 #get baseline mean activity 
+    poprate = np.nanmean(tensor_zsc[:,:,idx_B], axis=(0,2))
 
-    binedges = np.percentile(poprate,np.linspace(0,100,nActBins+1))
-    bincenters = (binedges[1:]+binedges[:-1])/2
+    binedges    = np.percentile(poprate,np.linspace(0,100,nActBins+1))
+    bincenters  = (binedges[1:]+binedges[:-1])/2
+    ori_ses     = np.mod(ses.trialdata['Orientation'],180)
 
     if lam is None:
-        y = ses.trialdata['Orientation']
+        y = ori_ses
         label_encoder = LabelEncoder()
         y = label_encoder.fit_transform(y.ravel())  # Convert to 1D array
         X = data.T
@@ -195,7 +254,7 @@ for ises,ses in tqdm(enumerate(sessions),desc='Decoding stimulus ori across sess
     for iap in range(nActBins):
         idx_T = (poprate >= binedges[iap]) & (poprate <= binedges[iap+1])
         X = data[np.ix_(idx_N,idx_T)].T
-        y = ses.trialdata['Orientation'][idx_T]
+        y = ori_ses[idx_T]
 
         label_encoder = LabelEncoder()
         y = label_encoder.fit_transform(y.ravel())  # Convert to 1D array
@@ -203,20 +262,59 @@ for ises,ses in tqdm(enumerate(sessions),desc='Decoding stimulus ori across sess
         X,y,_ = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
         # error_cv[ises,iap],_,_,_   = my_decoder_wrapper(X,y,model_name='LDA',kfold=kfold,lam=lam,norm_out=False,subtract_shuffle=False)
-        error_cv[ises,iap],_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,lam=lam,norm_out=False,subtract_shuffle=False)
+        error_cv[ises,iap],_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,scoring_type=scoring_type,
+                                                        lam=lam,norm_out=False,subtract_shuffle=False)
+
+#%% Correlation between baseline activity level and response:
+
+fig,axes = plt.subplots(1,1,figsize=(3,3))
+ax = axes
+corrdata = np.full((nSessions),np.nan)
+
+for ises,ses in enumerate(sessions):
+# for ises,ses in enumerate([sessions[0]]):
+
+    # tensor_zsc = copy.deepcopy(ses.tensor)
+    # tensor_zsc -= np.mean(tensor_zsc, axis=(1,2), keepdims=True)
+    # tensor_zsc /= np.std(tensor_zsc, axis=(1,2), keepdims=True)
+
+    idx_B           = t_axis<=0 #get baseline mean activity 
+    # idx_B           = (t_axis>-0.5) & (t_axis<0) #get response mean activity 
+    # baselinerate     = np.nanmean(tensor_zsc[:,:,idx_B], axis=(0,2))
+    baselinerate     = np.nanmean(ses.tensor[:,:,idx_B], axis=(0,2))
+
+    idx_R           = (t_axis>0) & (t_axis<0.75) #get response mean activity 
+    # responserate     = np.nanmean(tensor_zsc[:,:,idx_R], axis=(0,2))
+    responserate     = np.nanmean(ses.tensor[:,:,idx_R], axis=(0,2))
+    
+    corrdata[ises] = np.corrcoef(baselinerate,responserate)[0,1]
+    # ax.scatter(baselinerate, responserate, s=4, alpha=0.8)
+
+
+
 
 #%% Plot error as a function of population rate: 
-from utils.plot_lib import shaded_error
 fig,ax = plt.subplots(1,1,figsize=(3,3))
 # ax.plot(np.arange(nActBins),error_cv.mean(axis=0))
 shaded_error(np.arange(nActBins)+1,error_cv,error='sem',ax=ax)
 ax.set_xlabel('Population rate (quantile)')
-ax.set_ylabel('Decoding accuracy\n (crossval LDA)')
-ax.set_ylim([0.5,1])
+# ax.set_ylabel('Decoding accuracy\n (crossval LDA)')
+ax.set_ylabel('Decoding accuracy\n (crossval Log. Regression)')
+ax.set_ylim([0,1])
 ax.set_xticks(np.arange(nActBins)+1)
-ax.legend(['mean+-sem\nn=%d sessions' % nSessions],loc='lower right',frameon=False)
-# fig.savefig(os.path.join(savedir,'Decoding_Orientation_LOGR_ActBins_%d' % nSessions + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'Decoding_Orientation_LDA_ActBins_%d' % nSessions + '.png'), format = 'png')
+ax.axhline(y=1/len(np.unique(np.mod(ses.trialdata['Orientation'],180))), color='grey', linestyle='--', linewidth=1)
+ax.text(0.5,0.15,'Chance',transform=ax.transAxes,ha='center',va='center',fontsize=8,color='grey')
+ax.legend(['mean+-sem\nn=%d sessions' % nSessions],loc='center right',frameon=False)
+sns.despine(fig=fig,trim=True,top=True,right=True)
+
+my_savefig(fig,savedir,'Decoding_Orientation_LOGR_ActBins_baseline_%d' % nSessions, formats = ['png'])
+# fig.savefig(os.path.join(savedir,'Decoding_Orientation_LDA_ActBins_%d' % nSessions + '.png'), format = 'png')
+
+
+#%%
+
+
+
 
 
 #%%
@@ -264,8 +362,6 @@ tensor_zsc /= np.std(tensor_zsc, axis=(1,2), keepdims=True)
 idx_B = (t_axis>=0) & (t_axis<=1)
 respmat_zsc = np.nanmean(tensor_zsc[:,:,idx_B], axis=2)
 data                = respmat_zsc
-
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 
 lam = 0.0
 ## LDA on grating stimuli:

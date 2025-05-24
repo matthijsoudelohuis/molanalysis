@@ -29,7 +29,7 @@ def CCA_subsample(DATA1,DATA2,nN=None,nK=None,resamples=5,kFold=5,prePCA=None,n_
     if nN is None:
         nN        = np.min((N1,N2)) #find common minimum number of neurons recorded
 
-    if prePCA and nN>prePCA:
+    if prePCA and n_components>prePCA:
         n_components = prePCA
 
     if nK is None:

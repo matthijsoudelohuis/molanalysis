@@ -65,13 +65,6 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 # RRR
 
-
-
-
-
-
-
-
 #%% 
 
 areas = ['V1','PM','AL','RSP']
@@ -520,6 +513,16 @@ add_corr_results(ax,dims.flatten(),optim_rank.flatten())
  #   #     #         #       #     #    #       #######    #    #       #   #         # 
   # #      #         #       #     #    #       #     #    #    #       #    #  #     # 
    #     #####       #       #     #    ####### #     #    #    ####### #     #  #####  
+
+
+
+#%%
+
+for ses in sessions:
+    ses.celldata['arealayer'] = ses.celldata['roi_name'] + ses.celldata['layer']
+
+for ses in sessions:
+    print(np.sum(ses.celldata['arealayer']=='V1L5'))
 
 
 #%% Parameters for decoding from size-matched populations of V1 and PM labeled and unlabeled neurons

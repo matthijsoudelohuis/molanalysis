@@ -7,7 +7,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 
 #%% ###################################################
 import math, os
-os.chdir('c:\\Python\\molanalysis')
+os.chdir('e:\\Python\\molanalysis')
 from loaddata.get_data_folder import get_local_drive
 # os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 
@@ -34,8 +34,8 @@ from utils.regress_lib import *
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Interarea\\CCA\\')
 
 #%% 
-session_list        = np.array([['LPE12223','2024_06_10'], #GR
-                                ['LPE10919','2023_11_06']]) #GR
+session_list        = np.array([['LPE12223_2024_06_10'], #GR
+                                ['LPE10919_2023_11_06']]) #GR
 # session_list        = np.array([['LPE09665','2023_03_21'], #GR
                                 # ['LPE10919','2023_11_06']]) #GR
 
@@ -57,7 +57,12 @@ sessions = compute_tuning_wrapper(sessions)
 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
+
+
 # sessions,nSessions   = filter_sessions(protocols = 'GR',only_session_id=session_list)
+
+
+
 
 #%% 
  #####   #####     #    
@@ -148,6 +153,37 @@ sns.despine(fig=fig, top=True, right=True,offset=5)
 fig.suptitle('Correlation between CCA and RRR:')
 fig.tight_layout()
 fig.savefig(os.path.join(savedir,'Corr_CCA_RRR_weights.png'), format = 'png')
+
+
+
+#%% 
+
+
+#%% Are CCA and RRR capturing the same signal?
+lam                 = 0
+Nsub                = 250
+
+model_CCA           = CCA(n_components=10,scale = False, max_iter = 1000)
+
+ses                 = sessions[0]
+
+idx_areax           = np.where(np.all((ses.celldata['roi_name']=='V1',
+                                            ses.celldata['noise_level']<20),axis=0))[0]
+idx_areay           = np.where(np.all((ses.celldata['roi_name']=='PM',
+                                        ses.celldata['noise_level']<20),axis=0))[0]
+
+idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool) #
+
+idx_areax_sub       = np.random.choice(idx_areax,Nsub,replace=False)
+idx_areay_sub       = np.random.choice(idx_areay,Nsub,replace=False)
+
+X                   = ses.respmat[np.ix_(idx_areax_sub,idx_T)].T
+Y                   = ses.respmat[np.ix_(idx_areay_sub,idx_T)].T
+
+X                   = zscore(X,axis=0)  #Z score activity for each neuron
+Y                   = zscore(Y,axis=0)
+
+
 
 
 

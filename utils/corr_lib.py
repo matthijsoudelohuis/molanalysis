@@ -25,7 +25,6 @@ from statannotations.Annotator import Annotator
 from scipy import stats
 from scipy.ndimage import gaussian_filter
 from scipy.stats import zscore
-from utils.dimreduc_lib import remove_dim
 from scipy.signal import detrend
 from utils.gain_lib import pop_rate_gain_model
 import itertools
