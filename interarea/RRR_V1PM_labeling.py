@@ -18,6 +18,9 @@ import seaborn as sns
 from scipy.signal import medfilt
 from sklearn.impute import SimpleImputer
 from scipy.stats import zscore
+from scipy import stats
+from tqdm import tqdm
+from statannotations.Annotator import Annotator
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
@@ -26,12 +29,13 @@ from utils.plot_lib import * #get all the fixed color schemes
 from utils.explorefigs import *
 from utils.tuning import compute_tuning_wrapper
 from utils.regress_lib import *
+from utils.RRRlib import *
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Interarea\\RRR\\Labeling\\')
 
 #%% 
-session_list        = np.array([['LPE12223','2024_06_10'], #GR
-                                ['LPE10919','2023_11_06']]) #GR
+session_list        = np.array([['LPE12223_2024_06_10'], #GR
+                                ['LPE10919_2023_11_06']]) #GR
 # session_list        = np.array([['LPE09665','2023_03_21'], #GR
                                 # ['LPE10919','2023_11_06']]) #GR
 
@@ -39,14 +43,12 @@ sessions,nSessions   = filter_sessions(protocols = 'GR',only_session_id=session_
 
 #%%  Load data properly:        
 calciumversion = 'dF'
-# calciumversion = 'deconv'
+calciumversion = 'deconv'
 
 for ises in range(nSessions):
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
                                 calciumversion=calciumversion,keepraw=True)
     
-#%% ##################### Compute pairwise neuronal distances: ##############################
-sessions = compute_pairwise_anatomical_distance(sessions)
 
 #%% ########################### Compute tuning metrics: ###################################
 sessions = compute_tuning_wrapper(sessions)
@@ -90,6 +92,12 @@ nareas = len(areas)
 # sessions,nSessions   = filter_sessions(protocols = ['GN','GR'],only_all_areas=areas,filter_areas=areas)
 sessions,nSessions   = filter_sessions(protocols = ['GN','GR'],filter_areas=areas)
 
+#%% Remove sessions with too much drift in them:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
+
 #%%  Load data properly:        
 # calciumversion = 'deconv'
 calciumversion = 'dF'
@@ -121,9 +129,9 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
     X                   = sessions[ises].respmat[np.ix_(idx_areax,idx_T)].T
     Y                   = sessions[ises].respmat[np.ix_(idx_areay,idx_T)].T
     
-    R2_cv[ises],optim_rank[ises]      = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+    R2_cv[ises],optim_rank[ises],_      = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
 
-print(np.nanmean(R2_cv))
+print(np.nanmean(R2_cv)) #should be around 0.07
 
 #%% Are the weights higher for V1lab or PMlab?
 
@@ -365,7 +373,7 @@ ax.set_title('Orig-Behavior (RRR)')
 ax.set_yticklabels('')
 ax.set_xlabel('Neurons')
 plt.tight_layout()
-my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%s.png' % ses.sessiondata['session_id'][0],formats=['png'])
+my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%s.png' % ses.session_id,formats=['png'])
 
 #%%
 nranks      = 10
@@ -388,8 +396,8 @@ my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%dsessions.png' % nSessions,fo
 
 #%% Plot the number of dimensions per area pair
 def plot_RRR_R2_regressout(R2data,rankdata,arealabelpairs,clrs_arealabelpairs):
-    fig, axes = plt.subplots(2,2,figsize=(8,6))
-
+    fig, axes = plt.subplots(3,2,figsize=(8,9))
+    nSessions = R2data.shape[2]
     statpairs = [(0,1),(0,2),(0,3),
                 (4,5),(4,6),(4,7)]
 
@@ -406,7 +414,7 @@ def plot_RRR_R2_regressout(R2data,rankdata,arealabelpairs,clrs_arealabelpairs):
         ax.set_ylim([0,my_ceil(np.nanmax(R2data[:,irbh,:]),2)])
 
         if irbh==1:
-            ax.set_xlabel('Population pair')
+            # ax.set_xlabel('Population pair')
             ax.set_xticks(range(narealabelpairs))
         else:
             ax.set_xticks(range(narealabelpairs),labels=[])
@@ -432,8 +440,9 @@ def plot_RRR_R2_regressout(R2data,rankdata,arealabelpairs,clrs_arealabelpairs):
 
         ax.set_xticks(range(narealabelpairs))
         if irbh==1:
-            ax.set_xlabel('Population pair')
-            ax.set_xticks(range(narealabelpairs))
+            # ax.set_xlabel('Population pair')
+            # ax.set_xticks(range(narealabelpairs))
+            ax.set_xticks(range(narealabelpairs),labels=[])
         else:
             ax.set_xticks(range(narealabelpairs),labels=[])
         
@@ -455,9 +464,47 @@ def plot_RRR_R2_regressout(R2data,rankdata,arealabelpairs,clrs_arealabelpairs):
         # annotator.configure(test='t-test_paired', text_format='star', loc='inside',verbose=False)
         # annotator.apply_and_annotate()
 
-    sns.despine(top=True,right=True,offset=3,trim=True)
-    axes[1,0].set_xticklabels(arealabelpairs2,fontsize=7)
-    axes[1,1].set_xticklabels(arealabelpairs2,fontsize=7)
+    #Fraction of R2 explained by the regressor
+    datatoplot          = (R2data[:,0,:] - R2data[:,1,:]) / R2data[:,0,:]
+
+    ax = axes[2,0]
+    for iapl, arealabelpair in enumerate(arealabelpairs):
+        ax.scatter(np.ones(nSessions)*iapl + np.random.rand(nSessions)*0.3,datatoplot[iapl,:],color='k',marker='o',s=10)
+        ax.errorbar(iapl+0.5,np.nanmean(datatoplot[iapl,:]),np.nanstd(datatoplot[iapl,:])/np.sqrt(nSessions),color=clrs_arealabelpairs[iapl],marker='o',zorder=10)
+
+    testdata = datatoplot[:,:]
+    testdata = testdata[:,~np.isnan(testdata).any(axis=0)]
+    # ax.plot(testdata,color='k',lw=0.5)
+
+    df = pd.DataFrame({'R2':  testdata.flatten(),
+                        'arealabelpair':np.repeat(np.arange(narealabelpairs),np.shape(testdata)[1])})
+
+    annotator = Annotator(ax, statpairs, data=df, x="arealabelpair", y='R2', 
+                          order=np.arange(narealabelpairs))
+    annotator.configure(test='Wilcoxon', text_format='star', loc='outside',
+                        line_height=0,line_offset_to_group=0,text_offset=0, 
+                        line_width=.75,comparisons_correction=None,
+                        verbose=False)
+    # annotator.configure(test='t-test_paired', text_format='star', loc='outside',verbose=False)
+    annotator.apply_and_annotate()
+
+    # ttest,pval = stats.ttest_rel(datatoplot[4,:],datatoplot[7,:],nan_policy='omit')
+
+    # ax.set_title('Fraction of V1-PM R2 (RRR)\n explained by activity shared with AL and RSP')
+    # ax.set_ylabel('Fraction of R2')
+    ax.set_ylabel('V1-PM variance \nnot explained by regressor')
+    # ax.set_ylim([0,my_ceil(np.nanmax(datatoplot[:,:]),2)])
+
+    ax.set_xlabel('Population pair')
+    ax.set_xticks(range(narealabelpairs))
+    # ax.set_ylim([my_floor(np.nanmin(datatoplot),1),1])
+    ax.set_ylim([0.6,1.25])
+
+    sns.despine(top=True,right=True,offset=3)
+    # axes[1,0].set_xticklabels(arealabelpairs2,fontsize=7)
+    # axes[1,1].set_xticklabels(arealabelpairs2,fontsize=7)
+    axes[2,0].set_xticklabels(arealabelpairs2,fontsize=7)
+    axes[2,1].set_xticklabels(arealabelpairs2,fontsize=7)
     return fig
 
 #%% Parameters for decoding from size-matched populations of V1 and PM labeled and unlabeled neurons
@@ -491,10 +538,10 @@ clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
 narealabelpairs     = len(arealabelpairs)
 
 lam                 = 0
-nsampleneurons      = 15
-nranks              = 15
-nmodelfits          = 10 #number of times new neurons are resampled 
-kfold               = 3
+nsampleneurons      = 25
+nranks              = 20
+nmodelfits          = 100 #number of times new neurons are resampled 
+kfold               = 5
 
 R2_cv               = np.full((narealabelpairs,2,nSessions),np.nan)
 optim_rank          = np.full((narealabelpairs,2,nSessions),np.nan)
@@ -502,22 +549,26 @@ optim_rank          = np.full((narealabelpairs,2,nSessions),np.nan)
 filter_nearby       = True
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
+    
+    if np.sum(ses.celldata['arealabel']=='V1lab')<nsampleneurons or np.sum(ses.celldata['arealabel']=='PMlab')<nsampleneurons:
+        continue
+    
     # idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
 
     # respmat,_  = regress_out_behavior_modulation(ses,X,respmat,rank=5,lam=0,perCond=True)
-    # Y_orig,Y_hat_rr,Y_out,_,_  = regress_out_behavior_modulation(ses,rank=5,lam=0,perCond=True)
-    Y_orig,Y_hat_rr,Y_out,_,_  = regress_out_behavior_modulation(ses,rank=5,lam=0,perCond=False)
+    Y_orig,Y_hat_rr,Y_out,_,_  = regress_out_behavior_modulation(ses,rank=5,lam=0.05,perCond=True)
+    # Y_orig,Y_hat_rr,Y_out,_,_  = regress_out_behavior_modulation(ses,rank=5,lam=0,perCond=False)
 
     neuraldata = np.stack((Y_orig,Y_out),axis=2)
 
     for irbhv,rbhb in enumerate([False,True]):
 
-            # X           = np.stack((ses.respmat_videome[idx_T],
-            #                 ses.respmat_runspeed[idx_T],
-            #                 ses.respmat_pupilarea[idx_T]),axis=1)
+        # X           = np.stack((ses.respmat_videome[idx_T],
+        #                 ses.respmat_runspeed[idx_T],
+        #                 ses.respmat_pupilarea[idx_T]),axis=1)
 
-            # Yall   = regress_out_behavior_modulation(ses,B,Yall,rank=3,lam=0)
-            
+        # Yall   = regress_out_behavior_modulation(ses,B,Yall,rank=3,lam=0)
+        
         for iapl, arealabelpair in enumerate(arealabelpairs):
             
             alx,aly = arealabelpair.split('-')
@@ -538,36 +589,37 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
             Y = neuraldata[:,idx_areay,irbhv]
 
             if len(idx_areax)>=nsampleneurons and len(idx_areay)>=nsampleneurons:
-                R2_cv[iapl,irbhv,ises],optim_rank[iapl,irbhv,ises]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+                R2_cv[iapl,irbhv,ises],optim_rank[iapl,irbhv,ises],_  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
 
 #%% Plot the R2 performance and number of dimensions per area pair
-fig = plot_RRR_R2_regressout(R2_cv,optim_rank,arealabelpairs,clrs_arealabelpairs)
+idx_ses     = np.all(~np.isnan(R2_cv),axis=(0,1))
+R2_data     = R2_cv[:,:,idx_ses]
+rankdata    = optim_rank[:,:,idx_ses]
 
-# my_savefig(fig,savedir,'RRR_cvR2_RegressOutBehavior_V1PM_LabUnl_%dsessions.png' % nSessions)
+fig         = plot_RRR_R2_regressout(R2_data,rankdata,arealabelpairs,clrs_arealabelpairs)
+
+my_savefig(fig,savedir,'RRR_cvR2_RegressOutBehavior_V1PM_LabUnl_%dsessions.png' % nSessions)
 
 
 #%% Print how many labeled neurons there are in V1 and Pm in the loaded sessions:
 print('Number of labeled neurons in V1 and PM:')
 for ises, ses in enumerate(sessions):
-
     print('Session %d: %d in V1, %d in PM' % (ises+1,
-                                              np.sum(np.all((ses.celldata['redcell']==1,
-                                                             ses.celldata['roi_name']=='V1',
+                                              np.sum(np.all((ses.celldata['arealabel']=='V1lab',
                                                              ses.celldata['noise_level']<20),axis=0)),
-                                              np.sum(np.all((ses.celldata['redcell']==1,
-                                                             ses.celldata['roi_name']=='PM',
+                                              np.sum(np.all((ses.celldata['arealabel']=='PMlab',
                                                              ses.celldata['noise_level']<20),axis=0))))
 
-
 #%% Validate regressing out AL RSP activity: 
-for ises in range(nSessions):#
-    print(np.any(sessions[ises].celldata['roi_name']=='AL'))
+# for ises in range(nSessions):#
+    # print(np.any(sessions[ises].celldata['roi_name']=='AL'))
 ises            = 6
+rank            = 6
 ses             = sessions[ises]
 idx_T           = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
 # idx_T   = ses.trialdata['stimCond']==0
 
-respmat             = ses.respmat[:,idx_T].T
+respmat         = ses.respmat[:,idx_T].T
 respmat         = zscore(respmat,axis=0)
 
 idx_ALRSP   = np.where(np.all((np.isin(ses.celldata['roi_name'],['AL','RSP']),
@@ -578,12 +630,12 @@ idx_V1PM   = np.where(np.all((np.isin(ses.celldata['roi_name'],['V1','PM']),
                         # ses.celldata['noise_level']<20	
                         ),axis=0))[0]
 
-Y_orig,Y_hat_rr,Y_out,rank,EVdata  = regress_out_behavior_modulation(ses,X=respmat[:,idx_ALRSP],Y=respmat[:,idx_V1PM],rank=10,lam=0)
+Y_orig,Y_hat_rr,Y_out,rank,EVdata  = regress_out_behavior_modulation(ses,X=respmat[:,idx_ALRSP],Y=respmat[:,idx_V1PM],rank=rank,lam=0)
 
 # Y_orig,Y_hat_rr,Y_out,rank,EVdata      = regress_out_behavior_modulation(sessions[ises],rank=5,lam=0,perCond=True)
-print("Variance explained by behavioral modulation: %1.4f" % EVdata)
+print("Variance explained by other cortical areas: %1.4f" % EVdata)
 
-#%% Make figure
+# Make figure
 minmax = 0.75
 fig,axes = plt.subplots(1,3,figsize=(6,3),sharex=False)
 ax = axes[0]
@@ -604,7 +656,7 @@ ax.set_title('Orig - AL/RSP')
 ax.set_yticklabels('')
 ax.set_xlabel('V1 PM Neurons')
 plt.tight_layout()
-my_savefig(fig,savedir,'AL_RSP_RegressedOut_V1PM_%s.png' % ses.sessiondata['session_id'][0],formats=['png'])
+# my_savefig(fig,savedir,'AL_RSP_RegressedOut_V1PM_%s.png' % ses.sessiondata['session_id'][0],formats=['png'])
 
 #%%
 nranks      = 10
@@ -639,7 +691,7 @@ arealabelpairs  = ['V1unl-PMunl',
                     'PMlab-V1lab']
 
 #external areas to include:
-regress_out_neural = True
+regress_out_neural  = True
 
 clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
 narealabelpairs     = len(arealabelpairs)
@@ -647,7 +699,7 @@ narealabelpairs     = len(arealabelpairs)
 lam                 = 0
 nsampleneurons      = 20
 nranks              = 20
-nmodelfits          = 20 #number of times new neurons are resampled 
+nmodelfits          = 10 #number of times new neurons are resampled 
 kfold               = 5
 ALRSP_rank          = 15
 
@@ -658,7 +710,7 @@ filter_nearby       = True
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
     
-    if np.any(sessions[ises].celldata['roi_name']=='AL'):
+    if np.any(sessions[ises].celldata['roi_name'].isin(['AL','RSP'])):
         idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
         
         respmat             = ses.respmat[:,idx_T].T
@@ -672,7 +724,8 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
                                 ses.celldata['noise_level']<20	
                                 ),axis=0))[0]
 
-        Y_orig,Y_hat_rr,Y_out,rank,EVdata  = regress_out_behavior_modulation(ses,X=respmat[:,idx_ALRSP],Y=respmat[:,idx_V1PM],rank=ALRSP_rank,lam=0)
+        Y_orig,Y_hat_rr,Y_out,rank,EVdata  = regress_out_behavior_modulation(ses,X=respmat[:,idx_ALRSP],Y=respmat[:,idx_V1PM],
+                                                                             perCond=False,rank=ALRSP_rank,lam=0)
 
         neuraldata = np.stack((respmat,respmat),axis=2)
         neuraldata[:,idx_V1PM,0] = Y_orig
@@ -688,23 +741,26 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
                     idx_nearby = np.ones(len(ses.celldata),dtype=bool)
 
                 idx_areax           = np.where(np.all((ses.celldata['arealabel']==alx,
-                                        # ses.celldata['noise_level']<20,	
+                                        ses.celldata['noise_level']<20,	
                                         idx_nearby),axis=0))[0]
                 idx_areay           = np.where(np.all((ses.celldata['arealabel']==aly,
-                                        # ses.celldata['noise_level']<20,	
+                                        ses.celldata['noise_level']<20,	
                                         idx_nearby),axis=0))[0]
             
                 X = neuraldata[:,idx_areax,irbhv]
                 Y = neuraldata[:,idx_areay,irbhv]
 
                 if len(idx_areax)>=nsampleneurons and len(idx_areay)>=nsampleneurons:
-                    R2_cv[iapl,irbhv,ises],optim_rank[iapl,irbhv,ises]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+                    R2_cv[iapl,irbhv,ises],optim_rank[iapl,irbhv,ises],_  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
 
 #%%
 fig = plot_RRR_R2_regressout(R2_cv,optim_rank,arealabelpairs,clrs_arealabelpairs)
-my_savefig(fig,savedir,'RRR_V1PM_regressoutneuralALRSP_%dsessions.png' % (nSessions))
+# my_savefig(fig,savedir,'RRR_V1PM_regressoutneuralALRSP_%dsessions.png' % (nSessions))
 
 #%% Fraction of R2 explained by shared activity with AL and RSP:
+statpairs = [(0,1),(0,2),(0,3),
+        (4,5),(4,6),(4,7)]
+
 datatoplot          = (R2_cv[:,0,:] - R2_cv[:,1,:]) / R2_cv[:,0,:]
 # datatoplot          = R2_cv[:,1,:]  / R2_cv[:,0,:]
 arealabelpairs2     = [al.replace('-','-\n') for al in arealabelpairs]
@@ -736,12 +792,12 @@ ax.set_ylim([0,my_ceil(np.nanmax(datatoplot[:,:]),2)])
 
 ax.set_xlabel('Population pair')
 ax.set_xticks(range(narealabelpairs))
-ax.set_ylim([0.5,1])
+ax.set_ylim([0.8,1])
 # ax.set_ylim([0,0.5])
 sns.despine(top=True,right=True,offset=3)
 ax.set_xticklabels(arealabelpairs2,fontsize=7)
 
-my_savefig(fig,savedir,'RRR_V1PM_regressoutneural_Frac_var_shared_ALRSP_%dsessions.png' % (nSessions))
+# my_savefig(fig,savedir,'RRR_V1PM_regressoutneural_Frac_var_shared_ALRSP_%dsessions.png' % (nSessions))
 
 
 
@@ -751,6 +807,116 @@ my_savefig(fig,savedir,'RRR_V1PM_regressoutneural_Frac_var_shared_ALRSP_%dsessio
 
 
 
+
+#%% Parameters for RRR between size-matched populations of V1 and PM labeled and unlabeled neurons
+arealabelpairs  = ['V1unl-PMunl',
+                    'V1unl-PMlab',
+                    'V1lab-PMunl',
+                    'V1lab-PMlab',
+                    'PMunl-V1unl',
+                    'PMunl-V1lab',
+                    'PMlab-V1unl',
+                    'PMlab-V1lab']
+
+#Regress out activity explained by the rest of the local population:
+#external areas to include:
+regress_out_neural = True
+
+clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
+narealabelpairs     = len(arealabelpairs)
+
+lam                 = 0
+minsampleneurons    = 10
+# nsampleneurons      = 20
+nranks              = 20
+nmodelfits          = 5 #number of times new neurons are resampled 
+kfold               = 5
+withinarearank      = 5
+
+R2_cv               = np.full((narealabelpairs,2,nSessions),np.nan)
+optim_rank          = np.full((narealabelpairs,2,nSessions),np.nan)
+
+filter_nearby       = True
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
+    
+    idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
+    
+    respmat             = ses.respmat[:,idx_T].T
+    respmat             = zscore(respmat,axis=0)
+
+    idx_V1unl = np.where(np.all((ses.celldata['arealabel']=='V1unl',
+                                    ses.celldata['noise_level']<20),axis=0))[0]
+    idx_V1lab = np.where(np.all((ses.celldata['arealabel']=='V1lab',
+                                    ses.celldata['noise_level']<20),axis=0))[0]
+    
+    nV1lab = len(idx_V1lab)
+
+    idx_PMunl = np.where(np.all((ses.celldata['arealabel']=='PMunl',
+                                    ses.celldata['noise_level']<20),axis=0))[0]
+    idx_PMlab = np.where(np.all((ses.celldata['arealabel']=='PMlab',
+                                    ses.celldata['noise_level']<20),axis=0))[0]
+    
+    nPMlab = len(idx_PMlab)
+
+    if nV1lab<minsampleneurons or nPMlab<minsampleneurons:
+        continue
+
+    neuraldata = np.stack((respmat,respmat),axis=2)
+
+    nV1unl_groups = int(np.ceil(len(idx_V1unl)/nV1lab))
+    idx_V1_groups = np.array_split(np.random.permutation(idx_V1unl),nV1unl_groups)
+    idx_V1_groups.append(idx_V1lab)
+    
+    nPMunl_groups = int(np.ceil(len(idx_PMunl)/nPMlab))
+    idx_PM_groups = np.array_split(np.random.permutation(idx_PMunl),nPMunl_groups)
+    idx_PM_groups.append(idx_PMlab)
+
+    for iV1group in range(len(idx_V1_groups)):
+        idx_source = np.concatenate([idx_V1_groups[i] for i in range(len(idx_V1_groups)) if i!=iV1group])
+        idx_target = idx_V1_groups[iV1group]
+        assert not np.any(np.in1d(idx_source,idx_target))
+        Y_orig,Y_hat_rr,Y_out,rank,EVdata  = regress_out_behavior_modulation(ses,X=respmat[:,idx_source],Y=respmat[:,idx_target],rank=int(nV1lab**0.4),lam=0)
+
+        neuraldata[:,idx_target,0] = Y_orig
+        neuraldata[:,idx_target,1] = Y_out
+
+    for iPMgroup in range(len(idx_PM_groups)):
+        idx_source = np.concatenate([idx_PM_groups[i] for i in range(len(idx_PM_groups)) if i!=iPMgroup])
+        idx_target = idx_PM_groups[iPMgroup]
+        assert not np.any(np.in1d(idx_source,idx_target))
+        Y_orig,Y_hat_rr,Y_out,rank,EVdata  = regress_out_behavior_modulation(ses,X=respmat[:,idx_source],Y=respmat[:,idx_target],rank=int(nPMlab**0.4),lam=0)
+
+        neuraldata[:,idx_target,0] = Y_orig
+        neuraldata[:,idx_target,1] = Y_out
+
+    nsampleneurons = np.min([nV1lab,nPMlab])
+
+    for irbhv,rbhb in enumerate([False,True]):
+        for iapl, arealabelpair in enumerate(arealabelpairs):
+            alx,aly = arealabelpair.split('-')
+
+            if filter_nearby:
+                idx_nearby  = filter_nearlabeled(ses,radius=50)
+            else:
+                idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+
+            idx_areax           = np.where(np.all((ses.celldata['arealabel']==alx,
+                                    ses.celldata['noise_level']<20,	
+                                    idx_nearby),axis=0))[0]
+            idx_areay           = np.where(np.all((ses.celldata['arealabel']==aly,
+                                    ses.celldata['noise_level']<20,	
+                                    idx_nearby),axis=0))[0]
+        
+            X = neuraldata[:,idx_areax,irbhv]
+            Y = neuraldata[:,idx_areay,irbhv]
+
+            if len(idx_areax)>=nsampleneurons and len(idx_areay)>=nsampleneurons:
+                R2_cv[iapl,irbhv,ises],optim_rank[iapl,irbhv,ises],_  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+
+#%%
+fig = plot_RRR_R2_regressout(R2_cv,optim_rank,arealabelpairs,clrs_arealabelpairs)
+my_savefig(fig,savedir,'RRR_V1PM_regressout_unlabeled_%dsessions.png' % (nSessions))
 
 
 

@@ -1182,7 +1182,7 @@ def assign_layer(celldata):
             idx = celldata[(celldata['roi_name'] == roi) & (mindepth <= celldata['depth']) & (celldata['depth'] < maxdepth)].index
             celldata.loc[idx, 'layer'] = layer
     
-    assert(celldata['layer'].notnull().all()), 'problematice assignment of layer based on ROI and depth'
+    assert(celldata['layer'].notnull().all()), 'problematic assignment of layer based on ROI and depth'
     
     #References: 
     # V1: 

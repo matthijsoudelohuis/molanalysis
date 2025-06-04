@@ -7,7 +7,7 @@ Matthijs Oude Lohuis, 2023-2025, Champalimaud Center
 
 #%% 
 import os
-os.chdir('c:\\Python\\molanalysis')
+os.chdir('e:\\Python\\molanalysis')
 from loaddata.get_data_folder import get_local_drive
 
 import numpy as np
@@ -19,6 +19,7 @@ from scipy.stats import zscore
 from scipy.sparse.linalg import svds
 from scipy import stats
 from sklearn.metrics import r2_score
+from statannotations.Annotator import Annotator
 
 from preprocessing.locate_rf import *
 from loaddata.session_info import filter_sessions,load_sessions
@@ -42,7 +43,7 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
 # 
 
 # Insights so far: 
-# variaility in sessions how well RF fits are
+# variability in sessions how well RF fits are
 # reconstructions and linear RFs are much better in V1, can reconstruct images much better
 # PM and PM labeled is poor
 # dividing by population mean does not help a lot for fitting RF
@@ -58,7 +59,7 @@ session_list        = np.array([['LPE13959','2025_02_24']])
 #%% Load sessions lazy: 
 sessions,nSessions   = filter_sessions(protocols = ['IM'],only_session_id=session_list)
 sessions,nSessions   = filter_sessions(protocols = ['IM'],min_lab_cells_V1=50,min_lab_cells_PM=50)
-sessions,nSessions   = filter_sessions(protocols = ['IM'],min_cells=2000)
+sessions,nSessions   = filter_sessions(protocols = ['IM'],min_cells=1)
 
 #%%   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
@@ -269,6 +270,18 @@ def fit_2dgauss_cRF(cRF, nsub,celldata):
             pass
     return celldata
 
+
+#%%
+
+
+
+
+
+
+
+
+
+
 #%% On the trial to trial response: RRR to get RF
 sesidx  = 0
 nsub    = 4
@@ -369,6 +382,7 @@ fig.savefig(os.path.join(savedir,'ReducedRank_FitRF_example_RF_corr_%s.png' % se
 
 sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method=None)
 
+# for ises in range(nSessions):
 sessions[sesidx].resp_corr = np.corrcoef(sessions[sesidx].respmat)
 # sessions[sesidx].resp_corr = np.corrcoef(resp)
 np.fill_diagonal(sessions[sesidx].resp_corr,np.nan)
@@ -575,6 +589,207 @@ fig.tight_layout()
 fig.savefig(os.path.join(savedir,'RRR_FitRF_corr_dRF_%s_%s.png' % (datatype,sessions[sesidx].sessiondata['session_id'][0])),format='png',dpi=300,bbox_inches='tight')
 
 
+
+
+
+
+#%% On the trial to trial response: RRR to get RF
+
+#NOTES:
+# For the reconstruction it worked really well to divide by population rate, zscore
+# Then fit the data with lam=0.05, nranks=50, nsub=3
+# Later update: reduced rank is not necessary, is only limiting, nsub2 is better but 
+# slower. Lam depends on df/deconv and needs to be optimized with crossval. Furthermore 
+# lambda biases towards low or high frequency reconstruction. 
+
+nsub    = 3 #without subsampling really slow, i.e. nsub=1
+lam     = 0.05
+
+for ises, ses in enumerate(sessions):
+    print(ses.session_id)
+    resp    = ses.respmat.T
+
+    K,N     = np.shape(resp)
+
+    #normalize the response for each neuron to the maximum:
+    resp        = zscore(resp, axis=0)
+
+    # dividing by poprate:
+    # resp = resp / np.mean(resp, axis=0, keepdims=True)
+
+    IMdata      = natimgdata[:,:,ses.trialdata['ImageNumber']]
+
+    # cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=0.05,nranks=100,nsub=nsub)
+    ses.cRF,Y_hat   = linear_RF_cv(resp, IMdata, lam=lam, nsub=nsub)
+
+    RF_R2 = r2_score(resp,Y_hat,multioutput='raw_values')
+    ses.celldata['RF_R2'] = RF_R2
+    print('RF R2: %0.2f' % (RF_R2.mean()))
+
+    #Compute pairwise correlations matrix of the cRF:
+    cRF_reshape             = np.reshape(ses.cRF, (np.shape(ses.cRF)[0]*np.shape(ses.cRF)[1],np.shape(ses.cRF)[2]))
+    ses.RF_corrmat  = np.corrcoef(cRF_reshape.T)
+
+    np.fill_diagonal(ses.RF_corrmat,np.nan)
+
+    ses.resp_corr = np.corrcoef(ses.respmat)
+    # sessions[sesidx].resp_corr = np.corrcoef(resp)
+    np.fill_diagonal(ses.resp_corr,np.nan)
+
+    ses.resid_corr = np.corrcoef(resp.T - Y_hat.T)
+    np.fill_diagonal(ses.resid_corr,np.nan)
+
+#%% 
+
+#%% the relationship between similarity of RFs and similarity of responses:
+#Expecting positive correlation of course
+
+arealabelpairs = np.array(['V1unl-V1unl',
+                'V1unl-V1lab',
+                'V1lab-V1lab',
+                'PMunl-PMunl',
+                'PMunl-PMlab',
+                'PMlab-PMlab',
+                'V1unl-PMunl',
+                'V1unl-PMlab',
+                'V1lab-PMunl',
+                'V1lab-PMlab'])
+
+min_relhalf     = 0
+min_tuning_SNR  = 0.1
+min_RF_R2       = 0
+
+datatypes = ['sig_corr','resid_corr','resp_corr']
+
+RFcorr      = np.full((nSessions,len(arealabelpairs)),np.nan)
+slopes      = np.full((nSessions,len(datatypes),len(arealabelpairs)),np.nan)
+intercepts  = np.full((nSessions,len(datatypes),len(arealabelpairs)),np.nan)
+
+for ises, ses in enumerate(sessions):
+    for ial,alpair in enumerate(arealabelpairs):
+
+        al_source = alpair.split('-')[0]
+        al_target = alpair.split('-')[1]
+
+        idx_X = np.where(np.all((sessions[ises].celldata['arealabel']==al_source,
+                                    sessions[ises].celldata['tuning_SNR']>min_tuning_SNR,
+                                    sessions[ises].celldata['rel_half']>min_relhalf,
+                                    sessions[ises].celldata['RF_R2']>min_RF_R2,
+                                    sessions[ises].celldata['noise_level']<20),axis=0))[0]
+
+        idx_Y = np.where(np.all((sessions[ises].celldata['arealabel']==al_target,
+                                    sessions[ises].celldata['tuning_SNR']>min_tuning_SNR,
+                                    sessions[ises].celldata['rel_half']>min_relhalf,
+                                    sessions[ises].celldata['RF_R2']>min_RF_R2,
+                                    sessions[ises].celldata['noise_level']<20),axis=0))[0]
+        
+        if len(idx_X) <= 5 or len(idx_Y) <= 5:
+            # slopes[ises,idt,ial] = np.nan
+            continue
+
+        xdata = sessions[ises].RF_corrmat[np.ix_(idx_X,idx_Y)].flatten()
+        # RFcorr[ises,ial]        = np.nanmean(xdata)
+        RFcorr[ises,ial]        = np.nanmean(np.abs(xdata))
+
+        for idt,datatype in enumerate(datatypes):
+            xdata = sessions[ises].RF_corrmat[np.ix_(idx_X,idx_Y)].flatten()
+
+            ydata = getattr(sessions[ises],datatype)[np.ix_(idx_X,idx_Y)].flatten()
+            
+            notnan = ~np.isnan(ydata) & ~np.isnan(xdata)
+            xdata = xdata[notnan]
+            ydata = ydata[notnan]        
+
+            slope, intercept, r_value, p_value, std_err = stats.linregress(xdata,ydata)
+            
+            x = np.linspace(np.min(xdata),np.max(xdata),100)
+            y = slope*x + intercept
+
+            slopes[ises,idt,ial]        = slope
+            intercepts[ises,idt,ial]    = intercept
+
+
+
+#%% 
+pairs = [('V1unl-V1unl', 'V1unl-V1lab'),
+         ('V1unl-V1unl', 'V1lab-V1lab'),
+         ('PMunl-PMunl', 'PMunl-PMlab'),
+         ('PMunl-PMunl', 'PMlab-PMlab'),
+         ('V1unl-PMunl', 'V1lab-PMlab'),
+         ('V1unl-PMunl', 'V1lab-PMunl'),
+         ('V1unl-PMunl', 'V1unl-PMlab'),
+        #  ('V1lab-PMunl', 'V1unl-PMlab'),
+        #  ('V1lab-PMunl', 'V1lab-PMlab')
+        #  ('V1unl-PMlab', 'V1lab-PMlab')
+         ]
+
+clrs_area_labelpairs = get_clr_area_labelpairs(arealabelpairs)
+
+fig,axes = plt.subplots(1,len(datatypes),figsize=(len(datatypes)*3,3),sharey=True)
+for idt,datatype in enumerate(datatypes):
+    ax = axes[idt]
+    df              = pd.DataFrame(data=slopes[:,idt,:],columns=arealabelpairs)
+    sns.barplot(data=df,ax=ax,capsize=0,linewidth=0.5,palette=clrs_area_labelpairs)
+   
+    df              = df.dropna() 
+    pvalue_thresholds=[[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"], [1, ""]]
+    annotator = Annotator(ax, pairs, data=df,order=list(df.columns))
+    annotator.configure(test='t-test_paired', text_format='star', loc='inside',
+                        line_height=0.05,line_offset_to_group=0.15,text_offset=0, 
+                        line_width=0.25,comparisons_correction=None,verbose=False,
+                        correction_format='replace',fontsize=8)
+    annotator.apply_and_annotate()
+
+    ax.set_xticks(range(len(arealabelpairs)))
+    ax.set_xticklabels(arealabelpairs,rotation=90)
+
+    ax.set_title(datatype)
+    ax.set_ylabel('Slope')
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True, offset = 3)
+for ax in axes:
+    ax.set_xticklabels(arealabelpairs,rotation=90,fontsize=6)
+
+my_savefig(fig,savedir,'LinearRF_PairwiseCorrelations_Arealabelpairs_Slopes_%d' % nSessions,formats=['png'])
+
+
+#%% 
+fig,axes = plt.subplots(1,1,figsize=(3,3),sharey=True)
+ax = axes
+
+df              = pd.DataFrame(data=RFcorr,columns=arealabelpairs)
+sns.barplot(data=df,ax=ax,capsize=0,linewidth=1,palette=clrs_area_labelpairs)
+
+#Stats:
+df              = df.dropna() 
+pvalue_thresholds=[[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"], [1, ""]]
+annotator = Annotator(ax, pairs, data=df,order=list(df.columns))
+annotator.configure(test='t-test_paired', text_format='star', loc='inside',
+                    line_height=0.05,line_offset_to_group=0.05,text_offset=0, 
+                    line_width=0.25,comparisons_correction=None,verbose=False,
+                    correction_format='replace',fontsize=8)
+annotator.apply_and_annotate()
+
+ax.set_xticks(range(len(arealabelpairs)))
+ax.set_xticklabels(arealabelpairs,rotation=90)
+
+ax.set_ylabel('Receptive Field correlation')
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True, offset = 3)
+# for ax in axes:
+ax.set_xticklabels(arealabelpairs,rotation=90,fontsize=6)
+
+my_savefig(fig,savedir,'LinearRF_PairwiseCorrelation_Arealabelpairs_%d' % nSessions,formats=['png'])
+
+
+
+
+
+
+
+
+
+
 #%% Do some optimizations: lambda,kfold,rank
 
 
@@ -586,8 +801,11 @@ resp    = sessions[sesidx].respmat.T
 #remove gain modulation by the population rate:
 # resp = resp / np.mean(resp, axis=1, keepdims=True)
 #normalize the response for each neuron to the maximum:
-resp = zscore(resp, axis=0)
+resp = zscore(resp, axis=0, nan_policy='omit')
 # resp = resp / np.percentile(resp, 90,axis=0)
+
+# dividing by poprate:
+resp = resp / (np.mean(resp, axis=0, keepdims=True)+1e-8)
 
 IMdata = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]
 
@@ -597,8 +815,8 @@ lams        = np.logspace(-2,1,10)
 EV_lams     = np.full((len(lams)),np.nan)
 
 for i, lam in enumerate(lams):
-    cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=lam,nranks=50,nsub=nsub)
-    # cRF,Y_hat = linear_RF_cv(resp, IMdata,lam=lam,nsub=nsub)
+    # cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=lam,nranks=50,nsub=nsub)
+    cRF,Y_hat = linear_RF_cv(resp, IMdata,lam=lam,nsub=nsub)
     
     # EV_lams[i] = EV(resp,Y_hat)
     # EV_lams[i] = r2_score(resp,Y_hat)
