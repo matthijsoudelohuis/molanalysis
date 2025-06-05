@@ -972,6 +972,7 @@ def proc_imaging(sesfolder, sessiondata, filter_good_cells=True):
             celldata['roi_name'] = celldata['roi_name'].str.replace('ROI 1','PM')
             print('Unnamed ROI in scanimage inferred to be PM')
         assert not celldata['roi_name'].str.contains('ROI').any(),'unknown area'
+    celldata['arealabel']     = celldata['roi_name'] + celldata['labeled']
 
     #Assign layers to the cells based on recording depth and area:
     celldata = assign_layer(celldata)

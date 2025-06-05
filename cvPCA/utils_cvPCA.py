@@ -33,6 +33,28 @@ def shuff_cvPCA(X, nshuff=5):
 def cvPCA(X):
     ''' X is 2 x stimuli x neurons '''
     # do PCA on data
+    # pca = PCA(n_components=min(1024, X.shape[1])).fit(X[0].T)
+    pca = PCA(n_components=min(512, X.shape[2])).fit(X[0].T)
+    # get the components
+    u = pca.components_.T
+    # get the singular values
+    sv = pca.singular_values_
+    
+    # project train data onto components
+    xproj = X[0].T @ (u / sv)
+    # project train data onto components
+    cproj0 = X[0] @ xproj
+    # project test data onto components
+    cproj1 = X[1] @ xproj
+    
+    # compute the correlation between the two sets of components
+    ss = (cproj0 * cproj1).sum(axis=0)
+    return ss
+
+
+def cvPLS(X,Y):
+    ''' X is 2 x stimuli x neurons '''
+    # do PCA on data
     pca = PCA(n_components=min(1024, X.shape[1])).fit(X[0].T)
     # get the components
     u = pca.components_.T
