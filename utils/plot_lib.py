@@ -555,6 +555,18 @@ def get_clr_area_labelpairs(area_labelpairs):
         'PMunl-V1lab': sns.xkcd_rgb['minty green'],
         'PMlab-V1unl': sns.xkcd_rgb['teal blue'],
         'PMlab-V1lab': sns.xkcd_rgb['true blue'],
+
+        'V1unl-ALunl': sns.xkcd_rgb['teal'],
+        'V1lab-ALunl': sns.xkcd_rgb['neon blue'],
+
+        'V1unl-RSPunl': sns.xkcd_rgb['peach'],
+        'V1lab-RSPunl': sns.xkcd_rgb['powder blue'],
+
+        'PMunl-ALunl': sns.xkcd_rgb['teal'],
+        'PMlab-ALunl': sns.xkcd_rgb['neon blue'],
+
+        'PMunl-RSPunl': sns.xkcd_rgb['peach'],
+        'PMlab-RSPunl': sns.xkcd_rgb['powder blue'],
                     }
     
     return itemgetter(*area_labelpairs)(palette)
@@ -576,6 +588,8 @@ def get_clr_arealayerpairs(pairs):
     palette       = {
         'V1L2/3-PML2/3': sns.xkcd_rgb['teal'],
         'V1L2/3-PML5': sns.xkcd_rgb['lilac'],
+        'V1L5-V1L2/3': sns.xkcd_rgb['forest green'],
+        'V1L2/3-V1L5': sns.xkcd_rgb['apple green'],
         'PML5-PML2/3': sns.xkcd_rgb['deep purple'],
         'PML5-V1L2/3': sns.xkcd_rgb['royal blue'],
         'PML2/3-V1L2/3': sns.xkcd_rgb['powder blue'],

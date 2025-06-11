@@ -31,6 +31,7 @@ from utils.corr_lib import *
 from utils.tuning import compute_tuning_wrapper
 from utils.RRRlib import *
 from utils.regress_lib import *
+from preprocessing.preprocesslib import assign_layer
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Interarea\\RRR\\WithinAcross')
 
@@ -181,7 +182,7 @@ for r in range(nrankstoshow):
     ax.set_xlim([0,nM])
     ax.set_ylim([-0.3,0.3])
 
-my_savefig(fig,savedir,'RRR_weights_acrossranks_V1PM_%s.png' % ses.sessiondata['session_id'][0],formats=['png'])
+my_savefig(fig,savedir,'RRR_weights_acrossranks_V1PM_%s' % ses.sessiondata['session_id'][0],formats=['png'])
 
 #%% Plot the mean across ranks: 
 fig,axes = plt.subplots(1,1,figsize=(4,3))
@@ -194,7 +195,7 @@ ax.legend(frameon=False,fontsize=8)
 ax.set_xlabel('Dimension')
 ax.set_ylabel('Mean weight')
 sns.despine(right=True,top=True,offset=3,trim=True)
-my_savefig(fig,savedir,'RRR_Meanweights_acrossranks_V1PM_%s.png' % ses.sessiondata['session_id'][0],formats=['png'])
+my_savefig(fig,savedir,'RRR_Meanweights_acrossranks_V1PM_%s' % ses.sessiondata['session_id'][0],formats=['png'])
 
 
 #%% 
@@ -240,7 +241,7 @@ plt.tight_layout()
 print('%1.2f average overlap of significant target neurons across pairs of dimensions' % np.mean(V_overlap[np.triu_indices(nranks,k=1)]))
 
 sns.despine(right=True,top=True,offset=3,trim=True)
-my_savefig(fig,savedir,'RRR_SigWeightOverlap_acrossranks_V1PM_%s.png' % ses.sessiondata['session_id'][0],formats=['png'])
+my_savefig(fig,savedir,'RRR_SigWeightOverlap_acrossranks_V1PM_%s' % ses.sessiondata['session_id'][0],formats=['png'])
 
 
 #%% Perform RRR on all neurons in V1 to PM for one session and show labeled weights:
@@ -311,7 +312,7 @@ for r in range(nrankstoshow):
     ax.axis('off')
     ax.set_xlim([0,np.sum(idx_lab)])
 # plt.tight_layout()
-my_savefig(fig,savedir,'RRR_weights_acrossranks_V1PMlabeled_%s.png' % ses.sessiondata['session_id'][0],formats=['png'])
+my_savefig(fig,savedir,'RRR_weights_acrossranks_V1PMlabeled_%s' % ses.sessiondata['session_id'][0],formats=['png'])
 
 
 
@@ -319,7 +320,7 @@ my_savefig(fig,savedir,'RRR_weights_acrossranks_V1PMlabeled_%s.png' % ses.sessio
 
 
 #%% Do RRR in FF and FB direction and compare performance:
-nsampleneurons  = 250
+nsampleneurons  = 100
 nranks          = 25
 nmodelfits      = 10 #number of times new neurons are resampled 
 kfold           = 5
@@ -357,8 +358,9 @@ handles.append(shaded_error(np.arange(nranks),datatoplot[:,1,:],color=clrs_areap
 ax.legend(handles,['V1->PM','PM->V1'],frameon=False,fontsize=8,loc='lower right')
 ax.set_xlabel('Rank')
 ax.set_ylabel('R2')
-ax.set_ylim([0,0.3])
 ax.set_yticks([0,0.1,0.2,0.3])
+ax.set_ylim([0,0.2])
+ax.set_xticks(np.arange(0,nranks+1,5))
 ax.set_xlim([0,nranks])
 
 ax = axes[1]
@@ -371,9 +373,9 @@ ax.set_ylim([0,0.4])
 t,p = ttest_rel(R2_cv[:,0],R2_cv[:,1],nan_policy='omit')
 print('Paired t-test (R2): p=%.3f' % p)
 if p<0.05:
-    ax.text(0.6,0.2,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=12,color='red')
+    ax.text(0.6,0.1,'p=%.3f' % p,transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
 else: 
-    ax.text(0.6,0.2,'p=%.3f' % p,transform=ax.transAxes,ha='center',va='center',fontsize=12,color='k')
+    ax.text(0.6,0.1,'p=%.3f' % p,transform=ax.transAxes,ha='center',va='center',fontsize=10,color='k')
 
 ax = axes[2]
 ax.scatter(optim_rank[:,0],optim_rank[:,1],color='k',s=10)
@@ -386,20 +388,19 @@ ax_nticks(ax,3)
 t,p = ttest_rel(optim_rank[:,0],optim_rank[:,1],nan_policy='omit')
 print('Paired t-test (R2): p=%.3f' % p)
 if p<0.05:
-    ax.text(0.6,0.2,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=12,color='red')
-else: 
-    ax.text(0.6,0.2,'p=n.s.',transform=ax.transAxes,ha='center',va='center',fontsize=12,color='k')
+    ax.text(0.6,0.1,'p=%.3f' % p,transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
+else:
+    ax.text(0.6,0.1,'p=%.3f' % p,transform=ax.transAxes,ha='center',va='center',fontsize=10,color='k')
     
 # ax.set_ylim([0,0.3])
 plt.tight_layout()
 sns.despine(top=True,right=True,offset=3,trim=True)
-my_savefig(fig,savedir,'RRR_R2_acrossranks_V1PM_%dsessions.png' % nSessions,formats=['png'])
-
+my_savefig(fig,savedir,'RRR_R2_acrossranks_V1PM_%dsessions' % nSessions,formats=['png'])
 
 
 
 #%% Do RRR in FF and FB direction and compare performance:
-nsampleneurons  = 250
+nsampleneurons  = 100
 nranks          = 25
 nmodelfits      = 20 #number of times new neurons are resampled 
 kfold           = 5
@@ -483,7 +484,7 @@ add_corr_results(ax,dims.flatten(),np.flip(R2_cv,axis=1).flatten())
 plt.tight_layout()
 sns.despine(top=True,right=True,offset=3)
 
-my_savefig(fig,savedir,'RRR_Perf_WithinAcross_Dimensionality_%dsessions.png' % nSessions)
+my_savefig(fig,savedir,'RRR_Perf_WithinAcross_Dimensionality_%dsessions' % nSessions)
 
 #%% 
 fig,axes = plt.subplots(1,1,figsize=(3.5,3.5),sharex=True,sharey='row')
@@ -502,7 +503,184 @@ add_corr_results(ax,dims.flatten(),optim_rank.flatten())
 
 
 
+#%% 
+######  ####### #     # ### #     #    #    #     # #######                                
+#     # #     # ##   ##  #  ##    #   # #   ##    #    #                                   
+#     # #     # # # # #  #  # #   #  #   #  # #   #    #                                   
+#     # #     # #  #  #  #  #  #  # #     # #  #  #    #                                   
+#     # #     # #     #  #  #   # # ####### #   # #    #                                   
+#     # #     # #     #  #  #    ## #     # #    ##    #                                   
+######  ####### #     # ### #     # #     # #     #    #    
+                               
+#     #  #####     ######  ######  ####### ######  ###  #####  ####### ### #     # ####### 
+#     # #     #    #     # #     # #       #     #  #  #     #    #     #  #     # #       
+#     # #          #     # #     # #       #     #  #  #          #     #  #     # #       
+#     #  #####     ######  ######  #####   #     #  #  #          #     #  #     # #####   
+ #   #        #    #       #   #   #       #     #  #  #          #     #   #   #  #       
+  # #   #     #    #       #    #  #       #     #  #  #     #    #     #    # #   #       
+   #     #####     #       #     # ####### ######  ###  #####     #    ###    #    ####### 
 
+#%% Dominant vs predictive dimensions: 
+# from factor_analyzer import FactorAnalyzer
+from sklearn.decomposition import FactorAnalysis as FA
+kf                  = KFold(n_splits=kfold,shuffle=True,random_state=None)
+
+nsampleneurons  = 100
+nranks          = 40
+nmodelfits      = 10 #number of times new neurons are resampled 
+kfold           = 5
+# R2_cv           = np.full((nSessions,2),np.nan)
+# optim_rank      = np.full((nSessions,2),np.nan)
+R2_ranks        = np.full((nSessions,4,nranks,nmodelfits,kfold),np.nan)
+# 0: V1-PM RRR predictive dimensions
+# 1: V1-PM linear regression from dominant FA dimensions in V1
+# 2: V1-V1 from RRR predictive dimensions
+# 3: V1-V1 from linear regression from dominant FA dimensions in V1
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for session:'):
+    # idx_T               = ses.trialdata['Orientation']==0
+    idx_T               = np.ones(len(ses.trialdata['stimCond']),dtype=bool)
+    idx_areax           = np.where(np.all((ses.celldata['roi_name']=='V1',
+                            ses.celldata['noise_level']<20),axis=0))[0]
+    idx_areay           = np.where(np.all((ses.celldata['roi_name']=='PM',
+                            ses.celldata['noise_level']<20),axis=0))[0]
+    
+    X                   = sessions[ises].respmat[np.ix_(idx_areax,idx_T)].T
+    Y                   = sessions[ises].respmat[np.ix_(idx_areay,idx_T)].T
+    
+    if len(idx_areax)<(nsampleneurons*2) or len(idx_areay)<nsampleneurons:
+        continue
+
+    for imf in range(nmodelfits):
+        idx_areax_sub       = np.random.choice(idx_areax,nsampleneurons,replace=False)
+        idx_areax_sub2      = np.random.choice(list(set(idx_areax) - set(idx_areax_sub)),nsampleneurons,replace=False)
+        idx_areay_sub       = np.random.choice(idx_areay,nsampleneurons,replace=False)
+
+        X_sub               = sessions[ises].respmat[np.ix_(idx_areax_sub,idx_T)].T
+        X_sub2               = sessions[ises].respmat[np.ix_(idx_areax_sub2,idx_T)].T
+        Y_sub               = sessions[ises].respmat[np.ix_(idx_areay_sub,idx_T)].T
+        
+        X_sub               = zscore(X_sub,axis=0)
+        X_sub2              = zscore(X_sub2,axis=0)
+        Y_sub               = zscore(Y_sub,axis=0)
+        
+        #RRR from V1 to PM:
+        for ikf, (idx_train, idx_test) in enumerate(kf.split(X_sub)):
+            X_train, X_test     = X_sub[idx_train], X_sub[idx_test]
+            Y_train, Y_test     = Y_sub[idx_train], Y_sub[idx_test]
+            B_hat_train         = LM(Y_train,X_train, lam=lam)
+            Y_hat_train         = X_train @ B_hat_train
+
+            # decomposing and low rank approximation of Yhat
+            U, s, V = svds(Y_hat_train,k=np.min((nranks,nN,nM))-1,which='LM')
+            U, s, V = U[:, ::-1], s[::-1], V[::-1, :]
+
+            for r in range(nranks):
+                B_rrr               = B_hat_train @ V[:r,:].T @ V[:r,:] #project beta coeff into low rank subspace
+                Y_hat_rr_test       = X_test @ B_rrr #project test data onto low rank predictive subspace
+                R2_ranks[ises,0,r,imf,ikf] = EV(Y_test,Y_hat_rr_test)
+
+        #FA regression from V1 to PM:
+        fa                  = FA(n_components=nranks)
+        X_fa                = fa.fit_transform(X_sub)
+
+        for ikf, (idx_train, idx_test) in enumerate(kf.split(X_fa)):
+            for r in range(1,nranks):
+                X_train, X_test     = X_fa[np.ix_(idx_train,range(r))], X_fa[np.ix_(idx_test,range(r))]
+                Y_train, Y_test     = Y_sub[idx_train], Y_sub[idx_test]
+
+                B_hat               = LM(Y_train,X_train, lam=0)
+
+                Y_hat_test          = X_test @ B_hat
+
+                R2_ranks[ises,1,r,imf,ikf] = EV(Y_test,Y_hat_test)
+        
+        #RRR from V1 to V1:
+        for ikf, (idx_train, idx_test) in enumerate(kf.split(X_sub)):
+            X_train, X_test     = X_sub[idx_train], X_sub[idx_test]
+            Y_train, Y_test     = X_sub2[idx_train], X_sub2[idx_test]
+            B_hat_train         = LM(Y_train,X_train, lam=lam)
+            Y_hat_train         = X_train @ B_hat_train
+
+            # decomposing and low rank approximation of Yhat
+            U, s, V = svds(Y_hat_train,k=np.min((nranks,nN,nM))-1,which='LM')
+            U, s, V = U[:, ::-1], s[::-1], V[::-1, :]
+
+            for r in range(nranks):
+                B_rrr               = B_hat_train @ V[:r,:].T @ V[:r,:] #project beta coeff into low rank subspace
+                Y_hat_rr_test       = X_test @ B_rrr #project test data onto low rank predictive subspace
+                R2_ranks[ises,2,r,imf,ikf] = EV(Y_test,Y_hat_rr_test)
+
+        #FA regression from V1 to V1:
+        for ikf, (idx_train, idx_test) in enumerate(kf.split(X_fa)):
+            for r in range(1,nranks):
+                X_train, X_test     = X_fa[np.ix_(idx_train,range(r))], X_fa[np.ix_(idx_test,range(r))]
+                Y_train, Y_test     = X_sub2[idx_train], X_sub2[idx_test]
+
+                B_hat               = LM(Y_train,X_train, lam=0)
+
+                Y_hat_test          = X_test @ B_hat
+
+                R2_ranks[ises,3,r,imf,ikf] = EV(Y_test,Y_hat_test)
+
+#%% Rank from R2
+R2_cv           = np.full((nSessions,4),np.nan)
+optim_rank      = np.full((nSessions,4),np.nan)
+for ises in range(nSessions):
+    for i in range(4):
+        R2_cv[ises,i],optim_rank[ises,i] = rank_from_R2(R2_ranks[ises,i,:,:,:].reshape([nranks,nmodelfits*kfold]),nranks,nmodelfits*kfold)
+
+#%% Rank from R2
+R2_cv           = np.full((4),np.nan)
+optim_rank      = np.full((4),np.nan)
+for i in range(4):
+    R2_cv[i],optim_rank[i] = rank_from_R2(np.nanmean(R2_ranks[:,i,:,:,:],axis=0).reshape([nranks,nmodelfits*kfold]),nranks,nmodelfits*kfold)
+
+
+#%% Make figure: show predictive performance for dominant vs predictive dimensions in predicting PM or another V1 population:
+fig,axes = plt.subplots(1,2,figsize=(5.5,2.5),sharex=True,sharey=True)
+ax = axes[0]
+ax.set_title('V1-PM')
+idx0 = 0
+idx1 = 1
+clr1 = 'k'
+clr2 = 'g'
+handles = []
+handles.append(shaded_error(np.arange(nranks),np.nanmean(R2_ranks[:,idx0,:,:,:],axis=(-1,-2)),color=clr1,error='sem',ax=ax))
+handles.append(shaded_error(np.arange(nranks),np.nanmean(R2_ranks[:,idx1,:,:,:],axis=(-1,-2)),color=clr2,error='sem',ax=ax))
+ax.axhline(R2_cv[idx0],linestyle='--',color=clr1,linewidth=0.5)
+ax.axhline(R2_cv[idx1],linestyle='--',color=clr2,linewidth=0.5)
+ax.plot(optim_rank[idx0],R2_cv[idx0]+0.01,'v',color=clr1)
+ax.plot(optim_rank[idx1],R2_cv[idx1]+0.01,'v',color=clr2)
+ax.legend(handles=handles,labels=['PM-Predictive','V1-Dominant'],
+          loc='lower right',frameon=False,fontsize=8)
+ax.set_ylabel('Fraction of variance explained')
+
+ax = axes[1]
+ax.set_title('V1-V1')
+idx0 = 2
+idx1 = 3
+clr1 = 'k'
+clr2 = 'b'
+handles = []
+handles.append(shaded_error(np.arange(nranks),np.nanmean(R2_ranks[:,idx0,:,:,:],axis=(-1,-2)),color=clr1,error='sem',ax=ax))
+handles.append(shaded_error(np.arange(nranks),np.nanmean(R2_ranks[:,idx1,:,:,:],axis=(-1,-2)),color=clr2,error='sem',ax=ax))
+ax.axhline(R2_cv[idx0],linestyle='--',color=clr1,linewidth=0.5)
+ax.axhline(R2_cv[idx1],linestyle='--',color=clr2,linewidth=0.5)
+ax.plot(optim_rank[idx0],R2_cv[idx0]+0.01,'v',color=clr1)
+ax.plot(optim_rank[idx1],R2_cv[idx1]+0.01,'v',color=clr2)
+
+ax.set_xticks(range(0,nranks+1,5))
+ax.set_yticks(np.arange(0,0.4,0.05))
+ax.set_xlabel('Rank')
+ax.set_xlim([0,nranks-5])
+ax.set_ylim([0,0.22])
+# ax.legend(handles=handles,labels=['V1-Dominant','PM-Predictive'],frameon=False,fontsize=8)
+ax.legend(handles=handles,labels=['V1-Predictive','V1-Dominant'],
+                    loc='lower right',frameon=False,fontsize=8)
+sns.despine(offset=5,top=True,right=True)
+fig.tight_layout()
+my_savefig(fig,savedir,'V1PM_dominant_predictive_ranks_%dsessions' % (nSessions),formats=['png'])
 
 
 #%% 
@@ -515,6 +693,9 @@ add_corr_results(ax,dims.flatten(),optim_rank.flatten())
    #     #####       #       #     #    ####### #     #    #    ####### #     #  #####  
 
 
+#%%  #assign arealayerlabel
+for ises in range(nSessions):   
+    sessions[ises].celldata = assign_layer(sessions[ises].celldata)
 
 #%%
 
@@ -526,12 +707,18 @@ for ses in sessions:
 
 
 #%% Parameters for decoding from size-matched populations of V1 and PM labeled and unlabeled neurons
-
-for ses in sessions:
-    ses.celldata['arealayer'] = ses.celldata['roi_name'] + ses.celldata['layer']
+arealayerpairs  = ['V1L2/3-PML2/3',
+                   'V1L2/3-PML5',
+                   'PML2/3-V1L2/3',
+                   'PML5-V1L2/3',
+                   'PML2/3-PML5',
+                   'PML5-PML2/3'                   
+                   ]
 
 arealayerpairs  = ['V1L2/3-PML2/3',
                    'V1L2/3-PML5',
+                   'V1L2/3-V1L5',
+                   'V1L5-V1L2/3',
                    'PML2/3-V1L2/3',
                    'PML5-V1L2/3',
                    'PML2/3-PML5',
@@ -619,7 +806,7 @@ annotator.configure(test='t-test_paired', text_format='star', loc='inside',verbo
                     # hide_non_significant=True,
                     pvalue_thresholds=[[1e-4, "****"], [1e-3, "***"], [1e-2, "**"], [0.05, "*"]]
                     )
-annotator.apply_and_annotate()
+# annotator.apply_and_annotate()
 
 ax = axes[2]
 datatoplot = optim_rank
@@ -634,8 +821,8 @@ axes[1].set_xticks(range(narealayerpairs),arealayerpairs,rotation=45,ha='right',
 axes[2].set_xticks(range(narealayerpairs),arealayerpairs,rotation=45,ha='right',fontsize=6)
 
 plt.tight_layout()
-# my_savefig(fig,savedir,'RRR_V1PM_Layers_%dsessions' % (nSessions),formats=['png'])
-my_savefig(fig,savedir,'RRR_V1PM_Layers_%dsessions_stats' % (nSessions),formats=['png'])
+my_savefig(fig,savedir,'RRR_V1PM_Layers_%dsessions' % (nSessions),formats=['png'])
+# my_savefig(fig,savedir,'RRR_V1PM_Layers_%dsessions_stats' % (nSessions),formats=['png'])
 
 
 
@@ -763,7 +950,6 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
 
         R2_cv[ises,1,imethod],optim_rank[ises,1,imethod],R2_ranks[ises,1,imethod,:,:,:]      = RRR_wrapper(X, Y, nN=nsampleneurons,nK=None,lam=lam,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
 
-
 #%% Plot the performance across sessions as a function of rank: 
 
 clrs_areapairs = get_clr_area_pairs(['V1-PM','PM-V1'])
@@ -831,7 +1017,7 @@ R2_cv_folds         = np.full((narealabelpairs,nSessions,4,nranks,nmodelfits,kfo
 # optim_rank          = np.full((narealabelpairs,2,nSessions),np.nan)
 
 
-for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model'):
     idx_T               = np.ones(len(ses.trialdata['stimCond']),dtype=bool)
     #Stimulus data:
     S           = ses.trialdata['stimCond'][idx_T].to_numpy()
@@ -1244,7 +1430,7 @@ ax.set_title('Orig-Behavior (RRR)')
 ax.set_yticklabels('')
 ax.set_xlabel('Neurons')
 plt.tight_layout()
-my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%s.png' % ses.sessiondata['session_id'][0],formats=['png'])
+my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%s' % ses.sessiondata['session_id'][0],formats=['png'])
 
 #%%
 nranks      = 10
@@ -1263,7 +1449,7 @@ ax.set_ylabel('Variance Explained')
 ax.set_xlabel('Rank')
 ax.set_xticks(range(nranks+1))
 sns.despine(top=True,right=True,offset=3)
-my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%dsessions.png' % nSessions,formats=['png'])
+my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%dsessions' % nSessions,formats=['png'])
 
 #%% Plot the number of dimensions per area pair
 def plot_RRR_R2_regressout(R2data,rankdata,arealabelpairs,clrs_arealabelpairs):
@@ -1422,7 +1608,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
 #%% Plot the R2 performance and number of dimensions per area pair
 fig = plot_RRR_R2_regressout(R2_cv,optim_rank,arealabelpairs,clrs_arealabelpairs)
 
-# my_savefig(fig,savedir,'RRR_cvR2_RegressOutBehavior_V1PM_LabUnl_%dsessions.png' % nSessions)
+# my_savefig(fig,savedir,'RRR_cvR2_RegressOutBehavior_V1PM_LabUnl_%dsessions' % nSessions)
 
 
 #%% Print how many labeled neurons there are in V1 and Pm in the loaded sessions:
@@ -1483,7 +1669,7 @@ ax.set_title('Orig - AL/RSP')
 ax.set_yticklabels('')
 ax.set_xlabel('V1 PM Neurons')
 plt.tight_layout()
-my_savefig(fig,savedir,'AL_RSP_RegressedOut_V1PM_%s.png' % ses.sessiondata['session_id'][0],formats=['png'])
+my_savefig(fig,savedir,'AL_RSP_RegressedOut_V1PM_%s' % ses.sessiondata['session_id'][0],formats=['png'])
 
 #%%
 nranks      = 10
@@ -1502,7 +1688,7 @@ ax.set_ylabel('Variance Explained')
 ax.set_xlabel('Rank')
 ax.set_xticks(range(nranks+1))
 sns.despine(top=True,right=True,offset=3)
-my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%dsessions.png' % nSessions,formats=['png'])
+my_savefig(fig,savedir,'BehaviorRegressedOut_V1PM_%dsessions' % nSessions,formats=['png'])
 
 
 
@@ -1581,7 +1767,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
 
 #%%
 fig = plot_RRR_R2_regressout(R2_cv,optim_rank,arealabelpairs,clrs_arealabelpairs)
-my_savefig(fig,savedir,'RRR_V1PM_regressoutneuralALRSP_%dsessions.png' % (nSessions))
+my_savefig(fig,savedir,'RRR_V1PM_regressoutneuralALRSP_%dsessions' % (nSessions))
 
 #%% Fraction of R2 explained by shared activity with AL and RSP:
 datatoplot          = (R2_cv[:,0,:] - R2_cv[:,1,:]) / R2_cv[:,0,:]
@@ -1620,6 +1806,6 @@ ax.set_ylim([0.5,1])
 sns.despine(top=True,right=True,offset=3)
 ax.set_xticklabels(arealabelpairs2,fontsize=7)
 
-my_savefig(fig,savedir,'RRR_V1PM_regressoutneural_Frac_var_shared_ALRSP_%dsessions.png' % (nSessions))
+my_savefig(fig,savedir,'RRR_V1PM_regressoutneural_Frac_var_shared_ALRSP_%dsessions' % (nSessions))
 
 

@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import zscore
 from skimage.measure import block_reduce
+from tqdm import tqdm
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.plot_lib import * #get all the fixed color schemes

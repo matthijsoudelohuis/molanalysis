@@ -30,29 +30,35 @@ from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled
 from utils.tuning import compute_tuning, compute_prefori
 from utils.RRRlib import *
 
+
 #%% 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
 
 #%% #############################################################################
-session_list        = np.array([['LPE10919','2023_11_06']])
-sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
-session_list        = np.array([['LPE12013','2024_05_02']])
+session_list        = np.array([['LPE12013_2024_05_02']])
 #Sessions with good receptive field mapping in both V1 and PM:
-session_list        = np.array([['LPE11998','2024_05_02'], #GN
-                                ['LPE12013','2024_05_02']]) #GN
-sessions,nSessions   = load_sessions(protocol = 'GN',session_list=session_list)
+session_list        = np.array([['LPE11998_2024_05_02'], #GN
+                                ['LPE12013_2024_05_02']]) #GN
+sessions,nSessions   = filter_sessions(protocols = 'GN',only_session_id=session_list)
 # sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
 
 
 #%% Load all sessions from certain protocols: 
 # sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
-sessions,nSessions   = filter_sessions(protocols = ['GN'],filter_areas=['V1','PM'],session_rf=True) 
+sessions,nSessions   = filter_sessions(protocols = ['GN','GR'],filter_areas=['V1','PM'],session_rf=True) 
 
-#%%  Load data properly:                      
+#%% Remove sessions with too much drift in them:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
+
+#%%  Load data properly:  
+calciumversion = 'deconv'                    
 for ises in range(nSessions):
     # sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,calciumversion='dF')
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion='dF',keepraw=False)
+                                calciumversion=calciumversion,keepraw=False)
 
 
 #%% ########################## Compute signal and noise correlations: ###################################
@@ -89,44 +95,213 @@ sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
 #          ('V1unl-PMunl','V1lab-PMlab'),
 #          ] #for statistics
 
+
+# delta_rfbinedges    = np.arange(-75,75,deltabinres)
+# delta_rfbincenters  = delta_rfbinedges[:-1] + deltabinres/2
+
+# target_area         = 'V1'
+# source_area         = 'PM'
+# 
+
+# min_target_neurons  = 10
+
+# binmean             = np.zeros((len(delta_rfbincenters),len(delta_rfbincenters)))
+# bincounts           = np.zeros((len(delta_rfbincenters),len(delta_rfbincenters)))
+
+# method              = 'CCA'
+# method              = 'RRR'
+
+# n_components        = 5
+# lambda_reg          = 1
+
+#%%
+for ses in sessions:
+    if 'rf_az_Fsmooth' in ses.celldata.columns:
+        # print(np.sum(~np.isnan( ses.celldata['rf_az_Fsmooth'])) / len(ses.celldata))
+        print(np.sum(~np.isnan( ses.celldata['rf_az_Fneu'])) / len(ses.celldata))
+        # print(np.sum(ses.celldata['rf_r2_Fneu']>0.2) / len(ses.celldata))
+
+#%% Matched and mismatched receptive fields across areas: 
+
+binres              = 10 #deg steps in azimuth and elevation to select target neurons
+
+vec_elevation       = [-16.7,50.2] #bottom and top of screen displays
+vec_azimuth         = [-135,135] #left and right of screen displays
+
+binedges_az         = np.arange(vec_azimuth[0],vec_azimuth[1]+binres,binres)
+binedges_el         = np.arange(vec_elevation[0],vec_elevation[1]+binres,binres)
+nbins_az            = len(binedges_az)
+nbins_el            = len(binedges_el)
+
+radius_match        = 15 #deg, radius of receptive field to match
+radius_mismatch     = 15 #deg, radius of receptive field to mismatch, if within this radius then excluded
+
+# arealabelpairs      = ['PMunl-V1unl']
+arealabelpairs      = ['V1unl-PMunl','PMunl-V1unl']
+# arealabelpairs      = ['PMunl-V1unl','PMunl-V1lab']
+# arealabelpairs      = ['PMunl-V1unl','PMlab-V1unl']
+# arealabelpairs      = ['V1unl-PMunl','V1lab-PMunl']
+
+arealabelpairs  = ['V1unl-PMunl',
+                    'V1lab-PMunl',
+                    'V1unl-PMlab',
+                    'V1lab-PMlab',
+                    'PMunl-V1unl',
+                    'PMunl-V1lab',
+                    'PMlab-V1unl',
+                    'PMlab-V1lab']
+
+clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
+narealabelpairs     = len(arealabelpairs)
+
+nsampleneurons       = 20
+
+lam                 = 0
+nranks              = 20
+nmodelfits          = 10 #number of times new neurons are resampled 
+kfold               = 5
+maxnoiselevel       = 20
+
+R2_cv               = np.full((nbins_az,nbins_el,narealabelpairs,2,nSessions),np.nan)
+optim_rank          = np.full((nbins_az,nbins_el,narealabelpairs,2,nSessions),np.nan)
+R2_ranks            = np.full((nbins_az,nbins_el,narealabelpairs,2,nSessions,nranks,nmodelfits,kfold),np.nan)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for match/mismatch RF:'):
+    if 'rf_az_Fsmooth' not in ses.celldata.columns:
+        continue
+    # sesaz = ses.celldata['rf_az_Fsmooth'].to_numpy()
+    # sesel = ses.celldata['rf_el_Fsmooth'].to_numpy()
+    sesaz = ses.celldata['rf_az_Fneu'].to_numpy()
+    sesel = ses.celldata['rf_el_Fneu'].to_numpy()
+
+    idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
+    for iapl, arealabelpair in enumerate(arealabelpairs):
+        
+        alx,aly = arealabelpair.split('-')
+
+        for iaz,az in enumerate(binedges_az):
+            for iel,el in enumerate(binedges_el):
+                idx_match = np.all((sesaz>=az-radius_match,
+                                    sesaz<az+radius_match,
+                                    sesel>=el-radius_match,
+                                    sesel<el+radius_match),axis=0)
+                
+                idx_mismatch = ~np.all((sesaz>=az-radius_mismatch,
+                                    sesaz<az+radius_mismatch,
+                                    sesel>=el-radius_mismatch,
+                                    sesel<el+radius_mismatch),axis=0)
+                
+                idx_x       = np.where(np.all((ses.celldata['arealabel']==alx,
+                                idx_match,
+                                ses.celldata['rf_r2_Fneu']>0.2,
+                                ses.celldata['noise_level']<maxnoiselevel),axis=0))[0]
+            
+                idx_y_match  = np.where(np.all((ses.celldata['arealabel']==aly,
+                                idx_match,
+                                ses.celldata['rf_r2_Fneu']>0.2,
+                                ses.celldata['noise_level']<maxnoiselevel),axis=0))[0]
+            
+                idx_y_mismatch  = np.where(np.all((ses.celldata['arealabel']==aly,
+                                idx_mismatch,
+                                ses.celldata['rf_r2_Fneu']>0.2,
+                                ses.celldata['noise_level']<maxnoiselevel),axis=0))[0]
+
+                if len(idx_x)<nsampleneurons or len(idx_y_match)<nsampleneurons or len(idx_y_mismatch)<nsampleneurons: #skip exec if not enough neurons in one of the populations
+                    continue
+                
+                X                   = sessions[ises].respmat[np.ix_(idx_x,idx_T)].T #Get activity and transpose to samples x features
+                Y                   = sessions[ises].respmat[np.ix_(idx_y_match,idx_T)].T
+                Z                   = sessions[ises].respmat[np.ix_(idx_y_mismatch,idx_T)].T
+
+                # R2_cv[iaz,iel,iapl,0,ises] = 1
+                # R2_cv[iaz,iel,iapl,1,ises] = 1
+                
+                R2_cv[iaz,iel,iapl,0,ises],optim_rank[iaz,iel,iapl,0,ises],R2_ranks[iaz,iel,iapl,0,ises,:,:,:]  = \
+                    RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=lam,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+
+                R2_cv[iaz,iel,iapl,1,ises],optim_rank[iaz,iel,iapl,1,ises],R2_ranks[iaz,iel,iapl,1,ises,:,:,:]  = \
+                    RRR_wrapper(Z, X, nN=nsampleneurons,nK=None,lam=lam,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+
+#%%
+print('Fraction of array filled with data: %.2f' % (np.sum(~np.isnan(R2_cv)) / R2_cv.size))
+
+#%% Plot the results: 
+fig,axes = plt.subplots(1,narealabelpairs,figsize=(narealabelpairs*2,3),sharey=True,sharex=True)
+if narealabelpairs == 1:
+    axes = np.array([axes])
+
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax = axes[iapl]
+
+    datatoplot = np.column_stack((R2_cv[:,:,iapl,0,:].flatten(),R2_cv[:,:,iapl,1,:].flatten())) 
+    datatoplot = datatoplot[~np.isnan(datatoplot).any(axis=1)]
+
+    ax.scatter(np.zeros(len(datatoplot))+np.random.randn(len(datatoplot))*0.05,datatoplot[:,0],color='k',marker='o',s=10)
+    ax.errorbar(0.2,np.nanmean(datatoplot[:,0]),np.nanstd(datatoplot[:,0])/np.sqrt(nSessions),color='g',marker='o',zorder=10)
+
+    ax.scatter(np.ones(len(datatoplot))+np.random.randn(len(datatoplot))*0.05,datatoplot[:,1],color='k',marker='o',s=10)
+    ax.errorbar(1.2,np.nanmean(datatoplot[:,1]),np.nanstd(datatoplot[:,1])/np.sqrt(nSessions),color='r',marker='o',zorder=10)
+
+    ax.set_xticks([0,1],['Match','Mismatch'])
+    ax.set_ylabel('R2')
+    ax.set_title('%s' % arealabelpair,fontsize=8)
+ax.set_ylim([0,0.25])
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+# my_savefig(fig,savedir,'RRR_R2_MatchMismatch_RF_%dsessions' % (nSessions),formats = ['png'])
+
+#%% Plot the results: 
+fig,axes = plt.subplots(1,narealabelpairs,figsize=(narealabelpairs*1.3,3),sharey=True,sharex=True)
+if narealabelpairs == 1:
+    axes = np.array([axes])
+
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax = axes[iapl]
+
+    datatoplot = np.column_stack((optim_rank[:,:,iapl,0,:].flatten(),optim_rank[:,:,iapl,1,:].flatten())) 
+    datatoplot = np.column_stack((np.nanmean(optim_rank[:,:,iapl,0,:],axis=(0,1)).flatten(),np.nanmean(optim_rank[:,:,iapl,1,:],axis=(0,1)).flatten())) 
+    datatoplot = datatoplot[~np.isnan(datatoplot).any(axis=1)]
+
+    ax.scatter(np.zeros(len(datatoplot))+np.random.randn(len(datatoplot))*0.05,datatoplot[:,0],color='k',marker='o',s=10)
+    ax.errorbar(0.2,np.nanmean(datatoplot[:,0]),np.nanstd(datatoplot[:,0])/np.sqrt(nSessions),color='g',marker='o',zorder=10)
+
+    ax.scatter(np.ones(len(datatoplot))+np.random.randn(len(datatoplot))*0.05,datatoplot[:,1],color='k',marker='o',s=10)
+    ax.errorbar(1.2,np.nanmean(datatoplot[:,1]),np.nanstd(datatoplot[:,1])/np.sqrt(nSessions),color='r',marker='o',zorder=10)
+
+    ax.set_xticks([0,1],['Match','Mismatch'])
+    ax.set_title('%s' % arealabelpair,fontsize=8)
+# ax.set_ylim([0,0.25])
+axes[0].set_ylabel('Rank')
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+my_savefig(fig,savedir,'RRR_Rank_MatchMismatch_RF_%dsessions' % (nSessions),formats = ['png'])
+
+
+#%%  Show percentage difference between match and mismatch:
+
+fig,axes = plt.subplots(1,1,figsize=(2,3),sharey=True,sharex=True)
+
+datatoplot = np.column_stack([R2_cv[:,:,iapl,0,:].flatten() / R2_cv[:,:,iapl,1,:].flatten() for iapl in range(narealabelpairs)]) 
+ax = axes
+
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    # ax.errorbar(iapl+0.5,np.nanmean(datatoplot[iapl,:]),np.nanstd(datatoplot[iapl,:])/np.sqrt(nSessions),color=clrs_arealabelpairs[iapl],marker='o',zorder=10)
+    ax.errorbar(iapl,np.nanmean(datatoplot[:,iapl]),np.nanstd(datatoplot[:,iapl])/np.sqrt(nSessions),color=clrs_arealabelpairs[iapl],marker='o',zorder=10)
+ax.axhline(1, color='k', linewidth=0.5, linestyle='--')
+ax.set_ylabel('Ratio R2 (match/mismatch)')
+ax_nticks(ax,4)
+sns.despine(top=True,right=True,offset=3)	
+ax.set_xticks(range(narealabelpairs))
+ax.set_xticklabels(arealabelpairs,rotation=45,ha='right',fontsize=8)
+my_savefig(fig,savedir,'R2_Ratio_MatchMismatch_RF_%dsessions' % (nSessions),formats = ['png'])
+
+
+#%% 
+
+
 #%% ##########################################################################################################
 #   2D     DELTA RECEPTIVE FIELD                 2D
 # ##########################################################################################################
-
-# #%% #########################################################################################
-# # Contrast: across areas
-# # areas               = ['V1','PM']
-
-# areapairs           = ['V1-V1']
-
-# areapairs           = ['V1-V1','PM-PM','V1-PM']
-# layerpairs          = ['L2/3-L2/3','L2/3-L5','L5-L2/3','L5-L5']
-# projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
-
-# #If you override any of these then these pairs will be ignored:
-# layerpairs          = ' '
-# # areapairs           = ' '
-# # projpairs           = ' '
-
-# deltaori            = [-15,15]
-# # deltaori            = [80,100]
-# # deltaori            = None
-# rotate_prefori      = True
-# rf_type             = 'Fsmooth'
-
-# [binmean,bincounts,bincenters] = bin_2d_corr_deltarf(sessions,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-#                             corr_type='trace_corr',binresolution=5,rotate_prefori=rotate_prefori,deltaori=deltaori,rf_type=rf_type,
-#                             sig_thr = 0.001,noise_thr=1,tuned_thr=0.00,absolute=False,normalize=False)
-# binmean[bincounts<min_counts]           = np.nan
-
-# #%% Definitions of azimuth, elevation and delta RF 2D space:
-# delta_az,delta_el   = np.meshgrid(bincenters,bincenters)
-# deltarf             = np.sqrt(delta_az**2 + delta_el**2)
-# anglerf             = np.mod(np.arctan2(delta_az,delta_el)+np.pi/2,np.pi*2)
-
-# #%% Make the figure:
-# centerthr           = [15,25,25]
-# min_counts          = 10
 
 #%% 2D CCA maps:
 

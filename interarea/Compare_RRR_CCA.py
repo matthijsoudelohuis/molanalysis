@@ -185,6 +185,52 @@ Y                   = zscore(Y,axis=0)
 
 
 
+#%% 
+
+ #####   #####     #           ######  #        #####         ######  ######  ######  
+#     # #     #   # #          #     # #       #     #        #     # #     # #     # 
+#       #        #   #         #     # #       #              #     # #     # #     # 
+#       #       #     # ###    ######  #        #####  ###    ######  ######  ######  
+#       #       ####### ###    #       #             # ###    #   #   #   #   #   #   
+#     # #     # #     #  #     #       #       #     #  #     #    #  #    #  #    #  
+ #####   #####  #     # #      #       #######  #####  #      #     # #     # #     # 
+
+#%% 
+
+from sklearn.cross_decomposition import CCA,PLSRegression,PLSCanonical,PLSSVD
+# from sklearn.decomposition import RandomizedRRR
+
+nsampleneurons  = 500
+idx_X           = np.random.choice(len(idx_areax),nsampleneurons,replace=False)
+idx_Y           = np.random.choice(len(idx_areay),nsampleneurons,replace=False)
+
+X               = data[np.ix_(idx_X,idx_T)].T
+Y               = data[np.ix_(idx_Y,idx_T)].T
+
+X               = zscore(X,axis=0)  #Z score activity for each neuron across trials/timepoints
+Y               = zscore(Y,axis=0)
+
+#%%
+
+# prepca      = PCA(n_components=50)
+# X           = prepca.fit_transform(X)
+# Y           = prepca.fit_transform(Y)
+
+cca = CCA(n_components=10,scale = False, max_iter = 1000)
+# pls = PLSCanonical(n_components=10)
+pls = PLSSVD(n_components=10,scale=False,copy=False)
+pls.fit(X,Y)
+# _,_,_      = RRR_wrapper(Y, X, nN=300,nK=None,lam=0,nranks=25,kfold=5,nmodelfits=1)
+
+# rrr = RandomizedRRR(n_components=10)
+
+#%% 
+%timeit cca.fit(X,Y)
+# %timeit pls.fit(X,Y)
+# %timeit rrr.fit(X,Y)
+
+#%% 
+
 
 
 
