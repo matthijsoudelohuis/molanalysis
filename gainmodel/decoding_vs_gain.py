@@ -18,7 +18,6 @@ from utils.plot_lib import shaded_error
 from utils.regress_lib import *
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 
-
 savedir = 'E:\\OneDrive\\PostDoc\\Figures\\SharedGain'
 
 #%% #############################################################################
@@ -157,10 +156,12 @@ sessions,nSessions   = filter_sessions(protocols = 'GR',filter_areas=['V1'])
 #%%  Load data properly:                      
 for ises in range(nSessions):
     # sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,calciumversion='dF')
-    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+    # sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                # calciumversion='deconv',keepraw=False)
+    sessions[ises].load_tensor(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
                                 calciumversion='deconv',keepraw=False)
 
-
+t_axis = sessions[ises].t_axis
 #%% 
 # Does the standard deviation of the population response on the decoding axis scale linearly with the mean?
 
@@ -218,30 +219,35 @@ for ises in range(nSessions):
 nActBins = 10
 kfold = 5
 lam = None
-lam = 1
+# lam = 1
 model_name = 'LOGR'
 scoring_type = 'accuracy_score'
 # scoring_type = 'balanced_accuracy_score'
 
+# model_name = 'Ridge'
+# model_name = 'SVR'
+# scoring_type = 'circular_abs_error'
+
 error_cv = np.full((nSessions,nActBins),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),desc='Decoding stimulus ori across sessions',total=nSessions):
-    idx_N = np.ones(len(ses.celldata)).astype(bool)
+    idx_N               = np.ones(len(ses.celldata)).astype(bool)
 
     data                = zscore(ses.respmat, axis=1)
     # data                = zscore(ses.respmat[idx, :], axis=1)
     poprate             = np.nanmean(data,axis=0)
 
-    tensor_zsc = copy.deepcopy(ses.tensor)
-    tensor_zsc -= np.mean(tensor_zsc, axis=(1,2), keepdims=True)
-    tensor_zsc /= np.std(tensor_zsc, axis=(1,2), keepdims=True)
+    # tensor_zsc = copy.deepcopy(ses.tensor)
+    # tensor_zsc -= np.mean(tensor_zsc, axis=(1,2), keepdims=True)
+    # tensor_zsc /= np.std(tensor_zsc, axis=(1,2), keepdims=True)
 
-    idx_B = t_axis<=0 #get baseline mean activity 
-    poprate = np.nanmean(tensor_zsc[:,:,idx_B], axis=(0,2))
+    # idx_B       = t_axis<=0 #get baseline mean activity 
+    # poprate     = np.nanmean(tensor_zsc[:,:,idx_B], axis=(0,2))
 
     binedges    = np.percentile(poprate,np.linspace(0,100,nActBins+1))
     bincenters  = (binedges[1:]+binedges[:-1])/2
-    ori_ses     = np.mod(ses.trialdata['Orientation'],180)
+    # ori_ses     = np.mod(ses.trialdata['Orientation'],180)
+    ori_ses     = ses.trialdata['Orientation']
 
     if lam is None:
         y = ori_ses
@@ -256,8 +262,8 @@ for ises,ses in tqdm(enumerate(sessions),desc='Decoding stimulus ori across sess
         X = data[np.ix_(idx_N,idx_T)].T
         y = ori_ses[idx_T]
 
-        label_encoder = LabelEncoder()
-        y = label_encoder.fit_transform(y.ravel())  # Convert to 1D array
+        # label_encoder = LabelEncoder()
+        # y = label_encoder.fit_transform(y.ravel())  # Convert to 1D array
 
         X,y,_ = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
 
@@ -291,9 +297,7 @@ for ises,ses in enumerate(sessions):
     # ax.scatter(baselinerate, responserate, s=4, alpha=0.8)
 
 
-
-
-#%% Plot error as a function of population rate: 
+#%% Plot performance as a function of population rate: 
 fig,ax = plt.subplots(1,1,figsize=(3,3))
 # ax.plot(np.arange(nActBins),error_cv.mean(axis=0))
 shaded_error(np.arange(nActBins)+1,error_cv,error='sem',ax=ax)
@@ -311,7 +315,236 @@ my_savefig(fig,savedir,'Decoding_Orientation_LOGR_ActBins_baseline_%d' % nSessio
 # fig.savefig(os.path.join(savedir,'Decoding_Orientation_LDA_ActBins_%d' % nSessions + '.png'), format = 'png')
 
 
-#%%
+#%% Plot error as a function of population rate: 
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+# ax.plot(np.arange(nActBins),error_cv.mean(axis=0))
+shaded_error(np.arange(nActBins)+1,error_cv,error='sem',ax=ax)
+ax.set_xlabel('Population rate (quantile)')
+# ax.set_ylabel('Decoding accuracy\n (crossval LDA)')
+ax.set_ylabel('Decoding error\n (crossval)')
+# ax.set_ylim([0,25])
+ax.set_xticks(np.arange(nActBins)+1)
+ax.axhline(y=180/2, color='grey', linestyle='--', linewidth=1)
+ax.set_ylim([15,30])
+ax.legend(['mean+-sem\nn=%d sessions' % nSessions],loc='best',frameon=False)
+sns.despine(fig=fig,trim=True,top=True,right=True)
+
+my_savefig(fig,savedir,'Ori_Decoding_Error_%s_ActBins_%dsessions' % (model_name,nSessions), formats = ['png'])
+# fig.savefig(os.path.join(savedir,'Decoding_Orientation_LDA_ActBins_%d' % nSessions + '.png'), format = 'png')
+
+#%% Decoding performance as a function of population rate for differently coupled neurons
+nActBins = 10
+nPopCouplingBins = 10
+kfold = 5
+lam = 1
+model_name = 'LOGR'
+scoring_type = 'accuracy_score'
+# scoring_type = 'balanced_accuracy_score'
+
+error_cv = np.full((nSessions,nActBins,nPopCouplingBins),np.nan)
+
+for ises,ses in tqdm(enumerate(sessions),desc='Decoding stimulus ori across sessions',total=nSessions):
+    ori_ses                 = ses.trialdata['Orientation']
+
+    data                    = zscore(ses.respmat, axis=1)
+
+    poprate                 = np.nanmean(data,axis=0)
+    popratequantiles        = np.percentile(poprate,range(0,101,100//nActBins))
+
+    N                       = np.shape(data)[0]
+    popcoupling             = [np.corrcoef(data[i,:],poprate)[0,1] for i in range(N)]
+    popcouplingquantiles    = np.percentile(popcoupling,range(0,101,100//nPopCouplingBins))
+
+    # binedges    = np.percentile(poprate,np.linspace(0,100,nActBins+1))
+    # bincenters  = (binedges[1:]+binedges[:-1])/2
+
+    if lam is None:
+        y = ori_ses
+        label_encoder = LabelEncoder()
+        y = label_encoder.fit_transform(y.ravel())  # Convert to 1D array
+        X = data.T
+        X,y,_ = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+        lam = find_optimal_lambda(X,y,model_name=model_name,kfold=kfold)
+
+    for iqrpopcoupling in range(len(popcouplingquantiles)-1):
+        idx_N     = np.where(np.all((popcoupling>popcouplingquantiles[iqrpopcoupling],
+                            popcoupling<=popcouplingquantiles[iqrpopcoupling+1]),axis=0))[0]
+
+    # for iap in range(nActBins):
+        for iqrpoprate in range(len(popratequantiles)-1):
+            idx_T = np.all((poprate>popratequantiles[iqrpoprate],
+                                        poprate<=popratequantiles[iqrpoprate+1]),axis=0)
+
+            X = data[np.ix_(idx_N,idx_T)].T
+            y = ori_ses[idx_T]
+
+            label_encoder = LabelEncoder()
+            y = label_encoder.fit_transform(y.ravel())  # Convert to 1D array
+
+            X,y,_ = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+            # error_cv[ises,iap],_,_,_   = my_decoder_wrapper(X,y,model_name='LDA',kfold=kfold,lam=lam,norm_out=False,subtract_shuffle=False)
+            error_cv[ises,iqrpoprate,iqrpopcoupling],_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,scoring_type=scoring_type,
+                                                            lam=lam,norm_out=False,subtract_shuffle=False)
+
+#%% Plot error as a function of population rate and for different populations with coupling
+# clrs = sns.color_palette('colorblind',n_colors=nPopCouplingBins)
+clrs_popcoupling = sns.color_palette('viridis',nPopCouplingBins)
+
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+for iqrpopcoupling in range(len(popcouplingquantiles)-1):
+    # shaded_error(np.arange(nActBins)+1,error_cv[:,:,iqrpopcoupling],error='sem',ax=ax,color=clrs_popcoupling[iqrpopcoupling])
+    ax.plot(np.arange(nActBins)+1,np.nanmean(error_cv[:,:,iqrpopcoupling],axis=0),
+            color=clrs_popcoupling[iqrpopcoupling],linewidth=2)
+ax.set_xlabel('Population rate (quantile)')
+ax.set_ylabel('Decoding accuracy\n (crossval Log. Regression)')
+ax.set_ylim([0,1])
+ax.set_xticks(np.arange(nActBins)+1)
+ax.axhline(y=1/len(np.unique(ses.trialdata['Orientation'])), color='grey', linestyle='--', linewidth=1)
+ax.text(0.5,0.15,'Chance',transform=ax.transAxes,ha='center',va='center',fontsize=8,color='grey')
+# ax.legend(['0-10%','10-20%','20-30%','30-40%','40-50%','50-60%','60-70%','70-80%','80-90%','90-100%'],
+ax.legend(['Weak/Negative','','','','','Intermediate','','','','Strong'],
+          reverse=True,fontsize=7,frameon=False,title='pop. coupling bins',bbox_to_anchor=(0.9,1), loc='upper left')
+
+# ax.legend(np.arange,title='Pop. coupling bins',loc='best',frameon=False)
+# ax.legend(['mean+-sem\nn=%d sessions' % nSessions],loc='center right',frameon=False)
+sns.despine(fig=fig,trim=True,top=True,right=True)
+
+my_savefig(fig,savedir,'Decoding_Ori_LOGR_ActBins_PopCoupling_%dsessions' % nSessions, formats = ['png'])
+
+
+#%% 
+lam = 1
+model_name = 'SVR'
+scoring_type = 'circular_abs_error'
+# scoring_type = 'mean_squared_error'
+error_cv,_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,scoring_type=scoring_type,
+                                                            lam=lam,norm_out=False,subtract_shuffle=False)
+
+model_name = 'Ridge'
+scoring_type = 'circular_abs_error'
+
+lam = 0.5
+error_cv,_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,scoring_type=scoring_type,
+                                                lam=lam,norm_out=False,subtract_shuffle=False)
+print(error_cv)
+
+
+
+#%% 
+
+#######    #    #     # #######    #######    #     #####  ####### ####### ######  
+#         # #   ##    # #     #    #         # #   #     #    #    #     # #     # 
+#        #   #  # #   # #     #    #        #   #  #          #    #     # #     # 
+#####   #     # #  #  # #     #    #####   #     # #          #    #     # ######  
+#       ####### #   # # #     #    #       ####### #          #    #     # #   #   
+#       #     # #    ## #     #    #       #     # #     #    #    #     # #    #  
+#       #     # #     # #######    #       #     #  #####     #    ####### #     # 
+
+#%% 
+sessions,nSessions   = filter_sessions(protocols = 'GR',filter_areas=['V1'])
+
+#%%  Load data properly:                      
+for ises in range(nSessions):
+    # sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,calciumversion='dF')
+    # sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                # calciumversion='deconv',keepraw=False)
+    sessions[ises].load_tensor(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion='dF',keepraw=False)
+
+t_axis = sessions[ises].t_axis
+
+#%% 
+idx_resp = (t_axis>=0.5) & (t_axis<=1.5)
+for ses in sessions:
+    ses.respmat = np.nanmean(ses.tensor[:,:,idx_resp], axis=2)
+
+#%% ########################### Compute tuning metrics: ###################################
+sessions = compute_tuning_wrapper(sessions)
+
+#%% Fano Factor over time: 
+celldata        = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+N               = len(celldata)
+
+ntimebins       = len(t_axis)
+fano_data       = np.full((nActBins,ntimebins,N),np.nan)
+
+for ises,ses in enumerate(sessions):
+    idx_ses         = np.where(celldata['session_id']==ses.sessiondata['session_id'][0])[0]
+    data            = zscore(ses.respmat, axis=1)
+    # poprate         = np.nanmean(data,axis=0)
+    poprate         = np.nanmean(ses.tensor,axis=(0,2))
+
+    binedges        = np.percentile(poprate,np.linspace(0,100,nActBins+1))
+    bincenters      = (binedges[1:]+binedges[:-1])/2
+
+    N_ses           = len(ses.celldata)
+    uoris           = np.unique(ses.trialdata['Orientation'])
+
+    #Per orientation:
+    # fano_temp = np.full((nActBins,ntimebins,N_ses,len(uoris)),np.nan)
+    # for iap in range(nActBins):
+    #     for iori,ori in enumerate(uoris):
+    #         idx_T       = np.all((poprate >= binedges[iap],
+    #                               poprate <= binedges[iap+1],
+    #                               ses.trialdata['Orientation'] == ori), axis=0)
+    #         X       = ses.tensor[:,idx_T,:]
+    #         fano_temp[iap,:,:,iori] = np.transpose(np.nanmean(X,axis=1) / np.nanstd(X,axis=1))
+    # fano_data[:,:,idx_ses] = np.nanmean(fano_temp, axis=3)
+
+    #All trials:
+    fano_temp = np.full((nActBins,ntimebins,N_ses),np.nan)
+    for iap in range(nActBins):
+        idx_T       = np.all((poprate >= binedges[iap],
+                                poprate <= binedges[iap+1]), axis=0)
+        X           = ses.tensor[:,idx_T,:]
+        fano_data[iap,:,idx_ses] = np.nanmean(X,axis=1) / np.nanstd(X,axis=1)
+
+#%% Fano Factor over time: 
+clrs_actbins = sns.color_palette('magma',nActBins+2)
+min_tuned = 0.0
+idx_N = np.where(celldata['tuning_var']>min_tuned)[0]
+# idx_N = np.where(celldata['tuning_var']>0.025)[0]
+# idx_N = np.where(celldata['roi_name']=='V1')[0]
+# idx_N = celldata['tuning_var']>0.1
+# idx_N = celldata['tuning_var']>0.1
+
+fano_mean = np.nanmean(fano_data[:,:,idx_N],axis=2)
+fig,ax = plt.subplots(1,1,figsize=(4,3))
+for iap in range(nActBins):
+    
+    ax.plot(t_axis,fano_mean[iap,:],alpha=1,color=clrs_actbins[iap],linewidth=1.5)
+# ax.plot(t_axis,fano_data[:,:,idx_N].mean(axis=2).T)
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Fano Factor')
+ax.axhline(1,ls='--',color='k',alpha=0.5)
+ax.set_ylim([0.9,1.2])
+# ax.set_ylim([0.8,1.5])
+# ax.set_ylim([1.15,1.45])
+ax.legend(['0-10%','10-20%','20-30%','30-40%','40-50%','50-60%','60-70%','70-80%','80-90%','90-100%'],
+          reverse=True,fontsize=7,frameon=False,title='pop. rate bins',bbox_to_anchor=(0.9,1), loc='upper left')
+sns.despine(fig=fig,trim=True,offset=3,top=True,right=True)
+plt.tight_layout()
+my_savefig(fig,savedir,'FanoFactor_ActBins_baseline_%dsessions_%1.3ftuning' % (nSessions,min_tuned), formats = ['png'])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

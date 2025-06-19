@@ -84,8 +84,8 @@ sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
 
 #%%  Load data properly:        
-calciumversion = 'deconv'
-# calciumversion = 'dF'
+# calciumversion = 'deconv'
+calciumversion = 'dF'
 for ises in range(nSessions):
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
                                 calciumversion=calciumversion,keepraw=False)
@@ -322,7 +322,7 @@ my_savefig(fig,savedir,'RRR_weights_acrossranks_V1PMlabeled_%s' % ses.sessiondat
 #%% Do RRR in FF and FB direction and compare performance:
 nsampleneurons  = 100
 nranks          = 25
-nmodelfits      = 10 #number of times new neurons are resampled 
+nmodelfits      = 100 #number of times new neurons are resampled 
 kfold           = 5
 R2_cv           = np.full((nSessions,2),np.nan)
 optim_rank      = np.full((nSessions,2),np.nan)
@@ -358,8 +358,8 @@ handles.append(shaded_error(np.arange(nranks),datatoplot[:,1,:],color=clrs_areap
 ax.legend(handles,['V1->PM','PM->V1'],frameon=False,fontsize=8,loc='lower right')
 ax.set_xlabel('Rank')
 ax.set_ylabel('R2')
-ax.set_yticks([0,0.1,0.2,0.3])
-ax.set_ylim([0,0.2])
+ax.set_yticks(np.arange(0,0.4,0.05))
+ax.set_ylim([0,0.25])
 ax.set_xticks(np.arange(0,nranks+1,5))
 ax.set_xlim([0,nranks])
 
@@ -484,7 +484,7 @@ add_corr_results(ax,dims.flatten(),np.flip(R2_cv,axis=1).flatten())
 plt.tight_layout()
 sns.despine(top=True,right=True,offset=3)
 
-my_savefig(fig,savedir,'RRR_Perf_WithinAcross_Dimensionality_%dsessions' % nSessions)
+# my_savefig(fig,savedir,'RRR_Perf_WithinAcross_Dimensionality_%dsessions' % nSessions)
 
 #%% 
 fig,axes = plt.subplots(1,1,figsize=(3.5,3.5),sharex=True,sharey='row')

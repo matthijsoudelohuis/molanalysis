@@ -166,6 +166,155 @@ fig = plot_respmat(orientations, datasets, ['original','pop rate gain'],prefori)
 
 #%% 
 
+ #####   #####     #       #     #    #      ######  #     #       #    #       
+#     # #     #   # #      #     #   ##      #     # ##   ##      # #   #       
+#       #        #   #     #     #  # #      #     # # # # #     #   #  #       
+#       #       #     #    #     #    #      ######  #  #  #    #     # #       
+#       #       #######     #   #     #      #       #     #    ####### #       
+#     # #     # #     #      # #      #      #       #     #    #     # #       
+ #####   #####  #     #       #     #####    #       #     #    #     # ####### 
+
+#%% 
+from mvlearn.datasets import sample_joint_factor_model
+from mvlearn.embed import CCA as CCAmv
+from mvlearn.embed import MCCA, KMCCA
+from mvlearn.plotting import crossviews_plot
+from mvlearn.decomposition import GroupPCA
+
+
+#%% Load an example session: 
+session_list        = np.array(['LPE12223_2024_06_10']) #GR
+# session_list        = np.array(['LPE11622_2024_03_26']) #GR
+sessions,nSessions   = filter_sessions(protocols = 'GR',only_session_id=session_list)
+sessions,nSessions   = filter_sessions(protocols = 'GR',only_all_areas=['V1','PM','AL'])
+for ises in range(nSessions):
+    print(sessions[ises].sessiondata['session_id'][0])
+
+
+#%%  Load data properly:        
+calciumversion = 'deconv'
+for ises in range(nSessions):
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion=calciumversion,keepraw=False)
+    
+
+#%%
+areas       = ['V1','PM','AL']
+
+ses         = sessions[0]
+
+prePCA      = 500
+Xs          = []
+trialsort   = []
+for iarea,area in enumerate(areas):
+    idx_N           = ses.celldata['roi_name'] == area
+    idx_N           = np.all((ses.celldata['roi_name'] == area,
+                              ses.celldata['noise_level']<20
+                              ),axis=0)
+
+    X               = ses.respmat[idx_N,:].T
+    X               = zscore(X,axis=0)  #Z score activity for each neuron
+
+    if prePCA:
+        pca         = PCA(n_components=np.min([prePCA,X.shape[1]]))
+        X           = pca.fit_transform(X)
+
+    Xs.append(X)
+
+#%% Multi views:
+reglam = 0.5
+# regularization value of .5 for each view
+mcca = MCCA(n_components=3, regs=reglam)
+
+# the fit-transform method outputs the scores for each view
+cca_scores = mcca.fit_transform(Xs)
+# cca_scores = mcca.fit_transform(Xs[8:])
+crossviews_plot(cca_scores[[0, 1]],
+                title='MCCA scores with regularization (first 2 views shown)',
+                equal_axes=True,
+                scatter_kwargs={'alpha': 0.4, 's': 2.0})
+
+print('Canonical Correlations:')
+print(mcca.canon_corrs(cca_scores))
+
+#%% 
+nOris       = 16
+
+ori         = sessions[0].trialdata['Orientation']
+oris        = np.sort(pd.Series.unique(sessions[0].trialdata['Orientation']))
+ori_ind     = [np.argwhere(np.array(ori) == iori)[:, 0] for iori in oris]
+
+pal         = np.tile(sns.color_palette('husl', int(len(oris)/2)), (2, 1))
+
+nviews = np.shape(cca_scores)[0]
+fig = plt.figure(figsize=(nviews*4,6))
+
+for iarea,area in enumerate(areas):
+    ccaproj     = cca_scores[iarea]
+
+    ax          = fig.add_subplot(1, nviews, iarea+1, projection='3d')
+    # ax          = fig.add_subplot(2, 5, ises+1, projection='3d')
+
+    # plot orientation separately with diff colors
+    for t, t_type in enumerate(oris):
+        # get all data points for this ori along first PC or projection pairs
+        x = ccaproj.T[0, ori_ind[t]]
+        y = ccaproj.T[1, ori_ind[t]]  # and the second
+        z = ccaproj.T[2, ori_ind[t]]  # and the third
+        # each trial is one dot
+        ax.scatter(x, y, z, color=pal[t], s=6, alpha=0.6)
+    # if plotgainaxis:
+        # ax.plot(Xg[0,:],Xg[1,:],Xg[2,:],color='k',linewidth=1)
+    ax.set_xlabel('CCA 1')  # give labels to axes
+    ax.set_ylabel('CCA 2')
+    ax.set_zlabel('CCA 3')
+
+    ax.set_title(area,fontsize=15)
+    nticks = 5
+    ax.grid(True)
+    ax.set_facecolor('white')
+    ax.set_xticks(np.linspace(np.percentile(ccaproj[:,0],1),np.percentile(ccaproj[:,0],99),nticks))
+    ax.set_yticks(np.linspace(np.percentile(ccaproj[:,1],1),np.percentile(ccaproj[:,1],99),nticks))
+    ax.set_zticks(np.linspace(np.percentile(ccaproj[:,2],1),np.percentile(ccaproj[:,2],99),nticks))
+    
+    ax.set_xlim(np.percentile(ccaproj[:,0],[1,99]))
+    ax.set_ylim(np.percentile(ccaproj[:,1],[1,99]))
+    ax.set_zlim(np.percentile(ccaproj[:,2],[1,99]))
+
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.set_zticklabels([])
+
+    # Get rid of colored axes planes, remove fill
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+
+    # Now set color to white (or whatever is "invisible")
+    ax.xaxis.pane.set_edgecolor('w')
+    ax.yaxis.pane.set_edgecolor('w')
+    ax.zaxis.pane.set_edgecolor('w')
+
+    if ses.session_id == 'LPE12223_2024_06_10': 
+        ax.view_init(elev=25, azim=55)
+    elif ses.session_id == 'LPE11622_2024_03_26': 
+        ax.view_init(elev=120, azim=-15,roll=60)
+
+plt.tight_layout()
+my_savefig(fig,savedir,'GR_MCCA_V1PMAL_%s.png' % (ses.session_id),formats=['png'])
+
+
+
+
+#%% 
+
+#     #    #      ######  ### ####### #######     #####  #######  #####   #####  ### ####### #     #  #####  
+#     #   ##      #     #  #  #       #          #     # #       #     # #     #  #  #     # ##    # #     # 
+#     #  # #      #     #  #  #       #          #       #       #       #        #  #     # # #   # #       
+#     #    #      #     #  #  #####   #####       #####  #####    #####   #####   #  #     # #  #  #  #####  
+ #   #     #      #     #  #  #       #                # #             #       #  #  #     # #   # #       # 
+  # #      #      #     #  #  #       #          #     # #       #     # #     #  #  #     # #    ## #     # 
+   #     #####    ######  ### #       #           #####  #######  #####   #####  ### ####### #     #  #####  
 
 #%% Make a plot of the CCA structure without any sorting of the trials: 
 ises1           = 8
@@ -392,12 +541,12 @@ my_savefig(fig,savedir,'CCA_sorts_WithinSession_V1PM_%dsessions' % (nSessions),f
 
 
 #%%
-
 from mvlearn.datasets import sample_joint_factor_model
 from mvlearn.embed import CCA as CCAmv
 from mvlearn.embed import MCCA, KMCCA
 from mvlearn.plotting import crossviews_plot
 from mvlearn.decomposition import GroupPCA
+
 
 
 n_views = 3

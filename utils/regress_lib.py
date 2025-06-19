@@ -19,6 +19,60 @@ from matplotlib.lines import Line2D
 from utils.rf_lib import filter_nearlabeled
 from utils.plot_lib import *
 
+
+def unit_vector(vector):
+    """ Returns the unit vector of the vector.  """
+    return vector / np.linalg.norm(vector)
+
+def angle_between(v1, v2):
+    """ Returns the angle in degrees between vectors 'v1' and 'v2'::
+    Filters out nans in any column
+    """
+    notnan = np.logical_and(~np.isnan(v1), ~np.isnan(v2))
+    v1 = v1[notnan]
+    v2 = v2[notnan]
+    
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    angle_rad = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+    return np.rad2deg(angle_rad)
+
+def angles_between(v):
+    """ Returns the angle in degrees between each of the columns in vector array v:
+    """
+    angles = np.full((v.shape[1],v.shape[1]), np.nan)
+    for i in range(v.shape[1]):
+        for j in range(i+1,v.shape[1]):
+            angles[i,j] = angle_between(v[:,i],v[:,j])
+            angles[j,i] = angles[i,j]
+    return angles
+
+def var_along_dim(data,weights):
+    """
+    Compute the variance of the data projected onto the weights.
+    
+    Parameters
+    ----------
+    data : array (n_samples, n_features)
+        Data to project
+    weights : array (n_features)
+        Weights for projecting the data into a lower dimensional space
+    
+    Returns
+    -------
+    ev : float
+        Proportion of variance explained by the projection.
+    """
+    assert data.shape[1] == weights.shape[0], "data and weights must have the same number of features"
+    assert weights.ndim == 1, "weights must be a vector"
+    
+    weights     = unit_vector(weights) # normalize weights
+    var_proj    = np.var(np.dot(data, weights)) # compute variance of projected data
+    var_tot     = np.var(data, axis=0).sum() # compute total variance of original data
+    ev          = var_proj / var_tot # compute proportion of variance explained 
+    return ev
+
+
 def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
     if model_name == 'LogisticRegression':
         model_name = 'LOGR'
@@ -65,6 +119,11 @@ def find_optimal_lambda(X,y,model_name='LOGR',kfold=5,clip=False):
     # optimal_lambda = 1
     return optimal_lambda
 
+def circular_abs_error(y_true, y_pred):
+    # y_true and y_pred in degrees (0-360)
+    error = np.abs((y_pred - y_true + 180) % 360 - 180)
+    return np.mean(error)  # or np.median(error)
+
 def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_shuffle=True,
                           scoring_type=None,norm_out=False,n_components=None):
     if model_name == 'LogisticRegression':
@@ -72,7 +131,7 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
     assert len(Xfull.shape)==2, 'Xfull must be a matrix of samples by features'
     assert len(Yfull.shape)==1, 'Yfull must be a vector'
     assert Xfull.shape[0]==Yfull.shape[0], 'Xfull and Yfull must have the same number of samples'
-    assert model_name in ['LOGR','SVM','LDA','Ridge','Lasso','LinearRegression'], 'regularization not supported for model %s' % model_name
+    assert model_name in ['LOGR','SVM','LDA','Ridge','Lasso','LinearRegression','SVR'], 'regularization not supported for model %s' % model_name
     assert lam is None or lam > 0
     
     if lam is None:
@@ -93,10 +152,17 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
         model = getattr(sklearn.linear_model,model_name)(alpha=lam)
     elif model_name in ['ElasticNet']:
         model = getattr(sklearn.linear_model,model_name)(alpha=lam,l1_ratio=0.9)
+    elif model_name == 'SVR':
+        from sklearn.svm import SVR
+        model = SVR(kernel='rbf',C=lam)  # or 'linear'
 
     if scoring_type is None:
         scoring_type = 'accuracy_score' if model_name in ['LOGR','SVM','LDA','GBC'] else 'r2_score'
-    score_fun           = getattr(sklearn.metrics,scoring_type)
+    
+    if scoring_type == 'circular_abs_error':
+        score_fun           = circular_abs_error
+    else: 
+        score_fun           = getattr(sklearn.metrics,scoring_type)
 
     # Define the number of folds for cross-validation
     kf = KFold(n_splits=kfold, shuffle=True, random_state=0)
@@ -142,7 +208,10 @@ def my_decoder_wrapper(Xfull,Yfull,model_name='LOGR',kfold=5,lam=None,subtract_s
 
     #Estimate the weights from the entire dataset:
     model.fit(Xfull,Yfull)
-    weights = model.coef_.ravel()
+    if hasattr(model,'coef_'):
+        weights = model.coef_.ravel()
+    else:
+        weights = []
 
     if np.shape(Xfull)[1] == np.shape(weights)[0]:
     # if len(np.unique(Yfull)) == 2:

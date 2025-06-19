@@ -300,7 +300,7 @@ def plot_neural_raster(ses, ax, tstart, tstop, neuronsel=None, counter=0):
 
 
 # Function that takes in the tensor and computes the average response for some example neurons:
-def plot_tuned_response(calciumdata, trialdata, t_axis, example_cells):
+def plot_tuned_response(calciumdata, trialdata, t_axis, example_cells,plot_n_trials=0):
     """
     The plot_tuned_response function is used to visualize the average response of specific neurons to different orientations. It takes in four inputs:
     calciumdata: a 3D tensor containing calcium imaging data for multiple cells, trials, and timepoints.
@@ -317,11 +317,11 @@ def plot_tuned_response(calciumdata, trialdata, t_axis, example_cells):
 
     T = len(t_axis)
     oris = np.sort(pd.Series.unique(trialdata['Orientation']))
-    resp_meanori = np.empty([len(example_cells), len(oris), T])
+    # resp_meanori = np.empty([len(example_cells), len(oris), T])
 
-    for i, cell in enumerate(example_cells):
-        for j, ori in enumerate(oris):
-            resp_meanori[i, j, :] = np.nanmean(calciumdata[np.ix_([cell], trialdata['Orientation'] == ori,range(T))], axis=1)
+    # for i, cell in enumerate(example_cells):
+        # for j, ori in enumerate(oris):
+            # resp_meanori[i, j, :] = np.nanmean(calciumdata[np.ix_([cell], trialdata['Orientation'] == ori,range(T))], axis=1)
 
     fig, axs = plt.subplots(len(example_cells), len(oris), figsize=[12, 8], sharex=True, sharey=False)
     axs = axs.flatten()
@@ -332,16 +332,24 @@ def plot_tuned_response(calciumdata, trialdata, t_axis, example_cells):
 
     for i, cell in enumerate(example_cells):
         row_max = 0
-
         for j, ori in enumerate(oris):
-            axs[i * len(oris) + j].plot(t_axis, resp_meanori[i, j, :],color=pal[j])
+            resp_meanori = np.nanmean(calciumdata[np.ix_([cell], trialdata['Orientation'] == ori,range(T))], axis=1).squeeze()
+
+            axs[i * len(oris) + j].plot(t_axis, resp_meanori,color=pal[j])
             # axs[i * len(oris) + j].set_title(f'Cell {cell}, {ori} deg')
             axs[i * len(oris) + j].set_xticks([])
             axs[i * len(oris) + j].set_yticks([])
             # REMOVE axis borders
             axs[i * len(oris) + j].axis('off')
-            row_max = max(row_max, np.max(resp_meanori[i, j, :]))
+            row_max = max(row_max, np.max(resp_meanori))
         
+            if plot_n_trials > 0:
+                # for trial in range(plot_n_trials):
+                trialsel = np.random.choice(np.where(trialdata['Orientation'] == ori)[0],plot_n_trials)
+                tracedata = calciumdata[np.ix_([cell], trialsel,range(T))].squeeze().T
+                axs[i * len(oris) + j].plot(t_axis, tracedata, color='k', linewidth=0.1)
+                row_max = max(row_max, np.max(tracedata))
+
         for j in range(len(oris)):
             axs[i * len(oris) + j].set_ylim(top=row_max * 1.1)  # add 10% padding
             # Add vertical dotted line at t=0

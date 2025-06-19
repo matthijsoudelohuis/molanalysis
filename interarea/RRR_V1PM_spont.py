@@ -125,3 +125,119 @@ else:
 plt.tight_layout()
 sns.despine(top=True,right=True,offset=3)
 my_savefig(fig,savedir,'RRR_R2_acrossranks_V1PM_SPONT_%dsessions_%dsec.png' % (nSessions,temporalbin),formats=['png'])
+
+#%% 
+
+######  ######  ######     #          #    ######     #     #  #####     #     # #     # #       
+#     # #     # #     #    #         # #   #     #    #     # #     #    #     # ##    # #       
+#     # #     # #     #    #        #   #  #     #    #     # #          #     # # #   # #       
+######  ######  ######     #       #     # ######     #     #  #####     #     # #  #  # #       
+#   #   #   #   #   #      #       ####### #     #     #   #        #    #     # #   # # #       
+#    #  #    #  #    #     #       #     # #     #      # #   #     #    #     # #    ## #       
+#     # #     # #     #    ####### #     # ######        #     #####      #####  #     # ####### 
+
+#%
+
+from utils.pair_lib import value_matching
+
+#%% Parameters for decoding from size-matched populations of V1 and PM labeled and unlabeled neurons
+
+# arealabelpairs  = ['V1unl-V1unl',
+#                     'V1unl-V1lab',
+#                     'V1lab-V1lab',
+#                     'PMunl-PMunl',
+#                     'PMunl-PMlab',
+#                     'PMlab-PMlab',
+#                     'V1unl-PMunl',
+#                     'V1unl-PMlab',
+#                     'V1lab-PMunl',
+#                     'V1lab-PMlab',
+#                     'PMunl-V1unl',
+#                     'PMunl-V1lab',
+#                     'PMlab-V1unl',
+#                     'PMlab-V1lab']
+
+arealabelpairs  = ['V1unl-PMunl',
+                    'V1lab-PMunl',
+                    'V1unl-PMlab',
+                    'V1lab-PMlab',
+                    'PMunl-V1unl',
+                    'PMunl-V1lab',
+                    'PMlab-V1unl',
+                    'PMlab-V1lab']
+
+clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
+narealabelpairs     = len(arealabelpairs)
+
+lam                 = 0
+nranks              = 20
+nmodelfits          = 5 #number of times new neurons are resampled 
+kfold               = 5
+maxnoiselevel       = 20
+
+R2_cv               = np.full((narealabelpairs,nSessions),np.nan)
+optim_rank          = np.full((narealabelpairs,nSessions),np.nan)
+R2_ranks            = np.full((narealabelpairs,nSessions,nranks,nmodelfits,kfold),np.nan)
+
+filter_nearby       = True
+# filter_nearby       = False
+
+valuematching       = None
+# valuematching       = 'noise_level'
+# valuematching       = 'event_rate'
+# valuematching       = 'skew'
+# valuematching       = 'meanF'
+nmatchbins          = 10
+minsampleneurons    = 10
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
+    idx_T               = np.ones(len(ses.trialdata['stimCond']),dtype=bool)
+    # idx_T               = ses.trialdata['stimCond']==0
+
+    allpops             = np.array([i.split('-') for i in arealabelpairs]).flatten()
+    nsampleneurons      = np.min([np.sum((ses.celldata['arealabel']==i) & (ses.celldata['noise_level']<maxnoiselevel)) for i in allpops])
+    #take the smallest sample size
+
+    if nsampleneurons<minsampleneurons: #skip session if less than minsampleneurons in either population
+        continue
+
+    for iapl, arealabelpair in enumerate(arealabelpairs):
+        
+        alx,aly = arealabelpair.split('-')
+
+        if filter_nearby:
+            idx_nearby  = filter_nearlabeled(ses,radius=50)
+        else:
+            idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+
+        idx_areax           = np.where(np.all((ses.celldata['arealabel']==alx,
+                                ses.celldata['noise_level']<maxnoiselevel,	
+                                idx_nearby),axis=0))[0]
+        idx_areay           = np.where(np.all((ses.celldata['arealabel']==aly,
+                                ses.celldata['noise_level']<maxnoiselevel,	
+                                idx_nearby),axis=0))[0]
+    
+        if valuematching is not None:
+            #Get value to match from celldata:
+            values      = sessions[ises].celldata[valuematching].to_numpy()
+            idx_joint   = np.concatenate((idx_areax,idx_areay))
+            group       = np.concatenate((np.zeros(len(idx_areax)),np.ones(len(idx_areay))))
+            idx_sub     = value_matching(idx_joint,group,values[idx_joint],bins=nmatchbins,showFig=False)
+            idx_areax   = np.intersect1d(idx_areax,idx_sub) #recover subset from idx_joint
+            idx_areay   = np.intersect1d(idx_areay,idx_sub)
+
+        X                   = sessions[ises].respmat[np.ix_(idx_areax,idx_T)].T #Get activity and transpose to samples x features
+        Y                   = sessions[ises].respmat[np.ix_(idx_areay,idx_T)].T
+
+        if len(idx_areax)<nsampleneurons or len(idx_areay)<nsampleneurons: #skip exec if not enough neurons in one of the populations
+            continue
+        R2_cv[iapl,ises],optim_rank[iapl,ises],R2_ranks[iapl,ises,:,:,:]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=lam,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+        #OUTPUT: MAX PERF, OPTIM RANK, PERF FOR EACH RANK ACROSS FOLDS AND MODELFITS
+
+#%% Plot the R2 performance and number of dimensions per area pair
+# fig         = plot_RRR_R2_arealabels(R2_cv,optim_rank,R2_ranks,arealabelpairs,clrs_arealabelpairs)
+# my_savefig(fig,savedir,'RRR_cvR2_RegressOutBehavior_V1PM_LabUnl_%dsessions' % nSessions)
+fig         = plot_RRR_R2_arealabels(R2_cv[:4],optim_rank[:4],R2_ranks[:4],arealabelpairs[:4],clrs_arealabelpairs[:4])
+my_savefig(fig,savedir,'RRR_cvR2_V1PM_LabUnl_%dsessions' % nSessions)
+fig         = plot_RRR_R2_arealabels(R2_cv[4:],optim_rank[4:],R2_ranks[4:],arealabelpairs[4:],clrs_arealabelpairs[4:])
+my_savefig(fig,savedir,'RRR_cvR2_PMV1_LabUnl_%dsessions' % nSessions)

@@ -436,104 +436,6 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
         R2_cv[iapl,ises],optim_rank[iapl,ises],R2_ranks[iapl,ises,:,:,:]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=lam,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
         #OUTPUT: MAX PERF, OPTIM RANK, PERF FOR EACH RANK ACROSS FOLDS AND MODELFITS
 
-#%% Plot the performance across sessions as a function of rank:
-def plot_RRR_R2_arealabels(R2_cv,optim_rank,R2_ranks,arealabelpairs,clrs_arealabelpairs,normalize=False):
-
-    if normalize:
-        R2_cv       = copy.deepcopy(R2_cv) #copy array to avoid modifying the original
-        optim_rank  = copy.deepcopy(optim_rank)
-        R2_ranks    = copy.deepcopy(R2_ranks)
-
-        R2_cv       = R2_cv/R2_cv[0,:][np.newaxis,:]
-        optim_rank  = optim_rank/optim_rank[0,:][np.newaxis,:]
-        R2_ranks    = np.diff(R2_ranks,axis=2,prepend=0)
-        R2_ranks    = R2_ranks/R2_ranks[0,:,:,:,:][np.newaxis,:,:,:,:]
-
-    fig, axes = plt.subplots(1,3,figsize=(9,2.5))
-    nSessions = R2_cv.shape[1]
-    arealabelpairs2     = [al.replace('-','-\n') for al in arealabelpairs]
-    narealabelpairs     = len(arealabelpairs)
-    if narealabelpairs==8: 
-        statpairs = [(0,1),(0,2),(0,3),
-                (4,5),(4,6),(4,7)]
-    elif narealabelpairs==4: 
-        statpairs = [(0,1),(0,2),(0,3)]
-    elif narealabelpairs==2: 
-        statpairs = [(0,1)]
-    elif narealabelpairs==6: 
-        statpairs = [(0,1),(2,3),(4,5)]
-    else: print('Wrong number of arealabelpairs for statistics')
-
-    datatoplot          = np.nanmean(R2_ranks,axis=(3,4))
-    axlim               = my_ceil(np.nanmax(np.nanmean(datatoplot,axis=1))*1.1,2)
-
-    ax = axes[0]
-    handles = []
-    for iapl, arealabelpair in enumerate(arealabelpairs):
-        handles.append(shaded_error(np.arange(nranks),datatoplot[iapl,:,:],color=clrs_arealabelpairs[iapl],
-                                    alpha=0.25,error='sem',ax=ax))
-
-    ax.legend(handles,arealabelpairs,frameon=False,fontsize=8,loc='lower right')
-    ax.set_xlabel('Rank')
-    ax.set_ylabel('R2 (cv)')
-    # ax.set_yticks([0,0.05,0.1])
-    ax.set_ylim([0,axlim])
-    ax.set_xlim([0,nranks])
-    ax_nticks(ax,5)
-
-    ax=axes[1]
-    for iapl, arealabelpair in enumerate(arealabelpairs):
-        ax.scatter(np.ones(nSessions)*iapl + np.random.rand(nSessions)*0.3 - 0.25,R2_cv[iapl,:],color='k',marker='o',s=8)
-        ax.errorbar(iapl+0.2,np.nanmean(R2_cv[iapl,:]),np.nanstd(R2_cv[iapl,:])/np.sqrt(nSessions),color=clrs_arealabelpairs[iapl],marker='o',zorder=10)
-
-    ax.set_ylabel('R2 (cv)')
-    ax.set_ylim([0,my_ceil(np.nanmax(R2_cv),2)])
-    ax.set_xticks(range(narealabelpairs),labels=[])
-
-    testdata = R2_cv
-    testdata = testdata[:,~np.isnan(testdata).any(axis=0)]
-
-    df = pd.DataFrame({'R2':  testdata.flatten(),
-                    'arealabelpair':np.repeat(np.arange(narealabelpairs),np.shape(testdata)[1])})
-    
-    annotator = Annotator(ax, statpairs, data=df, x="arealabelpair", y='R2', order=np.arange(narealabelpairs))
-    # annotator.configure(test='Wilcoxon', text_format='star', loc='inside',verbose=False)
-    annotator.configure(test='t-test_paired', text_format='star', loc='inside',verbose=False,comparisons_correction="holm-bonferroni")
-    annotator.apply_and_annotate()
-
-    ax=axes[2]
-    for iapl, arealabelpair in enumerate(arealabelpairs):
-        ax.scatter(np.ones(nSessions)*iapl + np.random.rand(nSessions)*0.3 - 0.25,optim_rank[iapl,:],color='k',marker='o',s=10)
-        ax.errorbar(iapl+0.2,np.nanmean(optim_rank[iapl,:]),np.nanstd(optim_rank[iapl,:])/np.sqrt(nSessions),color=clrs_arealabelpairs[iapl],marker='o',zorder=10)
-
-    ax.set_xticks(range(narealabelpairs),labels=[])
-    # ax.set_ylabel('Number of dimensions')
-    ax.set_yticks(np.arange(0,14,2))
-    ax.set_ylim([0,my_ceil(np.nanmax(optim_rank),0)+1])
-    # ax.set_title('Dimensionality')
-
-    testdata = optim_rank
-    testdata = testdata[:,~np.isnan(testdata).any(axis=0)]
-
-    df = pd.DataFrame({'R2':  testdata.flatten(),
-                    'arealabelpair':np.repeat(np.arange(narealabelpairs),np.shape(testdata)[1])})
-
-    annotator = Annotator(ax, statpairs, data=df, x="arealabelpair", y='R2', order=np.arange(narealabelpairs))
-    # annotator.configure(test='Wilcoxon', text_format='star', loc='inside',verbose=False)
-    annotator.configure(test='t-test_paired', text_format='star', loc='inside',verbose=False,comparisons_correction="holm-bonferroni")
-    annotator.apply_and_annotate()
-
-    ax.set_ylabel('Rank')
-
-    ax.set_xlabel('Population pair')
-    ax.set_xticks(range(narealabelpairs))
-
-    sns.despine(top=True,right=True,offset=3)
-    axes[1].set_xticklabels(arealabelpairs2,fontsize=7)
-    axes[2].set_xticklabels(arealabelpairs2,fontsize=7)
-    fig.tight_layout()
-    return fig
-
 #%% Plot the R2 performance and number of dimensions per area pair
 # fig         = plot_RRR_R2_arealabels(R2_cv,optim_rank,R2_ranks,arealabelpairs,clrs_arealabelpairs)
 # my_savefig(fig,savedir,'RRR_cvR2_RegressOutBehavior_V1PM_LabUnl_%dsessions' % nSessions)
@@ -1006,9 +908,8 @@ clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
 narealabelpairs     = len(arealabelpairs)
 
 lam                 = 0
-nsampleneurons      = 20
 nranks              = 20
-nmodelfits          = 10 #number of times new neurons are resampled 
+nmodelfits          = 20 #number of times new neurons are resampled 
 kfold               = 5
 ALRSP_rank          = 15
 
@@ -1017,8 +918,17 @@ optim_rank          = np.full((narealabelpairs,2,nSessions),np.nan)
 
 filter_nearby       = True
 
+minsampleneurons    = 10
+
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
     
+    #take the smallest sample size
+    allpops             = np.array([i.split('-') for i in arealabelpairs]).flatten()
+    nsampleneurons      = np.min([np.sum((ses.celldata['arealabel']==i) & (ses.celldata['noise_level']<20)) for i in allpops])
+
+    if nsampleneurons<minsampleneurons: #skip session if less than minsampleneurons in either population
+        continue
+
     if np.any(sessions[ises].celldata['roi_name'].isin(['AL','RSP'])):
         idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
         
@@ -1050,10 +960,10 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
                     idx_nearby = np.ones(len(ses.celldata),dtype=bool)
 
                 idx_areax           = np.where(np.all((ses.celldata['arealabel']==alx,
-                                        ses.celldata['noise_level']<20,	
+                                        ses.celldata['noise_level']<100,	
                                         idx_nearby),axis=0))[0]
                 idx_areay           = np.where(np.all((ses.celldata['arealabel']==aly,
-                                        ses.celldata['noise_level']<20,	
+                                        ses.celldata['noise_level']<100,	
                                         idx_nearby),axis=0))[0]
             
                 X = neuraldata[:,idx_areax,irbhv]
@@ -1064,7 +974,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
 
 #%%
 fig = plot_RRR_R2_regressout(R2_cv,optim_rank,arealabelpairs,clrs_arealabelpairs)
-# my_savefig(fig,savedir,'RRR_V1PM_regressoutneuralALRSP_%dsessions' % (nSessions))
+my_savefig(fig,savedir,'RRR_V1PM_labeled_regressoutneuralALRSP_%dsessions' % (nSessions))
 
 #%% Fraction of R2 explained by shared activity with AL and RSP:
 statpairs = [(0,1),(0,2),(0,3),

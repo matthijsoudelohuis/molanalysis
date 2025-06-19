@@ -433,7 +433,7 @@ clrs_arealabelpairs = get_clr_area_pairs(arealabelpairs)
 narealabelpairs     = len(arealabelpairs)
 
 lam                 = 0
-nsampleneurons      = 250
+nsampleneurons      = 100
 nranks              = 50
 nmodelfits          = 10 #number of times new neurons are resampled 
 kfold               = 5
@@ -443,8 +443,12 @@ optim_rank          = np.full((narealabelpairs,nSessions),np.nan)
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
     idx_T               = np.ones(len(ses.trialdata['Orientation']),dtype=bool)
-    if np.sum(ses.celldata['roi_name']=='V1')<(nsampleneurons*2) or np.sum(ses.celldata['roi_name']=='PM')<(nsampleneurons*2):
-        continue 
+    if np.sum((ses.celldata['roi_name']=='V1') & (ses.celldata['noise_level']<20))<(nsampleneurons*2):
+        continue
+    
+    if np.sum((ses.celldata['roi_name']=='PM') & (ses.celldata['noise_level']<20))<(nsampleneurons*2):
+        continue
+
     for iapl, arealabelpair in enumerate(arealabelpairs):
         
         alx,aly = arealabelpair.split('-')
@@ -452,74 +456,117 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
         idx_areax           = np.where(np.all((ses.celldata['roi_name']==alx,
                                 ses.celldata['noise_level']<20
                                 ),axis=0))[0]
-        idx_areax_sub       = np.random.choice(idx_areax,nsampleneurons,replace=False)
-        
         idx_areay           = np.where(np.all((ses.celldata['roi_name']==aly,
                                 ses.celldata['noise_level']<20
                                 ),axis=0))[0]
-        
-        idx_areay           = np.setdiff1d(idx_areay,idx_areax_sub)
-        
-        idx_areay_sub       = np.random.choice(idx_areay,nsampleneurons,replace=False)
     
-        X                   = sessions[ises].respmat[np.ix_(idx_areax_sub,idx_T)].T
-        Y                   = sessions[ises].respmat[np.ix_(idx_areay_sub,idx_T)].T
+        if np.any(np.intersect1d(idx_areax,idx_areay)): #if interactions within one population:
+            if not np.array_equal(idx_areax, idx_areay): 
+                print('Arealabelpair %s has partly overlapping neurons'%arealabelpair)
+            idx_areax, idx_areay = np.array_split(np.random.permutation(idx_areax), 2)
 
-        R2_cv[iapl,ises],optim_rank[iapl,ises]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+        X                   = sessions[ises].respmat[np.ix_(idx_areax,idx_T)].T
+        Y                   = sessions[ises].respmat[np.ix_(idx_areay,idx_T)].T
 
+        R2_cv[iapl,ises],optim_rank[iapl,ises],_  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=0,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
 
 #%% Plotting:
 clr = clrs_arealabelpairs[0]
 
-fig,axes = plt.subplots(2,3,figsize=(6.5,4.5),sharey='row',sharex='row')
+fig,axes = plt.subplots(1,2,figsize=(4.5,2.5))
 
-comps = [[0,1],[0,3],[1,2]]
+clrs = get_clr_areas(['V1','PM'])
+ax = axes[0]
+comps = [[0,3],[1,2]]
 for icomp,comp in enumerate(comps):
-    ax = axes[0,icomp]
-    ax.scatter(R2_cv[comp[0],:],R2_cv[comp[1],:],s=100,marker='.',color=clr)
-    # ax.set_xlim([0,0.4])
-    # ax.set_ylim([0,0.4])
-    ax.plot([0,0.4],[0,0.4],':',color='grey',linewidth=1)
+    ax.scatter(R2_cv[comp[0],:],R2_cv[comp[1],:],s=120,edgecolor='w',marker='.',color=clrs[icomp])
+    # ax.scatter(R2_cv[comp[0],:],R2_cv[comp[1],:],s=80,alpha=0.8,marker='.',color=clrs[icomp])
     ax_nticks(ax,3)
-    if icomp==0:
-        ax.set_ylabel('R2\n%s (%s)' % (arealabelpairs[comp[1]],alp_withinacross[comp[1]]))
-    else: 
-        ax.set_ylabel('%s (%s)' % (arealabelpairs[comp[1]],alp_withinacross[comp[1]]))
-    
-    _,pval = ttest_rel(R2_cv[comp[0],:],R2_cv[comp[1],:])
-    ax.text(0.7,0.05,'p=%.3f' % pval,transform=ax.transAxes,fontsize=10)
+    ax.set_xlabel('Within')
+    ax.set_ylabel('Across')
+    ax.set_title('R2')
 
-    ax = axes[1,icomp]
-    ax.scatter(optim_rank[comp[0],:],optim_rank[comp[1],:],s=100,marker='.',color=clr)
-    ax.plot([0,30],[0,30],':',color='grey',linewidth=1)
-    # ax.set_xlim([0,25])
-    # ax.set_ylim([0,25])
+    _,pval = ttest_rel(R2_cv[comp[0],:],R2_cv[comp[1],:],nan_policy='omit')
+    ax.text(0.6,0.1*(1+icomp),'%sp=%.3f' % (get_sig_asterisks(pval),pval),transform=ax.transAxes,fontsize=10,color=clrs[icomp])
+ax.legend(['V1','PM'],frameon=False,fontsize=10)
+my_legend_strip(ax)
+ax.set_xlim([0,0.4])
+ax.set_ylim([0,0.4])
+ax.plot([0,0.4],[0,0.4],':',color='grey',linewidth=1)
+
+ax = axes[1]
+for icomp,comp in enumerate(comps):
+    ax.scatter(optim_rank[comp[0],:],optim_rank[comp[1],:],s=120,edgecolor='w',marker='.',color=clrs[icomp])
     ax_nticks(ax,3)
+    ax.set_xlabel('Within')
+    ax.set_title('Rank')
+    _,pval = ttest_rel(optim_rank[comp[0],:],optim_rank[comp[1],:],nan_policy='omit')
+    ax.text(0.6,0.1*(1+icomp),'%sp=%.3f' % (get_sig_asterisks(pval),pval),transform=ax.transAxes,fontsize=10,color=clrs[icomp])
+ax.legend(['V1','PM'],frameon=False,fontsize=10)
+my_legend_strip(ax)
+ax.set_xlim([0,25])
+ax.set_ylim([0,25])
+ax.plot([0,25],[0,25],':',color='grey',linewidth=1)
+# ax.legend(['V1 (V1->V1 vs PM->V1','PM (PM->PM vs V1->PM'],frameon=False,fontsize=8)
 
-    ax.set_xlabel('%s (%s)' % (arealabelpairs[comp[0]],alp_withinacross[comp[0]]))
-    if icomp==0:
-        ax.set_ylabel('Rank\n%s (%s)' % (arealabelpairs[comp[1]],alp_withinacross[comp[1]]))
-    else: 
-        ax.set_ylabel('%s (%s)' % (arealabelpairs[comp[1]],alp_withinacross[comp[1]]))
-    
-    _,pval = ttest_rel(optim_rank[comp[0],:],optim_rank[comp[1],:])
-    ax.text(0.7,0.05,'p=%.3f' % pval,transform=ax.transAxes,fontsize=10)
-
-    # ax.set_title('Rank=%d' % np.nanmean(optim_rank[comp[0],:]))
 sns.despine(offset=3,top=True,right=True)
-
-# Add a title above the first row of subplots
-fig.text(0.5, 0.95, 'Variance explained', ha='center', fontsize=14)
-
-# Add a title above the second row of subplots
-fig.text(0.5, 0.48, 'Optimal rank', ha='center', fontsize=14)
-
-# Adjust layout to make room for the titles
-fig.tight_layout(rect=[0, 0.03, 1, 0.92])
-
 plt.tight_layout()
 
-my_savefig(fig,savedir,'R2Rank_WithinAcross_GR_%dneurons.png' % nsampleneurons,formats=['png'])
+my_savefig(fig,savedir,'RRR_R2Rank_WithinVSAcross_%dneurons' % nsampleneurons,formats=['png'])
+
+
+#%% Plotting:
+# clr = clrs_arealabelpairs[0]
+
+# fig,axes = plt.subplots(2,3,figsize=(6.5,4.5),sharey='row',sharex='row')
+
+# comps = [[0,1],[0,3],[1,2]]
+# for icomp,comp in enumerate(comps):
+#     ax = axes[0,icomp]
+#     ax.scatter(R2_cv[comp[0],:],R2_cv[comp[1],:],s=100,marker='.',color=clr)
+#     # ax.set_xlim([0,0.4])
+#     # ax.set_ylim([0,0.4])
+#     ax.plot([0,0.4],[0,0.4],':',color='grey',linewidth=1)
+#     ax_nticks(ax,3)
+#     if icomp==0:
+#         ax.set_ylabel('R2\n%s (%s)' % (arealabelpairs[comp[1]],alp_withinacross[comp[1]]))
+#     else: 
+#         ax.set_ylabel('%s (%s)' % (arealabelpairs[comp[1]],alp_withinacross[comp[1]]))
+    
+#     _,pval = ttest_rel(R2_cv[comp[0],:],R2_cv[comp[1],:])
+#     ax.text(0.7,0.05,'p=%.3f' % pval,transform=ax.transAxes,fontsize=10)
+
+#     ax = axes[1,icomp]
+#     ax.scatter(optim_rank[comp[0],:],optim_rank[comp[1],:],s=100,marker='.',color=clr)
+#     ax.plot([0,30],[0,30],':',color='grey',linewidth=1)
+#     # ax.set_xlim([0,25])
+#     # ax.set_ylim([0,25])
+#     ax_nticks(ax,3)
+
+#     ax.set_xlabel('%s (%s)' % (arealabelpairs[comp[0]],alp_withinacross[comp[0]]))
+#     if icomp==0:
+#         ax.set_ylabel('Rank\n%s (%s)' % (arealabelpairs[comp[1]],alp_withinacross[comp[1]]))
+#     else: 
+#         ax.set_ylabel('%s (%s)' % (arealabelpairs[comp[1]],alp_withinacross[comp[1]]))
+    
+#     _,pval = ttest_rel(optim_rank[comp[0],:],optim_rank[comp[1],:])
+#     ax.text(0.7,0.05,'p=%.3f' % pval,transform=ax.transAxes,fontsize=10)
+
+#     # ax.set_title('Rank=%d' % np.nanmean(optim_rank[comp[0],:]))
+# sns.despine(offset=3,top=True,right=True)
+
+# # Add a title above the first row of subplots
+# fig.text(0.5, 0.95, 'Variance explained', ha='center', fontsize=14)
+
+# # Add a title above the second row of subplots
+# fig.text(0.5, 0.48, 'Optimal rank', ha='center', fontsize=14)
+
+# # Adjust layout to make room for the titles
+# fig.tight_layout(rect=[0, 0.03, 1, 0.92])
+
+# plt.tight_layout()
+
+# my_savefig(fig,savedir,'R2Rank_WithinAcross_GR_%dneurons.png' % nsampleneurons,formats=['png'])
 
 
 

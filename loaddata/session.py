@@ -12,7 +12,7 @@ import os
 import numpy as np
 import pandas as pd
 from loaddata.get_data_folder import get_data_folder
-from utils.psth import compute_respmat
+from utils.psth import *
 import scipy
 import logging
 from utils.filter_lib import my_highpass_filter
@@ -217,6 +217,78 @@ class Session():
         else: 
             self.respmat_pupilarea = None
             self.respmat_pupilareaderiv = None
+
+        if not keepraw:
+            delattr(self, 'calciumdata')
+            delattr(self, 'videodata')
+            delattr(self, 'behaviordata')
+
+    def load_tensor(self, load_behaviordata=False, load_calciumdata=True, load_videodata=False, calciumversion='dF',
+                    keepraw=False, cellfilter=None,filter_hp=None):
+        #combination to load data, then compute the average responses to the stimuli and delete the full data afterwards:
+
+        self.load_data(load_behaviordata=load_behaviordata, load_calciumdata=load_calciumdata,
+                       load_videodata=load_videodata,calciumversion=calciumversion,filter_hp=filter_hp)
+
+        #Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
+        if self.sessiondata['protocol'][0]=='IM':
+            t_pre = -0.5
+            t_post = 2
+        elif self.sessiondata['protocol'][0]=='GR':
+            t_pre = -1
+            t_post = 2
+        elif self.sessiondata['protocol'][0]=='GN':
+            t_pre = -1
+            t_post = 2
+        else:
+            print('skipping tensory calculation for unknown protocol')
+            return
+
+        ##############################################################################
+        ## Construct trial response matrix:  N neurons by K trials
+        [self.tensor,self.t_axis]         = compute_tensor(self.calciumdata, self.ts_F, self.trialdata['tOnset'], 
+                                 t_pre, t_post, method='nearby')
+    
+        # self.respmat_runspeed = compute_respmat(self.behaviordata['runspeed'],
+        #                                 self.behaviordata['ts'], self.trialdata['tOnset'],
+        #                                 t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "runspeed")
+
+        # self.respmat_videome = compute_respmat(self.videodata['motionenergy'],
+        #                                 self.videodata['ts'],self.trialdata['tOnset'],
+        #                                 t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "motion energy")
+        
+        # self.respmat_videopc = compute_respmat(self.videodata['motionenergy'],
+        #                                 self.videodata['ts'],self.trialdata['tOnset'],
+        #                                 t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "motion energy")
+        
+        # nPCs = 30
+        # self.respmat_videopc = compute_respmat(self.videodata[['videoPC_' + str(i) for i in range(nPCs)]],
+        #                                 self.videodata['ts'],self.trialdata['tOnset'],
+        #                                 t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "motion PCs")
+        
+        # if 'pupil_xpos' in self.videodata:
+        #     self.respmat_pupilx = compute_respmat(self.videodata['pupil_xpos'],
+        #                                         self.videodata['ts'], self.trialdata['tOnset'],
+        #                                         t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil x position')
+            
+        # if 'pupil_ypos' in self.videodata:
+        #     self.respmat_pupily = compute_respmat(self.videodata['pupil_ypos'],
+        #                                         self.videodata['ts'], self.trialdata['tOnset'],
+        #                                         t_resp_start=0, t_resp_stop=t_resp_stop, method='mean', label='pupil y position')
+        
+        # if 'pupil_area' in self.videodata:
+        #     self.respmat_pupilarea = compute_respmat(self.videodata['pupil_area'],
+        #                                 self.videodata['ts'],self.trialdata['tOnset'],
+        #                                 t_resp_start=t_resp_start,t_resp_stop=t_resp_stop,method='mean', label = "pupil area")
+            
+        #     sampling_rate = 1 / np.mean(np.diff(self.ts_F))
+        #     self.respmat_pupilareaderiv = self.lowpass_filter(
+        #         self.respmat_pupilarea, sampling_rate, lowcut=None, highcut=0.7, order=6)
+        #     self.respmat_pupilareaderiv = np.gradient(
+        #         self.respmat_pupilareaderiv, axis=0)
+        # else: 
+        #     self.respmat_pupilarea = None
+        #     self.respmat_pupilareaderiv = None
 
         if not keepraw:
             delattr(self, 'calciumdata')

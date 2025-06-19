@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 import warnings
 from scipy.stats import pearsonr,ttest_rel
+import copy
+from statannotations.Annotator import Annotator
 
 desired_width = 600
 pd.set_option('display.width', desired_width)
@@ -68,7 +70,6 @@ def my_ceil(a, precision=0):
 def my_floor(a, precision=0):
     return np.true_divide(np.floor(a * 10**precision), 10**precision)
 
-# Define the p-value thresholds array
 def get_sig_asterisks(pvalue, return_ns=False):
     """
     Return a string of asterisks corresponding to the significance level of the p-value.
@@ -93,6 +94,15 @@ def get_sig_asterisks(pvalue, return_ns=False):
             return asterisks
     # Default return if p-value is greater than 1
     return ""
+
+def round_pval(pvalue, return_ns=False):
+    """
+    """
+    pvalue_thresholds = np.array([[1e-4, "0.0001"], [1e-3, "0.001"], [1e-2, "0.01"], [0.05, "0.05"], [10000, "ns" if return_ns else ""]])
+    # Iterate through the thresholds and return the appropriate significance string
+    for threshold, asterisks in pvalue_thresholds:
+        if pvalue <= float(threshold):
+            return asterisks
 
 def ax_nticks(ax, n):
     ax.locator_params(axis='x', nbins=n)
@@ -261,10 +271,7 @@ def add_paired_ttest_results(ax, x,y,pos=[0.2,0.1],fontsize=8):
     t,p = ttest_rel(x[~nas], y[~nas])
 
     print('Paired t-test: p=%.3f' % (p))
-    if p<0.05:
-        ax.text(pos[0],pos[1],'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
-    else: 
-        ax.text(pos[0],pos[1],'p=n.s.',transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k')
+    ax.text(pos[0],pos[1],'p<%s' % round_pval(p),transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
 
 def my_legend_strip(ax):
     leg = ax.get_legend()
@@ -456,6 +463,176 @@ def plot_stim_dec_spatial_proj(X, celldata, trialdata, W, sbins, labeled= ['unl'
             else: 
                 ax.axis('off')
     plt.tight_layout()
+    return fig
+
+
+# Plot the performance across sessions as a function of rank:
+def plot_RRR_R2_arealabels(R2_cv,optim_rank,R2_ranks,arealabelpairs,clrs_arealabelpairs,normalize=False):
+
+    nranks          = R2_ranks.shape[2]
+
+    if normalize:
+        R2_cv       = copy.deepcopy(R2_cv) #copy array to avoid modifying the original
+        optim_rank  = copy.deepcopy(optim_rank)
+        R2_ranks    = copy.deepcopy(R2_ranks)
+
+        R2_cv       = R2_cv/R2_cv[0,:][np.newaxis,:]
+        optim_rank  = optim_rank/optim_rank[0,:][np.newaxis,:]
+        R2_ranks    = np.diff(R2_ranks,axis=2,prepend=0)
+        R2_ranks    = R2_ranks/R2_ranks[0,:,:,:,:][np.newaxis,:,:,:,:]
+
+    fig, axes = plt.subplots(1,3,figsize=(9,2.5))
+    nSessions = R2_cv.shape[1]
+    arealabelpairs2     = [al.replace('-','-\n') for al in arealabelpairs]
+    narealabelpairs     = len(arealabelpairs)
+    if narealabelpairs==8: 
+        statpairs = [(0,1),(0,2),(0,3),
+                (4,5),(4,6),(4,7)]
+    elif narealabelpairs==4: 
+        # statpairs = [(0,1),(0,2),(0,3),(1,3)]
+        statpairs = [(0,1),(2,3)]
+    elif narealabelpairs==2: 
+        statpairs = [(0,1)]
+    elif narealabelpairs==6: 
+        statpairs = [(0,1),(2,3),(4,5)]
+    else: print('Wrong number of arealabelpairs for statistics')
+
+    datatoplot          = np.nanmean(R2_ranks,axis=(3,4))
+    axlim               = my_ceil(np.nanmax(np.nanmean(datatoplot,axis=1))*1.1,2)
+
+    ax = axes[0]
+    handles = []
+    for iapl, arealabelpair in enumerate(arealabelpairs):
+        handles.append(shaded_error(np.arange(nranks),datatoplot[iapl,:,:],color=clrs_arealabelpairs[iapl],
+                                    alpha=0.25,error='sem',ax=ax))
+
+    ax.legend(handles,arealabelpairs,frameon=False,fontsize=8,loc='lower right')
+    ax.set_xlabel('Rank')
+    ax.set_ylabel('R2 (cv)')
+    # ax.set_yticks([0,0.05,0.1])
+    ax.set_ylim([0,axlim])
+    ax.set_xlim([0,nranks])
+    ax_nticks(ax,5)
+
+    ax=axes[1]
+    for iapl, arealabelpair in enumerate(arealabelpairs):
+        ax.scatter(np.ones(nSessions)*iapl + np.random.rand(nSessions)*0.3 - 0.25,R2_cv[iapl,:],color='k',marker='o',s=8)
+        ax.errorbar(iapl+0.2,np.nanmean(R2_cv[iapl,:]),np.nanstd(R2_cv[iapl,:])/np.sqrt(nSessions),color=clrs_arealabelpairs[iapl],marker='o',zorder=10)
+
+    ax.set_ylabel('R2 (cv)')
+    ax.set_ylim([0,my_ceil(np.nanmax(R2_cv),2)])
+    ax.set_xticks(range(narealabelpairs),labels=[])
+
+    testdata = R2_cv
+    testdata = testdata[:,~np.isnan(testdata).any(axis=0)]
+
+    df = pd.DataFrame({'R2':  testdata.flatten(),
+                    'arealabelpair':np.repeat(np.arange(narealabelpairs),np.shape(testdata)[1])})
+    
+    annotator = Annotator(ax, statpairs, data=df, x="arealabelpair", y='R2', order=np.arange(narealabelpairs))
+    # annotator.configure(test='Wilcoxon', text_format='star', loc='inside',verbose=False)
+    annotator.configure(test='t-test_paired', text_format='star', loc='inside',verbose=False,comparisons_correction="holm-bonferroni")
+    annotator.apply_and_annotate()
+
+    ax=axes[2]
+    for iapl, arealabelpair in enumerate(arealabelpairs):
+        ax.scatter(np.ones(nSessions)*iapl + np.random.rand(nSessions)*0.3 - 0.25,optim_rank[iapl,:],color='k',marker='o',s=10)
+        ax.errorbar(iapl+0.2,np.nanmean(optim_rank[iapl,:]),np.nanstd(optim_rank[iapl,:])/np.sqrt(nSessions),color=clrs_arealabelpairs[iapl],marker='o',zorder=10)
+
+    ax.set_xticks(range(narealabelpairs),labels=[])
+    # ax.set_ylabel('Number of dimensions')
+    ax.set_yticks(np.arange(0,14,2))
+    ax.set_ylim([0,my_ceil(np.nanmax(optim_rank),0)+1])
+    # ax.set_title('Dimensionality')
+
+    testdata = optim_rank
+    testdata = testdata[:,~np.isnan(testdata).any(axis=0)]
+
+    df = pd.DataFrame({'R2':  testdata.flatten(),
+                    'arealabelpair':np.repeat(np.arange(narealabelpairs),np.shape(testdata)[1])})
+
+    annotator = Annotator(ax, statpairs, data=df, x="arealabelpair", y='R2', order=np.arange(narealabelpairs))
+    # annotator.configure(test='Wilcoxon', text_format='star', loc='inside',verbose=False)
+    annotator.configure(test='t-test_paired', text_format='star', loc='inside',verbose=False,comparisons_correction="holm-bonferroni")
+    annotator.apply_and_annotate()
+
+    ax.set_ylabel('Rank')
+
+    ax.set_xlabel('Population pair')
+    ax.set_xticks(range(narealabelpairs))
+
+    sns.despine(top=True,right=True,offset=3)
+    axes[1].set_xticklabels(arealabelpairs2,fontsize=7)
+    axes[2].set_xticklabels(arealabelpairs2,fontsize=7)
+    fig.tight_layout()
+    return fig
+
+
+# Plot the performance across sessions as a function of rank:
+def plot_RRR_R2_arealabels_paired(R2_cv,optim_rank,R2_ranks,arealabelpairs,clrs_arealabelpairs,normalize=False):
+
+    nranks              = R2_ranks.shape[2]
+    nSessions           = R2_cv.shape[1]
+    arealabelpairs2     = [al.replace('-','-\n') for al in arealabelpairs]
+    narealabelpairs     = len(arealabelpairs)
+
+    meanrankdata          = np.nanmean(R2_ranks,axis=(3,4))
+    if normalize:
+        R2_cv       = copy.deepcopy(R2_cv) #copy array to avoid modifying the original
+        optim_rank  = copy.deepcopy(optim_rank)
+        R2_ranks    = copy.deepcopy(R2_ranks)
+
+        R2_cv       = R2_cv/R2_cv[0,:][np.newaxis,:]
+        optim_rank  = optim_rank/optim_rank[0,:][np.newaxis,:]
+        
+        meanrankdata    = np.diff(meanrankdata,axis=2,prepend=0)
+        meanrankdata    = meanrankdata/meanrankdata[0,:,:][np.newaxis,:,:]
+
+    axlim               = my_ceil(np.nanmax(np.nanmean(meanrankdata,axis=1))*1.1,2)
+
+    fig, axes = plt.subplots(1,3,figsize=(7.5,2.5))
+
+    ax = axes[0]
+    handles = []
+    for iapl, arealabelpair in enumerate(arealabelpairs):
+        handles.append(shaded_error(np.arange(nranks),meanrankdata[iapl,:,:],color=clrs_arealabelpairs[iapl],
+                                    alpha=0.25,error='sem',ax=ax))
+
+    ax.legend(handles,arealabelpairs,frameon=False,fontsize=8,loc='lower right')
+    ax.set_xlabel('Rank')
+    ax.set_ylabel('R2 (cv)')
+    ax.set_yticks(np.arange(0,0.3,0.05))
+    ax.set_xticks(np.arange(0,20,5))
+    ax.set_ylim([0,axlim])
+    ax.set_xlim([0,nranks])
+    # ax.set_ylim([0,0.15])
+
+    ax=axes[1]
+    ax.scatter(R2_cv[0,:],R2_cv[1,:],color=clrs_arealabelpairs[0],marker='o',s=10)
+    ax.plot([0,1],[0,1],color='k',linestyle='--',linewidth=0.5)
+    ax.set_xlabel(arealabelpairs[0])
+    ax.set_ylabel(arealabelpairs[1])
+    add_paired_ttest_results(ax,R2_cv[0,:],R2_cv[1,:],pos=[0.7,0.1],fontsize=10)
+    ax.set_title('R2 (cv)',fontsize=10)
+    ax.set_xticks(np.arange(0,0.3,0.1))
+    ax.set_yticks(np.arange(0,0.3,0.1))
+    ax.set_xlim([0,my_ceil(np.nanmax(R2_cv),2)])
+    ax.set_ylim([0,my_ceil(np.nanmax(R2_cv),2)])
+
+    ax=axes[2]
+    ax.scatter(optim_rank[0,:],optim_rank[1,:],color=clrs_arealabelpairs[0],marker='o',s=10)
+    ax.plot([0,20],[0,20],color='k',linestyle='--',linewidth=0.5)
+    ax.set_xlabel(arealabelpairs[0])
+    ax.set_ylabel(arealabelpairs[1])
+    add_paired_ttest_results(ax,optim_rank[0,:],optim_rank[1,:],pos=[0.7,0.1],fontsize=10)
+    ax.set_xticks(np.arange(0,20,5))
+    ax.set_yticks(np.arange(0,20,5))
+    ax.set_xlim([0,my_ceil(np.nanmax(optim_rank),0)+1])
+    ax.set_ylim([0,my_ceil(np.nanmax(optim_rank),0)+1])
+    ax.set_title('Rank',fontsize=10)
+
+    sns.despine(top=True,right=True,offset=3)
+    fig.tight_layout()
     return fig
 
 ################################################################

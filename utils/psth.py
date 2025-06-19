@@ -24,7 +24,7 @@ from tqdm.auto import tqdm
 """
 
 
-def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='interpolate', *args, **kwargs):
+def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=None, method='nearby', *args, **kwargs):
     """
     This function constructs a tensor: a 3D 'matrix' of N neurons by K trials by T time bins
     It needs a 2D matrix of activity across neurons, the timestamps of this data (ts_F)
@@ -39,7 +39,8 @@ def compute_tensor(data, ts_F, ts_T, t_pre=-1, t_post=2, binsize=0.2, method='in
         ts_F)[0], 'the amount of datapoints does not seem to match the timestamps'
 
     if method == 'nearby':
-        print('Binsize parameter ignored - set by imaging frame rate in nearby method\n')
+        if binsize is not None: 
+            print('Binsize parameter ignored - set by imaging frame rate in nearby method\n')
 
         binsize = np.mean(np.diff(ts_F))
 
