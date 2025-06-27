@@ -691,18 +691,22 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
     return bincenters_2d,bin_2d,bin_2d_count,bin_dist,bin_dist_count,binsdRF,bin_angle_cent,bin_angle_cent_count,bin_angle_surr,bin_angle_surr_count,bincenters_angle
 
 
-def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False):
+def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False,absolute=False):
     binedges = np.arange(0,1000,20) 
     nbins= len(binedges)-1
     binmean = np.full((len(sessions),len(areapairs),nbins),np.nan)
     for ises in tqdm(range(len(sessions)),desc= 'Computing pairwise correlations across antom. distance: '):
         if hasattr(sessions[ises],corr_type):
             corrdata = getattr(sessions[ises],corr_type).copy()
+            
+            if absolute:
+                corrdata = np.abs(corrdata)
             # corrdata[corrdata<0] = np.nan
             for iap,areapair in enumerate(areapairs):
                 areafilter      = filter_2d_areapair(sessions[ises],areapair)
                 nanfilter       = ~np.isnan(corrdata)
                 cellfilter      = np.all((areafilter,nanfilter),axis=0)
+                # binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xy[cellfilter].flatten(),
                 binmean[ises,iap,:] = binned_statistic(x=sessions[ises].distmat_xyz[cellfilter].flatten(),
                                                     values=corrdata[cellfilter].flatten(),
                                                     statistic='mean', bins=binedges)[0]
@@ -736,10 +740,11 @@ def plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type):
         ax.legend(handles,areapairs,loc='upper right',frameon=False)	
         ax.set_xlabel('Anatomical distance ($\mu$m)')
         ax.set_ylabel('Correlation')
-        ax.set_xlim([10,600])
+        ax.set_xlim([20,600])
         ax.set_title('%s (%s)' % (corr_type,protocol))
         # ax.set_ylim([-0.01,0.04])
-        ax.set_ylim([0,0.09])
+        # ax.set_ylim([0,ax.get_ylim()[1]])
+        ax.set_ylim([0,0.05])
         ax.set_aspect('auto')
         ax.tick_params(axis='both', which='major', labelsize=8)
 
@@ -1106,6 +1111,7 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
     bin_2d_count    = np.zeros((nSessions,nBins,nBins,len(areapairs),len(layerpairs),len(projpairs)))
 
     #Binning parameters 1D distance
+    # binlim          = 100
     binlim          = 75
     binedges_dist   = np.arange(-binresolution/2,binlim,binresolution)+binresolution/2 
     binsdRF = binedges_dist[:-1]+binresolution/2 
@@ -1293,8 +1299,9 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                             cellfilter      = np.all((rffilter,signalfilter,tuningfilter,areafilter,nearfilter,corrsignfilter,
                                                 layerfilter,projfilter,proxfilter,nanfilter,
                                                 deltaorifilter,dsi_filter,centerorifilter,surroundorifilter),axis=0)
+                            minNcells = 10
 
-                            if np.any(cellfilter):
+                            if np.any(cellfilter) and np.sum(np.any(cellfilter,axis=0)) > minNcells and np.sum(np.any(cellfilter,axis=1)) > minNcells:
                                 # valuedata are the correlation values, these are going to be binned
                                 vdata               = corrdata[cellfilter].flatten()
 
@@ -1554,7 +1561,8 @@ def plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_d
         xylim               = 250
         dim12label = 'XY (um)'
     else:
-        xylim               = 65
+        # xylim               = 65
+        xylim               = 70
         dim12label = 'RF (\N{DEGREE SIGN})'
 
     min_counts      = 100
@@ -1612,7 +1620,7 @@ def plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_d
         ax.set_title('%s' % (areapair),c=clrs_areapairs[iap])
         if iap==0:
             ax.set_ylabel(datatype)
-
+    sns.despine(fig=fig,top=True,right=True,offset=5)
     plt.tight_layout()
     return fig
 
@@ -1778,7 +1786,7 @@ def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
     testbins        = [[0,20],[25,70]]
     testbincolors   = ['grey','grey']
     testlabels      = ['Center','Surround']
-    min_counts      = 10
+    min_counts      = 25
 
     statpairs_areas = [[('unl-unl','lab-unl'),
             ('unl-unl','lab-lab'),
@@ -1805,9 +1813,9 @@ def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
     temp = copy.deepcopy(bin_dist_data_ses)
     temp[bin_dist_count_ses<min_counts] = np.nan
 
-    # data_mean   = np.nanmean(temp,axis=0)
-
-    data_mean   = nanweightedaverage(temp, weights=bin_dist_count_ses, axis=0)
+    data_mean   = np.nanmean(temp,axis=0)
+# 
+    # data_mean   = nanweightedaverage(temp, weights=bin_dist_count_ses, axis=0)
     data_error  = np.nanstd(temp,axis=0) / np.sqrt(np.shape(temp)[0])
 
     #Make figure:
@@ -1933,9 +1941,10 @@ def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
         #     if iap==0:
         #         ax.set_ylabel(datatype)
 
+    sns.despine(fig,top=True,right=True,offset=3)
     # fig.tight_layout()
     # fig2.tight_layout()
-
+    
     return fig#,fig2
 
 # def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count,bin_dist_data,	

@@ -53,8 +53,8 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
 
 
 #%% ################################################
-session_list        = np.array([['LPE11086','2023_12_16']])
-session_list        = np.array([['LPE13959','2025_02_24']])
+session_list        = np.array([['LPE11086_2023_12_16']])
+session_list        = np.array([['LPE13959_2025_02_24']])
 
 #%% Load sessions lazy: 
 sessions,nSessions   = filter_sessions(protocols = ['IM'],only_session_id=session_list)
@@ -861,7 +861,7 @@ plt.plot(subs,EV_nsubs)
 
 #NOTES:
 # For the reconstruction it worked really well to divide by population rate, zscore
-# Then fit the data with lam=0.05, nranks=50, nsub=3
+# Then fit the data with lam=0.05, nsub=3
 # Later update: reduced rank is not necessary, is only limiting, nsub2 is better but 
 # slower. Lam depends on df/deconv and needs to be optimized with crossval. Furthermore 
 # lambda biases towards low or high frequency reconstruction. 
@@ -1102,6 +1102,23 @@ my_savefig(fig,savedir,'R2_pertrial_vs_variables_%s.png' % (sessions[sesidx].ses
 #%% 
 sessions[sesidx].celldata = fit_2dgauss_cRF(cRF, nsub=nsub,celldata=sessions[sesidx].celldata)
 
+
+
+
+
+
+
+
+#%% 
+
+#    # #     # #     #    ######  #######  #####  ####### ######  ### #     #  #####  
+#   #  ##    # ##    #    #     # #       #     # #     # #     #  #  ##    # #     # 
+#  #   # #   # # #   #    #     # #       #       #     # #     #  #  # #   # #       
+###    #  #  # #  #  #    #     # #####   #       #     # #     #  #  #  #  # #  #### 
+#  #   #   # # #   # #    #     # #       #       #     # #     #  #  #   # # #     # 
+#   #  #    ## #    ##    #     # #       #     # #     # #     #  #  #    ## #     # 
+#    # #     # #     #    ######  #######  #####  ####### ######  ### #     #  #####  
+
 #%% 
 # Do KNN decoding with choristers and soloists, very easy! Cool! Is there a large V1 dataset with natural images with spiking data? Yes Paolo Papale data. But that is MUA no?
 # Do KNN category decoding? 
@@ -1270,3 +1287,267 @@ sesidx = 11
 numeric_cols = ['rf_sx_RRR','rf_sy_RRR','rf_r2_RRR','RF_R2']
 for col in numeric_cols:
     plot_knn_binnedvar(sessions,sesidx,varlabel=col,nbins=5)
+
+
+
+
+#%% 
+
+
+
+ #####     #    ### #     #    ######  ####### 
+#     #   # #    #  ##    #    #     # #       
+#        #   #   #  # #   #    #     # #       
+#  #### #     #  #  #  #  #    ######  #####   
+#     # #######  #  #   # #    #   #   #       
+#     # #     #  #  #    ##    #    #  #       
+ #####  #     # ### #     #    #     # #       
+
+
+
+#%% ################################################
+session_list        = np.array([['LPE11086_2023_12_16']])
+session_list        = np.array([['LPE13959_2025_02_24']])
+session_list        = np.array([['LPE10885_2023_10_20']])
+
+#%% Load sessions lazy: 
+sessions,nSessions   = filter_sessions(protocols = ['IM'],only_session_id=session_list)
+# sessions,nSessions   = filter_sessions(protocols = ['IM'],min_cells=1)
+
+#%%   Load proper data and compute average trial responses:                      
+for ises in range(nSessions):    # iterate over sessions
+    sessions[ises].load_respmat(calciumversion='deconv',keepraw=False)
+
+
+#%% Add how neurons are coupled to the population rate: 
+for ses in tqdm(sessions,desc='Computing tuning metrics for each session'):
+    resp                                = zscore(ses.respmat.T,axis=0)
+    poprate                             = np.mean(resp, axis=1)
+    ses.celldata['pop_coupling']        = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(len(ses.celldata))]
+
+#%% 
+
+
+#%% On the trial to trial response: linear regression to get RF
+sesidx  = 0
+print(sessions[sesidx].session_id)
+nsub    = 3 #without subsampling really slow, i.e. nsub=1
+resp    = sessions[sesidx].respmat.T
+lam     = 0.05
+lam     = 0.2
+
+K,N     = np.shape(resp)
+
+#normalize the response for each neuron to the maximum:
+resp = zscore(resp, axis=0)
+
+IMdata = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]
+
+# cRF,Y_hat = lowrank_RF_cv(resp, IMdata,lam=0.05,nranks=100,nsub=nsub)
+cRF,Y_hat = linear_RF_cv(resp, IMdata,lam=lam,nsub=nsub)
+
+RF_R2 = r2_score(resp,Y_hat,multioutput='raw_values')
+sessions[sesidx].celldata['RF_R2'] = RF_R2
+plt.hist(RF_R2,bins=100)
+print(np.mean(RF_R2))
+
+#%% 
+sessions[sesidx].celldata = fit_2dgauss_cRF(cRF, nsub, sessions[sesidx].celldata)
+
+
+#%% Show some linear RF estimates for neurons with different coupling quantiles: 
+
+nexamplecells           = 6
+npopcouplingquantiles   = 5
+
+quantiles               =  np.percentile(ses.celldata['pop_coupling'],np.linspace(0,100,npopcouplingquantiles+1))
+
+fig,axes = plt.subplots(nexamplecells,npopcouplingquantiles,figsize=(npopcouplingquantiles*1.5,nexamplecells*0.8),sharey=True,sharex=True)
+for iqrpopcoupling in range(npopcouplingquantiles):
+    
+    idx_N = np.where(np.all((ses.celldata['pop_coupling'] > quantiles[iqrpopcoupling], 
+                             ses.celldata['pop_coupling'] < quantiles[iqrpopcoupling+1],
+                             ses.celldata['RF_R2'] > 0.05
+                             ), axis=0))[0]
+    excells = np.random.choice(idx_N,nexamplecells,replace=False)
+
+    for iN,N in enumerate(excells):
+        # in range(nexamplecells):
+        ax = axes[iN,iqrpopcoupling]
+        lim = np.max(np.abs(cRF[:,:,N]))*1.2
+        ax.imshow(cRF[:,:,N],cmap='bwr',vmin=-lim,
+                            vmax=lim)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_axis_off()
+        # ax.imshow(cRF[:,:,icell+iqrpopcoupling*nexamplecells],vmin=-0.5,vmax=0.5,cmap='RdBu')
+
+plt.suptitle('RFs for neurons with different population coupling levels',fontsize=11)
+plt.tight_layout()
+my_savefig(fig,savedir,'RFs_by_popcoupling_%s' % sessions[sesidx].session_id, formats = ['png'])
+
+#%% 
+fields = np.array(['RF_R2','rf_az_RRR','rf_el_RRR','rf_sx_RRR','rf_sy_RRR','rf_r2_RRR'])
+nfields = len(fields)
+
+idx_N = ses.celldata['RF_R2'] > 0.025
+
+fig,axes = plt.subplots(2,nfields//2,figsize=(3*nfields/2,2.5*nfields/3))
+axes = axes.flatten()
+for ifield in range(nfields):
+    ax = axes[ifield]
+    x = ses.celldata['pop_coupling'][idx_N]
+    y = ses.celldata[fields[ifield]][idx_N]
+    ax.scatter(x,y,s=0.5)
+    ax.set_xlabel('pop coupling')
+    ax.set_ylabel(fields[ifield])
+    ax.set_xlim(np.nanpercentile(x,[0.1,99.5]))
+    ax.set_ylim(np.nanpercentile(y,[0.1,99.5]))
+    ax.text(0.7,0.9,'r = %.2f' % (ses.celldata[[fields[ifield],'pop_coupling']].corr().to_numpy()[0,1]),
+            transform=ax.transAxes)
+sns.despine(trim=False,top=True,right=True,offset=3)
+plt.tight_layout()
+my_savefig(fig,savedir,'PopCouplingBy_RF_params_%s' % sessions[sesidx].session_id, formats = ['png'])
+
+#%% 
+x = ses.celldata['pop_coupling']
+y = ses.celldata['rf_sx_RRR'] * ses.celldata['rf_sy_RRR']
+idx_N = (ses.celldata['RF_R2'] > 0.025) & (y<500)
+idx_N = np.all((ses.celldata['RF_R2'] > 0.025,
+                y<500,
+                ses.celldata['roi_name'] == 'V1'
+                ),axis=0)
+# idx_N = (ses.celldata['RF_R2'] > 0.025) & (ses.celldata['roi_name'] == 'V1')
+# idx_N = (ses.celldata['rf_r2_RRR'] > 0.6) & (y<500)
+
+# y = ses.celldata['rf_sx_RRR']
+# idx_N = (ses.celldata['RF_R2'] > 0.025) & (y<25)
+# idx_N = (ses.celldata['rf_r2_RRR'] > 0.5) & (y<40)
+
+fig,axes = plt.subplots(1,1,figsize=(3,2.5))
+ax = axes
+x = x[idx_N]
+y = y[idx_N]
+mask = ~np.isnan(x) & ~np.isnan(y)
+x = np.array(x[mask])
+y = np.array(y[mask])
+ax.scatter(x,y,s=0.5)
+ax.set_xlabel('pop coupling')
+ax.set_ylabel('RF size')
+
+
+# define the model
+model = HuberRegressor()
+X = x.reshape((len(x), 1))
+
+model.fit(X, y)
+ypred = model.predict(X)
+xaxis = arange(X.min(), X.max(), 0.01)
+yaxis = model.predict(xaxis.reshape((len(xaxis), 1)))
+plt.plot(xaxis, yaxis, color='r')
+r2 = r2_score(y,ypred)
+r = np.sqrt(r2)
+# r = r2
+
+# results = evaluate_model(X, y, model)
+# print('Mean MAE: %.3f (%.3f)' % (mean(results), std(results)))
+# plot the line of best fit
+# plot_best_fit(X, y, model)
+
+# ax.set_xlim(np.nanpercentile(x,[0.1,99]))
+# ax.set_ylim(np.nanpercentile(y,[0,99]))
+ax.text(0.7,0.9,'r = %.2f' % r,
+            transform=ax.transAxes)
+sns.despine(trim=False,top=True,right=True,offset=3)
+plt.tight_layout()
+# my_savefig(fig,savedir,'PopCouplingBy_RF_params_%s' % sessions[sesidx].session_id, formats = ['png'])
+
+
+#%% 
+
+
+
+
+
+#%% On the trial to trial response: linear regression to get RF
+#But separate based on trials with different population rate
+sesidx  = 0
+print(sessions[sesidx].session_id)
+nsub    = 3 #without subsampling really slow, i.e. nsub=1
+resp    = sessions[sesidx].respmat.T
+lam     = 0.05
+lam     = 0.1
+lam     = 0.3
+
+K,N     = np.shape(resp)
+
+#normalize the response for each neuron:
+resp = zscore(resp, axis=0)
+
+#remove gain modulation by the population rate:
+poprate = np.mean(resp, axis=1)
+
+IMdata = natimgdata[:,:,sessions[sesidx].trialdata['ImageNumber']]
+
+nquantiles = 3
+quantiles = np.percentile(poprate,np.linspace(0,100,nquantiles+1))
+
+cRF,Y_hat = linear_RF_cv(resp[:10,:], IMdata[:,:,:10],lam=lam,nsub=nsub)
+
+cRF_quantiles       = np.empty((nquantiles,)+np.shape(cRF))
+RF_R2_quantiles     = np.empty((nquantiles,N))
+for iqr in range(nquantiles):
+    idx_T = np.where(np.all((poprate > quantiles[iqr], 
+                             poprate < quantiles[iqr+1]), axis=0))[0]
+    print(len(idx_T))
+    
+    cRF_quantiles[iqr,:,:,:],Y_hat = linear_RF_cv(resp[idx_T,:], IMdata[:,:,idx_T],lam=lam,nsub=nsub)
+    
+    RF_R2_quantiles[iqr,:] = r2_score(resp[idx_T,:],Y_hat,multioutput='raw_values')
+
+print(np.mean(RF_R2_quantiles))
+
+
+#%% Show some linear RF estimates for the same neurons with different population rates:
+
+nexamplecells           = 6
+
+idx_N = np.where(np.nanmean(RF_R2_quantiles, axis=0) > 0.1)[0]
+
+# idx_N = np.where(np.all((np.nanmean(RF_R2_quantiles, axis=0) > 0.05,
+                        # ses.celldata['pop_coupling']>0.2), axis=0))[0]
+
+excells = np.random.choice(idx_N,nexamplecells,replace=False)
+
+fig,axes = plt.subplots(nexamplecells,nquantiles,figsize=(nquantiles*1.5,nexamplecells*0.8),sharey=True,sharex=True)
+for iqr in range(nquantiles):
+    for iN,N in enumerate(excells):
+        # in range(nexamplecells):
+        ax = axes[iN,iqr]
+        lim = np.max(np.abs(cRF_quantiles[iqr,:,:,N]))*1.2
+        ax.imshow(cRF_quantiles[iqr,:,:,N],cmap='bwr',vmin=-lim,
+                            vmax=lim)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_axis_off()
+        # ax.imshow(cRF[:,:,icell+iqrpopcoupling*nexamplecells],vmin=-0.5,vmax=0.5,cmap='RdBu')
+plt.suptitle('RFs estimated from trials with different population rates\n (same neurons)',fontsize=11)
+plt.tight_layout()
+my_savefig(fig,savedir,'RFs_by_poprate_%s' % sessions[sesidx].session_id, formats = ['png'])
+
+#%% 
+fig,axes = plt.subplots(1,1,figsize=(3,3),sharey=True,sharex=True)
+ax = axes
+for iqr in range(nquantiles):
+    ax.scatter(np.random.randn(len(RF_R2_quantiles[iqr,:]))*0.1+iqr,RF_R2_quantiles[iqr,:],
+               marker='.',color='k',alpha=0.2)
+    ax.errorbar(iqr,np.mean(RF_R2_quantiles[iqr,:]),
+                yerr=np.std(RF_R2_quantiles[iqr,:]),linewidth=2,marker='o',markerfacecolor='w')   
+ax.set_xticks(np.arange(nquantiles))
+ax.set_xlabel('Pop rate quantiles (trial set)')
+ax.set_ylabel('RF R2')
+        # ax.imshow(cRF[:,:,icell+iqrpopcoupling*nexamplecells],vmin=-0.5,vmax=0.5,cmap='RdBu')
+# plt.suptitle('RFs estimated from trials with different population rates\n (same neurons)',fontsize=11)
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True,offset=3)
+my_savefig(fig,savedir,'RFs_quant_by_poprate_%s' % sessions[sesidx].session_id, formats = ['png'])

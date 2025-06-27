@@ -145,14 +145,14 @@ arealabelpairs  = [ #Feedforward selectivity
                     'V1unl-RSPunl', #to RSP
                     'V1lab-RSPunl']
 
-arealabelpairs  = [ #Feedback selectivity
-                    'PMunl-V1unl', #Feedback pairs
-                    'PMlab-V1unl',
-                    'PMunl-ALunl', #to AL
-                    'PMlab-ALunl',
-                    'PMunl-RSPunl',#to RSP
-                    'PMlab-RSPunl',
-                    ]
+# arealabelpairs  = [ #Feedback selectivity
+#                     'PMunl-V1unl', #Feedback pairs
+#                     'PMlab-V1unl',
+#                     'PMunl-ALunl', #to AL
+#                     'PMlab-ALunl',
+#                     'PMunl-RSPunl',#to RSP
+#                     'PMlab-RSPunl',
+#                     ]
 
 # arealabelpairs  = ['V1unl-PMunl',
 #                     'V1lab-PMunl',
@@ -168,7 +168,7 @@ narealabelpairs     = len(arealabelpairs)
 
 lam                 = 0
 nranks              = 20
-nmodelfits          = 200 #number of times new neurons are resampled 
+nmodelfits          = 50 #number of times new neurons are resampled 
 kfold               = 5
 maxnoiselevel       = 20
 # idx_resp            = np.where((t_axis>=0) & (t_axis<=1))[0]
@@ -261,7 +261,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
                                 idx_nearby),axis=0))[0]
         idx_areay           = np.where(np.all((ses.celldata['arealabel']==aly,
                                 ses.celldata['noise_level']<maxnoiselevel,	
-                                # idx_nearby
+                                idx_nearby
                                 ),axis=0))[0]
     
         if np.any(np.intersect1d(idx_areax,idx_areay)): #if interactions within one population:
@@ -326,7 +326,6 @@ for idx in np.array([[0,3],[4,7]]):
     mean,sd = np.nanmean(R2_cv[idx[1]] / R2_cv[idx[0]])*100-100,np.nanstd(R2_cv[idx[1]] / R2_cv[idx[0]])
     print('%s vs %s: %2.1f %% +/- %2.1f' % (arealabelpairs[idx[1]],arealabelpairs[idx[0]],mean,sd))
 
-
 # normalize   = False
 # fig         = plot_RRR_R2_arealabels(R2_cv[:4],optim_rank[:4],R2_ranks[:4],arealabelpairs[:4],clrs_arealabelpairs[:4],normalize=normalize)
 # my_savefig(fig,savedir,'RRR_cvR2_V1PM_LabUnl_%s_%dsessions' % (version,nSessions))
@@ -346,7 +345,6 @@ for idx in np.array([[0,1],[2,3],[4,5]]):
 
 
 #%% Parameters for decoding from size-matched populations of V1 and PM labeled and unlabeled neurons
-
 arealabelpairs  = ['V1unl-PMunl',
                     'V1lab-PMunl',
                     'V1unl-PMlab',

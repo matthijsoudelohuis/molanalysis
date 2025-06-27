@@ -271,7 +271,7 @@ def add_paired_ttest_results(ax, x,y,pos=[0.2,0.1],fontsize=8):
     t,p = ttest_rel(x[~nas], y[~nas])
 
     print('Paired t-test: p=%.3f' % (p))
-    ax.text(pos[0],pos[1],'p<%s' % round_pval(p),transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
+    ax.text(pos[0],pos[1],'p<%s' % round_pval(p,return_ns=True),transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
 
 def my_legend_strip(ax):
     leg = ax.get_legend()

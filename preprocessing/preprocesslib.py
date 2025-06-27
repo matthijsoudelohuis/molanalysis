@@ -1194,6 +1194,68 @@ def assign_layer(celldata):
 
     return celldata
 
+
+def assign_layer2(celldata):
+    celldata['layer'] = ''
+
+    layers = {
+        'V1': {
+            'L2/3': (0, 300),
+            'L5': (300, np.inf)
+        },
+        'PM': {
+            'L2/3': (0, 300),
+            'L5': (300, np.inf)
+        },
+        'AL': {
+            'L2/3': (0, 300),
+            'L5': (300, np.inf)
+        },
+        'RSP': {
+            'L2/3': (0, 300),
+            'L5': (300, np.inf)
+        }
+    }
+
+    # layers = {
+    #     'V1': {
+    #         'L2/3': (0, 250),
+    #         'L4': (250, 350),
+    #         'L5': (350, np.inf)
+    #     },
+    #     'PM': {
+    #         'L2/3': (0, 250),
+    #         'L4': (250, 325),
+    #         'L5': (325, np.inf)
+    #     },
+    #     'AL': {
+    #         'L2/3': (0, 250),
+    #         'L4': (250, 325),
+    #         'L5': (325, np.inf)
+    #     },
+    #     'RSP': {
+    #         'L2/3': (0, 300),
+    #         'L5': (300, np.inf)
+    #     }
+    # }
+
+    for roi, layerdict in layers.items():
+        for layer, (mindepth, maxdepth) in layerdict.items():
+            idx = celldata[(celldata['roi_name'] == roi) & (mindepth <= celldata['depth']) & (celldata['depth'] < maxdepth)].index
+            celldata.loc[idx, 'layer'] = layer
+    
+    assert(celldata['layer'].notnull().all()), 'problematic assignment of layer based on ROI and depth'
+    
+    #References: 
+    # V1: 
+    # Niell & Stryker, 2008 Journal of Neuroscience
+    # Gilman, et al. 2017 eNeuro
+    # RSC/PM:
+    # Zilles 1995 Rat cortex areal and laminar structure
+
+    return celldata
+
+
 def add_session_bounds(sessiondata,data):
     if 'trialNumber' in data or 'TrialNumber' in data:
         if 'tOnset' in data:
