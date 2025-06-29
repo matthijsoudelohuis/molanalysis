@@ -1546,6 +1546,173 @@ def bin_corr_deltarf_ses_vkeep(sessions,method='mean',areapairs=' ',layerpairs='
     
     return bin_dist,bin_dist_count,binsdRF
 
+
+def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='Fsmooth',
+                    r2_thr=0.2,noise_thr=100,filternear=False,absolute=False,
+                    normalize=False,min_dist=15,n_components=20):
+    """
+    
+
+    """
+    from sklearn.linear_model import LinearRegression
+    nSessions       = len(sessions)
+
+    # Binning parameters RF distance
+    binres_RF       = 5
+    binlim_RF       = 75
+    binedges_RF     = np.arange(-binres_RF/2,binlim_RF,binres_RF)+binres_RF/2 
+    bins_RF         = binedges_RF[:-1]+binres_RF/2 
+    nbins_RF        = len(bins_RF)
+
+    # Binning parameters XYZ distance
+    binres_XYZ      = 10
+    binlim_XYZ      = 500
+    binedges_XYZ    = np.arange(-binres_XYZ/2,binlim_XYZ,binres_XYZ)+binres_XYZ/2 
+    bins_XYZ        = binedges_XYZ[:-1]+binres_XYZ/2 
+    nbins_XYZ       = len(bins_XYZ)
+
+    minpairs        = 5000
+
+    #Init output arrays:
+    spatial_cov_rf   = np.full((nSessions,n_components,nbins_RF,len(areapairs),len(layerpairs),
+                         len(projpairs)),np.nan)
+    spatial_cov_xyz  = np.full((nSessions,n_components,nbins_XYZ,len(areapairs),len(layerpairs),
+                         len(projpairs)),np.nan)
+    # #Init output arrays:
+    # R2_rf_cov   = np.full((nSessions,n_components,len(areapairs),len(layerpairs),
+    #                      len(projpairs)),np.nan)
+    # R2_xyz_cov       = np.full((nSessions,n_components,len(areapairs),len(layerpairs),
+    #                      len(projpairs)),np.nan)
+    
+    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
+        celldata = copy.deepcopy(sessions[ises].celldata)
+
+        assert(hasattr(sessions[ises],corr_type)), f'covariance type {corr_type} not found in session {ises}'
+        
+        covdata         = getattr(sessions[ises],corr_type).copy()
+        assert covdata.shape[0] == covdata.shape[1], f'covariance matrix is not square'
+        assert len(sessions[ises].celldata) == covdata.shape[0], f'number of cells in session {ises} does not match covariance matrix'
+        
+        #Eigenvalue decomposition of the covariance matrix
+        evals, evecs    = np.linalg.eigh(covdata)
+        evals = evals[::-1]
+        evecs = evecs[:,::-1] #sort eigenvalues in descending order
+
+        covdata_dims    = np.full((covdata.shape[0],covdata.shape[1],n_components),np.nan)
+        for icomp in range(n_components):
+            covdata_dims[:,:,icomp] = np.dot(evecs[:,icomp].reshape(-1,1)*evals[icomp],evecs[:,icomp].reshape(1,-1))
+        
+        if 'rf_r2_' + rf_type in celldata:
+
+            el              = celldata['rf_el_' + rf_type].to_numpy()
+            az              = celldata['rf_az_' + rf_type].to_numpy()
+            
+            delta_el        = el[:,None] - el[None,:]
+            delta_az        = az[:,None] - az[None,:]
+
+            delta_rf        = np.sqrt(delta_az**2 + delta_el**2)
+
+            deltaXYZ        = sessions[ises].distmat_xyz
+
+            if absolute:
+                covdata = np.abs(covdata)
+
+            if filternear:
+                nearfilter      = filter_nearlabeled(sessions[ises],radius=50)
+                nearfilter      = np.meshgrid(nearfilter,nearfilter)
+                nearfilter      = np.logical_and(nearfilter[0],nearfilter[1])
+            else: 
+                nearfilter      = np.ones((len(celldata),len(celldata))).astype(bool)
+
+            rffilter        = np.meshgrid(celldata['rf_r2_' + rf_type] > r2_thr,celldata['rf_r2_'  + rf_type] > r2_thr)
+            rffilter        = np.logical_and(rffilter[0],rffilter[1])
+            rffilter[np.isnan(delta_rf)] = np.nan
+
+            signalfilter    = np.meshgrid(celldata['noise_level']<noise_thr,celldata['noise_level']<noise_thr)
+            signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
+
+            # nanfilter       = np.all((~np.isnan(covdata),~np.isnan(delta_rf)),axis=0)
+            nanfilter       = ~np.isnan(covdata)
+
+            proxfilter      = ~(sessions[ises].distmat_xy<min_dist)
+
+            for iap,areapair in enumerate(areapairs):
+                for ilp,layerpair in enumerate(layerpairs):
+                    for ipp,projpair in enumerate(projpairs):
+
+                        areafilter      = filter_2d_areapair(sessions[ises],areapair)
+
+                        layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
+
+                        projfilter      = filter_2d_projpair(sessions[ises],projpair)
+
+                        #Combine all filters into a single filter:
+                        cellfilter      = np.all((rffilter,signalfilter,areafilter,nearfilter,
+                                            layerfilter,projfilter,proxfilter,nanfilter),axis=0)
+                        minNcells       = 10
+
+                        if np.any(cellfilter) and np.sum(np.any(cellfilter,axis=0)) > minNcells and np.sum(np.any(cellfilter,axis=1)) > minNcells:
+                            
+                            #For the first regression try to predict covariance from delta RF:
+                            xdata_RF            = delta_rf[cellfilter].flatten()
+                            # xdata_RF            = xdata_RF.reshape(-1,1)
+                            
+                            # fig,ax = plt.subplots(1,1,figsize=(5,5))
+                            # clrs = sns.color_palette('magma',n_components)
+                            for icomp in range(n_components):
+                                ydata = covdata_dims[:,:,icomp][cellfilter].flatten()
+                                ydata = zscore(ydata)
+
+                                #Take the mean of the covariance in this dimension in each bin:
+                                bin_mean            = binned_statistic(x=xdata_RF,values=ydata,statistic='mean', bins=binedges_RF)[0]
+                                bin_count           = np.histogram(xdata_RF,bins=binedges_RF)[0]
+                                bin_mean[bin_count<minpairs] = np.nan
+
+                                # x = bins_RF[~np.isnan(bin_mean)].reshape(-1,1)
+                                # y = bin_mean[~np.isnan(bin_mean)].reshape(-1,1)
+                                spatial_cov_rf[ises,icomp,:,iap,ilp,ipp] = bin_mean
+                                
+                                # ax.plot(x,y,'-',color=clrs[icomp],label=str(icomp+1))
+
+                                # model = LinearRegression().fit(x,y)
+                                # R2_rf_cov[ises,icomp,iap,ilp,ipp] = model.score(x, y)
+                                # R2_rf_cov[ises,icomp,iap,ilp,ipp] = model.coef_[0][0]
+
+                        #Combine all filters into a single filter:
+                        cellfilter      = np.all((signalfilter,areafilter,nearfilter,
+                                            layerfilter,projfilter,proxfilter,nanfilter),axis=0)
+                        minNcells       = 10
+
+                        if np.any(cellfilter) and np.sum(np.any(cellfilter,axis=0)) > minNcells and np.sum(np.any(cellfilter,axis=1)) > minNcells:
+
+
+                            xdata_XYZ           = deltaXYZ[cellfilter].flatten()
+                            # xdata_XYZ           = xdata_XYZ.reshape(-1,1)
+                            for icomp in range(n_components):
+                                ydata = covdata_dims[:,:,icomp][cellfilter].flatten()
+                                ydata = zscore(ydata)
+
+                                #Take the mean of the covariance in this dimension in each bin:
+                                bin_mean            = binned_statistic(x=xdata_XYZ,values=ydata,statistic='mean', bins=binedges_XYZ)[0]
+                                bin_count      = np.histogram(xdata_XYZ,bins=binedges_XYZ)[0]
+                                bin_mean[bin_count<minpairs] = np.nan
+                                
+                                spatial_cov_xyz[ises,icomp,:,iap,ilp,ipp] = bin_mean
+
+                                # x = bins_XYZ[~np.isnan(bin_mean)].reshape(-1,1)
+                                # y = bin_mean[~np.isnan(bin_mean)].reshape(-1,1)
+                                # ax.plot(x,y,'-',color=clrs[icomp],label=str(icomp+1))
+# 
+                                # model = LinearRegression().fit(x,y)
+                                # R2_xyz_cov[ises,icomp,iap,ilp,ipp] = model.score(x, y)
+                                # R2_xyz_cov[ises,icomp,iap,ilp,ipp] = model.coef_[0][0]
+
+
+
+
+    return spatial_cov_rf,spatial_cov_xyz
+
+
 ######  #       ####### #######    ######  ####### #       #######    #       ######  ####### 
 #     # #       #     #    #       #     # #       #          #      # #      #     # #       
 #     # #       #     #    #       #     # #       #          #     #   #     #     # #       

@@ -225,7 +225,7 @@ pls.fit(X,Y)
 # rrr = RandomizedRRR(n_components=10)
 
 #%% 
-%timeit cca.fit(X,Y)
+# %timeit cca.fit(X,Y)
 # %timeit pls.fit(X,Y)
 # %timeit rrr.fit(X,Y)
 

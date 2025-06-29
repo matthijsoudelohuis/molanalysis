@@ -21,7 +21,6 @@ from statannotations.Annotator import Annotator
 from loaddata.session_info import filter_sessions,load_sessions
 from preprocessing.preprocesslib import assign_layer
 from utils.plot_lib import * #get all the fixed color schemes
-from utils.plot_lib import shaded_error,my_ceil,my_floor
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace_smooth_with_Fsig
 from utils.tuning import compute_tuning_wrapper
@@ -46,7 +45,6 @@ session_list        = np.array([['LPE10919_2023_11_06']])
 
 session_list        = np.array([['LPE09665_2023_03_21'], #GR
                                 ['LPE10919_2023_11_06']]) #GR
-
 
 # Sessions with good RF:
 session_list        = np.array([['LPE09665_2023_03_21'], #GR
@@ -108,11 +106,11 @@ fa = FA(n_components=n_components)
 # comps = np.array([0,1,2,3,4,5,6,7,8,9])
 # comps = np.array([1,2,3,4,5,6,7,8])
 comps = np.arange(1,n_components)
-# comps = np.array([0])
+# comps = np.array(0,)
 # comps = np.arange(2,n_components)
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Computing noise correlations'):
-    # ses. 
+    
     [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
     if sessions[ises].sessiondata['protocol'][0]=='GR':
         resp_meanori,respmat_res        = mean_resp_gr(sessions[ises])
@@ -300,7 +298,6 @@ sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_ind
 
 idx_ses             = np.isin(sessiondata['session_id'],session_list[:,0])
 
-
 #%% Plot radial tuning:
 filestring = 'RadialTuning_areas_%s_%s_' % (corr_type,layerpairs[0].replace('/',''))
 # filestring = 'RadialTuning_areas_%sGM_%s_' % (corr_type,layerpairs[0].replace('/',''))
@@ -415,7 +412,7 @@ fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses[idx_ses],bin_dist
 
 # fig = plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses[idx_ses],bin_dist_mean_ses[idx_ses],areapairs,layerpairs,projpairs)
 
-# fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,areapairs,layerpairs,projpairs,datatype='Correlation')
+fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,areapairs,layerpairs,projpairs,datatype='Correlation')
 # fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs,datatype='Correlation')
 # axes = fig.get_axes()
 # axes[0].set_ylim([-0.05,0.05])
@@ -424,10 +421,11 @@ fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses[idx_ses],bin_dist
 # fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_shuf' % (corr_type) + '.pdf'), format = 'pdf')
 
 
+
+
+
+
 #%% 
-
-
-
 for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
     celldata = copy.deepcopy(sessions[ises].celldata)
     if hasattr(sessions[ises],corr_type):
@@ -453,35 +451,109 @@ axes[0].imshow(corrdata,vmin=-0.1,vmax=0.1)
 corrdata = my_shuffle(corrdata,method='random',axis=None)
 axes[1].imshow(corrdata,vmin=-0.1,vmax=0.1)
 
-# #%% #########################################################################################
-# # Contrast: across areas
-# areapairs           = ['V1-V1','PM-PM','V1-PM']
-# # layerpairs          = ['L2/3-L2/3']
-# # layerpairs          = ['L5-L5']
-# layerpairs          = ' '
-# projpairs           = ' '
-# binresolution = 5
-# rf_type             = 'Fsmooth'
-# corr_type           = 'noise_corr'
 
-# [bin_dist_mean_ses,bin_dist_count_ses,binsdRF] = bin_corr_deltarf_ses_vkeep(sessions,rf_type=rf_type,
-#                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-#                         method='mean',filtersign=None,corr_type=corr_type,noise_thr=20,
-#                         binresolution=binresolution,normalize=False)
 
-# binres              = 0.005
-# binedges            = np.arange(-1,1,binres)
-# bincenters          = binedges[:-1] + binres/2
-# nbins               = len(bincenters)
 
-# hist_mean_ses = np.full(list(np.shape(bin_dist_mean_ses))[:-1] + [nbins],np.nan)
+#%% Regress pairwise metrics onto different dimensions of covariance matrix:
+# The idea is to see which dimensions of the covariance are 
+# The prediction is that the first dimension is reflected shared population rate that is not retinotopically specific
+# However, higher dimensions do contain retinotopically specific covariability because it is reflected in the total
+# covariance.
+# 
+# areapairs=' ',layerpairs=' ',projpairs=' ',
 
-# for idx in np.ndindex(*bin_dist_mean_ses.shape[:-1]):
-#     hist_mean_ses[idx],_ = np.histogram(bin_dist_mean_ses[idx],bins=binedges)
 
-# hist_mean_ses /= np.sum(hist_mean_ses,axis=-1,keepdims=True)
+areapairs           = ['V1-V1']
 
-# # plt.plot(bincenters,np.nanmean(hist_mean_ses,axis=(0,1,2,3,4)))
-# plt.plot(bincenters,np.nanmean(hist_mean_ses[:,:2,:,:,:,:],axis=(0,1,2,3)).T)
-# plt.plot(bincenters,np.nanmean(hist_mean_ses[:,:3,0,:,:,:],axis=(0,1,2)).T)
-# plt.xlim([-0.1,0.1])
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+# areapairs           = ['V1-PM']
+projpairs           = ' '
+# projpairs           = ['unl-unl']
+layerpairs          = ' '
+n_components        = 30
+
+spatial_cov_rf,spatial_cov_xyz = regress_cov_dim(sessions,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                    corr_type='noise_corr',rf_type='F',
+                    r2_thr=0.1,noise_thr=20,n_components=n_components)
+
+nareapairs = len(areapairs)
+
+#%% 
+ilp = 0
+ipp = 0
+n_components = 15
+clrs = sns.color_palette('Spectral',n_components)
+fig,axes = plt.subplots(1,nareapairs,figsize=(9,3))
+for iap in range(nareapairs):
+    ax = axes[iap]
+    # ax.plot(range(n_components),np.nanmean(R2_RF_COV,axis=(0,2,3,4)))
+    for icomp in range(n_components):
+        ax.plot(bins_RF,np.nanmean(spatial_cov_rf[:,icomp,:,iap,ilp,ipp],axis=(0)),
+                color=clrs[icomp])
+    
+        # for ises in range(nSessions):
+        # ax.plot(range(n_components),spatial_cov_rf[ises,:,iap,ilp,ipp],axis=(1,2,3)),alpha=0.5)
+    ax.axhline(0,ls=':',color='k',alpha=0.5)
+
+    ax.set_xlabel('Delta RF (deg)')
+    if iap == 0:
+        ax.set_ylabel('Covariance')
+    if iap==nareapairs-1:
+        ax.legend(np.arange(n_components)+1,frameon=False,title='Components',fontsize=7,bbox_to_anchor=(1,0.9))
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+
+#%% 
+ilp = 0
+ipp = 0
+n_components = 15
+clrs = sns.color_palette('viridis',n_components)
+fig,axes = plt.subplots(nSessions,nareapairs,figsize=(9,20),sharex=True,sharey=True)
+for iap in range(nareapairs):
+    for ises in range(nSessions):
+        ax = axes[ises,iap]
+    # ax.plot(range(n_components),np.nanmean(R2_RF_COV,axis=(0,2,3,4)))
+        for icomp in range(n_components):
+            ax.plot(bins_RF,spatial_cov_rf[ises,icomp,:,iap,ilp,ipp],
+                    color=clrs[icomp])
+    
+        # for ises in range(nSessions):
+        # ax.plot(range(n_components),spatial_cov_rf[ises,:,iap,ilp,ipp],axis=(1,2,3)),alpha=0.5)
+
+        if iap == 1 and ises==nSessions-1:
+            ax.set_xlabel('Delta RF (deg)')
+        if iap == 0 and ises==0:
+            ax.set_ylabel('Covariance')
+        if iap==nareapairs-1 and ises==nSessions//2:
+            ax.legend(np.arange(n_components)+1,frameon=False,title='Components',fontsize=7,bbox_to_anchor=(1,0.9))
+        ax.axhline(0,ls=':',color='k',alpha=0.5)
+ax.set_xlim([0,45])
+ax.set_ylim([-0.1,0.15])
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+
+#%% 
+ilp = 0
+ipp = 0
+n_components = 25
+clrs = sns.color_palette('Spectral',n_components)
+fig,axes = plt.subplots(1,nareapairs,figsize=(9,3),sharex=True,sharey=True)
+for iap in range(nareapairs):
+    ax = axes[iap]
+    # ax.plot(range(n_components),np.nanmean(R2_RF_COV,axis=(0,2,3,4)))
+    for icomp in range(n_components):
+        ax.plot(bins_XYZ,np.nanmean(spatial_cov_xyz[:,icomp,:,iap,ilp,ipp],axis=(0)),
+                color=clrs[icomp])
+    
+        # for ises in range(nSessions):
+        # ax.plot(range(n_components),spatial_cov_rf[ises,:,iap,ilp,ipp],axis=(1,2,3)),alpha=0.5)
+
+    ax.set_xlabel('Delta XYZ (um)')
+    if iap == 0:
+        ax.set_ylabel('Covariance')
+    if iap==nareapairs-1:
+        ax.legend(np.arange(n_components)+1,frameon=False,title='Components',
+                  fontsize=7,bbox_to_anchor=(1,0.9),ncol=2)
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+

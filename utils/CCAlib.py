@@ -70,7 +70,7 @@ def CCA_subsample(DATA1,DATA2,nN=None,nK=None,resamples=5,kFold=5,prePCA=None,n_
             
             model.fit(X_train,Y_train)
 
-            # Compute and store canonical correlations for the first pair
+            # Compute and store canonical correlations for each pair
             X_c, Y_c = model.transform(X_train,Y_train)
             for icomp in range(n_components):
                 corr_train[icomp,iRS,ikf] = np.corrcoef(X_c[:,icomp],Y_c[:,icomp], rowvar = False)[0,1]
