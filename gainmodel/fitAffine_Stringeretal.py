@@ -40,20 +40,20 @@ savedir =  os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGai
 #===============================================================================
 
 #%% #############################################################################
-session_list        = np.array([['LPE10919','2023_11_06']])
-# session_list        = np.array([['LPE10885','2023_10_23']])
-# session_list        = np.array([['LPE12223','2024_06_10']])
+#Put data in rootdir/Procdata/GR/LPE12223/2024_06_10/
+#Add the rootdir on working PC (USER) in get_data_folder()
+# loaddata.get_data_folder()
+
+session_list        = np.array([['LPE12223_2024_06_10']])
 
 # load sessions lazy: 
-sessions,nSessions   = filter_sessions(protocols = ['GR'],only_session_id=session_list)
+sessions,nSessions   = filter_sessions(protocols = 'GR',only_session_id=session_list)
 
-#%% Load proper data and compute average trial responses:                      
+#   Load proper data and compute average trial responses:                      
 for ises in range(nSessions):    # iterate over sessions
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion='deconv',keepraw=False)
+                                calciumversion='deconv',keepraw=True)
                                 # calciumversion='dF',keepraw=True)
-
-
 
 #%% 
 fig = plot_PCA_gratings(sessions[ises])
