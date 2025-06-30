@@ -14,6 +14,9 @@ from skimage.measure import block_reduce
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+#Repeated measures ANOVA
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
 
 from utils.plot_lib import *
 from utils.plot_lib import * #get all the fixed color schemes
@@ -1600,7 +1603,7 @@ def bin_corr_deltarf_ses_vkeep(sessions,method='mean',areapairs=' ',layerpairs='
 
 def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='Fsmooth',
                     r2_thr=0.2,noise_thr=100,filternear=False,absolute=False,
-                    normalize=False,min_dist=15,n_components=20):
+                    normalize=False,min_dist=15,n_components=20,minpairs = 50):
     """
     
 
@@ -1621,8 +1624,6 @@ def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_typ
     binedges_XYZ    = np.arange(-binres_XYZ/2,binlim_XYZ,binres_XYZ)+binres_XYZ/2 
     bins_XYZ        = binedges_XYZ[:-1]+binres_XYZ/2 
     nbins_XYZ       = len(bins_XYZ)
-
-    minpairs        = 1000
 
     #Init output arrays:
     spatial_cov_rf   = np.full((nSessions,n_components,nbins_RF,len(areapairs),len(layerpairs),
@@ -2032,7 +2033,6 @@ def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
     testbincolors   = ['grey','grey']
     testlabels      = ['Center','Surround']
     
-
     statpairs_areas = [[('unl-unl','lab-unl'),
             ('unl-unl','lab-lab'),
             ('lab-unl','lab-lab'),
@@ -2100,10 +2100,6 @@ def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
             #     print('curve_fit failed for %s' % (projpair))
             #     continue
 
-        #Repeated measures ANOVA
-        import statsmodels.api as sm
-        from statsmodels.formula.api import ols
-
         # Define the data
         data = bin_dist_data_ses[:,:, iap, ilp, :]
 
@@ -2115,7 +2111,8 @@ def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
         df = pd.DataFrame({
             'correlation': data_long,
             'session': np.repeat(np.arange(n_sessions), n_delta_rf * n_cell_types),
-            'delta_rf': np.repeat(np.arange(n_delta_rf), n_sessions * n_cell_types),
+            # 'delta_rf': np.repeat(np.arange(n_delta_rf), n_sessions * n_cell_types),
+            'delta_rf': np.tile(np.repeat(np.arange(n_delta_rf),n_cell_types),n_sessions),
             'labeled': np.tile(np.arange(n_cell_types), n_sessions * n_delta_rf)
         })
 

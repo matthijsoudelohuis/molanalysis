@@ -23,7 +23,7 @@ pd.set_option("display.max_columns", 14)
 
 def my_savefig(fig,savedir,filename,formats=['png','pdf']):
     for fmt in formats:
-        fig.savefig(os.path.join(savedir,filename +  '.' + fmt),format = fmt,dpi=300,bbox_inches='tight',transparent=True)
+        fig.savefig(os.path.join(savedir,filename +  '.' + fmt),format = fmt,dpi=600,bbox_inches='tight',transparent=True)
     # fig.savefig(os.path.join(savedir,filename +  '.png'),format = 'png',dpi=300,bbox_inches='tight',transparent=True)
     # fig.savefig(os.path.join(savedir,filename +  '.pdf'),format = 'pdf',dpi=300,bbox_inches='tight',transparent=True)
 

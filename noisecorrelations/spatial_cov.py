@@ -29,7 +29,7 @@ from utils.explorefigs import plot_excerpt
 from utils.shuffle_lib import my_shuffle, corr_shuffle
 from utils.gain_lib import * 
 from utils.arrayop_lib import nanweightedaverage
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\RadialTuning')
 
 
 #%% 
@@ -408,7 +408,7 @@ normalize           = False
 absolute            = False
 shufflefield        = None
 
-shufflefield        = 'corrdata'
+# shufflefield        = 'corrdata'
 # shufflefield      = 'labeled'
 # shufflefield      = 'RF'
 
@@ -430,8 +430,8 @@ fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_mean_ses
                                     layerpairs,projpairs,datatype='Correlation',min_counts=min_counts)
 # fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs,datatype='Correlation')
 
-# fig.savefig(os.path.join(savedir,'RadialTuning','RadialTuning_projs_%s_mean' % (corr_type) + '.png'), format = 'png')
-fig.savefig(os.path.join(savedir,'RadialTuning','RadialTuning_projs_%s_mean_shuf' % (corr_type) + '.png'), format = 'png')
+fig.savefig(os.path.join(savedir,'RadialTuning','RadialTuning_projs_%s_mean' % (corr_type) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'RadialTuning','RadialTuning_projs_%s_mean_shuf' % (corr_type) + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'RadialTuning_projs_%s_mean_GRGN_shuf' % (corr_type) + '.pdf'), format = 'pdf')
 
 
@@ -446,14 +446,14 @@ areapairs           = ['V1-V1']
 areapairs           = ['V1-V1','PM-PM','V1-PM']
 # areapairs           = ['V1-PM']
 projpairs           = ' '
-# projpairs           = ['unl-unl']
+# projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
 layerpairs          = ' '
 n_components        = 20
 
 bins_RF,spatial_cov_rf,bins_XYZ,spatial_cov_xyz = regress_cov_dim(sessions,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
                     # corr_type='noise_cov',rf_type='F',
-                    corr_type='noise_corr',rf_type='F',
-                    r2_thr=0.1,noise_thr=20,n_components=n_components)
+                    corr_type='noise_corr',rf_type='F',minpairs=1000,
+                    r2_thr=0.1,noise_thr=100,n_components=n_components)
 
 #%% 
 nareapairs = len(areapairs)
@@ -489,31 +489,34 @@ ax.set_ylim([-0.1,0.15])
 sns.despine(top=True,right=True,offset=3)
 plt.tight_layout()
 
-
-# #%% 
-# ilp = 0
-# ipp = 0
-# n_components = 15
-# clrs = sns.color_palette('Spectral',n_components)
-# fig,axes = plt.subplots(1,nareapairs,figsize=(9,3),sharex=True,sharey=True)
-# for iap in range(nareapairs):
-#     ax = axes[iap]
-#     # ax.plot(range(n_components),np.nanmean(R2_RF_COV,axis=(0,2,3,4)))
-#     for icomp in range(n_components):
-#         ax.plot(bins_RF,np.nanmean(spatial_cov_rf[:,icomp,:,iap,ilp,ipp],axis=(0)),
-#                 color=clrs[icomp])
+#%% 
+ilp = 0
+ipp = 0
+n_components = 15
+clrs = sns.color_palette('Spectral',n_components)
+fig,axes = plt.subplots(1,nareapairs,figsize=(9,3),sharex=True,sharey=True)
+for iap in range(nareapairs):
+    ax = axes[iap]
+    # ax.plot(range(n_components),np.nanmean(R2_RF_COV,axis=(0,2,3,4)))
+    for icomp in range(n_components):
+        ax.plot(bins_RF,np.nanmean(spatial_cov_rf[:,icomp,:,iap,ilp,ipp],axis=(0)),
+                color=clrs[icomp])
+        # ax.plot(bins_RF,np.nanmean(np.abs(spatial_cov_rf[:,icomp,:,iap,ilp,ipp]),axis=(0)),
+                # color=clrs[icomp])
     
-#         # for ises in range(nSessions):
-#         # ax.plot(range(n_components),spatial_cov_rf[ises,:,iap,ilp,ipp],axis=(1,2,3)),alpha=0.5)
-#     ax.axhline(0,ls=':',color='k',alpha=0.5)
-
-#     ax.set_xlabel('Delta RF (deg)')
-#     if iap == 0:
-#         ax.set_ylabel('Covariance')
-#     if iap==nareapairs-1:
-#         ax.legend(np.arange(n_components)+1,frameon=False,title='Components',fontsize=7,bbox_to_anchor=(1,0.9))
-# sns.despine(top=True,right=True,offset=3)
-# plt.tight_layout()
+        # for ises in range(nSessions):
+        # ax.plot(range(n_components),spatial_cov_rf[ises,:,iap,ilp,ipp],axis=(1,2,3)),alpha=0.5)
+    ax.axhline(0,ls=':',color='k',alpha=0.5)
+    ax_nticks(ax,5)
+    ax.set_xlabel('Delta RF (deg)')
+    if iap == 0:
+        ax.set_ylabel('Covariance')
+    if iap==nareapairs-1:
+        ax.legend(np.arange(n_components)+1,frameon=False,title='Components',fontsize=7,bbox_to_anchor=(1,0.9))
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+# my_savefig(fig,savedir,'CrossArea_Spatial_Cov_RF_%dsessions_abs' % (nSessions))
+my_savefig(fig,savedir,'CrossArea_Spatial_Cov_RF_%dsessions' % (nSessions))
 
 #%% 
 ilp = 0
@@ -543,10 +546,10 @@ ax.set_xlim([0,45])
 ax.set_ylim([-0.1,0.15])
 sns.despine(top=True,right=True,offset=3)
 plt.tight_layout()
+my_savefig(fig,savedir,'CrossArea_Spatial_Cov_RF_%d_indiv_sessions' % (nSessions))
 
 
 #%% Spatial XYZ:
-
 
 #%% 
 ilp = 0
@@ -566,7 +569,7 @@ for iap in range(nareapairs):
         # ax.plot(range(n_components),spatial_cov_rf[ises,:,iap,ilp,ipp],axis=(1,2,3)),alpha=0.5)
     ax.axhline(0,ls=':',color='k',alpha=0.5)
     ax.set_title('%s' % (areapairs[iap]),c=clrs_areapairs[iap])
-    ax.set_xlabel('Delta RF (deg)')
+    ax.set_xlabel('Delta XYZ (um)')
     if iap == 0:
         ax.set_ylabel('Covariance')
     if iap==nareapairs-1:
@@ -575,6 +578,7 @@ ax.set_xlim([0,750])
 ax.set_ylim([-0.1,0.15])
 sns.despine(top=True,right=True,offset=3)
 plt.tight_layout()
+my_savefig(fig,savedir,'CrossArea_Spatial_Cov_XYZ_%dsessions_BinDims' % (nSessions))
 
 #%% 
 ilp = 0
@@ -599,9 +603,215 @@ for iap in range(nareapairs):
         ax.legend(np.arange(n_components)+1,frameon=False,title='Components',
                   fontsize=7,bbox_to_anchor=(1,0.9),ncol=2)
     ax.axhline(0,ls=':',color='k',alpha=0.5)
+    ax_nticks(ax,5)
 ax.set_xlim([0,750])
 ax.set_ylim([-0.1,0.15])
 
 sns.despine(top=True,right=True,offset=3)
 plt.tight_layout()
+my_savefig(fig,savedir,'CrossArea_Spatial_Cov_XYZ_%dsessions_IndivDims' % (nSessions))
 
+
+
+#%% 
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+# areapairs           = ['V1-PM']
+projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
+layerpairs          = ' '
+n_components        = 20
+
+bins_RF,spatial_cov_rf,bins_XYZ,spatial_cov_xyz = regress_cov_dim(sessions,areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                    corr_type='noise_cov',rf_type='F',minpairs=50,
+                    # corr_type='noise_corr',rf_type='F',min_pairs=50,
+                    r2_thr=0.1,noise_thr=100,n_components=n_components)
+
+#%% 
+ilp = 0
+# clrs = sns.color_palette('Spectral',len(bindims))
+clrs_projpairs = get_clr_labelpairs(projpairs)
+
+fig,axes = plt.subplots(len(bindims),nareapairs,figsize=(2*nareapairs,2*len(bindims)),sharex=True,sharey=True)
+for iap in range(nareapairs):
+    for ibdim,bdim in enumerate(bindims):
+        ax = axes[ibdim,iap]
+        for ipp,projpair in enumerate(projpairs):
+            data = spatial_cov_rf[np.ix_(range(nSessions),bdim,range(len(bins_RF)),[iap],[ilp],[ipp])]
+        
+            ax.plot(bins_RF,np.nanmean(data,axis=(0,1,3,4,5)),
+                    color=clrs_projpairs[ipp],label=projpair)
+    
+        # for ises in range(nSessions):
+        # ax.plot(range(n_components),spatial_cov_rf[ises,:,iap,ilp,ipp],axis=(1,2,3)),alpha=0.5)
+        ax.axhline(0,ls=':',color='k',alpha=0.5)
+        if ibdim == 0:
+            ax.set_title('%s' % (areapairs[iap]),c=clrs_areapairs[iap])
+        if ibdim == len(bindims)-1:
+            ax.set_xlabel('Delta RF (deg)')
+        ax_nticks(ax,3)
+        if iap == 0:
+            ax.set_ylabel('Cov (%s)' % (bindimlabels[ibdim]))
+        if iap==nareapairs-1:
+            ax.legend(projpairs,frameon=False,fontsize=7,bbox_to_anchor=(1,0.9))
+ax.set_xlim([0,45])
+ax.set_ylim([-0.05,0.15])
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+my_savefig(fig,savedir,'CrossArea_Spatial_Cov_RF_%dsessions_projpairs' % (nSessions),formats=['png'])
+
+#%% 
+ilp = 0
+# clrs = sns.color_palette('Spectral',len(bindims))
+clrs_projpairs = get_clr_labelpairs(projpairs)
+
+fig,axes = plt.subplots(len(bindims),nareapairs,figsize=(2*nareapairs,2*len(bindims)),sharex=True,sharey=True)
+for iap in range(nareapairs):
+    for ibdim,bdim in enumerate(bindims):
+        ax = axes[ibdim,iap]
+        for ipp,projpair in enumerate(projpairs):
+            data = spatial_cov_xyz[np.ix_(range(nSessions),bdim,range(len(bins_XYZ)),[iap],[ilp],[ipp])]
+        
+            ax.plot(bins_XYZ,np.nanmean(data,axis=(0,1,3,4,5)),
+                    color=clrs_projpairs[ipp],label=projpair)
+    
+        ax_nticks(ax,3)
+        ax.axhline(0,ls=':',color='k',alpha=0.5)
+        if ibdim == 0:
+            ax.set_title('%s' % (areapairs[iap]),c=clrs_areapairs[iap])
+        if ibdim == len(bindims)-1:
+            ax.set_xlabel('Delta XYZ (um)')
+        if iap == 0:
+            ax.set_ylabel('Cov (%s)' % (bindimlabels[ibdim]))
+        if iap==nareapairs-1:
+            ax.legend(projpairs,frameon=False,fontsize=7,bbox_to_anchor=(1,0.9))
+ax.set_xlim([0,750])
+ax.set_ylim([-0.05,0.1])
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+my_savefig(fig,savedir,'CrossArea_Spatial_Cov_XYZ_%dsessions_projpairs' % (nSessions))
+
+#%% 
+
+ #####  ######  ####### #     # #######    #    #     # ####### ####### #     #  #####  
+#     # #     # #     # ##    #    #      # #   ##    # #       #     # #     # #     # 
+#       #     # #     # # #   #    #     #   #  # #   # #       #     # #     # #       
+ #####  ######  #     # #  #  #    #    #     # #  #  # #####   #     # #     #  #####  
+      # #       #     # #   # #    #    ####### #   # # #       #     # #     #       # 
+#     # #       #     # #    ##    #    #     # #    ## #       #     # #     # #     # 
+ #####  #       ####### #     #    #    #     # #     # ####### #######  #####   #####  
+
+
+#%% 
+
+#%% Load all sessions from certain protocols: 
+# sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
+# sessions,nSessions   = filter_sessions(protocols = ['GR','GN'],filter_areas=['V1','PM']) 
+sessions,nSessions   = filter_sessions(protocols = ['SP'],filter_areas=['V1','PM'],session_rf=True)  
+
+#%%  Load data properly:                      
+for ises in range(nSessions):
+    sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,load_videodata=False,
+                                calciumversion='dF')
+
+#%% ##################### Compute pairwise neuronal distances: ##############################
+sessions = compute_pairwise_anatomical_distance(sessions)
+
+#%% 
+areas = ['V1','PM']
+n_components = 20
+fa = FA(n_components=n_components)
+
+# comps = np.array([0,1,2,3,4,5,6,7,8,9])
+# comps = np.array([1,2,3,4,5,6,7,8])
+comps = np.arange(1,n_components)
+# comps = np.array(0,)
+# comps = np.arange(2,n_components)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Computing noise correlations'):
+    
+    [K,N]                           = np.shape(sessions[ises].calciumdata) #get dimensions of response matrix
+
+    # Compute noise correlations from spontaneous activity:
+    data                            = zscore(sessions[ises].calciumdata,axis=0)
+    sessions[ises].trace_corr       = np.corrcoef(data.T)
+    fa.fit(data)
+    data_T              = fa.transform(data)
+    data_hat            = np.dot(data_T[:,comps], fa.components_[comps,:])       # Reconstruct data
+    sessions[ises].noise_cov    = np.cov(data_hat.T)
+
+#%% Define the areapairs:
+areapairs       = ['V1-V1','PM-PM']
+clrs_areapairs  = get_clr_area_pairs(areapairs)
+
+#%% Compute pairwise correlations as a function of pairwise anatomical distance ###################################################################
+for corr_type in ['trace_corr','noise_cov']:
+    [binmean,binedges] = bin_corr_distance(sessions,areapairs,corr_type=corr_type,
+                                           absolute=False)
+
+    #Make the figure per protocol:
+    fig = plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type=corr_type)
+    my_savefig(fig,savedir,'Corr_anatomicaldist_SP_%s' % (corr_type),formats = ['png'])
+
+
+#%% #########################################################################################
+# Contrast: across areas
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+layerpairs          = ' '
+projpairs           = ' '
+
+rf_type             = 'F'
+# rf_type             = 'Fsmooth'
+# corr_type           = 'trace_corr'
+corr_type           = 'noise_cov'
+binresolution       = 10
+normalize           = False
+# normalize = True
+absolute            = False
+# absolute            = True
+shufflefield        = None
+
+[bins2d,bin_2d_mean_ses,bin_2d_count_ses,bin_dist_mean_ses,bin_dist_count_ses,binsdRF,
+bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
+bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_type,
+                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                        method='mean',filtersign=None,corr_type=corr_type,noise_thr=100,
+                        binresolution=binresolution,normalize=normalize,absolute=absolute,
+                        shufflefield=shufflefield,r2_thr=0.1)
+
+#%% Plot radial tuning:
+fig = plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,
+                                             areapairs,layerpairs,projpairs,min_counts=100)
+my_savefig(fig,savedir,'RadialTuning_Areas_SP_%s' % (corr_type),formats = ['png'])
+
+#%% Plot radial tuning with exponential fits:
+fig = plot_corr_radial_tuning_areas(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,areapairs,layerpairs,projpairs)
+my_savefig(fig,savedir,'RadialTuning_ExponentialFits_areas_SP_%s_' % (corr_type),formats = ['png'])
+
+
+#%% #########################################################################################
+# Contrast: across projections:
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+projpairs           = ['unl-unl','unl-lab','lab-unl','lab-lab']
+layerpairs          = ' '
+
+rf_type             = 'F'
+corr_type           = 'noise_cov'
+corr_type           = 'trace_corr'
+
+binresolution       = 10
+normalize           = False
+# absolute            = True
+absolute            = False
+shufflefield        = None
+
+[bins2d,bin_2d_mean_ses,bin_2d_count_ses,bin_dist_mean_ses,bin_dist_count_ses,binsdRF,
+bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
+bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_type,
+                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                        method='mean',filtersign=None,corr_type=corr_type,noise_thr=100,
+                        binresolution=binresolution,normalize=normalize,absolute=absolute,
+                        shufflefield=shufflefield,r2_thr=0.1)
+
+#%% Plot radial tuning:
+fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,
+                                             areapairs,layerpairs,projpairs,min_counts=100)
+my_savefig(fig,savedir,'RadialTuning_Areas_Projs_SP_%s' % (corr_type),formats = ['png'])
