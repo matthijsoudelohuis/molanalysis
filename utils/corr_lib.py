@@ -571,17 +571,6 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
             else: 
                 raise ValueError('invalid method to apply to bins')
 
-            # Rotate delta azimuth and delta elevation to the pref ori of the source neuron
-            # delta_az is source neurons
-            if rotate_prefori: 
-                for iN in range(len(celldata)):
-                    ori_rots            = celldata['pref_ori'][iN]
-                    ori_rots            = np.tile(celldata['pref_ori'][iN],len(celldata))
-                    angle_vec           = np.vstack((delta_x[iN,:], delta_y[iN,:]))
-                    angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots + 90) #90 degrees is added to make collinear horizontal
-                    delta_x[iN,:]      = angle_vec_rot[0,:]
-                    delta_y[iN,:]      = angle_vec_rot[1,:]
-
             if onlysameplane:
                 planefilter    = np.meshgrid(celldata['plane_idx'],celldata['plane_idx'])
                 planefilter    = planefilter[0] == planefilter[1]
@@ -621,15 +610,9 @@ def bin_corr_deltaxy(sessions,method='mean',areapairs=' ',layerpairs=' ',projpai
                         else:
                             deltaorifilter = np.ones(np.shape(signalfilter)).astype(bool)
 
-                        if dsi_thr:
-                            dsi_filter = np.meshgrid(celldata['DSI']>dsi_thr,celldata['DSI']>dsi_thr)
-                            dsi_filter = np.logical_and(dsi_filter[0],dsi_filter[1])
-                        else:
-                            dsi_filter = np.ones(np.shape(signalfilter)).astype(bool)
-
                         #Combine all filters into a single filter:
                         cellfilter      = np.all((signalfilter,tuningfilter,areafilter,corrsignfilter,
-                                            layerfilter,projfilter,nanfilter,deltaorifilter,dsi_filter),axis=0)
+                                            layerfilter,projfilter,nanfilter,deltaorifilter),axis=0)
 
                         if np.any(cellfilter):
                             # valuedata are the correlation values, these are going to be binned
@@ -716,40 +699,108 @@ def bin_corr_distance(sessions,areapairs,corr_type='trace_corr',normalize=False,
 
     return binmean,binedges
 
+
 def plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type):
-    sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
-    protocols = np.unique(sessiondata['protocol'])
     clrs_areapairs = get_clr_area_pairs(areapairs)
     if len(areapairs)==1:
         clrs_areapairs = [clrs_areapairs]
-    fig,axes = plt.subplots(1,len(protocols),figsize=(4*len(protocols),4))
+    fig,axes = plt.subplots(1,1,figsize=(3.5,3))
     handles = []
-    for iprot,protocol in enumerate(protocols):
-        sesidx = np.where(sessiondata['protocol']== protocol)[0]
-        if len(protocols)>1:
-            ax = axes[iprot]
-        else:
-            ax = axes
+    ax = axes
+    for iap,areapair in enumerate(areapairs):
+        for ises in range(len(sessions)):
+            ax.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
+        handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,iap,:].squeeze(),
+                                    error='sem',color=clrs_areapairs[iap],linewidth=3))
+        # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
 
-        for iap,areapair in enumerate(areapairs):
-            for ises in sesidx:
-                ax.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
-            handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[sesidx,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
-            # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+    ax.legend(handles,areapairs,loc='upper right',frameon=False,fontsize=9)	
+    ax.set_xlabel('Anatomical distance ($\mu$m)')
+    ax.set_ylabel('Correlation')
+    ax.set_xlim([20,600])
+    ax_nticks(ax,3)
+    # ax.set_title('%s (%s)' % (corr_type,protocol))
+    # ax.set_ylim([-0.01,0.04])
+    # ax.set_ylim([0,ax.get_ylim()[1]])
+    ax.set_ylim([0,0.04])
+    ax.set_aspect('auto')
+    ax.tick_params(axis='both', which='major', labelsize=8)
+    sns.despine(top=True,right=True,offset=3)
+    plt.tight_layout()
+    return fig
 
-        ax.legend(handles,areapairs,loc='upper right',frameon=False)	
+
+def plot_bin_corr_distance_projs(binsdRF,bin_dist,areapairs,layerpairs,projpairs):
+    clrs_projpairs = get_clr_labelpairs(projpairs)
+    clrs_areapairs = get_clr_area_pairs(areapairs)
+    # nSessions = binsdRF.shape[0]
+    nprojpairs = len(projpairs)
+    nareapairs = len(areapairs)
+
+    ilp = 0
+    fig,axes = plt.subplots(1,nareapairs,figsize=(6.5,3),sharey=True,sharex=True)
+    handles = []
+    for iap,areapair in enumerate(areapairs):
+        ax = axes[iap]
+        for ipp,projpair in enumerate(projpairs):
+            ax.plot(binsdRF,bin_dist[:,iap,ilp,ipp].squeeze(),
+                                        color=clrs_projpairs[ipp],linewidth=3)
+            # handles.append(shaded_error(x=binsdRF,y=bin_dist[:,iap,ilp,ipp].squeeze(),ax=ax,
+                                        # error='sem',color=clrs_projpairs[ipp],linewidth=3))
+        # data = 
+        # for ises in range(nSessions):
+            # ax.plot(binsdRF,binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
+        # handles.append(shaded_error(ax=ax,x=binsdRF,y=bin_dist[:,iap,ilp,ipp].squeeze(),
+                                    # error='sem',color=clrs_areapairs[iap],linewidth=3))
+
+        ax.legend(projpairs,loc='upper right',frameon=False,fontsize=9)	
         ax.set_xlabel('Anatomical distance ($\mu$m)')
         ax.set_ylabel('Correlation')
         ax.set_xlim([20,600])
-        ax.set_title('%s (%s)' % (corr_type,protocol))
-        # ax.set_ylim([-0.01,0.04])
-        # ax.set_ylim([0,ax.get_ylim()[1]])
-        ax.set_ylim([0,0.05])
-        ax.set_aspect('auto')
+        ax_nticks(ax,3)
+    # ax.set_title('%s (%s)' % (corr_type,protocol))
+    # ax.set_ylim([-0.01,0.04])
+    # ax.set_ylim([0,ax.get_ylim()[1]])
+        ax.set_ylim([0,0.04])
         ax.tick_params(axis='both', which='major', labelsize=8)
-
+    sns.despine(top=True,right=True,offset=3)
     plt.tight_layout()
     return fig
+
+# def plot_bin_corr_distance_deprecated(sessions,binmean,binedges,areapairs,corr_type):
+#     sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+#     protocols = np.unique(sessiondata['protocol'])
+#     clrs_areapairs = get_clr_area_pairs(areapairs)
+#     if len(areapairs)==1:
+#         clrs_areapairs = [clrs_areapairs]
+#     fig,axes = plt.subplots(1,len(protocols),figsize=(4*len(protocols),4))
+#     handles = []
+#     for iprot,protocol in enumerate(protocols):
+#         sesidx = np.where(sessiondata['protocol']== protocol)[0]
+#         if len(protocols)>1:
+#             ax = axes[iprot]
+#         else:
+#             ax = axes
+
+#         for iap,areapair in enumerate(areapairs):
+#             for ises in sesidx:
+#                 ax.plot(binedges[:-1],binmean[ises,iap,:].squeeze(),linewidth=0.15,color=clrs_areapairs[iap])
+#             handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[sesidx,iap,:].squeeze(),error='sem',color=clrs_areapairs[iap]))
+#             # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+#         ax.legend(handles,areapairs,loc='upper right',frameon=False)	
+#         ax.set_xlabel('Anatomical distance ($\mu$m)')
+#         ax.set_ylabel('Correlation')
+#         ax.set_xlim([20,600])
+#         ax.set_title('%s (%s)' % (corr_type,protocol))
+#         # ax.set_ylim([-0.01,0.04])
+#         # ax.set_ylim([0,ax.get_ylim()[1]])
+#         ax.set_ylim([0,0.05])
+#         ax.set_aspect('auto')
+#         ax.tick_params(axis='both', which='major', labelsize=8)
+
+#     plt.tight_layout()
+#     return fig
 
 ######  ### #     #    ######  ####### #       #######    #       ######  ####### 
 #     #  #  ##    #    #     # #       #          #      # #      #     # #       
@@ -1554,7 +1605,7 @@ def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_typ
     
 
     """
-    from sklearn.linear_model import LinearRegression
+    # from sklearn.linear_model import LinearRegression
     nSessions       = len(sessions)
 
     # Binning parameters RF distance
@@ -1565,13 +1616,13 @@ def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_typ
     nbins_RF        = len(bins_RF)
 
     # Binning parameters XYZ distance
-    binres_XYZ      = 10
-    binlim_XYZ      = 500
+    binres_XYZ      = 50
+    binlim_XYZ      = 1000
     binedges_XYZ    = np.arange(-binres_XYZ/2,binlim_XYZ,binres_XYZ)+binres_XYZ/2 
     bins_XYZ        = binedges_XYZ[:-1]+binres_XYZ/2 
     nbins_XYZ       = len(bins_XYZ)
 
-    minpairs        = 5000
+    minpairs        = 1000
 
     #Init output arrays:
     spatial_cov_rf   = np.full((nSessions,n_components,nbins_RF,len(areapairs),len(layerpairs),
@@ -1584,7 +1635,7 @@ def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_typ
     # R2_xyz_cov       = np.full((nSessions,n_components,len(areapairs),len(layerpairs),
     #                      len(projpairs)),np.nan)
     
-    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing 2D corr histograms maps: '):
+    for ises in tqdm(range(len(sessions)),total=len(sessions),desc= 'Computing spatial covariance: '):
         celldata = copy.deepcopy(sessions[ises].celldata)
 
         assert(hasattr(sessions[ises],corr_type)), f'covariance type {corr_type} not found in session {ises}'
@@ -1593,14 +1644,18 @@ def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_typ
         assert covdata.shape[0] == covdata.shape[1], f'covariance matrix is not square'
         assert len(sessions[ises].celldata) == covdata.shape[0], f'number of cells in session {ises} does not match covariance matrix'
         
-        #Eigenvalue decomposition of the covariance matrix
-        evals, evecs    = np.linalg.eigh(covdata)
-        evals = evals[::-1]
-        evecs = evecs[:,::-1] #sort eigenvalues in descending order
+        # #Eigenvalue decomposition of the covariance matrix
+        # evals, evecs    = np.linalg.eigh(covdata)
+        # evals = evals[::-1]
+        # evecs = evecs[:,::-1] #sort eigenvalues in descending order
 
+        # covdata_dims    = np.full((covdata.shape[0],covdata.shape[1],n_components),np.nan)
+        # for icomp in range(n_components):
+        #     covdata_dims[:,:,icomp] = np.dot(evecs[:,icomp].reshape(-1,1)*evals[icomp],evecs[:,icomp].reshape(1,-1))
+        
+        # covdata_filter = covdata[areafilter]
+        
         covdata_dims    = np.full((covdata.shape[0],covdata.shape[1],n_components),np.nan)
-        for icomp in range(n_components):
-            covdata_dims[:,:,icomp] = np.dot(evecs[:,icomp].reshape(-1,1)*evals[icomp],evecs[:,icomp].reshape(1,-1))
         
         if 'rf_r2_' + rf_type in celldata:
 
@@ -1637,6 +1692,24 @@ def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_typ
             proxfilter      = ~(sessions[ises].distmat_xy<min_dist)
 
             for iap,areapair in enumerate(areapairs):
+
+                area1,area2 = areapair.split('-')
+                idx_area1   = sessions[ises].celldata['roi_name']==area1
+                idx_area2   = sessions[ises].celldata['roi_name']==area2
+
+                # #Eigenvalue decomposition of the covariance matrix
+                # evals, evecs    = np.linalg.eigh(covdata[np.ix_(idx_area1,idx_area2)])
+                # evals = evals[::-1]
+                # evecs = evecs[:,::-1] #sort eigenvalues in descending order
+                # for icomp in range(n_components):
+                #     covdata_dims[np.ix_(idx_area1,idx_area2,[icomp])] = np.dot(evecs[:,icomp].reshape(-1,1)*evals[icomp],evecs[:,icomp].reshape(1,-1))[..., np.newaxis]
+
+                #Singular value decomposition of the covariance matrix
+                # Singular Value Decomposition of the covariance matrix
+                u, s, vh = np.linalg.svd(covdata[np.ix_(idx_area1,idx_area2)])
+                for icomp in range(n_components):
+                    covdata_dims[np.ix_(idx_area1,idx_area2,[icomp])] = np.dot(u[:,icomp].reshape(-1,1)*s[icomp],vh[icomp,:].reshape(1,-1))[..., np.newaxis]
+
                 for ilp,layerpair in enumerate(layerpairs):
                     for ipp,projpair in enumerate(projpairs):
 
@@ -1661,6 +1734,7 @@ def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_typ
                             # clrs = sns.color_palette('magma',n_components)
                             for icomp in range(n_components):
                                 ydata = covdata_dims[:,:,icomp][cellfilter].flatten()
+                                # ydata = covdata_dims[:,:,icomp].flatten()
                                 ydata = zscore(ydata)
 
                                 #Take the mean of the covariance in this dimension in each bin:
@@ -1707,10 +1781,7 @@ def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_typ
                                 # R2_xyz_cov[ises,icomp,iap,ilp,ipp] = model.score(x, y)
                                 # R2_xyz_cov[ises,icomp,iap,ilp,ipp] = model.coef_[0][0]
 
-
-
-
-    return spatial_cov_rf,spatial_cov_xyz
+    return bins_RF,spatial_cov_rf,bins_XYZ,spatial_cov_xyz
 
 
 ######  #       ####### #######    ######  ####### #       #######    #       ######  ####### 
@@ -1723,7 +1794,8 @@ def regress_cov_dim(sessions,areapairs=' ',layerpairs=' ',projpairs=' ',corr_typ
 
 
 def plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_data_ses,	
-                           areapairs=' ',layerpairs=' ',projpairs=' ',datatype='Correlation'):
+                           areapairs=' ',layerpairs=' ',projpairs=' ',datatype='Correlation',
+                           min_counts=100):
     if np.max(binsdRF)>100:
         xylim               = 250
         dim12label = 'XY (um)'
@@ -1732,14 +1804,13 @@ def plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_d
         xylim               = 70
         dim12label = 'RF (\N{DEGREE SIGN})'
 
-    min_counts      = 100
-
     #Colors:
     clrs_areapairs      = get_clr_area_pairs(areapairs) 
     if len(areapairs)==1:
         clrs_areapairs =[clrs_areapairs]
 
     #Compute data mean and error:
+    bin_dist_data_ses = copy.deepcopy(bin_dist_data_ses)
     bin_dist_data_ses[bin_dist_count_ses<min_counts] = np.nan
     data_mean   = np.nanmean(bin_dist_data_ses,axis=0)
     data_error  = np.nanstd(bin_dist_data_ses,axis=0) / np.sqrt(np.shape(bin_dist_data_ses)[0])
@@ -1769,7 +1840,10 @@ def plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_d
             popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[ydata[0]-ydata[-1], 0, ydata[-1]],bounds=(-10, 10))
             # popt, pcov = curve_fit(lambda x,a,b,c: a * np.exp(-b * x) + c, xdata, ydata, p0=[ydata[0]-ydata[-1], 0, ydata[-1]])
             ax.plot(xdata, popt[0] * np.exp(-popt[1] * xdata) + popt[2],linestyle='--',color=clrs_areapairs[iap],label=f'{areapair} fit',linewidth=1)
-
+            print('Spatial constant %s: %1.4f' % (areapair,popt[1]))
+            print('Amplitude %s: %0.4f' % (areapair,popt[0]))
+            print('Offset %s: %0.4f' % (areapair,popt[2]))
+            # print('Spatial constant %s: %2.2f' % (areapair,popt[1]))
         except:
             print('curve_fit failed for %s' % (areapair))
             continue
@@ -1779,9 +1853,11 @@ def plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_d
         if datatype=='Correlation':
             # ax.set_ylim([0.01,0.08])
             # ax.set_ylim([0.01,0.12])
-            ax.set_ylim([my_floor(np.nanmin(bin_dist_data_ses),2),my_ceil(np.nanmax(bin_dist_data_ses),2)])
+            # ax.set_ylim([my_floor(np.nanmin(bin_dist_data_ses),2),my_ceil(np.nanmax(bin_dist_data_ses),2)])
+            ax.set_ylim([my_floor(np.nanpercentile(bin_dist_data_ses,5),2),my_ceil(np.nanpercentile(bin_dist_data_ses,98),2)])
         else:
-            ax.set_ylim([my_floor(np.nanmin(bin_dist_data_ses),2),my_ceil(np.nanmax(bin_dist_data_ses),2)])
+            # ax.set_ylim([my_floor(np.nanmin(bin_dist_data_ses),2),my_ceil(np.nanmax(bin_dist_data_ses),2)])
+            ax.set_ylim([my_floor(np.nanpercentile(bin_dist_data_ses,5),2),my_ceil(np.nanpercentile(bin_dist_data_ses,98),2)])
         
         ax.set_xlabel(u'Δ %s' % dim12label)   
         ax.set_title('%s' % (areapair),c=clrs_areapairs[iap])
@@ -1893,6 +1969,7 @@ def plot_corr_radial_tuning_areas(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
         ax.axhline(0,linestyle='--',color='k',linewidth=1)
 
     plt.tight_layout()
+    sns.despine(top=True,right=True,offset=3)
     return fig
 
 def plot_corr_radial_tuning_areas_mean(binsdRF,bin_dist_count,bin_dist_mean,	
@@ -1941,7 +2018,8 @@ def plot_corr_radial_tuning_areas_mean(binsdRF,bin_dist_count,bin_dist_mean,
     return fig
 
 def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,	
-                           areapairs=' ',layerpairs=' ',projpairs=' ',datatype='Correlation'):
+                           areapairs=' ',layerpairs=' ',projpairs=' ',datatype='Correlation',
+                           min_counts=25):
     
     #Colors:
     clrs_areapairs      = get_clr_area_pairs(areapairs) 
@@ -1953,7 +2031,7 @@ def plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_data_ses,
     testbins        = [[0,20],[25,70]]
     testbincolors   = ['grey','grey']
     testlabels      = ['Center','Surround']
-    min_counts      = 25
+    
 
     statpairs_areas = [[('unl-unl','lab-unl'),
             ('unl-unl','lab-lab'),
