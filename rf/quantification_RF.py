@@ -18,7 +18,7 @@ from loaddata.get_data_folder import get_local_drive
 from utils.corr_lib import compute_pairwise_anatomical_distance
 from utils.plot_lib import * #get all the fixed color schemes
 
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Neural - RF\\')
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\RF mapping\\RF_quantification')
 
 #%% ################### Loading the data ##############################
 
@@ -48,6 +48,7 @@ sessions,nSessions = filter_sessions(protocols = ['GR','GN'],session_rf=True,fil
 
 #%% 
 r2_thr = 0.2 #R2 of the 2D gaussian fit
+r2_thr = 0.1 #R2 of the 2D gaussian fit
 
 #%% Interpolation of receptive fields:
 sessions = compute_pairwise_anatomical_distance(sessions)
@@ -57,12 +58,13 @@ sessions = exclude_outlier_rf(sessions)
 sessions = replace_smooth_with_Fsig(sessions) 
 
 sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
+# sessions = compute_pairwise_delta_rf(sessions,rf_type='F')
 
 
 #%% Show fraction of receptive fields per session before any corrections:
 for rf_type in ['F','Fneu','Fsmooth']:
     [fig,rf_frac_F] = plot_RF_frac(sessions,rf_type=rf_type,r2_thr=r2_thr)
-    fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_%s' % rf_type  + '.png'), format = 'png')
+    fig.savefig(os.path.join(savedir,'RF_fraction_%s' % rf_type  + '.png'), format = 'png')
 # fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_F_IMincluded' + '.png'), format = 'png')
 
 #%% ##################### Retinotopic mapping within V1 and PM #####################
@@ -83,12 +85,16 @@ rf_type = 'F'
 fig.savefig(os.path.join(savedir,'RF_quantification','RF_fraction_out%s_%s' % (rf_type,sessions[ises].sessiondata['session_id'][0]) + '.png'), format = 'png')
 
 #%% 
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\RF mapping\\RF_planes')
+
+#%% 
 ises = 22
 fig = plot_rf_plane(sessions[ises].celldata,r2_thr=r2_thr,rf_type='F') 
 fig = plot_rf_plane(sessions[ises].celldata,r2_thr=r2_thr,rf_type='Fsmooth') 
 
 #%% ########### Plot locations of receptive fields as on the screen ##############################
 rf_type = 'Fsmooth'
+rf_type = 'F'
 for ises in range(nSessions):
 # for ises in [5]:
     fig = plot_rf_screen(sessions[ises].celldata,r2_thr=r2_thr,rf_type=rf_type) 
@@ -96,11 +102,13 @@ for ises in range(nSessions):
 
 #%% Show distribution of delta receptive fields across areas: 
 sessions = compute_pairwise_delta_rf(sessions,rf_type='Fsmooth')
+sessions = compute_pairwise_delta_rf(sessions,rf_type='F')
 
-#Make a figure with each session is one line for each of the areapairs a histogram of distmat_rf:
+#%% Make a figure with each session is one line for each of the areapairs a histogram of distmat_rf:
 areapairs = ['V1-V1','PM-PM','V1-PM']
-
-fig = plot_delta_rf_across_sessions(sessions,areapairs)
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\RF mapping')
+# r2_thr = 0.2
+fig = plot_delta_rf_across_sessions(sessions,areapairs,r2_thr=r2_thr,rf_type='F')
 fig.savefig(os.path.join(savedir,'DeltaRF_Areapairs_%dsessions_' % nSessions + '.png'), format = 'png')
 
 #%% Make a histogram of delta receptive fields across V1 and PM based on labeling

@@ -29,7 +29,6 @@ from utils.tuning import compute_tuning_wrapper
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\Collinear\\')
 
-
 colors = [(0, 0, 0), (1, 0, 0), (1, 1, 1)] # first color is black, last is red
 cm_red = LinearSegmentedColormap.from_list("Custom", colors, N=20)
 colors = [(0, 0, 0), (0, 0, 1), (1, 1, 1)] # first color is black, last is red
@@ -40,11 +39,6 @@ centerthr           = [20,20,20,20]
 gaussian_sigma = 1
 
 #%% #############################################################################
-session_list        = np.array([['LPE10919','2023_11_06']])
-session_list        = np.array([['LPE09665','2023_03_21'], #GR
-                                ['LPE10919','2023_11_06']]) #GR
-sessions,nSessions   = load_sessions(protocol = 'GR',session_list=session_list)
-# sessions,nSessions   = load_sessions(protocol = 'SP',session_list=session_list)
 
 #%% Load all sessions from certain protocols: 
 # sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
@@ -71,7 +65,7 @@ for ises in range(nSessions):
     sessions[ises] = compute_trace_correlation([sessions[ises]],binwidth=0.5,uppertriangular=False)[0]
     delattr(sessions[ises],'videodata')
     delattr(sessions[ises],'behaviordata')
-    # delattr(sessions[ises],'calciumdata')
+    delattr(sessions[ises],'calciumdata')
 
 
 #%% 
@@ -95,6 +89,57 @@ sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 
 #%% ##################### Compute pairwise neuronal distances: ##############################
 sessions = compute_pairwise_anatomical_distance(sessions)
+
+
+#%%
+from sklearn.decomposition import FactorAnalysis as FA
+
+areas = ['V1','PM']
+n_components = 20
+fa = FA(n_components=n_components)
+
+# comps = np.array([0,1,2,3,4,5,6,7,8,9])
+# comps = np.array([1,2,3,4,5,6,7,8])
+comps = np.arange(1,n_components)
+# comps = np.array(0,)
+# comps = np.arange(2,n_components)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Computing noise correlations'):
+    
+    [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+    if sessions[ises].sessiondata['protocol'][0]=='GR':
+        resp_meanori,respmat_res        = mean_resp_gr(sessions[ises])
+    elif sessions[ises].sessiondata['protocol'][0]=='GN':
+        resp_meanori,respmat_res        = mean_resp_gn(sessions[ises])
+
+    # # Compute noise correlations from residuals:
+    # data = zscore(respmat_res,axis=1)
+    # sessions[ises].noise_corr       = np.corrcoef(data)
+    # fa.fit(data.T)
+    # data_T              = fa.transform(data.T)
+    # data_hat            = np.dot(data_T[:,comps], fa.components_[comps,:]).T        # Reconstruct data
+    # sessions[ises].noise_cov    = np.cov(data_hat)
+
+    stims        = np.sort(sessions[ises].trialdata['stimCond'].unique())
+    trial_stim   = sessions[ises].trialdata['stimCond']
+    noise_corr  = np.empty((N,N,len(stims)))  
+    noise_cov   = np.empty((N,N,len(stims)))  
+    for i,stim in enumerate(stims):
+        data                = zscore(respmat_res[:,trial_stim==stim],axis=1)
+
+        noise_corr[:,:,i]   = np.corrcoef(data)
+
+        for iarea,area in enumerate(areas):
+            idx_N               = ses.celldata['roi_name']==area
+
+            fa.fit(data[idx_N,:].T)
+            data_T              = fa.transform(data[idx_N,:].T)
+            data[idx_N,:]       = np.dot(data_T[:,comps], fa.components_[comps,:]).T        # Reconstruct data
+        
+        noise_cov[:,:,i]  = np.cov(data)
+
+    sessions[ises].noise_corr       = np.mean(noise_corr,axis=2)
+    sessions[ises].noise_cov        = np.mean(noise_cov,axis=2)
 
 #%% ##################### Compute pairwise receptive field distances: ##############################
 # sessions = smooth_rf(sessions,radius=50,rf_type='Fneu',mincellsFneu=5)
@@ -228,9 +273,10 @@ plt.tight_layout()
 # fig.savefig(os.path.join(savedir,'DeltaAz_DeltaEl_2D' + '.png'), format = 'png')
 
 #%% 
-rf_type             = 'Fsmooth'
+# rf_type             = 'Fsmooth'
+rf_type             = 'F'
 areapairs            = ['V1-V1','PM-PM','V1-PM']
-histedges           = np.arange(-100,100,5)
+histedges           = np.arange(-100,100,10)
 data_out            = np.empty((len(sessions),len(histedges)-1,2,len(areapairs)))
 
 for ises in range(len(sessions)):
@@ -290,33 +336,64 @@ projpairs           = ' '
 
 deltaori            = None
 rotate_prefori      = True
-rf_type             = 'Fsmooth'
-corr_type           = 'noise_corr'
+# rf_type             = 'Fsmooth'
+rf_type             = 'F'
+# corr_type           = 'noise_corr'
+corr_type           = 'noise_cov'
 # corr_type           = 'trace_corr'
 tuned_thr           = 0.0
-noise_thr           = 20
+noise_thr           = 100
 min_counts          = 100
 corr_thr            = 0.01
+r2_thr              = 0.1
 
-[bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
-bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
-bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,method='mean',areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+[bincenters_2d,bin_2d_mean_ses,bin_2d_count_ses,bin_dist_mean_ses,bin_dist_count_ses,bincenters_dist,
+bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
+bin_angle_surr_count_ses,bincenters_angle] = bin_corr_deltarf_ses(sessions,method='mean',areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
                             corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,
+                            r2_thr=r2_thr,
                             deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
-[bincenters_2d,bin_2d_posf,bin_2d_count,bin_dist_posf,bin_dist_count,bincenters_dist,
-bin_angle_cent_posf,bin_angle_cent_count,bin_angle_surr_posf,
-bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,method='frac',filtersign='pos',
+[bincenters_2d,bin_2d_posf_ses,bin_2d_count_ses,bin_dist_posf_ses,bin_dist_count_ses,bincenters_dist,
+bin_angle_cent_posf_ses,bin_angle_cent_count_ses,bin_angle_surr_posf_ses,
+bin_angle_surr_count_ses,bincenters_angle] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='pos',
                             areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
                             corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+                            r2_thr=r2_thr,
                             deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
-[bincenters_2d,bin_2d_negf,bin_2d_count,bin_dist_negf,bin_dist_count,bincenters_dist,
-bin_angle_cent_negf,bin_angle_cent_count,bin_angle_surr_negf,
-bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,method='frac',filtersign='neg',
+[bincenters_2d,bin_2d_negf_ses,bin_2d_count_ses,bin_dist_negf_ses,bin_dist_count_ses,bincenters_dist,
+bin_angle_cent_negf_ses,bin_angle_cent_count_ses,bin_angle_surr_negf_ses,
+bin_angle_surr_count_ses,bincenters_angle] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='neg',
                             areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
                             corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+                            r2_thr=r2_thr,
                             deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
+#%% Take the (weighted) mean across sessions:
+bin_2d_mean = nanweightedaverage(bin_2d_mean_ses,weights=bin_2d_count_ses,axis=0)
+bin_2d_count = np.nansum(bin_2d_count_ses,axis=0)
+
+#Huge difference! 
+bin_dist_count = np.nansum(bin_dist_count_ses,axis=0)
+bin_dist_mean = np.nanmean(bin_dist_mean_ses,axis=0)
+bin_dist_posf = np.nanmean(bin_dist_posf_ses,axis=0)
+bin_dist_negf = np.nanmean(bin_dist_negf_ses,axis=0)
+
+bin_2d_count = np.nansum(bin_2d_count_ses,axis=0)
+bin_2d_mean = np.nanmean(bin_2d_mean_ses,axis=0)
+bin_2d_posf = np.nanmean(bin_2d_posf_ses,axis=0)
+bin_2d_negf = np.nanmean(bin_2d_negf_ses,axis=0)
+
+bin_angle_cent_count = np.nansum(bin_angle_cent_count_ses,axis=0)
+bin_angle_cent_mean = np.nanmean(bin_angle_cent_mean_ses,axis=0)
+bin_angle_cent_posf = np.nanmean(bin_angle_cent_posf_ses,axis=0)
+bin_angle_cent_negf = np.nanmean(bin_angle_cent_negf_ses,axis=0)
+
+bin_angle_surr_count = np.nansum(bin_angle_surr_count_ses,axis=0)
+bin_angle_surr_mean = np.nanmean(bin_angle_surr_mean_ses,axis=0)
+bin_angle_surr_posf = np.nanmean(bin_angle_surr_posf_ses,axis=0)
+bin_angle_surr_negf = np.nanmean(bin_angle_surr_negf_ses,axis=0)
 
 #%% Compute collinear selectivity index:
 csi_cent_mean =  collinear_selectivity_index(bin_angle_cent_mean,bincenters_angle)
@@ -331,17 +408,17 @@ csi_surr_negf =  collinear_selectivity_index(bin_angle_surr_negf,bincenters_angl
 #%% Show spatial maps for the mean correlation
 fig = plot_2D_mean_corr(bin_2d_mean,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
                         projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap='magma')
-fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
 
 #%% Show spatial maps for the fraction positive
 fig = plot_2D_mean_corr(bin_2d_posf,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
                         projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_red)
-fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_areas_%s_posf' % (corr_type) + '.png'), format = 'png')
 
 #%% Show spatial maps for the fraction negative
 fig = plot_2D_mean_corr(bin_2d_negf,bin_2d_count,bincenters_2d,areapairs=areapairs,layerpairs=layerpairs,
                         projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap=cm_blue)
-fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
+# fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_areas_%s_negf' % (corr_type) + '.png'), format = 'png')
 
 
 #%% Plot radial tuning:
@@ -392,31 +469,65 @@ deltaori            = None
 rotate_prefori      = True
 rf_type             = 'Fsmooth'
 corr_type           = 'noise_corr'
-# corr_type           = 'trace_corr'
-tuned_thr           = 0.025
 noise_thr           = 20
 min_counts          = 100
 corr_thr            = 0.01
 
-[bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
-bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
-bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,method='mean',areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                            corr_type=corr_type,binresolution=7.5,rotate_prefori=rotate_prefori,
+rf_type             = 'F'
+corr_type           = 'noise_cov'
+tuned_thr           = 0.025
+noise_thr           = 100
+min_counts          = 100
+corr_thr            = 0.01
+r2_thr              = 0.1
+
+[bincenters_2d,bin_2d_mean_ses,bin_2d_count_ses,bin_dist_mean_ses,bin_dist_count_ses,bincenters_dist,
+bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
+bin_angle_surr_count_ses,bincenters_angle] = bin_corr_deltarf_ses(sessions,method='mean',areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                            corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,
+                            r2_thr=r2_thr,
                             deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
-[bincenters_2d,bin_2d_posf,bin_2d_count,bin_dist_posf,bin_dist_count,bincenters_dist,
-bin_angle_cent_posf,bin_angle_cent_count,bin_angle_surr_posf,
-bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,method='frac',filtersign='pos',
+[bincenters_2d,bin_2d_posf_ses,bin_2d_count_ses,bin_dist_posf_ses,bin_dist_count_ses,bincenters_dist,
+bin_angle_cent_posf_ses,bin_angle_cent_count_ses,bin_angle_surr_posf_ses,
+bin_angle_surr_count_ses,bincenters_angle] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='pos',
                             areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                            corr_type=corr_type,binresolution=7.5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+                            corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+                            r2_thr=r2_thr,
                             deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
-[bincenters_2d,bin_2d_negf,bin_2d_count,bin_dist_negf,bin_dist_count,bincenters_dist,
-bin_angle_cent_negf,bin_angle_cent_count,bin_angle_surr_negf,
-bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf(sessions,method='frac',filtersign='neg',
+[bincenters_2d,bin_2d_negf_ses,bin_2d_count_ses,bin_dist_negf_ses,bin_dist_count_ses,bincenters_dist,
+bin_angle_cent_negf_ses,bin_angle_cent_count_ses,bin_angle_surr_negf_ses,
+bin_angle_surr_count_ses,bincenters_angle] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='neg',
                             areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                            corr_type=corr_type,binresolution=7.5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+                            corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+                            r2_thr=r2_thr,
                             deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
+#%% Take the (weighted) mean across sessions:
+# bin_2d_mean = nanweightedaverage(bin_2d_mean_ses,weights=bin_2d_count_ses,axis=0)
+# bin_2d_count = np.nansum(bin_2d_count_ses,axis=0)
+
+#Huge difference! 
+bin_dist_count = np.nansum(bin_dist_count_ses,axis=0)
+bin_dist_mean = np.nanmean(bin_dist_mean_ses,axis=0)
+bin_dist_posf = np.nanmean(bin_dist_posf_ses,axis=0)
+bin_dist_negf = np.nanmean(bin_dist_negf_ses,axis=0)
+
+bin_2d_count = np.nansum(bin_2d_count_ses,axis=0)
+bin_2d_mean = np.nanmean(bin_2d_mean_ses,axis=0)
+bin_2d_posf = np.nanmean(bin_2d_posf_ses,axis=0)
+bin_2d_negf = np.nanmean(bin_2d_negf_ses,axis=0)
+
+bin_angle_cent_count = np.nansum(bin_angle_cent_count_ses,axis=0)
+bin_angle_cent_mean = np.nanmean(bin_angle_cent_mean_ses,axis=0)
+bin_angle_cent_posf = np.nanmean(bin_angle_cent_posf_ses,axis=0)
+bin_angle_cent_negf = np.nanmean(bin_angle_cent_negf_ses,axis=0)
+
+bin_angle_surr_count = np.nansum(bin_angle_surr_count_ses,axis=0)
+bin_angle_surr_mean = np.nanmean(bin_angle_surr_mean_ses,axis=0)
+bin_angle_surr_posf = np.nanmean(bin_angle_surr_posf_ses,axis=0)
+bin_angle_surr_negf = np.nanmean(bin_angle_surr_negf_ses,axis=0)
 
 #%% Compute collinear selectivity index:
 csi_cent_mean =  collinear_selectivity_index(bin_angle_cent_mean,bincenters_angle)
@@ -450,13 +561,14 @@ fig = plot_2D_mean_corr(bin_2d_negf,bin_2d_count,bincenters_2d,areapairs=areapai
 fig.savefig(os.path.join(savedir,'Rotated_DeltaRF_2D_projs_%s_negf' % (corr_type) + '.png'), format = 'png')
 
 #%% Plot radial tuning:
-fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
+fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count_ses,bin_dist_mean_ses,areapairs,layerpairs,projpairs)
+# fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_mean,areapairs,layerpairs,projpairs)
 fig.savefig(os.path.join(savedir,'Rotated_RadialTuning_projs_%s_mean' % (corr_type) + '.png'), format = 'png')
 
-fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_posf,areapairs,layerpairs,projpairs)
+fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count_ses,bin_dist_posf_ses,areapairs,layerpairs,projpairs)
 fig.savefig(os.path.join(savedir,'Rotated_RadialTuning_projs_%s_posf' % (corr_type) + '.png'), format = 'png')
 
-fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count,bin_dist_negf,areapairs,layerpairs,projpairs)
+fig = plot_corr_radial_tuning_projs(bincenters_dist,bin_dist_count_ses,bin_dist_negf_ses,areapairs,layerpairs,projpairs)
 fig.savefig(os.path.join(savedir,'Rotated_RadialTuning_projs_%s_negf' % (corr_type) + '.png'), format = 'png')
 
 
@@ -502,57 +614,85 @@ tuned_thr           = 0.025
 noise_thr           = 20
 min_counts          = 50
 
-#Do for one session to get the dimensions: (data is discarded)
-[bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
-    bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
-    bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf([sessions[0]],method='mean',areapairs=areapairs,
-                                                              layerpairs=layerpairs,projpairs=projpairs,binresolution=5)
+rf_type             = 'F'
+corr_type           = 'noise_cov'
+noise_thr           = 100
+r2_thr              = 0.1
+binresolution       = 10
+
+[bincenters_2d,bin_2d_mean_ses,bin_2d_count_ses,bin_dist_mean_ses,bin_dist_count_ses,bincenters_dist,
+bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
+bin_angle_surr_count_ses,bincenters_angle] = bin_corr_deltarf_ses(sessions,method='mean',areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                            corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,
+                            r2_thr=1,deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
 #Init output arrays:
-bin_2d_mean_oris        = np.empty((ncenteroris,*np.shape(bin_2d_mean)))
-bin_2d_posf_oris        = np.empty((ncenteroris,*np.shape(bin_2d_mean)))
-bin_2d_negf_oris        = np.empty((ncenteroris,*np.shape(bin_2d_mean)))
-bin_2d_count_oris       = np.empty((ncenteroris,*np.shape(bin_2d_count)))
+bin_2d_mean_oris_ses        = np.full((ncenteroris,*np.shape(bin_2d_mean_ses)),np.nan)
+bin_2d_posf_oris_ses        = np.full((ncenteroris,*np.shape(bin_2d_mean_ses)),np.nan)
+bin_2d_negf_oris_ses        = np.full((ncenteroris,*np.shape(bin_2d_mean_ses)),np.nan)
+bin_2d_count_oris_ses       = np.full((ncenteroris,*np.shape(bin_2d_count_ses)),np.nan)
 
-bin_dist_mean_oris      = np.empty((ncenteroris,*np.shape(bin_dist_mean)))
-bin_dist_posf_oris      = np.empty((ncenteroris,*np.shape(bin_dist_mean)))
-bin_dist_negf_oris      = np.empty((ncenteroris,*np.shape(bin_dist_mean)))
-bin_dist_count_oris     = np.empty((ncenteroris,*np.shape(bin_dist_count)))
+bin_dist_mean_oris_ses      = np.full((ncenteroris,*np.shape(bin_dist_mean_ses)),np.nan)
+bin_dist_posf_oris_ses      = np.full((ncenteroris,*np.shape(bin_dist_mean_ses)),np.nan)
+bin_dist_negf_oris_ses      = np.full((ncenteroris,*np.shape(bin_dist_mean_ses)),np.nan)
+bin_dist_count_oris_ses     = np.full((ncenteroris,*np.shape(bin_dist_count_ses)),np.nan)
 
-bin_angle_cent_mean_oris      = np.empty((ncenteroris,*np.shape(bin_angle_cent_mean)))
-bin_angle_cent_posf_oris      = np.empty((ncenteroris,*np.shape(bin_angle_cent_mean)))
-bin_angle_cent_negf_oris      = np.empty((ncenteroris,*np.shape(bin_angle_cent_mean)))
-bin_angle_cent_count_oris     = np.empty((ncenteroris,*np.shape(bin_angle_cent_count)))
+bin_angle_cent_mean_oris_ses      = np.full((ncenteroris,*np.shape(bin_angle_cent_mean_ses)),np.nan)
+bin_angle_cent_posf_oris_ses      = np.full((ncenteroris,*np.shape(bin_angle_cent_mean_ses)),np.nan)
+bin_angle_cent_negf_oris_ses      = np.full((ncenteroris,*np.shape(bin_angle_cent_mean_ses)),np.nan)
+bin_angle_cent_count_oris_ses     = np.full((ncenteroris,*np.shape(bin_angle_cent_count_ses)),np.nan)
 
-bin_angle_surr_mean_oris      = np.empty((ncenteroris,*np.shape(bin_angle_surr_mean)))
-bin_angle_surr_posf_oris      = np.empty((ncenteroris,*np.shape(bin_angle_surr_mean)))
-bin_angle_surr_negf_oris      = np.empty((ncenteroris,*np.shape(bin_angle_surr_mean)))
-bin_angle_surr_count_oris     = np.empty((ncenteroris,*np.shape(bin_angle_surr_count)))
+bin_angle_surr_mean_oris_ses      = np.full((ncenteroris,*np.shape(bin_angle_surr_mean_ses)),np.nan)
+bin_angle_surr_posf_oris_ses      = np.full((ncenteroris,*np.shape(bin_angle_surr_mean_ses)),np.nan)
+bin_angle_surr_negf_oris_ses      = np.full((ncenteroris,*np.shape(bin_angle_surr_mean_ses)),np.nan)
+bin_angle_surr_count_oris_ses     = np.full((ncenteroris,*np.shape(bin_angle_surr_count_ses)),np.nan)
 
 for idOri,centerori in enumerate(centeroris):
-    [_,bin_2d_mean_oris[idOri,:,:,:,:,:],bin_2d_count_oris[idOri,:,:,:,:,:],
-     bin_dist_mean_oris[idOri,:,:,:,:],bin_dist_count_oris[idOri,:,:,:],_,
-     bin_angle_cent_mean_oris[idOri,:,:,:,:],bin_angle_cent_count_oris[idOri,:,:,:,:],
-     bin_angle_surr_mean_oris[idOri,:,:,:,:],bin_angle_surr_count_oris[idOri,:,:,:,:],_] = bin_corr_deltarf(sessions,
+    [_,bin_2d_mean_oris_ses[idOri,:,:,:,:,:],bin_2d_count_oris_ses[idOri,:,:,:,:,:],
+     bin_dist_mean_oris_ses[idOri,:,:,:,:],bin_dist_count_oris_ses[idOri,:,:,:],_,
+     bin_angle_cent_mean_oris_ses[idOri,:,:,:,:],bin_angle_cent_count_oris_ses[idOri,:,:,:,:],
+     bin_angle_surr_mean_oris_ses[idOri,:,:,:,:],bin_angle_surr_count_oris_ses[idOri,:,:,:,:],_] = bin_corr_deltarf_ses(sessions,
                                                     method='mean',filtersign=None,areapairs=areapairs,layerpairs=layerpairs,
-                                                    projpairs=projpairs,corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,
-                                                    centerori=centerori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+                                                    projpairs=projpairs,corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,
+                                                    r2_thr=r2_thr,centerori=centerori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
     
-    [_,bin_2d_posf_oris[idOri,:,:,:,:,:],_,
-     bin_dist_posf_oris[idOri,:,:,:,:],_,_,
-     bin_angle_cent_posf_oris[idOri,:,:,:,:],_,
-     bin_angle_surr_posf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='pos',
-                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                                                    corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,centerori=centerori,
-                                                    rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+    # [_,bin_2d_posf_oris_ses[idOri,:,:,:,:,:],_,
+    #  bin_dist_posf_oris_ses[idOri,:,:,:,:],_,_,
+    #  bin_angle_cent_posf_oris_ses[idOri,:,:,:,:],_,
+    #  bin_angle_surr_posf_oris_ses[idOri,:,:,:,:],_,_] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='pos',
+    #                                                 areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+    #                                                 corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,centerori=centerori,
+    #                                                 r2_thr=r2_thr,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
-    [_,bin_2d_negf_oris[idOri,:,:,:,:,:],_,
-     bin_dist_negf_oris[idOri,:,:,:,:],_,_,
-     bin_angle_cent_negf_oris[idOri,:,:,:,:],_,
-     bin_angle_surr_negf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='neg',
-                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                                                    corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,centerori=centerori,
-                                                    rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+    # [_,bin_2d_negf_oris_ses[idOri,:,:,:,:,:],_,
+    #  bin_dist_negf_oris_ses[idOri,:,:,:,:],_,_,
+    #  bin_angle_cent_negf_oris_ses[idOri,:,:,:,:],_,
+    #  bin_angle_surr_negf_oris_ses[idOri,:,:,:,:],_,_] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='neg',
+    #                                                 areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+    #                                                 corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,centerori=centerori,
+    #                                                 r2_thr=r2_thr,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
+
+#%% Compute mean over sessions for each orientation
+bin_2d_count_oris = np.nanmean(bin_2d_count_oris_ses,1)
+bin_2d_mean_oris = np.nanmean(bin_2d_mean_oris_ses,1)
+bin_2d_posf_oris = np.nanmean(bin_2d_posf_oris_ses,1)
+bin_2d_negf_oris = np.nanmean(bin_2d_negf_oris_ses,1)
+
+bin_dist_count_oris = np.nanmean(bin_dist_count_oris_ses,1)
+bin_dist_mean_oris = np.nanmean(bin_dist_mean_oris_ses,1)
+bin_dist_posf_oris = np.nanmean(bin_dist_posf_oris_ses,1)
+bin_dist_negf_oris = np.nanmean(bin_dist_negf_oris_ses,1)
+
+bin_angle_cent_count_oris = np.nanmean(bin_angle_cent_count_oris_ses,1)
+bin_angle_cent_mean_oris = np.nanmean(bin_angle_cent_mean_oris_ses,1)
+bin_angle_cent_posf_oris = np.nanmean(bin_angle_cent_posf_oris_ses,1)    
+bin_angle_cent_negf_oris = np.nanmean(bin_angle_cent_negf_oris_ses,1)
+
+bin_angle_surr_count_oris = np.nanmean(bin_angle_surr_count_oris_ses,1)
+bin_angle_surr_mean_oris = np.nanmean(bin_angle_surr_mean_oris_ses,1)
+bin_angle_surr_posf_oris = np.nanmean(bin_angle_surr_posf_oris_ses,1)    
+bin_angle_surr_negf_oris = np.nanmean(bin_angle_surr_negf_oris_ses,1)
 
 #%% Compute collinear selectivity index:
 csi_cent_mean_oris =  collinear_selectivity_index(bin_angle_cent_mean_oris,bincenters_angle)
@@ -569,7 +709,7 @@ gaussian_sigma = 1
 
 #%% Show spatial maps per delta ori for the mean correlation
 fig = plot_2D_mean_corr_dori(bin_2d_mean_oris,bin_2d_count_oris,bincenters_2d,centeroris,areapairs=areapairs,layerpairs=layerpairs,
-                        projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma)
+                        projpairs=projpairs,centerthr=centerthr,min_counts=0,gaussian_sigma=gaussian_sigma)
 fig.savefig(os.path.join(savedir,'Collinear_DeltaRF_2D_perOri_%s_mean' % (corr_type) + '.png'), format = 'png')
 
 #%% Show angular tuning of center area (matched RF) for each delta ori:
@@ -667,62 +807,161 @@ rotate_prefori      = True
 rf_type             = 'Fsmooth'
 corr_type           = 'noise_corr'
 # corr_type           = 'trace_corr'
-tuned_thr           = 0.025
+tuned_thr           = 0.05
 noise_thr           = 20
-min_counts          = 50
 corr_thr            = 0.01
 
-#Do for one session to get the dimensions: (data is discarded)
-[bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
-    bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
-    bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf([sessions[0]],method='mean',areapairs=areapairs,
-                                                              layerpairs=layerpairs,projpairs=projpairs,binresolution=5)
+rf_type             = 'F'
+corr_type           = 'noise_cov'
+# corr_type           = 'noise_corr'
+noise_thr           = 100
+r2_thr              = 0.1
+binresolution       = 10
+
+[bincenters_2d,bin_2d_mean_ses,bin_2d_count_ses,bin_dist_mean_ses,bin_dist_count_ses,bincenters_dist,
+bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
+bin_angle_surr_count_ses,bincenters_angle] = bin_corr_deltarf_ses(sessions,method='mean',areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                            corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,
+                            r2_thr=1,deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
 #Init output arrays:
-bin_2d_mean_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
-bin_2d_posf_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
-bin_2d_negf_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
-bin_2d_count_oris       = np.empty((ndeltaoris,*np.shape(bin_2d_count)))
+bin_2d_mean_oris_ses        = np.full((ndeltaoris,*np.shape(bin_2d_mean_ses)),np.nan)
+bin_2d_posf_oris_ses        = np.full((ndeltaoris,*np.shape(bin_2d_mean_ses)),np.nan)
+bin_2d_negf_oris_ses        = np.full((ndeltaoris,*np.shape(bin_2d_mean_ses)),np.nan)
+bin_2d_count_oris_ses       = np.full((ndeltaoris,*np.shape(bin_2d_count_ses)),np.nan)
 
-bin_dist_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
-bin_dist_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
-bin_dist_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
-bin_dist_count_oris     = np.empty((ndeltaoris,*np.shape(bin_dist_count)))
+bin_dist_mean_oris_ses      = np.full((ndeltaoris,*np.shape(bin_dist_mean_ses)),np.nan)
+bin_dist_posf_oris_ses      = np.full((ndeltaoris,*np.shape(bin_dist_mean_ses)),np.nan)
+bin_dist_negf_oris_ses      = np.full((ndeltaoris,*np.shape(bin_dist_mean_ses)),np.nan)
+bin_dist_count_oris_ses     = np.full((ndeltaoris,*np.shape(bin_dist_count_ses)),np.nan)
 
-bin_angle_cent_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
-bin_angle_cent_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
-bin_angle_cent_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
-bin_angle_cent_count_oris     = np.empty((ndeltaoris,*np.shape(bin_angle_cent_count)))
+bin_angle_cent_mean_oris_ses      = np.full((ndeltaoris,*np.shape(bin_angle_cent_mean_ses)),np.nan)
+bin_angle_cent_posf_oris_ses      = np.full((ndeltaoris,*np.shape(bin_angle_cent_mean_ses)),np.nan)
+bin_angle_cent_negf_oris_ses      = np.full((ndeltaoris,*np.shape(bin_angle_cent_mean_ses)),np.nan)
+bin_angle_cent_count_oris_ses     = np.full((ndeltaoris,*np.shape(bin_angle_cent_count_ses)),np.nan)
 
-bin_angle_surr_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
-bin_angle_surr_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
-bin_angle_surr_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
-bin_angle_surr_count_oris     = np.empty((ndeltaoris,*np.shape(bin_angle_surr_count)))
+bin_angle_surr_mean_oris_ses      = np.full((ndeltaoris,*np.shape(bin_angle_surr_mean_ses)),np.nan)
+bin_angle_surr_posf_oris_ses      = np.full((ndeltaoris,*np.shape(bin_angle_surr_mean_ses)),np.nan)
+bin_angle_surr_negf_oris_ses      = np.full((ndeltaoris,*np.shape(bin_angle_surr_mean_ses)),np.nan)
+bin_angle_surr_count_oris_ses     = np.full((ndeltaoris,*np.shape(bin_angle_surr_count_ses)),np.nan)
 
 for idOri,deltaori in enumerate(deltaoris):
-    [_,bin_2d_mean_oris[idOri,:,:,:,:,:],bin_2d_count_oris[idOri,:,:,:,:,:],
-     bin_dist_mean_oris[idOri,:,:,:,:],bin_dist_count_oris[idOri,:,:,:],_,
-     bin_angle_cent_mean_oris[idOri,:,:,:,:],bin_angle_cent_count_oris[idOri,:,:,:,:],
-     bin_angle_surr_mean_oris[idOri,:,:,:,:],bin_angle_surr_count_oris[idOri,:,:,:,:],_] = bin_corr_deltarf(sessions,
+# for idOri,centerori in enumerate(centeroris):
+    [_,bin_2d_mean_oris_ses[idOri,:,:,:,:,:],bin_2d_count_oris_ses[idOri,:,:,:,:,:],
+     bin_dist_mean_oris_ses[idOri,:,:,:,:],bin_dist_count_oris_ses[idOri,:,:,:],_,
+     bin_angle_cent_mean_oris_ses[idOri,:,:,:,:],bin_angle_cent_count_oris_ses[idOri,:,:,:,:],
+     bin_angle_surr_mean_oris_ses[idOri,:,:,:,:],bin_angle_surr_count_oris_ses[idOri,:,:,:,:],_] = bin_corr_deltarf_ses(sessions,
                                                     method='mean',filtersign=None,areapairs=areapairs,layerpairs=layerpairs,
-                                                    projpairs=projpairs,corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,
-                                                    deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+                                                    projpairs=projpairs,corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,
+                                                    r2_thr=r2_thr,deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
     
-    [_,bin_2d_posf_oris[idOri,:,:,:,:,:],_,
-     bin_dist_posf_oris[idOri,:,:,:,:],_,_,
-     bin_angle_cent_posf_oris[idOri,:,:,:,:],_,
-     bin_angle_surr_posf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='pos',
-                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                                                    corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
-                                                    deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+    # [_,bin_2d_posf_oris_ses[idOri,:,:,:,:,:],_,
+    #  bin_dist_posf_oris_ses[idOri,:,:,:,:],_,_,
+    #  bin_angle_cent_posf_oris_ses[idOri,:,:,:,:],_,
+    #  bin_angle_surr_posf_oris_ses[idOri,:,:,:,:],_,_] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='pos',
+    #                                                 areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+    #                                                 corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,centerori=centerori,
+    #                                                 r2_thr=r2_thr,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
-    [_,bin_2d_negf_oris[idOri,:,:,:,:,:],_,
-     bin_dist_negf_oris[idOri,:,:,:,:],_,_,
-     bin_angle_cent_negf_oris[idOri,:,:,:,:],_,
-     bin_angle_surr_negf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='neg',
-                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                                                    corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
-                                                    deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+    # [_,bin_2d_negf_oris_ses[idOri,:,:,:,:,:],_,
+    #  bin_dist_negf_oris_ses[idOri,:,:,:,:],_,_,
+    #  bin_angle_cent_negf_oris_ses[idOri,:,:,:,:],_,
+    #  bin_angle_surr_negf_oris_ses[idOri,:,:,:,:],_,_] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='neg',
+    #                                                 areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+    #                                                 corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,centerori=centerori,
+    #                                                 r2_thr=r2_thr,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
+
+#%% Compute mean over sessions for each orientation
+bin_2d_count_oris = np.nansum(bin_2d_count_oris_ses,1)
+bin_2d_mean_oris = np.nanmean(bin_2d_mean_oris_ses,1)
+bin_2d_posf_oris = np.nanmean(bin_2d_posf_oris_ses,1)
+bin_2d_negf_oris = np.nanmean(bin_2d_negf_oris_ses,1)
+
+bin_dist_count_oris = np.nansum(bin_dist_count_oris_ses,1)
+bin_dist_mean_oris = np.nanmean(bin_dist_mean_oris_ses,1)
+bin_dist_posf_oris = np.nanmean(bin_dist_posf_oris_ses,1)
+bin_dist_negf_oris = np.nanmean(bin_dist_negf_oris_ses,1)
+
+bin_angle_cent_mean_oris = np.nanmean(bin_angle_cent_mean_oris_ses,1)
+bin_angle_cent_posf_oris = np.nanmean(bin_angle_cent_posf_oris_ses,1)    
+bin_angle_cent_negf_oris = np.nanmean(bin_angle_cent_negf_oris_ses,1)
+
+bin_angle_surr_mean_oris = np.nanmean(bin_angle_surr_mean_oris_ses,1)
+bin_angle_surr_posf_oris = np.nanmean(bin_angle_surr_posf_oris_ses,1)    
+bin_angle_surr_negf_oris = np.nanmean(bin_angle_surr_negf_oris_ses,1)
+
+#%% Compute mean over sessions for each orientation
+bin_2d_count_oris = np.nansum(bin_2d_count_oris_ses,1)
+bin_2d_mean_oris = nanweightedaverage(bin_2d_mean_oris_ses,weights=bin_2d_count_oris_ses,axis=1)
+bin_2d_posf_oris = nanweightedaverage(bin_2d_posf_oris_ses,weights=bin_2d_count_oris_ses,axis=1)
+bin_2d_negf_oris = nanweightedaverage(bin_2d_negf_oris_ses,weights=bin_2d_count_oris_ses,axis=1)
+
+bin_dist_count_oris = np.nansum(bin_dist_count_oris_ses,1)
+bin_dist_mean_oris = nanweightedaverage(bin_dist_mean_oris_ses,weights=bin_dist_count_oris_ses,axis=1)
+bin_dist_posf_oris = nanweightedaverage(bin_dist_posf_oris_ses,weights=bin_dist_count_oris_ses,axis=1)
+bin_dist_negf_oris = nanweightedaverage(bin_dist_negf_oris_ses,weights=bin_dist_count_oris_ses,axis=1)
+
+bin_angle_cent_mean_oris = nanweightedaverage(bin_angle_cent_mean_oris_ses,weights=bin_angle_cent_count_oris_ses,axis=1)
+bin_angle_cent_posf_oris = nanweightedaverage(bin_angle_cent_posf_oris_ses,weights=bin_angle_cent_count_oris_ses,axis=1)    
+bin_angle_cent_negf_oris = nanweightedaverage(bin_angle_cent_negf_oris_ses,weights=bin_angle_cent_count_oris_ses,axis=1)
+
+bin_angle_surr_mean_oris = nanweightedaverage(bin_angle_surr_mean_oris_ses,weights=bin_angle_surr_count_oris_ses,axis=1)
+bin_angle_surr_posf_oris = nanweightedaverage(bin_angle_surr_posf_oris_ses,weights=bin_angle_surr_count_oris_ses,axis=1)    
+bin_angle_surr_negf_oris = nanweightedaverage(bin_angle_surr_negf_oris_ses,weights=bin_angle_surr_count_oris_ses,axis=1)
+
+
+# #Do for one session to get the dimensions: (data is discarded)
+# [bincenters_2d,bin_2d_mean,bin_2d_count,bin_dist_mean,bin_dist_count,bincenters_dist,
+#     bin_angle_cent_mean,bin_angle_cent_count,bin_angle_surr_mean,
+#     bin_angle_surr_count,bincenters_angle] = bin_corr_deltarf([sessions[0]],method='mean',areapairs=areapairs,
+#                                                               layerpairs=layerpairs,projpairs=projpairs,binresolution=5)
+
+# #Init output arrays:
+# bin_2d_mean_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
+# bin_2d_posf_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
+# bin_2d_negf_oris        = np.empty((ndeltaoris,*np.shape(bin_2d_mean)))
+# bin_2d_count_oris       = np.empty((ndeltaoris,*np.shape(bin_2d_count)))
+
+# bin_dist_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
+# bin_dist_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
+# bin_dist_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_dist_mean)))
+# bin_dist_count_oris     = np.empty((ndeltaoris,*np.shape(bin_dist_count)))
+
+# bin_angle_cent_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
+# bin_angle_cent_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
+# bin_angle_cent_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_cent_mean)))
+# bin_angle_cent_count_oris     = np.empty((ndeltaoris,*np.shape(bin_angle_cent_count)))
+
+# bin_angle_surr_mean_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
+# bin_angle_surr_posf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
+# bin_angle_surr_negf_oris      = np.empty((ndeltaoris,*np.shape(bin_angle_surr_mean)))
+# bin_angle_surr_count_oris     = np.empty((ndeltaoris,*np.shape(bin_angle_surr_count)))
+
+# for idOri,deltaori in enumerate(deltaoris):
+#     [_,bin_2d_mean_oris[idOri,:,:,:,:,:],bin_2d_count_oris[idOri,:,:,:,:,:],
+#      bin_dist_mean_oris[idOri,:,:,:,:],bin_dist_count_oris[idOri,:,:,:],_,
+#      bin_angle_cent_mean_oris[idOri,:,:,:,:],bin_angle_cent_count_oris[idOri,:,:,:,:],
+#      bin_angle_surr_mean_oris[idOri,:,:,:,:],bin_angle_surr_count_oris[idOri,:,:,:,:],_] = bin_corr_deltarf(sessions,
+#                                                     method='mean',filtersign=None,areapairs=areapairs,layerpairs=layerpairs,
+#                                                     projpairs=projpairs,corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,
+#                                                     deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+    
+#     [_,bin_2d_posf_oris[idOri,:,:,:,:,:],_,
+#      bin_dist_posf_oris[idOri,:,:,:,:],_,_,
+#      bin_angle_cent_posf_oris[idOri,:,:,:,:],_,
+#      bin_angle_surr_posf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='pos',
+#                                                     areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+#                                                     corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+#                                                     deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
+#     [_,bin_2d_negf_oris[idOri,:,:,:,:,:],_,
+#      bin_dist_negf_oris[idOri,:,:,:,:],_,_,
+#      bin_angle_cent_negf_oris[idOri,:,:,:,:],_,
+#      bin_angle_surr_negf_oris[idOri,:,:,:,:],_,_] = bin_corr_deltarf(sessions,method='frac',filtersign='neg',
+#                                                     areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+#                                                     corr_type=corr_type,binresolution=5,rotate_prefori=rotate_prefori,corr_thr=corr_thr,
+#                                                     deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
 #%% Compute collinear selectivity index:
 csi_cent_mean_oris =  collinear_selectivity_index(bin_angle_cent_mean_oris,bincenters_angle)
@@ -739,6 +978,7 @@ csi_surr_negf_oris =  collinear_selectivity_index(bin_angle_surr_negf_oris,bince
 
 #%% 
 gaussian_sigma = 1
+min_counts = 250
 
 #%% Show spatial maps per delta ori for the mean correlation
 fig = plot_2D_mean_corr_dori(bin_2d_mean_oris,bin_2d_count_oris,bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
@@ -759,6 +999,8 @@ fig.savefig(os.path.join(savedir,'Collinear_Tuning_Surr_areas_%s_mean' % (corr_t
 fig = plot_corr_radial_tuning_dori(bincenters_dist,bin_dist_count_oris,bin_dist_mean_oris,deltaoris,	
                            areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
 fig.savefig(os.path.join(savedir,'Collinear_Radial_Tuning_areas_%s_mean' % (corr_type) + '.png'), format = 'png')
+
+
 
 
 #%% Show spatial maps per delta ori for the fraction positive 

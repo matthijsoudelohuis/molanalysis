@@ -664,7 +664,7 @@ def get_clr_labeled():
     return ['gray','indianred']
 
    
-def get_clr_deltaoris(deltaoris):
+def get_clr_deltaoris(deltaoris,version=90):
     # c = ["darkred","darkgreen"]
     # v = [0,1.]
     # l = list(zip(v,c))
@@ -678,8 +678,11 @@ def get_clr_deltaoris(deltaoris):
 
     # cmap = sns.color_palette('viridis', as_cmap=True)
     # colors = cmap((90-np.mod(deltaoris,180))/90)
-    colors = cmap(np.abs(90-deltaoris)/90)
-
+    if version == 90: 
+        colors = cmap(np.abs(90-deltaoris)/90)
+    elif version == 180:
+        colors = cmap(np.abs(180-deltaoris)/180)
+        
     return colors
 
 def get_clr_labelpairs(pairs):

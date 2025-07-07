@@ -52,7 +52,14 @@ for ises in range(nSessions):
 
 t_axis = sessions[0].t_axis
 
-
+#%% 
+ #####   #####     #       #     #    #   ######  #     #    #     # ####### ###  #####  #     # #######  #####  
+#     # #     #   # #      #     #   ##   #     # ##   ##    #  #  # #        #  #     # #     #    #    #     # 
+#       #        #   #     #     #  # #   #     # # # # #    #  #  # #        #  #       #     #    #    #       
+#       #       #     #    #     #    #   ######  #  #  #    #  #  # #####    #  #  #### #######    #     #####  
+#       #       #######     #   #     #   #       #     #    #  #  # #        #  #     # #     #    #          # 
+#     # #     # #     #      # #      #   #       #     #    #  #  # #        #  #     # #     #    #    #     # 
+ #####   #####  #     #       #     ##### #       #     #     ## ##  ####### ###  #####  #     #    #     #####  
 
 
 #%% Are the weights higher for V1lab or PMlab than unlabeled neurons?
@@ -300,7 +307,14 @@ sns.despine(top=True,right=True,offset=3,trim=True)
 
 
 
-
+#%% 
+   #    #          #     # ####### ###  #####  #     # #######  #####  
+  # #   #          #  #  # #        #  #     # #     #    #    #     # 
+ #   #  #          #  #  # #        #  #       #     #    #    #       
+#     # #          #  #  # #####    #  #  #### #######    #     #####  
+####### #          #  #  # #        #  #     # #     #    #          # 
+#     # #          #  #  # #        #  #     # #     #    #    #     # 
+#     # #######     ## ##  ####### ###  #####  #     #    #     #####  
 
 #%% 
 # areas       = ['V1','PM']
@@ -526,4 +540,121 @@ ax.set_xticks(np.arange(0,n_components+5,5),np.arange(0,n_components+5,5)+1)
 
 sns.despine(top=True,right=True,offset=3,trim=True)
 my_savefig(fig,savedir,'CCA_V1PM_labeled_toAL_deltaweights_%dsessions_%s' % (nSessions,varversion),formats=['png'])
+
+
+
+
+#%% 
+
+ #####   #####     #       ######  ####### ######     ######  ####### ######     ######     #    ### ######  
+#     # #     #   # #      #     # #       #     #    #     # #     # #     #    #     #   # #    #  #     # 
+#       #        #   #     #     # #       #     #    #     # #     # #     #    #     #  #   #   #  #     # 
+#       #       #     #    ######  #####   ######     ######  #     # ######     ######  #     #  #  ######  
+#       #       #######    #       #       #   #      #       #     # #          #       #######  #  #   #   
+#     # #     # #     #    #       #       #    #     #       #     # #          #       #     #  #  #    #  
+ #####   #####  #     #    #       ####### #     #    #       ####### #          #       #     # ### #     # 
+
+
+#%%
+
+
+
+#%% Are the weights higher for V1lab or PMlab than unlabeled neurons?
+n_components        = 20
+nStim               = 16
+nmodelfits          = 10
+minsampleneurons    = 10
+maxnoiselevel       = 20
+filter_nearby       = True
+kFold               = 5
+idx_resp            = np.where((t_axis>=0) & (t_axis<=1.5))[0]
+
+arealabelpairs      = ['V1unl-PMunl',
+                    'V1unl-PMlab',
+                    'V1lab-PMunl',
+                    'V1lab-PMlab']
+
+clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
+narealabelpairs     = len(arealabelpairs)
+
+CCA_corrtest        = np.full((narealabelpairs,n_components,nSessions,nStim),np.nan)
+     
+
+#%% Fit:
+model_CCA           = CCA(n_components=n_components,scale = False, max_iter = 1000)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model'):    # iterate over sessions
+# for ises,ses in tqdm(enumerate([sessions[0]]),total=nSessions,desc='Fitting CCA model'):    # iterate over sessions
+
+    if filter_nearby:
+        idx_nearby  = filter_nearlabeled(ses,radius=25)
+    else:
+        idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+
+    #take the smallest sample size
+    allpops             = np.array([i.split('-') for i in arealabelpairs]).flatten()
+    nsampleneurons      = np.min([np.sum(np.all((ses.celldata['arealabel']==i,
+                                          ses.celldata['noise_level']<maxnoiselevel,
+                                          idx_nearby),axis=0)) for i in allpops])
+    
+    if nsampleneurons<minsampleneurons: #skip session if less than minsampleneurons in either population
+        continue
+    
+    for iapl, arealabelpair in enumerate(arealabelpairs):
+        alx,aly = arealabelpair.split('-')
+
+        if filter_nearby:
+            idx_nearby  = filter_nearlabeled(ses,radius=50)
+        else:
+            idx_nearby = np.ones(len(ses.celldata),dtype=bool)
+
+        idx_areax           = np.where(np.all((ses.celldata['arealabel']==alx,
+                                ses.celldata['noise_level']<100,	
+                                idx_nearby),axis=0))[0]
+        idx_areay           = np.where(np.all((ses.celldata['arealabel']==aly,
+                                ses.celldata['noise_level']<100,	
+                                idx_nearby),axis=0))[0]
+    
+        for istim,stim in enumerate(np.unique(ses.trialdata['stimCond'])): # loop over orientations 
+            idx_T               = ses.trialdata['stimCond']==stim
+        
+            #on tensor during the response:
+            # X                   = sessions[ises].tensor[np.ix_(idx_areax,idx_T,idx_resp)].reshape(len(idx_areax),-1).T
+            # Y                   = sessions[ises].tensor[np.ix_(idx_areay,idx_T,idx_resp)].reshape(len(idx_areay),-1).T
+            
+            #on residual tensor during the response:
+            X                   = sessions[ises].tensor[np.ix_(idx_areax,idx_T,idx_resp)]
+            Y                   = sessions[ises].tensor[np.ix_(idx_areay,idx_T,idx_resp)]
+            
+            X                   -= np.mean(X,axis=1,keepdims=True)
+            Y                   -= np.mean(Y,axis=1,keepdims=True)
+
+            X                   = X.reshape(len(idx_areax),-1).T
+            Y                   = Y.reshape(len(idx_areay),-1).T
+
+            X                   = zscore(X,axis=0)  #Z score activity for each neuron
+            Y                   = zscore(Y,axis=0)
+
+            [CCA_corrtest[iapl,:,ises,istim],_] = CCA_subsample(X.T,Y.T,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=None,n_components=n_components)
+
+#%%
+fig, axes = plt.subplots(1,1,figsize=(4,4))
+
+ax = axes
+
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax.plot(np.arange(n_components),np.nanmean(CCA_corrtest[iapl,:,:,:],axis=(1,2)),
+            color=clrs_arealabelpairs[iapl],linewidth=2)
+# plt.plot(np.arange(nccadims),np.nanmean(CCA_corrtest[:,:,0,:,0],axis=(0,1,2)),color='k',linewidth=2)
+ax.set_xticks(np.arange(0,n_components+5,5))
+ax.set_xticklabels(np.arange(0,n_components+5,5)+1)
+# ax.set_xticklabels(np.arange(1,n_components,2)+1)
+ax.set_ylim([0,my_ceil(np.nanmax(np.nanmean(CCA_corrtest,axis=(2,3))),1)])
+# ax.set_yticks([0,ax.get_ylim()[1]])
+ax.set_yticks([0,ax.get_ylim()[1]/2,ax.get_ylim()[1]])
+ax.set_xlabel('CCA Dimension')
+ax.set_ylabel('Correlation')
+ax.legend(arealabelpairs,loc='upper right',frameon=False,fontsize=9)
+sns.despine(top=True,right=True,offset=3,trim=True)
+my_savefig(fig,savedir,'CCA_V1PM_pops_labeled_testcorr_%dsessions_%s' % (nSessions,varversion),formats=['png'])
 

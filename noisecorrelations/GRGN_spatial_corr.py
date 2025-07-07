@@ -54,6 +54,14 @@ sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
 
 #%%  Load data properly:        
+calciumversion = 'dF'
+# calciumversion = 'deconv'
+for ises in range(nSessions):
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion=calciumversion,keepraw=False)
+                                # calciumversion=calciumversion,keepraw=True,filter_hp=0.01)
+
+#%%  Load data properly:        
 # calciumversion = 'dF'
 calciumversion = 'deconv'
 
@@ -87,6 +95,56 @@ sessions = compute_signal_noise_correlation(sessions,uppertriangular=False)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='GM')
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,remove_method='PCA',remove_rank=1)
 # sessions = compute_signal_noise_correlation(sessions,uppertriangular=False,filtersig=False,remove_method='RRR',remove_rank=2)
+
+#%% 
+from sklearn.decomposition import FactorAnalysis as FA
+
+areas = ['V1','PM']
+n_components = 20
+fa = FA(n_components=n_components)
+
+# comps = np.array([0,1,2,3,4,5,6,7,8,9])
+# comps = np.array([1,2,3,4,5,6,7,8])
+comps = np.arange(1,n_components)
+# comps = np.array(0,)
+# comps = np.arange(2,n_components)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Computing noise correlations'):
+    
+    [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+    if sessions[ises].sessiondata['protocol'][0]=='GR':
+        resp_meanori,respmat_res        = mean_resp_gr(sessions[ises])
+    elif sessions[ises].sessiondata['protocol'][0]=='GN':
+        resp_meanori,respmat_res        = mean_resp_gn(sessions[ises])
+
+    # # Compute noise correlations from residuals:
+    # data = zscore(respmat_res,axis=1)
+    # sessions[ises].noise_corr       = np.corrcoef(data)
+    # fa.fit(data.T)
+    # data_T              = fa.transform(data.T)
+    # data_hat            = np.dot(data_T[:,comps], fa.components_[comps,:]).T        # Reconstruct data
+    # sessions[ises].noise_cov    = np.cov(data_hat)
+
+    stims        = np.sort(sessions[ises].trialdata['stimCond'].unique())
+    trial_stim   = sessions[ises].trialdata['stimCond']
+    noise_corr  = np.empty((N,N,len(stims)))  
+    noise_cov   = np.empty((N,N,len(stims)))  
+    for i,stim in enumerate(stims):
+        data                = zscore(respmat_res[:,trial_stim==stim],axis=1)
+
+        noise_corr[:,:,i]   = np.corrcoef(data)
+
+        for iarea,area in enumerate(areas):
+            idx_N               = ses.celldata['roi_name']==area
+
+            fa.fit(data[idx_N,:].T)
+            data_T              = fa.transform(data[idx_N,:].T)
+            data[idx_N,:]       = np.dot(data_T[:,comps], fa.components_[comps,:]).T        # Reconstruct data
+        
+        noise_cov[:,:,i]  = np.cov(data)
+
+    sessions[ises].noise_corr       = np.mean(noise_corr,axis=2)
+    sessions[ises].noise_cov        = np.mean(noise_cov,axis=2)
 
 # plt.imshow(sessions[0].noise_corr,vmin=-0.03,vmax=0.05)
 
@@ -122,8 +180,8 @@ areapairs       = ['V1-V1','PM-PM']
 clrs_areapairs  = get_clr_area_pairs(areapairs)
 
 #%% Compute pairwise correlations as a function of pairwise anatomical distance ###################################################################
-for corr_type in ['trace_corr','sig_corr','noise_corr']:
-# for corr_type in ['noise_corr']:
+# for corr_type in ['trace_corr','sig_corr','noise_corr']:
+for corr_type in ['noise_cov']:
     [binmean,binedges] = bin_corr_distance(sessions,areapairs,corr_type=corr_type)
 
     #Make the figure per protocol:
@@ -137,6 +195,7 @@ areapairs           = ['V1-V1','PM-PM']
 layerpairs          = ' '
 projpairs           = ' '
 corr_type           = 'noise_corr'
+corr_type           = 'noise_cov'
 # corr_type           = 'trace_corr'
 # corr_type           = 'sig_corr'
 corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
@@ -198,6 +257,7 @@ areapairs           = ['V1-V1','PM-PM','V1-PM']
 # layerpairs          = ['L5-L5']
 layerpairs          = ' '
 projpairs           = ' '
+binresolution = 10
 
 [bin_dist_mean_ses,bin_dist_count_ses,binsdRF] = bin_corr_deltarf_ses_vkeep(sessions,rf_type=rf_type,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
@@ -227,16 +287,17 @@ plt.xlim([-0.1,0.1])
 areapairs           = ['V1-V1','PM-PM','V1-PM']
 # areapairs           = ['V1-PM']
 # areapairs           = ['PM-PM']
-layerpairs          = ['L2/3-L2/3']
+# layerpairs          = ['L2/3-L2/3']
 # layerpairs          = ['L2/3-L5']
 # layerpairs          = ['L5-L5']
-# layerpairs          = ' '
+layerpairs          = ' '
 projpairs           = ' '
 
 # corr_thr            = 0.025 #thr in percentile of total corr for significant pos or neg
 corr_thr            = 0.01 #thr in percentile of total corr for significant pos or neg
-rf_type             = 'Fsmooth'
+rf_type             = 'F'
 corr_type           = 'noise_corr'
+corr_type           = 'noise_cov'
 # corr_type           = 'trace_corr'
 # corr_type           = 'sig_corr'
 min_counts          = 50
@@ -247,7 +308,8 @@ binresolution       = 10
 bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
 bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_type,
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
-                        method='mean',filtersign=None,corr_type=corr_type,noise_thr=20,
+                        method='mean',filtersign=None,corr_type=corr_type,noise_thr=100,
+                        r2_thr=0.1,
                         binresolution=binresolution,normalize=False)
 
 [_,bin_2d_posf_ses,_,bin_dist_posf_ses,_,_,
@@ -334,8 +396,9 @@ layerpairs          = ' '
 # layerpairs          = ['L2/3-L5']
 
 corr_thr            = 0.01 #thr in percentile of total corr for significant pos or neg
-rf_type             = 'Fsmooth'
+rf_type             = 'F'
 corr_type           = 'noise_corr'
+corr_type           = 'noise_cov'
 # corr_type           = 'trace_corr'
 # corr_type           = 'sig_corr'
 binresolution       = 10

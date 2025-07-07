@@ -1235,7 +1235,7 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
 
                 if corr_type == 'trace_corr':
                     n = len(sessions[ises].ts_F)
-                elif corr_type in ['noise_corr','sig_corr']:
+                elif corr_type in ['noise_corr','noise_cov','sig_corr']:
                     n = np.shape(sessions[ises].respmat)[1]
                 sigcorrdata = corrdata.copy()
 
@@ -3047,7 +3047,7 @@ def plot_corr_angular_tuning_dori(bin_angle_oris,bin_angle_count_oris,
     ilp = 0
     ipp = 0
     
-    clrs_deltaoris      = get_clr_deltaoris(deltaoris)
+    clrs_deltaoris      = get_clr_deltaoris(deltaoris,version=180)
     clrs_areapairs      = get_clr_area_pairs(areapairs)
     if len(areapairs)==1:
         clrs_areapairs =[clrs_areapairs]
@@ -3072,6 +3072,7 @@ def plot_corr_angular_tuning_dori(bin_angle_oris,bin_angle_count_oris,
                 ax.set_xlabel(u'Angular surround bin (\N{DEGREE SIGN})')
             # if iap==len(areapairs):
                 # ax.set_xlabel(u'Angle (deg)')
+    ax.set_ylim([0,0.05])
     plt.tight_layout()
     return fig
 

@@ -140,7 +140,7 @@ def plot_RF_frac(sessions,rf_type,r2_thr):
     plt.ylabel('Fraction receptive fields')
     plt.title(rf_type)
     plt.tight_layout()
-
+    sns.despine(fig=fig, top=True, right=True, offset = 3)
     # ax.get_legend().remove()
 
     return fig,rf_frac
@@ -263,7 +263,7 @@ def replace_smooth_with_Fsig(sessions,r2_thr=0.2):
     return sessions
     
     
-def plot_delta_rf_across_sessions(sessions,areapairs):
+def plot_delta_rf_across_sessions(sessions,areapairs,rf_type='Fsmooth',r2_thr=0.2):
     clrs_areapairs = get_clr_area_pairs(areapairs)
     binedges    = np.arange(-5,150,5) 
     nbins       = len(binedges)-1
@@ -272,16 +272,22 @@ def plot_delta_rf_across_sessions(sessions,areapairs):
     fig,axes = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*3,3))
     for iap,areapair in enumerate(areapairs):
         for ses in sessions:
-                        
+            
             # Define function to filter neuronpairs based on area combination
             areafilter = filter_2d_areapair(ses,areapair)
             nanfilter  = ~np.isnan(ses.distmat_rf)
-            cellfilter = np.logical_and(areafilter,nanfilter)
+            r2filter   = np.meshgrid(ses.celldata['rf_r2_' + rf_type]> r2_thr,ses.celldata['rf_r2_'  + rf_type] > r2_thr)
+            r2filter   = np.logical_and(r2filter[0],r2filter[1])
+
+            cellfilter = np.all((areafilter,nanfilter,r2filter),axis=0)
             sns.histplot(data=ses.distmat_rf[cellfilter].flatten(),bins=binedges,ax=axes[iap],color=clrs_areapairs[iap],
                          alpha=0.5,fill=False,stat='percent',element='step')
         axes[iap].set_title(areapair)
             # axes[iap].hist(ses.distmat_rf[cellfilter],bins=binedges,color=clrs_areapairs[iap],alpha=0.5)
+    sns.despine(fig=fig, top=True, right=True,offset=3)
+    plt.tight_layout()
     return fig
+
 
 def scatter_dXY_dRF(ses,areapairs):
     clrs_areapairs = get_clr_area_pairs(areapairs)

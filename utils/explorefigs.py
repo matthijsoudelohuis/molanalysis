@@ -212,6 +212,7 @@ def plot_neural_traces(ses, ax, tstart, tstop , neuronsel=None, counter=0, nexce
     scaleddata      = min_max_scaler.fit_transform(scaleddata)
     scaleddata      = scaleddata[np.logical_and(
         ses.ts_F > tstart, ses.ts_F < tstop)]
+    scaleddata      = min_max_scaler.fit_transform(scaleddata)
 
     areas           = np.unique(ses.celldata['roi_name'])
     labeled         = np.unique(ses.celldata['redcell'])
@@ -226,7 +227,7 @@ def plot_neural_traces(ses, ax, tstart, tstop , neuronsel=None, counter=0, nexce
                                             ses.celldata['redcell'] == label))[0]
                 temp_excells    = np.min((len(idx), nexcells))
                 excerpt_var     = np.var(scaleddata, axis=0)
-                example_cells    = np.append(example_cells, idx[np.argsort(-excerpt_var[idx])[:temp_excells]])
+                example_cells   = np.append(example_cells, idx[np.argsort(-excerpt_var[idx])[:temp_excells]])
     else:
         example_cells = np.array(neuronsel)
 
