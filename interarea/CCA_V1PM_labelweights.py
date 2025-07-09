@@ -351,7 +351,9 @@ maxnoiselevel       = 20
 filter_nearby       = True
 idx_resp            = np.where((t_axis>=0) & (t_axis<=1.5))[0]
 
+diffarea = 'RSPunl'
 arealabels          = np.array(['V1unl', 'V1lab', 'ALunl'])
+arealabels          = np.array(['V1unl', 'V1lab', 'RSPunl'])
 weights_CCA_V1AL    = np.full((n_components,len(arealabels),nSessions,nStim,nmodelfits),np.nan)
 
 #%% Fit:
@@ -361,7 +363,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model
 # for ises,ses in tqdm(enumerate([sessions[0]]),total=nSessions,desc='Fitting CCA model'):    # iterate over sessions
 
     if filter_nearby:
-        idx_nearby  = filter_nearlabeled(ses,radius=25)
+        idx_nearby  = filter_nearlabeled(ses,radius=50)
     else:
         idx_nearby = np.ones(len(ses.celldata),dtype=bool)
 
@@ -415,6 +417,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model
 
 #%% Are the weights higher for V1lab or PMlab than unlabeled neurons to the other area?
 arealabels          = np.array(['PMunl', 'PMlab', 'ALunl'])
+arealabels          = np.array(['PMunl', 'PMlab', 'RSPunl'])
 weights_CCA_PMAL    = np.full((n_components,len(arealabels),nSessions,nStim,nmodelfits),np.nan)
 
 #%% Fit:
@@ -424,7 +427,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model
 # for ises,ses in tqdm(enumerate([sessions[0]]),total=nSessions,desc='Fitting CCA model'):    # iterate over sessions
 
     if filter_nearby:
-        idx_nearby  = filter_nearlabeled(ses,radius=25)
+        idx_nearby  = filter_nearlabeled(ses,radius=50)
     else:
         idx_nearby = np.ones(len(ses.celldata),dtype=bool)
 
@@ -495,7 +498,7 @@ ax.errorbar(range(n_components),meantoplot,yerr=errortoplot,label=al,fmt='o-',ma
             elinewidth=1,markersize=8,color=get_clr_areas(['V1']))
 for icomp in range(n_components):
     ttest,pval = stats.ttest_1samp(ialdata[icomp],0,nan_policy='omit',alternative='two-sided')
-    pval = pval*n_components #(to correct for multiple comparisons)
+    # pval = pval*n_components #(to correct for multiple comparisons)
     # print(pval)
     if pval < 0.05:
         # ax.plot(icomp,meantoplot[icomp]+errortoplot[icomp]+0.002,'*',color='k',markersize=8)
@@ -504,7 +507,7 @@ for icomp in range(n_components):
 # ax.text(mindim+0.5,0.02,'CCA Dim',fontsize=8)
 ax.set_ylabel(r'$\Delta$|Weight|   (V1Lab-V1Unl)')
 ax.set_xlabel('Dimension')
-ax.set_title('V1<->AL')
+ax.set_title('V1<->%s' % diffarea)
 ax.axhline(y=0,color='k',linestyle='--')
 
 ax_nticks(ax,5)
@@ -532,14 +535,14 @@ for icomp in range(n_components):
 # ax.text(mindim+0.5,0.02,'CCA Dim',fontsize=8)
 ax.set_ylabel(r'$\Delta$|Weight|   (PMLab-PMUnl)')
 ax.set_xlabel('Dimension')
-ax.set_title('PM<->AL')
+ax.set_title('PM<->%s' % diffarea)
 ax.axhline(y=0,color='k',linestyle='--')
 
 ax_nticks(ax,5)
 ax.set_xticks(np.arange(0,n_components+5,5),np.arange(0,n_components+5,5)+1)
 
 sns.despine(top=True,right=True,offset=3,trim=True)
-my_savefig(fig,savedir,'CCA_V1PM_labeled_toAL_deltaweights_%dsessions_%s' % (nSessions,varversion),formats=['png'])
+# my_savefig(fig,savedir,'CCA_V1PM_labeled_to%s_deltaweights_%dsessions_%s' % (diffarea,nSessions,varversion),formats=['png'])
 
 
 
@@ -578,7 +581,7 @@ clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
 narealabelpairs     = len(arealabelpairs)
 
 CCA_corrtest        = np.full((narealabelpairs,n_components,nSessions,nStim),np.nan)
-     
+
 
 #%% Fit:
 model_CCA           = CCA(n_components=n_components,scale = False, max_iter = 1000)
@@ -635,26 +638,85 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model
             X                   = zscore(X,axis=0)  #Z score activity for each neuron
             Y                   = zscore(Y,axis=0)
 
-            [CCA_corrtest[iapl,:,ises,istim],_] = CCA_subsample(X.T,Y.T,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=None,n_components=n_components)
+            [g,_] = CCA_subsample(X.T,Y.T,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=None,n_components=np.min([n_components,nsampleneurons]))
+            CCA_corrtest[iapl,:len(g),ises,istim] = g
 
 #%%
 fig, axes = plt.subplots(1,1,figsize=(4,4))
 
 ax = axes
-
+handles = []
 for iapl, arealabelpair in enumerate(arealabelpairs):
-    ax.plot(np.arange(n_components),np.nanmean(CCA_corrtest[iapl,:,:,:],axis=(1,2)),
-            color=clrs_arealabelpairs[iapl],linewidth=2)
-# plt.plot(np.arange(nccadims),np.nanmean(CCA_corrtest[:,:,0,:,0],axis=(0,1,2)),color='k',linewidth=2)
+    # ax.plot(np.arange(n_components),np.nanmean(CCA_corrtest[iapl,:,:,:],axis=(1,2)),
+            # color=clrs_arealabelpairs[iapl],linewidth=2)
+    iapldata = CCA_corrtest[iapl,:,:,:].reshape(n_components,-1)
+    handles.append(shaded_error(x=np.arange(n_components),
+                                # y=np.nanmean(CCA_corrtest_norm[iapl,:,:,:],axis=(1)).T,
+                                y=iapldata.T,
+                                error='sem',color=clrs_arealabelpairs[iapl],alpha=0.3,ax=ax))
 ax.set_xticks(np.arange(0,n_components+5,5))
 ax.set_xticklabels(np.arange(0,n_components+5,5)+1)
-# ax.set_xticklabels(np.arange(1,n_components,2)+1)
 ax.set_ylim([0,my_ceil(np.nanmax(np.nanmean(CCA_corrtest,axis=(2,3))),1)])
-# ax.set_yticks([0,ax.get_ylim()[1]])
+ax.set_yticks([0,ax.get_ylim()[1]/2,ax.get_ylim()[1]])
+ax.set_xlabel('CCA Dimension')
+ax.set_ylabel('Correlation')
+ax.legend(handles,arealabelpairs,loc='upper right',frameon=False,fontsize=9)
+sns.despine(top=True,right=True,offset=1,trim=True)
+my_savefig(fig,savedir,'CCA_V1PM_pops_labeled_testcorr_%dsessions' % (nSessions),formats=['png'])
+
+#%%
+fig, axes = plt.subplots(1,1,figsize=(4,4))
+
+ax = axes
+CCA_corrtest_norm = CCA_corrtest / CCA_corrtest[0,0,:,:][np.newaxis,np.newaxis,:,:]
+# CCA_corrtest_norm = CCA_corrtest / CCA_corrtest[:,0,:,:][:,np.newaxis,:,:]
+
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    ax.plot(np.arange(n_components),np.nanmean(CCA_corrtest_norm[iapl,:,:,:],axis=(1,2)),
+            color=clrs_arealabelpairs[iapl],linewidth=2)
+ax.set_xticks(np.arange(0,n_components+5,5))
+ax.set_xticklabels(np.arange(0,n_components+5,5)+1)
+ax.set_ylim([0,my_ceil(np.nanmax(np.nanmean(CCA_corrtest_norm,axis=(2,3))),1)])
 ax.set_yticks([0,ax.get_ylim()[1]/2,ax.get_ylim()[1]])
 ax.set_xlabel('CCA Dimension')
 ax.set_ylabel('Correlation')
 ax.legend(arealabelpairs,loc='upper right',frameon=False,fontsize=9)
-sns.despine(top=True,right=True,offset=3,trim=True)
-my_savefig(fig,savedir,'CCA_V1PM_pops_labeled_testcorr_%dsessions_%s' % (nSessions,varversion),formats=['png'])
+sns.despine(top=True,right=True,offset=1,trim=True)
+# my_savefig(fig,savedir,'CCA_V1PM_pops_labeled_testcorr_normdim1_%dsessions_%s' % (nSessions,varversion),formats=['png'])
 
+#%%
+fig, axes = plt.subplots(1,1,figsize=(4,4))
+ax = axes
+# CCA_corrtest_norm = CCA_corrtest / CCA_corrtest[0,:,:,:][np.newaxis,:,:,:]
+CCA_corrtest_norm = CCA_corrtest - CCA_corrtest[0,:,:,:][np.newaxis,:,:,:]
+handles = []
+for iapl, arealabelpair in enumerate(arealabelpairs):
+    # ax.plot(np.arange(n_components),np.nanmean(CCA_corrtest_norm[iapl,:,:,:],axis=(1,2)),
+            # color=clrs_arealabelpairs[iapl],linewidth=2)
+    iapldata = CCA_corrtest_norm[iapl,:,:,:].reshape(n_components,-1)
+    handles.append(shaded_error(x=np.arange(n_components),
+                                # y=np.nanmean(CCA_corrtest_norm[iapl,:,:,:],axis=(1)).T,
+                                y=iapldata.T,
+                                error='sem',color=clrs_arealabelpairs[iapl],alpha=0.3,ax=ax))
+    for icomp in range(n_components):
+        # ttest,pval = stats.ttest_1samp(iapldata[icomp],0,nan_policy='omit',alternative='greater')
+        ttest,pval = stats.ttest_1samp(iapldata[icomp],0,nan_policy='omit',alternative='two-sided')
+        if pval < 0.05:
+            ax.plot(icomp,0.02+0.04*math.copysign(1, ttest) + iapl*0.003,'*',color=clrs_arealabelpairs[iapl],markersize=8)
+
+# ax.errorbar(range(n_components),meantoplot,yerr=errortoplot,label=al,fmt='o-',markerfacecolor='w',
+            # elinewidth=1,markersize=8,color=get_clr_areas(['PM']))
+
+ax.set_xticks(np.arange(0,n_components+5,5))
+ax.set_xticklabels(np.arange(0,n_components+5,5)+1)
+ax.set_ylim([0,my_ceil(np.nanmax(np.nanmean(CCA_corrtest_norm,axis=(2,3))),1)])
+ax.set_yticks([-0.025,0,0.025,0.05])
+ax.set_ylim([-0.025,0.075])
+ax.set_xlabel('CCA Dimension')
+ax.set_ylabel(u'Δ Correlation')
+ax.legend(handles,arealabelpairs,loc='upper right',frameon=False,fontsize=9)
+sns.despine(top=True,right=True,offset=1,trim=True)
+my_savefig(fig,savedir,'CCA_V1PM_pops_labeled_testcorr_normUnl_%dsessions' % (nSessions),formats=['png'])
+
+
+#%% 
