@@ -47,7 +47,7 @@ sessions,nSessions   = filter_sessions(protocols = 'GR')
 areas = ['V1','PM']
 sessions,nSessions   = filter_sessions(protocols = 'GR',only_all_areas=areas,min_lab_cells_V1=20,min_lab_cells_PM=20)
 
-#%% Remove two sessions with too much drift in them:
+#%% Remove sessions with too much drift in them:
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20']))[0]
 sessions            = [sessions[i] for i in sessions_in_list]

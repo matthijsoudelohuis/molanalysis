@@ -709,7 +709,7 @@ sessions,nSessions   = filter_sessions(protocols = ['SP'],filter_areas=['V1','PM
 
 #%%  Load data properly:                      
 for ises in range(nSessions):
-    sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,load_videodata=False,
+    sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
                                 calciumversion='dF')
 
 #%% ##################### Compute pairwise neuronal distances: ##############################
@@ -815,3 +815,174 @@ bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_t
 fig = plot_corr_radial_tuning_projs(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,
                                              areapairs,layerpairs,projpairs,min_counts=100)
 my_savefig(fig,savedir,'RadialTuning_Areas_Projs_SP_%s' % (corr_type),formats = ['png'])
+
+
+
+#%% Behavior related vs non-behavior related variability: 
+
+from sklearn.impute import SimpleImputer
+from utils.regress_lib import *
+from utils.RRRlib import *
+
+#%% 
+areas           = ['V1','PM']
+n_components    = 20
+vidfields       = np.concatenate((['videoPC_%d'%i for i in range(30)],
+                            ['pupil_area','pupil_ypos','pupil_xpos']),axis=0)
+si              = SimpleImputer()
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Computing noise correlations'):
+    
+    [K,N]                           = np.shape(sessions[ises].calciumdata) #get dimensions of response matrix
+
+    Y                            = zscore(sessions[ises].calciumdata,axis=0).to_numpy()
+
+    B = np.empty((len(sessions[ises].ts_F),len(vidfields)+1))
+    for ifie,field in enumerate(vidfields):
+        B[:,ifie] = np.interp(x=sessions[ises].ts_F, xp=sessions[ises].videodata['ts'],
+                                        # fp=sessions[ises].videodata['runspeed'])
+                                        fp=sessions[ises].videodata[field])
+    B[:,-1] = np.interp(x=sessions[ises].ts_F, xp=sessions[ises].behaviordata['ts'],
+                                        fp=sessions[ises].behaviordata['runspeed'])
+
+    B                   = si.fit_transform(B)
+    B                   = zscore(B,axis=0,nan_policy='omit')
+
+    #Reduced rank regression: 
+    B_hat               = LM(Y,B,lam=0)
+    Y_hat               = B @ B_hat
+
+    # decomposing and low rank approximation of Y_hat
+    rank                = 5
+    U, s, V             = svds(Y_hat,k=rank)
+    U, s, V             = U[:, ::-1], s[::-1], V[::-1, :]
+
+    S                   = linalg.diagsvd(s,U.shape[0],s.shape[0])
+
+    Y_hat_rr            = U[:,:rank] @ S[:rank,:rank] @ V[:rank,:]
+
+    sessions[ises].noise_cov_B    = np.cov(Y_hat_rr.T)
+    np.fill_diagonal(sessions[ises].noise_cov_B,np.nan)
+
+    sessions[ises].noise_cov_noB  = np.cov((Y-Y_hat_rr).T)
+    np.fill_diagonal(sessions[ises].noise_cov_noB,np.nan)
+ 
+ 
+#%% Define the areapairs:
+areapairs       = ['V1-V1','PM-PM']
+clrs_areapairs  = get_clr_area_pairs(areapairs)
+
+#%% Compute pairwise correlations as a function of pairwise anatomical distance ###################################################################
+# for corr_type in ['noise_cov_B','noise_cov_noB']:
+#     [binmean,binedges] = bin_corr_distance(sessions,areapairs,corr_type=corr_type,
+#                                            absolute=False)
+
+#     #Make the figure per protocol:
+#     fig = plot_bin_corr_distance(sessions,binmean,binedges,areapairs,corr_type=corr_type)
+#     # my_savefig(fig,savedir,'Corr_anatomicaldist_SP_%s' % (corr_type),formats = ['png'])
+
+[binmean_B,binedges] = bin_corr_distance(sessions,areapairs=' ',corr_type='noise_cov_B',absolute=False)
+[binmean_noB,binedges] = bin_corr_distance(sessions,areapairs=' ',corr_type='noise_cov_noB',absolute=False)
+
+binmean = np.concatenate((binmean_B,binmean_noB),axis=1)
+
+#%% Plot correlation as a function of anatomical distance
+
+corrtypes = ['noise_cov_B','noise_cov_noB']
+corrtypelabelss = ['Beh. related','Beh. unrelated']
+
+clrs = ['#7F7F7F','#D55E00']
+fig,axes = plt.subplots(1,1,figsize=(3,2.5))
+handles = []
+ax = axes
+for ict,corr_type in enumerate(corrtypes):
+    for ises in range(len(sessions)):
+        ax.plot(binedges[:-1],binmean[ises,ict,:].squeeze(),linewidth=0.15,color=clrs[ict])
+    handles.append(shaded_error(ax=ax,x=binedges[:-1],y=binmean[:,ict,:].squeeze(),
+                                error='sem',color=clrs[ict],linewidth=3))
+    # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+ax.legend(handles,corrtypelabelss,loc='upper right',frameon=False,fontsize=9)	
+ax.set_xlabel('Anatomical distance ($\mu$m)')
+ax.set_ylabel('Correlation')
+ax.set_xlim([20,600])
+ax_nticks(ax,3)
+ax.set_ylim([0,0.03])
+ax.set_aspect('auto')
+ax.tick_params(axis='both', which='major', labelsize=8)
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+my_savefig(fig,savedir,'RadialTuning_BehaviorRelated_SP_%dsessions' % nSessions,formats = ['png'])
+
+
+#%% #########################################################################################
+# Contrast: across areas
+areapairs           = ['V1-V1','PM-PM','V1-PM']
+areapairs           = ' '
+layerpairs          = ' '
+projpairs           = ' '
+
+rf_type             = 'F'
+# rf_type             = 'Fsmooth'
+# corr_type           = 'trace_corr'
+corr_type           = 'noise_cov_B'
+binresolution       = 5
+normalize           = False
+# normalize = True
+absolute            = False
+# absolute            = True
+shufflefield        = None
+
+[bins2d,bin_2d_mean_ses,bin_2d_count_ses,bin_dist_mean_ses_B,bin_dist_count_ses,binsdRF,
+bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
+bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_type,
+                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                        method='mean',filtersign=None,corr_type=corr_type,noise_thr=100,
+                        binresolution=binresolution,normalize=normalize,absolute=absolute,
+                        shufflefield=shufflefield,r2_thr=0.1)
+
+corr_type           = 'noise_cov_noB'
+
+[bins2d,bin_2d_mean_ses,bin_2d_count_ses,bin_dist_mean_ses_noB,bin_dist_count_ses,binsdRF,
+bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
+bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_type,
+                        areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                        method='mean',filtersign=None,corr_type=corr_type,noise_thr=100,
+                        binresolution=binresolution,normalize=normalize,absolute=absolute,
+                        shufflefield=shufflefield,r2_thr=0.1)
+
+#%% 
+np.shape(bin_dist_mean_ses)
+
+binmean = np.concatenate((np.squeeze(bin_dist_mean_ses_B),np.squeeze(bin_dist_mean_ses_noB)),axis=2)
+binmean = np.concatenate((bin_dist_mean_ses_B,bin_dist_mean_ses_noB),axis=2)
+binmean = np.squeeze(binmean)
+binmean = np.transpose(binmean,(0,2,1))
+
+#%% Plot correlation as a function of delta RF:
+corrtypes = ['noise_cov_B','noise_cov_noB']
+corrtypelabelss = ['Beh. related','Beh. unrelated']
+
+clrs = ['#7F7F7F','#D55E00']
+fig,axes = plt.subplots(1,1,figsize=(3,3))
+handles = []
+ax = axes
+for ict,corr_type in enumerate(corrtypes):
+    for ises in range(len(sessions)):
+        ax.plot(binsdRF,binmean[ises,ict,:].squeeze(),linewidth=0.15,color=clrs[ict])
+    handles.append(shaded_error(ax=ax,x=binsdRF,y=binmean[:,ict,:].squeeze(),
+                                error='sem',color=clrs[ict],linewidth=3))
+    # plt.savefig(os.path.join(savedir,'NoiseCorr_distRF_RegressOut_' + areapair + '_' + sessions[sesidx].sessiondata['session_id'][0] + '.png'), format = 'png')
+
+ax.legend(handles,corrtypelabelss,loc='upper right',frameon=False,fontsize=9)	
+ax.set_xlabel('Delta RF (deg)')
+ax.set_ylabel('Correlation')
+# ax.set_xticks([20,600])
+ax_nticks(ax,5)
+ax.set_ylim([0,0.017])
+ax.set_aspect('auto')
+ax.tick_params(axis='both', which='major', labelsize=8)
+sns.despine(top=True,right=True,offset=3)
+plt.tight_layout()
+my_savefig(fig,savedir,'DeltaRF_RadialTuning_BehaviorRelated_SP_%dsessions' % nSessions,formats = ['png'])
+

@@ -23,8 +23,10 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.plot_lib import * #get all the fixed color schemes
 from utils.tuning import compute_tuning_wrapper
 from utils.regress_lib import *
+from utils.RRRlib import *
 
 #%% 
+protocol = 'SP'
 areas = ['V1','PM']
 nareas = len(areas)
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Interarea\\RRR\\WithinAcross')
@@ -35,12 +37,23 @@ savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Interarea\
 # sessions,nSessions   = filter_sessions(protocols = 'SP',only_session_id=session_list)
 sessions,nSessions   = filter_sessions(protocols = ['SP'],filter_areas=areas)
 
-#%%  Load data properly:        
-calciumversion = 'deconv'
-# calciumversion = 'dF'
-for ises in range(nSessions):
-    sessions[ises].load_data(load_calciumdata=True)
+# #%% Remove two sessions with too much drift in them:
+# sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+# sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20']))[0]
+# sessions            = [sessions[i] for i in sessions_in_list]
+# nSessions           = len(sessions)
 
+# #%%  Load data properly:        
+# # calciumversion = 'deconv'
+# calciumversion = 'dF'
+# for ises in range(nSessions):
+#     sessions[ises].load_data(load_calciumdata=True)
+
+#%%  Load data properly:                      
+for ises in range(nSessions):
+    sessions[ises].load_data(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion='dF')
+    
 #%% Do RRR in FF and FB direction and compare performance:
 nsampleneurons  = 250
 nranks          = 25
@@ -124,7 +137,7 @@ else:
 # ax.set_ylim([0,0.3])
 plt.tight_layout()
 sns.despine(top=True,right=True,offset=3)
-my_savefig(fig,savedir,'RRR_R2_acrossranks_V1PM_SPONT_%dsessions_%dsec.png' % (nSessions,temporalbin),formats=['png'])
+# my_savefig(fig,savedir,'RRR_R2_acrossranks_V1PM_SPONT_%dsessions_%dsec.png' % (nSessions,temporalbin),formats=['png'])
 
 #%% 
 
@@ -136,9 +149,8 @@ my_savefig(fig,savedir,'RRR_R2_acrossranks_V1PM_SPONT_%dsessions_%dsec.png' % (n
 #    #  #    #  #    #     #       #     # #     #      # #   #     #    #     # #    ## #       
 #     # #     # #     #    ####### #     # ######        #     #####      #####  #     # ####### 
 
-#%
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Interarea\\RRR\\Labeling')
 
-from utils.pair_lib import value_matching
 
 #%% Parameters for decoding from size-matched populations of V1 and PM labeled and unlabeled neurons
 
@@ -157,13 +169,24 @@ from utils.pair_lib import value_matching
 #                     'PMlab-V1unl',
 #                     'PMlab-V1lab']
 
-arealabelpairs  = ['V1unl-PMunl',
+# arealabelpairs  = ['V1unl-PMunl',
+#                     'V1lab-PMunl',
+#                     'V1unl-PMlab',
+#                     'V1lab-PMlab',
+#                     'PMunl-V1unl',
+#                     'PMunl-V1lab',
+#                     'PMlab-V1unl',
+#                     'PMlab-V1lab']
+
+arealabelpairs  = [
+                    'V1unl-PMunl', #Feedforward pairs
                     'V1lab-PMunl',
                     'V1unl-PMlab',
                     'V1lab-PMlab',
-                    'PMunl-V1unl',
-                    'PMunl-V1lab',
+
+                    'PMunl-V1unl', #Feedback pairs
                     'PMlab-V1unl',
+                    'PMunl-V1lab',
                     'PMlab-V1lab']
 
 clrs_arealabelpairs = get_clr_area_labelpairs(arealabelpairs)
@@ -171,7 +194,7 @@ narealabelpairs     = len(arealabelpairs)
 
 lam                 = 0
 nranks              = 20
-nmodelfits          = 5 #number of times new neurons are resampled 
+nmodelfits          = 10 #number of times new neurons are resampled 
 kfold               = 5
 maxnoiselevel       = 20
 
@@ -182,17 +205,14 @@ R2_ranks            = np.full((narealabelpairs,nSessions,nranks,nmodelfits,kfold
 filter_nearby       = True
 # filter_nearby       = False
 
-valuematching       = None
-# valuematching       = 'noise_level'
-# valuematching       = 'event_rate'
-# valuematching       = 'skew'
-# valuematching       = 'meanF'
-nmatchbins          = 10
-minsampleneurons    = 10
+minsampleneurons    = 20
+
+regress_behavior = False
+vidfields       = np.concatenate((['videoPC_%d'%i for i in range(30)],
+                            ['pupil_area','pupil_ypos','pupil_xpos']),axis=0)
+si              = SimpleImputer()
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
-    idx_T               = np.ones(len(ses.trialdata['stimCond']),dtype=bool)
-    # idx_T               = ses.trialdata['stimCond']==0
 
     allpops             = np.array([i.split('-') for i in arealabelpairs]).flatten()
     nsampleneurons      = np.min([np.sum((ses.celldata['arealabel']==i) & (ses.celldata['noise_level']<maxnoiselevel)) for i in allpops])
@@ -201,12 +221,45 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
     if nsampleneurons<minsampleneurons: #skip session if less than minsampleneurons in either population
         continue
 
+    neuraldata          = zscore(sessions[ises].calciumdata.to_numpy(),axis=0,nan_policy='omit')
+
+    if regress_behavior:
+        B = np.empty((len(sessions[ises].ts_F),len(vidfields)+1))
+        for ifie,field in enumerate(vidfields):
+            B[:,ifie] = np.interp(x=sessions[ises].ts_F, xp=sessions[ises].videodata['ts'],
+                                            # fp=sessions[ises].videodata['runspeed'])
+                                            fp=sessions[ises].videodata[field])
+        B[:,-1] = np.interp(x=sessions[ises].ts_F, xp=sessions[ises].behaviordata['ts'],
+                                            fp=sessions[ises].behaviordata['runspeed'])
+
+        B                   = si.fit_transform(B)
+        B                   = zscore(B,axis=0,nan_policy='omit')
+
+        #Reduced rank regression: 
+        B_hat               = LM(neuraldata,B,lam=0)
+        Y_hat               = B @ B_hat
+
+        # decomposing and low rank approximation of Y_hat
+        rank                = 3
+        U, s, V             = svds(Y_hat,k=rank)
+        U, s, V             = U[:, ::-1], s[::-1], V[::-1, :]
+
+        S                   = linalg.diagsvd(s,U.shape[0],s.shape[0])
+
+        Y_hat_rr            = U[:,:rank] @ S[:rank,:rank] @ V[:rank,:]
+
+        # plt.imshow(neuraldata,vmin=-0.5,vmax=0.5)
+        # plt.imshow(Y_hat,vmin=-0.5,vmax=0.5)
+        # plt.imshow(Y_hat_rr,vmin=-0.5,vmax=0.5)
+
+        neuraldata          -= Y_hat_rr
+
     for iapl, arealabelpair in enumerate(arealabelpairs):
         
         alx,aly = arealabelpair.split('-')
 
         if filter_nearby:
-            idx_nearby  = filter_nearlabeled(ses,radius=50)
+            idx_nearby  = filter_nearlabeled(ses,radius=30)
         else:
             idx_nearby = np.ones(len(ses.celldata),dtype=bool)
 
@@ -217,27 +270,42 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
                                 ses.celldata['noise_level']<maxnoiselevel,	
                                 idx_nearby),axis=0))[0]
     
-        if valuematching is not None:
-            #Get value to match from celldata:
-            values      = sessions[ises].celldata[valuematching].to_numpy()
-            idx_joint   = np.concatenate((idx_areax,idx_areay))
-            group       = np.concatenate((np.zeros(len(idx_areax)),np.ones(len(idx_areay))))
-            idx_sub     = value_matching(idx_joint,group,values[idx_joint],bins=nmatchbins,showFig=False)
-            idx_areax   = np.intersect1d(idx_areax,idx_sub) #recover subset from idx_joint
-            idx_areay   = np.intersect1d(idx_areay,idx_sub)
-
-        X                   = sessions[ises].respmat[np.ix_(idx_areax,idx_T)].T #Get activity and transpose to samples x features
-        Y                   = sessions[ises].respmat[np.ix_(idx_areay,idx_T)].T
-
         if len(idx_areax)<nsampleneurons or len(idx_areay)<nsampleneurons: #skip exec if not enough neurons in one of the populations
             continue
+    
+        X                   = neuraldata[:,idx_areax]
+        Y                   = neuraldata[:,idx_areay]
+
         R2_cv[iapl,ises],optim_rank[iapl,ises],R2_ranks[iapl,ises,:,:,:]  = RRR_wrapper(Y, X, nN=nsampleneurons,nK=None,lam=lam,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
         #OUTPUT: MAX PERF, OPTIM RANK, PERF FOR EACH RANK ACROSS FOLDS AND MODELFITS
 
 #%% Plot the R2 performance and number of dimensions per area pair
 # fig         = plot_RRR_R2_arealabels(R2_cv,optim_rank,R2_ranks,arealabelpairs,clrs_arealabelpairs)
 # my_savefig(fig,savedir,'RRR_cvR2_RegressOutBehavior_V1PM_LabUnl_%dsessions' % nSessions)
-fig         = plot_RRR_R2_arealabels(R2_cv[:4],optim_rank[:4],R2_ranks[:4],arealabelpairs[:4],clrs_arealabelpairs[:4])
-my_savefig(fig,savedir,'RRR_cvR2_V1PM_LabUnl_%dsessions' % nSessions)
-fig         = plot_RRR_R2_arealabels(R2_cv[4:],optim_rank[4:],R2_ranks[4:],arealabelpairs[4:],clrs_arealabelpairs[4:])
-my_savefig(fig,savedir,'RRR_cvR2_PMV1_LabUnl_%dsessions' % nSessions)
+# fig         = plot_RRR_R2_arealabels(R2_cv[:4],optim_rank[:4],R2_ranks[:4],arealabelpairs[:4],clrs_arealabelpairs[:4])
+# my_savefig(fig,savedir,'RRR_cvR2_V1PM_LabUnl_%dsessions_spont' % nSessions)
+# fig         = plot_RRR_R2_arealabels(R2_cv[4:],optim_rank[4:],R2_ranks[4:],arealabelpairs[4:],clrs_arealabelpairs[4:])
+# my_savefig(fig,savedir,'RRR_cvR2_PMV1_LabUnl_%dsessions_spont' % nSessions)
+
+#%% 
+normalize   = False
+#Same target population:
+for idx in np.array([[0,1],[2,3],[4,5],[6,7]]):
+    clrs        = ['grey',get_clr_area_labeled([arealabelpairs[idx[1]].split('-')[0]])]
+    # fig         = plot_RRR_R2_arealabels_paired(R2_cv[idx],optim_rank[idx],R2_ranks[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
+    fig         = plot_RRR_R2_arealabels_paired(R2_cv[idx],optim_rank[idx],R2_ranks[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
+    my_savefig(fig,savedir,'RRR_cvR2_%s_%s_%dsessions' % (arealabelpairs[idx[1]],protocol,nSessions))
+
+for idx in np.array([[0,1],[2,3],[4,5],[6,7]]):
+    mean,sd = np.nanmean(R2_cv[idx[1]] / R2_cv[idx[0]])*100-100,np.nanstd(R2_cv[idx[1]] / R2_cv[idx[0]])
+    print('%s vs %s: %2.1f %% +/- %2.1f' % (arealabelpairs[idx[1]],arealabelpairs[idx[0]],mean,sd))
+
+#Different target population:
+for idx in np.array([[0,3],[4,7]]):
+    clrs        = ['grey',get_clr_area_labeled([arealabelpairs[idx[1]].split('-')[0]])]
+    fig         = plot_RRR_R2_arealabels_paired(R2_cv[idx],optim_rank[idx],R2_ranks[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
+    my_savefig(fig,savedir,'RRR_cvR2_diffTarget_%s_%s_%dsessions' % (arealabelpairs[idx[1]],protocol,nSessions))
+
+for idx in np.array([[0,3],[4,7]]):
+    mean,sd = np.nanmean(R2_cv[idx[1]] / R2_cv[idx[0]])*100-100,np.nanstd(R2_cv[idx[1]] / R2_cv[idx[0]])
+    print('%s vs %s: %2.1f %% +/- %2.1f' % (arealabelpairs[idx[1]],arealabelpairs[idx[0]],mean,sd))

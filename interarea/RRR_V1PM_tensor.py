@@ -126,24 +126,24 @@ from utils.pair_lib import value_matching
 #                     'PMlab-V1unl',
 #                     'PMlab-V1lab']
 
-# arealabelpairs  = [
-#                     'V1unl-PMunl', #Feedforward pairs
-#                     'V1lab-PMunl',
-#                     'V1unl-PMlab',
-#                     'V1lab-PMlab',
-
-#                     'PMunl-V1unl', #Feedback pairs
-#                     'PMlab-V1unl',
-#                     'PMunl-V1lab',
-#                     'PMlab-V1lab']
-
-arealabelpairs  = [ #Feedforward selectivity
+arealabelpairs  = [
                     'V1unl-PMunl', #Feedforward pairs
                     'V1lab-PMunl',
-                    'V1unl-ALunl', #to AL
-                    'V1lab-ALunl',
-                    'V1unl-RSPunl', #to RSP
-                    'V1lab-RSPunl']
+                    'V1unl-PMlab',
+                    'V1lab-PMlab',
+
+                    'PMunl-V1unl', #Feedback pairs
+                    'PMlab-V1unl',
+                    'PMunl-V1lab',
+                    'PMlab-V1lab']
+
+# arealabelpairs  = [ #Feedforward selectivity
+#                     'V1unl-PMunl', #Feedforward pairs
+#                     'V1lab-PMunl',
+#                     'V1unl-ALunl', #to AL
+#                     'V1lab-ALunl',
+#                     'V1unl-RSPunl', #to RSP
+#                     'V1lab-RSPunl']
 
 # arealabelpairs  = [ #Feedback selectivity
 #                     'PMunl-V1unl', #Feedback pairs
@@ -168,7 +168,7 @@ narealabelpairs     = len(arealabelpairs)
 
 lam                 = 0
 nranks              = 20
-nmodelfits          = 50 #number of times new neurons are resampled 
+nmodelfits          = 1 #number of times new neurons are resampled 
 kfold               = 5
 maxnoiselevel       = 20
 # idx_resp            = np.where((t_axis>=0) & (t_axis<=1))[0]
@@ -177,9 +177,15 @@ maxnoiselevel       = 20
 idx_resp            = np.where((t_axis>=0.5) & (t_axis<=1.5))[0]
 ntimebins           = len(idx_resp)
 
-R2_cv               = np.full((narealabelpairs,nSessions),np.nan)
-optim_rank          = np.full((narealabelpairs,nSessions),np.nan)
-R2_ranks            = np.full((narealabelpairs,nSessions,nranks,nmodelfits,kfold),np.nan)
+# R2_cv               = np.full((narealabelpairs,nSessions),np.nan)
+# optim_rank          = np.full((narealabelpairs,nSessions),np.nan)
+# R2_ranks            = np.full((narealabelpairs,nSessions,nranks,nmodelfits,kfold),np.nan)
+
+nStim               = 16
+R2_cv               = np.full((narealabelpairs,nSessions,nStim),np.nan)
+optim_rank          = np.full((narealabelpairs,nSessions,nStim),np.nan)
+R2_ranks            = np.full((narealabelpairs,nSessions,nStim,nranks,nmodelfits,kfold),np.nan)
+
 
 filter_nearby       = True
 # filter_nearby       = False
@@ -192,7 +198,8 @@ valuematching       = None
 nmatchbins          = 10
 minsampleneurons    = 10
 
-timeaverage         = True
+# timeaverage         = True
+timeaverage         = False
 # perOri              = False
 sub_mean            = True
 sub_PC1             = False
@@ -201,7 +208,7 @@ sub_PC1             = False
 version             = '%s_%s%s'%('mean' if timeaverage else 'tensor','resid' if sub_mean else 'orig','_PC1sub' if sub_PC1 else '')
 
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model for different population sizes'):
-    idx_T               = np.ones(len(ses.trialdata['stimCond']),dtype=bool)
+    # idx_T               = np.ones(len(ses.trialdata['stimCond']),dtype=bool)
     # idx_T               = ses.trialdata['stimCond']==0
 
     if filter_nearby:
@@ -219,19 +226,18 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
                                     [np.sum(np.all((ses.celldata['arealabel']==i,
                                                  ses.celldata['noise_level']<maxnoiselevel
                                                  ),axis=0)) for i in targetpops])))
-    #take the smallest sample size
+    # #take the smallest sample size
+    # tensor              = copy.deepcopy(ses.tensor)
 
-    tensor              = copy.deepcopy(ses.tensor)
+    # tensor              -= np.nanmean(tensor,axis=(1,2),keepdims=True)
+    # tensor              /= np.nanstd(tensor,axis=(1,2),keepdims=True)
 
-    tensor              -= np.nanmean(tensor,axis=(1,2),keepdims=True)
-    tensor              /= np.nanstd(tensor,axis=(1,2),keepdims=True)
-
-    #subtract mean response per stimulus condition (e.g. grating direction):
-    if sub_mean:
-        stim                = ses.trialdata['stimCond']
-        stimconds           = np.sort(stim.unique())
-        for stimcond in stimconds:
-            tensor[:,stim==stimcond,:] -= np.nanmean(tensor[:,stim==stimcond,:],axis=1,keepdims=True)
+    # #subtract mean response per stimulus condition (e.g. grating direction):
+    # if sub_mean:
+    #     stim                = ses.trialdata['stimCond']
+    #     stimconds           = np.sort(stim.unique())
+    #     for stimcond in stimconds:
+    #         tensor[:,stim==stimcond,:] -= np.nanmean(tensor[:,stim==stimcond,:],axis=1,keepdims=True)
 
     # Subtract PC1:         #Remove low rank prediction from data per stimulus (accounts for mult. gain for example)
     if sub_PC1: 
@@ -278,24 +284,52 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting RRR model
             idx_areax   = np.intersect1d(idx_areax,idx_sub) #recover subset from idx_joint
             idx_areay   = np.intersect1d(idx_areay,idx_sub)
 
-        #get data from tensor during the response:
-        X                   = tensor[np.ix_(idx_areax,idx_T,idx_resp)]
-        Y                   = tensor[np.ix_(idx_areay,idx_T,idx_resp)]
+        for istim,stim in enumerate(np.unique(ses.trialdata['stimCond'])): # loop over orientations 
+            idx_T               = ses.trialdata['stimCond']==stim
+        
+            #on residual tensor during the response:
+            X                   = sessions[ises].tensor[np.ix_(idx_areax,idx_T,idx_resp)]
+            Y                   = sessions[ises].tensor[np.ix_(idx_areay,idx_T,idx_resp)]
+            
+            X                   -= np.mean(X,axis=1,keepdims=True)
+            Y                   -= np.mean(Y,axis=1,keepdims=True)
 
-        if timeaverage:
-            X = np.nanmean(X,axis=2,keepdims=True)
-            Y = np.nanmean(Y,axis=2,keepdims=True)
+            X                   = X.reshape(len(idx_areax),-1).T
+            Y                   = Y.reshape(len(idx_areay),-1).T
 
-        X                   = X.reshape(len(idx_areax),-1).T
-        Y                   = Y.reshape(len(idx_areay),-1).T
+            X                   = zscore(X,axis=0,nan_policy='omit')  #Z score activity for each neuron
+            Y                   = zscore(Y,axis=0,nan_policy='omit')
 
-        if len(idx_areax)<nsampleneurons or len(idx_areay)<nsampleneurons: #skip exec if not enough neurons in one of the populations
-            continue
-        R2_cv[iapl,ises],optim_rank[iapl,ises],R2_ranks[iapl,ises,:,:,:]  = RRR_wrapper(Y, X, 
-                        nN=nsampleneurons,nK=None,lam=lam,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
-        #OUTPUT: MAX PERF, OPTIM RANK, PERF FOR EACH RANK ACROSS FOLDS AND MODELFITS
-    del tensor
+            # #get data from tensor during the response:
+            # X                   = tensor[np.ix_(idx_areax,idx_T,idx_resp)]
+            # Y                   = tensor[np.ix_(idx_areay,idx_T,idx_resp)]
 
+            if timeaverage:
+                X = np.nanmean(X,axis=2,keepdims=True)
+                Y = np.nanmean(Y,axis=2,keepdims=True)
+
+            # X                   = X.reshape(len(idx_areax),-1).T
+            # Y                   = Y.reshape(len(idx_areay),-1).T
+
+            if len(idx_areax)<nsampleneurons or len(idx_areay)<nsampleneurons: #skip exec if not enough neurons in one of the populations
+                continue
+            R2_cv[iapl,ises,istim],optim_rank[iapl,ises,istim],R2_ranks[iapl,ises,istim,:,:,:]  = RRR_wrapper(Y, X, 
+                            nN=nsampleneurons,nK=None,lam=lam,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+            # R2_cv[iapl,ises],optim_rank[iapl,ises],R2_ranks[iapl,ises,:,:,:]  = RRR_wrapper(Y, X, 
+                            # nN=nsampleneurons,nK=None,lam=lam,nranks=nranks,kfold=kfold,nmodelfits=nmodelfits)
+            #OUTPUT: MAX PERF, OPTIM RANK, PERF FOR EACH RANK ACROSS FOLDS AND MODELFITS
+            # del tensor
+
+#%% 
+R2_cv_2         = np.nanmean(R2_cv,axis=2)
+optim_rank_2    = np.nanmean(optim_rank,axis=2)
+R2_ranks_2      = np.nanmean(R2_ranks,axis=2)
+
+R2_cv_2         = np.reshape(R2_cv,(narealabelpairs,nSessions*nStim))
+optim_rank_2    = np.reshape(optim_rank,(narealabelpairs,nSessions*nStim))
+R2_ranks_2      = np.reshape(R2_ranks,(narealabelpairs,nSessions*nStim,nranks,nmodelfits,kfold))
+
+R2_cv_2[R2_cv_2==0] = np.nan
 
 #%% Plot the R2 performance and number of dimensions per area pair
 # fig         = plot_RRR_R2_arealabels(R2_cv,optim_rank,R2_ranks,arealabelpairs,clrs_arealabelpairs)
@@ -309,21 +343,26 @@ normalize   = False
 for idx in np.array([[0,1],[2,3],[4,5],[6,7]]):
     clrs        = ['grey',get_clr_area_labeled([arealabelpairs[idx[1]].split('-')[0]])]
     # fig         = plot_RRR_R2_arealabels_paired(R2_cv[idx],optim_rank[idx],R2_ranks[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
-    fig         = plot_RRR_R2_arealabels_paired(R2_cv[idx],optim_rank[idx],R2_ranks[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
+    # fig         = plot_RRR_R2_arealabels_paired(R2_cv[idx],optim_rank[idx],R2_ranks[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
+    fig         = plot_RRR_R2_arealabels_paired(R2_cv_2[idx],optim_rank_2[idx],R2_ranks_2[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
     my_savefig(fig,savedir,'RRR_cvR2_%s_%s_%dsessions' % (arealabelpairs[idx[1]],version,nSessions))
 
 for idx in np.array([[0,1],[2,3],[4,5],[6,7]]):
-    mean,sd = np.nanmean(R2_cv[idx[1]] / R2_cv[idx[0]])*100-100,np.nanstd(R2_cv[idx[1]] / R2_cv[idx[0]])
+    # mean,sd = np.nanmean(R2_cv[idx[1]] / R2_cv[idx[0]])*100-100,np.nanstd(R2_cv[idx[1]] / R2_cv[idx[0]])
+    # mean,sd = np.nanmean(R2_cv_2[idx[1]] / R2_cv_2[idx[0]])*100-100,np.nanstd(R2_cv_2[idx[1]] / R2_cv_2[idx[0]])*100
+    mean,sd = np.nanmean(R2_cv_2[idx[1]]) / np.nanmean(R2_cv_2[idx[0]])*100-100,np.nanstd(R2_cv_2[idx[1]] / R2_cv_2[idx[0]])*100
     print('%s vs %s: %2.1f %% +/- %2.1f' % (arealabelpairs[idx[1]],arealabelpairs[idx[0]],mean,sd))
 
 #Different target population:
 for idx in np.array([[0,3],[4,7]]):
     clrs        = ['grey',get_clr_area_labeled([arealabelpairs[idx[1]].split('-')[0]])]
-    fig         = plot_RRR_R2_arealabels_paired(R2_cv[idx],optim_rank[idx],R2_ranks[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
+    # fig         = plot_RRR_R2_arealabels_paired(R2_cv[idx],optim_rank[idx],R2_ranks[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
+    fig         = plot_RRR_R2_arealabels_paired(R2_cv_2[idx],optim_rank_2[idx],R2_ranks_2[idx],np.array(arealabelpairs)[idx],clrs,normalize=normalize)
     my_savefig(fig,savedir,'RRR_cvR2_diffTarget_%s_%s_%dsessions' % (arealabelpairs[idx[1]],version,nSessions))
 
 for idx in np.array([[0,3],[4,7]]):
-    mean,sd = np.nanmean(R2_cv[idx[1]] / R2_cv[idx[0]])*100-100,np.nanstd(R2_cv[idx[1]] / R2_cv[idx[0]])
+    # mean,sd = np.nanmean(R2_cv[idx[1]] / R2_cv[idx[0]])*100-100,np.nanstd(R2_cv[idx[1]] / R2_cv[idx[0]])
+    mean,sd = np.nanmean(R2_cv_2[idx[1]]) / np.nanmean(R2_cv_2[idx[0]])*100-100,np.nanstd(R2_cv_2[idx[1]] / R2_cv_2[idx[0]])*100
     print('%s vs %s: %2.1f %% +/- %2.1f' % (arealabelpairs[idx[1]],arealabelpairs[idx[0]],mean,sd))
 
 # normalize   = False

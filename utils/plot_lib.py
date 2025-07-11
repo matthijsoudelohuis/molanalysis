@@ -601,7 +601,8 @@ def plot_RRR_R2_arealabels_paired(R2_cv,optim_rank,R2_ranks,arealabelpairs,clrs_
     ax.legend(handles,arealabelpairs,frameon=False,fontsize=8,loc='lower right')
     ax.set_xlabel('Rank')
     ax.set_ylabel('R2 (cv)')
-    ax.set_yticks(np.arange(0,0.3,0.05))
+    # ax.set_yticks(np.arange(0,0.3,0.05))
+    ax.set_yticks(np.arange(0,0.3,0.025))
     ax.set_xticks(np.arange(0,20,5))
     ax.set_ylim([0,axlim])
     ax.set_xlim([0,nranks])
@@ -609,6 +610,19 @@ def plot_RRR_R2_arealabels_paired(R2_cv,optim_rank,R2_ranks,arealabelpairs,clrs_
 
     ax=axes[1]
     ax.scatter(R2_cv[0,:],R2_cv[1,:],color=clrs_arealabelpairs[0],marker='o',s=10)
+    
+    temp = np.reshape(R2_ranks,np.shape(R2_ranks)[:3] + (np.prod(np.shape(R2_ranks)[3:]),))
+    temp = np.nanstd(temp,axis=3)
+    R2_cv_error = np.full(np.shape(R2_cv),np.nan)
+    for i,j in np.ndindex(np.shape(R2_cv)):
+        # print(i,j)
+        if np.isnan(optim_rank[i,j]):
+            continue
+        R2_cv_error[i,j] = temp[i,j,int(optim_rank[i,j])]
+    ax.errorbar(R2_cv[0,:],R2_cv[1,:], xerr=R2_cv_error[0,:],yerr=R2_cv_error[1,:],color=clrs_arealabelpairs[0],
+                marker='o',elinewidth=0.5,capsize=0,capthick=0,
+                fmt='none',markersize=5)
+
     ax.plot([0,1],[0,1],color='k',linestyle='--',linewidth=0.5)
     ax.set_xlabel(arealabelpairs[0])
     ax.set_ylabel(arealabelpairs[1])
