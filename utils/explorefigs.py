@@ -429,12 +429,14 @@ def plot_PCA_gratings(ses,size='runspeed',cellfilter=None,apply_zscore=True,plot
     return fig
 
 
-def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=None,thr_tuning=0,plotgainaxis=False):
+def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=None,idx_N=None,plotgainaxis=False):
 
     ########### PCA on trial-averaged responses ############
     ######### plot result as scatter by orientation ########
+    if idx_N is None:
+        idx_N = np.ones(len(ses.celldata), dtype=bool)
 
-    areas = np.unique(ses.celldata['roi_name'])
+    areas = np.unique(ses.celldata['roi_name'][idx_N])
 
     ori = ses.trialdata['Orientation']
     oris = np.sort(pd.Series.unique(ses.trialdata['Orientation']))
@@ -456,12 +458,12 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
 
     fig = plt.figure(figsize=[len(areas)*4, 4])
     # fig,axes = plt.figure(1, len(areas), figsize=[len(areas)*3, 3])
-
+# 
     for iarea, area in enumerate(areas):
         # ax = axes[iarea]
         idx_area = ses.celldata['roi_name'] == area
-        idx_tuned = ses.celldata['tuning_var'] >= thr_tuning
-        idx = np.logical_and(idx_area, idx_tuned)
+        # idx_tuned = ses.celldata['tuning_var'] >= thr_tuning
+        idx = np.all((idx_area, idx_N), axis=0)
         # zscore for each neuron across trial responses
         respmat_zsc = zscore(ses.respmat[idx, :], axis=1)
 

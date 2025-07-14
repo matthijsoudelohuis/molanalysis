@@ -93,11 +93,33 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_statio
             [N,K]                       = np.shape(sessions[ises].respmat) #get dimensions of response matrix
             sessions[ises].sig_corr     = np.corrcoef(respmean)
 
+            if np.any(sessions[ises].trialdata['ImageNumber'].value_counts()>2):
+                stims = sessions[ises].trialdata['ImageNumber'].to_numpy()
+                idx = sessions[ises].trialdata['ImageNumber'].value_counts().index
+                ustim = idx[np.where(sessions[ises].trialdata['ImageNumber'].value_counts()>2)[0]]
+                
+                # noise_corr = np.empty((N,N,len(ustim)))
+                # for istim,stim in enumerate(ustim):
+                #     respmat_res             = sessions[ises].respmat[:,stims==stim]
+                #     respmat_res             -= np.nanmean(respmat_res,axis=1,keepdims=True)
+                #     noise_corr[:,:,istim]   = np.corrcoef(respmat_res)
+
+                respmat_res = np.full((N,K),np.nan)
+                for istim,stim in enumerate(ustim):
+                    temp                    = sessions[ises].respmat[:,stims==stim]
+                    respmat_res[:,stims==stim]   = temp - np.nanmean(temp,axis=1,keepdims=True)
+                respmat_res = respmat_res[:,~np.isnan(respmat_res).all(axis=0)]
+                sessions[ises].noise_corr       = np.corrcoef(respmat_res)
+            else:
+                sessions[ises].noise_corr = np.full((np.shape(sessions[ises].sig_corr)),np.nan)
+            
             if uppertriangular:
                 idx_triu = np.tri(N,N,k=0)==1 #index only upper triangular part
                 sessions[ises].sig_corr[idx_triu] = np.nan
+                sessions[ises].noise_corr[idx_triu] = np.nan
             else: #set only autocorrelation to nan
                 np.fill_diagonal(sessions[ises].sig_corr,np.nan)
+                np.fill_diagonal(sessions[ises].noise_corr,np.nan)
 
         elif sessions[ises].sessiondata['protocol'][0]=='GR':
             [N,K]                           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
@@ -117,6 +139,8 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_statio
             resp_meanori2,_                 = mean_resp_gr(sessions[ises],trialfilter=~trialfilter)
             sessions[ises].sig_corr         = 0.5 * (np.corrcoef(resp_meanori1, resp_meanori2)[:N, N:] +
                                                 np.corrcoef(resp_meanori2, resp_meanori1)[:N, N:])
+
+            # plt.imshow(sessions[ises].sig_corr,vmin=-0.4,vmax=0.4)
 
             if remove_method is not None:
                 if remove_method in ['PCA','FA','RRR']:
@@ -150,7 +174,7 @@ def compute_signal_noise_correlation(sessions,uppertriangular=True,filter_statio
 
             # Compute noise correlations from residuals:
             # sessions[ises].noise_corr       = np.corrcoef(respmat_res)
-
+            # Compute per stimulus, then average:
             trial_ori   = sessions[ises].trialdata['Orientation']
             noise_corr = np.empty((N,N,len(oris)))  
             for i,ori in enumerate(oris):

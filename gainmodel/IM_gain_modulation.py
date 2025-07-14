@@ -59,12 +59,12 @@ for ses in tqdm(sessions,desc='Computing tuning metrics for each session'):
     ses.celldata['gini_coefficient']    = compute_gini_coefficient(ses.respmat)
 
 #%% Add how neurons are coupled to the population rate: 
-for ses in tqdm(sessions,desc='Computing tuning metrics for each session'):
+for ses in tqdm(sessions,desc='Computing population coupling for each session'):
     resp        = stats.zscore(ses.respmat.T,axis=0)
     poprate     = np.mean(resp, axis=1)
     # popcoupling = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(N)]
 
-    ses.celldata['pop_coupling']                          = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(len(ses.celldata))]
+    ses.celldata['pop_coupling']   = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(len(ses.celldata))]
 
 #%% Plot the response across individual trials for some example neurons
 # Color the response by the population rate
@@ -179,3 +179,74 @@ ax.text(1,1/2400/nActBins+0.02,'Chance',color='k',fontsize=8)
 sns.despine(fig=fig, top=True, right=True,offset=3)
 fig.tight_layout()
 my_savefig(fig,savedir,'KNN_decoding_ActBins_%dsessions' % (nSessions), formats = ['png'])
+
+
+#%%
+#     # ####### ###  #####  #######     #####  ####### ######  ######  ####### #          #    ####### ### ####### #     #  #####  
+##    # #     #  #  #     # #          #     # #     # #     # #     # #       #         # #      #     #  #     # ##    # #     # 
+# #   # #     #  #  #       #          #       #     # #     # #     # #       #        #   #     #     #  #     # # #   # #       
+#  #  # #     #  #   #####  #####      #       #     # ######  ######  #####   #       #     #    #     #  #     # #  #  #  #####  
+#   # # #     #  #        # #          #       #     # #   #   #   #   #       #       #######    #     #  #     # #   # #       # 
+#    ## #     #  #  #     # #          #     # #     # #    #  #    #  #       #       #     #    #     #  #     # #    ## #     # 
+#     # ####### ###  #####  #######     #####  ####### #     # #     # ####### ####### #     #    #    ### ####### #     #  #####  
+
+
+
+#%% ########################## Compute signal and noise correlations: ###################################
+sessions_orig       = compute_signal_noise_correlation(sessions,filter_stationary=False,uppertriangular=False)
+# sessions_nogain     = compute_sign
+
+#%% 
+
+for ises,ses in enumerate(sessions):
+    # sessions[ises].joint_coupling = np.outer(ses.celldata['pop_coupling'].values,ses.celldata['pop_coupling'].values)
+    sessions[ises].joint_coupling = np.outer(ses.celldata['pop_coupling'].values,ses.celldata['pop_coupling'].values)
+
+# x = np.array([1, 2, 3])
+# np.subtract.outer(x, x)
+
+#%% 
+plt.imshow(sessions[ises].joint_coupling,vmin=-0.1,vmax=0.2)
+
+#%% 
+from scipy.stats import binned_statistic_2d
+
+#%% 
+fig,axes = plt.subplots(1,3,figsize=(11,4))
+subsample = 100
+ax = axes[0]
+ax.scatter(sessions[ises].joint_coupling.flatten()[::subsample],sessions[ises].noise_corr.flatten()[::subsample],c='k',s=1)
+ax.set_xlabel('Joint coupling')
+ax.set_ylabel('Noise correlation')
+ax.set_title('Population coupling vs noise correlation')
+
+ax = axes[1]
+ax.scatter(sessions[ises].sig_corr.flatten()[::subsample],sessions[ises].noise_corr.flatten()[::subsample],c='k',s=1)
+ax.set_ylabel('Noise correlation')
+ax.set_xlabel('Signal correlation')
+ax.set_title('Signal corr vs noise correlation')
+xdata = sessions[ises].sig_corr.flatten()
+ydata = sessions[ises].joint_coupling.flatten()
+vdata = sessions[ises].noise_corr.flatten()
+
+Problem with dimensions here! 
+#be careful with x and y dimensions here! 
+#Need to copy from NC tuning GR with pcolormesh etc.
+
+shared_idx = ~np.isnan(xdata) & ~np.isnan(ydata) & ~np.isnan(vdata)
+xdata = xdata[shared_idx]
+ydata = ydata[shared_idx]
+vdata = vdata[shared_idx]
+
+ax = axes[2]
+g = binned_statistic_2d(xdata, ydata, vdata, statistic='mean', bins=10, range=None, expand_binnumbers=False)[0]
+ax.imshow(g,origin='lower',extent=[-1,1,-1,1],vmin=-0.8,vmax=0.8,cmap='bwr',)
+ax.set_facecolor('gray')
+ax.set_xlabel('Signal correlation')
+ax.set_ylabel('Joint coupling')
+ax.set_title('Joint influence on noise correlation')
+cb = fig.colorbar(ax.images[0], ax=ax, shrink=0.5)
+cb.set_label('Noise correlation',fontsize=10,loc='center')
+sns.despine(fig=fig, top=True, right=True,offset=3)
+fig.tight_layout()
+my_savefig(fig,savedir,'IM_Signal_Coupling_Noise_correlation_%s' % (sessions[ises].session_id), formats = ['png'])

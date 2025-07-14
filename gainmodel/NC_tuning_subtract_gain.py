@@ -280,6 +280,10 @@ plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True, offset=3,trim=True)
 my_savefig(fig,savedir,'GainPopulation_V1PM_LabUnl_' + str(nSessions) + 'sessions',formats=['png'])
 
+
+#%% 
+
+
 #%% is affine modulation only present if a neuron is responsive / tuned: 
 
 celldata = pd.concat([sessions[ises].celldata for ises in range(nSessions)]).reset_index(drop=True)
@@ -461,6 +465,117 @@ ax.legend(frameon=False,loc='upper right')
 plt.tight_layout()
 plt.savefig(os.path.join(savedir,'PairwiseCorrelations','NC_deltaOri_subgainmodel' + '.png'), format = 'png')
 
+#%% 
+
+ #####  ###  #####               #####  ####### #     # ######  #       #######             #     #  #####  
+#     #  #  #     #      #      #     # #     # #     # #     # #       #                   ##    # #     # 
+#        #  #            #      #       #     # #     # #     # #       #          #####    # #   # #       
+ #####   #  #  ####    #####    #       #     # #     # ######  #       #####               #  #  # #       
+      #  #  #     #      #      #       #     # #     # #       #       #          #####    #   # # #       
+#     #  #  #     #      #      #     # #     # #     # #       #       #                   #    ## #     # 
+ #####  ###  #####               #####  #######  #####  #       ####### #######             #     #  #####  
+
+#%% #############################################################################
+session_list        = np.array([['LPE10919_2023_11_06']])
+session_list        = np.array([['LPE12223_2024_06_10']])
+session_list        = np.array([['LPE10884_2023_10_20']])
+
+sessions,nSessions   = filter_sessions(protocols = ['GR'],only_session_id=session_list,filter_areas=['V1','PM']) 
+
+#%%  Load data properly:                      
+for ises in range(nSessions):
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion='deconv',keepraw=False)
+
+#%% ########################### Compute tuning metrics: ###################################
+sessions        = compute_tuning_wrapper(sessions)
+
+#%% ########################## Compute signal and noise correlations: ###################################
+sessions       = compute_signal_noise_correlation(sessions,filter_stationary=False,uppertriangular=False)
+
+#%% Show for neurons with different population coupling: 
+for ises,ses in enumerate(sessions):
+    data                = zscore(sessions[ises].respmat.T, axis=0)
+    poprate             = np.nanmean(data,axis=1)
+    sessions[ises].celldata['pop_coupling'] = [np.corrcoef(data[:,i],poprate)[0,1] for i in range(np.shape(data)[1])]
+
+#%% ########################## Compute joint coupling: ###################################
+for ises,ses in enumerate(sessions):
+    sessions[ises].joint_coupling = np.outer(ses.celldata['pop_coupling'].values,ses.celldata['pop_coupling'].values)
+
+#%%
+ises = 0
+plt.imshow(sessions[ises].joint_coupling,vmin=-0.1,vmax=0.2)
+
+#%% 
+from scipy.stats import binned_statistic_2d
+
+#%%
+resp_meanori,respmat_res        = mean_resp_gr(sessions[ises],trialfilter=None)
+
+sessions[ises].sig_corr         = np.corrcoef(resp_meanori)
+sessions[ises].noise_corr       = np.corrcoef(respmat_res)
+
+[N,K]                           = np.shape(respmat_res) #get dimensions of response matrix
+
+# #Compute signal correlation on separate halfs of trials:
+trialfilter                     = np.random.choice([True,False],size=(K),p=[0.5,0.5])
+resp_meanori1,_                 = mean_resp_gr(sessions[ises],trialfilter=trialfilter)
+resp_meanori2,_                 = mean_resp_gr(sessions[ises],trialfilter=~trialfilter)
+sessions[ises].sig_corr         = 0.5 * (np.corrcoef(resp_meanori1, resp_meanori2)[:N, N:] +
+                                np.corrcoef(resp_meanori2, resp_meanori1)[:N, N:])
+
+# plt.imshow(sessions[ises].sig_corr,vmin=-0.4,vmax=0.4)
+
+# np.where(sessions[ises].sig_corr==np.max(sessions[ises].sig_corr))
+np.fill_diagonal(sessions[ises].sig_corr,np.nan)
+np.fill_diagonal(sessions[ises].delta_pref,np.nan)
+np.fill_diagonal(sessions[ises].noise_corr,np.nan)
+
+#%% 
+fig,axes = plt.subplots(1,3,figsize=(11,4))
+
+idx_N = np.outer(sessions[ises].celldata['gOSI']>0.4,sessions[ises].celldata['gOSI']>0.4)
+# idx_N = np.outer(sessions[ises].celldata['tuning_var']>0.1,sessions[ises].celldata['tuning_var']>0.1)
+# idx_N = np.outer(sessions[ises].celldata['tuning_var']>0.1,sessions[ises].celldata['tuning_var']>0.1)
+
+subsample = 100
+ax = axes[0]
+ax.scatter(sessions[ises].joint_coupling[idx_N].flatten()[::subsample],sessions[ises].noise_corr[idx_N].flatten()[::subsample],c='k',s=1)
+ax.set_xlabel('Joint coupling')
+ax.set_ylabel('Noise correlation')
+ax.set_title('Population coupling vs noise correlation')
+
+ax = axes[1]
+ax.scatter(sessions[ises].sig_corr[idx_N].flatten()[::subsample],sessions[ises].noise_corr[idx_N].flatten()[::subsample],c='k',s=1)
+ax.set_ylabel('Noise correlation')
+ax.set_xlabel('Signal correlation')
+ax.set_title('Signal corr vs noise correlation')
+
+xdata = sessions[ises].sig_corr[idx_N].flatten()
+ydata = sessions[ises].joint_coupling[idx_N].flatten()
+vdata = sessions[ises].noise_corr[idx_N].flatten()
+
+shared_idx = ~np.isnan(xdata) & ~np.isnan(ydata) & ~np.isnan(vdata)
+xdata = xdata[shared_idx]
+ydata = ydata[shared_idx]
+vdata = vdata[shared_idx]
+
+ax = axes[2]
+x,y = [np.linspace(-1,1,20),np.linspace(-0.15,0.38,20)] #be careful with x and y dimensions here! 
+X,Y = np.meshgrid(y,x)
+g = binned_statistic_2d(xdata, ydata, vdata, statistic='mean', bins=[x,y], range=None)[0]
+ax.pcolor(X,Y,g,vmin=-0.7,vmax=0.7,cmap='bwr')
+# ax.imshow(g,origin='lower',extent=[-1,1,-1,1],vmin=-0.8,vmax=0.8,cmap='bwr',)
+ax.set_facecolor('gray')
+ax.set_ylabel('Signal correlation')
+ax.set_xlabel('Joint coupling')
+ax.set_title('Joint influence on noise correlation')
+# cb = fig.colorbar(ax.images[0], ax=ax, shrink=0.5)
+# cb.set_label('Noise correlation',fontsize=10,loc='center')
+sns.despine(fig=fig, top=True, right=True,offset=3)
+fig.tight_layout()
+my_savefig(fig,savedir,'GR_Signal_Coupling_Noise_correlation_%s' % (sessions[ises].session_id), formats = ['png'])
 
 
 #%% 

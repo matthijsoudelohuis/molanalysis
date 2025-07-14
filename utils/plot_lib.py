@@ -287,6 +287,35 @@ def my_legend_strip(ax):
         handle.set_visible(False)
     leg.get_frame().set_visible(False)
 
+def ax_3d_makeup(ax,Xp,lab='PC'):
+
+    nticks = 5
+    ax.grid(True)
+    ax.set_facecolor('white')
+    minperc = 1
+    maxperc = 99
+    ax.set_xticks(np.linspace(np.percentile(Xp[:,0],minperc),np.percentile(Xp[:,0],maxperc),nticks))
+    ax.set_yticks(np.linspace(np.percentile(Xp[:,1],minperc),np.percentile(Xp[:,1],maxperc),nticks))
+    ax.set_zticks(np.linspace(np.percentile(Xp[:,2],minperc),np.percentile(Xp[:,2],maxperc),nticks))
+    
+    ax.set_xlim(np.percentile(Xp[:,0],[minperc,maxperc]))
+    ax.set_ylim(np.percentile(Xp[:,1],[minperc,maxperc]))
+    ax.set_zlim(np.percentile(Xp[:,2],[minperc,maxperc]))
+
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.set_zticklabels([])
+
+    # Get rid of colored axes planes, remove fill
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+
+    ax.set_xlabel('%s1' % lab, fontsize=6)  # give labels to axes
+    ax.set_ylabel('%s2' % lab, fontsize=6)
+    ax.set_zlabel('%s3' % lab, fontsize=6)
+
+
 #function to add colorbar for imshow data and axis
 def add_colorbar_outside(im,ax):
     fig = ax.get_figure()
