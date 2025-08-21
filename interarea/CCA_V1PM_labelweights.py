@@ -1336,7 +1336,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model
             X                   = zscore(X,axis=0)  #Z score activity for each neuron
             Y                   = zscore(Y,axis=0)
 
-            [g,_] = CCA_subsample(X.T,Y.T,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=None,n_components=np.min([n_components,nsampleneurons]))
+            [g,_] = CCA_subsample(X,Y,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=None,n_components=np.min([n_components,nsampleneurons]))
             CCA_corrtest[iapl,:len(g),ises,istim] = g
 
 #%%

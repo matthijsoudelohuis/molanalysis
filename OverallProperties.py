@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
 # from scipy.signal import medfilt
 # from scipy.stats import binned_statistic,binned_statistic_2d
 
@@ -34,8 +35,27 @@ sessions,nSessions   = filter_sessions(protocols = ['GN'])
 
 #%% Show number of trials per session 
 sessions,nSessions   = filter_sessions(protocols = ['GR','IM','GN'])
+sessions,nSessions   = filter_sessions(protocols = ['GR','GN'])
 sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
+#%% 
+days_diff = np.empty(nSessions)
+date_format = "%Y_%m_%d"
+
+for ises in range(nSessions):
+    delta = datetime.strptime(sessiondata['DOV'][ises], date_format) - datetime.strptime(sessiondata['DOB'][ises], date_format)
+    days_diff[ises] = delta.days
+
+print('Range of days between DOB and DOV: %d to %d' % (np.min(days_diff),np.max(days_diff)))
+
+#%% 
+# Number of cells with noise level > 20:
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+print('Number of cells with noise level > 20: %d/%d' %(len(celldata[celldata['noise_level']>20]),len(celldata)))
+print('Fraction of cells with noise level > 20: %1.3f' %(len(celldata[celldata['noise_level']>20])/len(celldata)))
+
+#%% 
 sesdata = pd.DataFrame()
 sesdata['ntrials']         = sessiondata.groupby(["protocol"])['ntrials']
 

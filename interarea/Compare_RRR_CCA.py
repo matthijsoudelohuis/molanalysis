@@ -334,7 +334,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA dim1'
                     X_c, Y_c = model_CCA.fit_transform(X,Y)
 
                     # corr_CC1[ix,iy,iori,0,ises] = np.corrcoef(X_c[:,0],Y_c[:,0])[0,1]
-                    [corr_CC1_vars[ix,iy,iori,0,0,ises],_] = CCA_subsample_1dim(X.T,Y.T,resamples=5,kFold=5,prePCA=None)
+                    [corr_CC1_vars[ix,iy,iori,0,0,ises],_] = CCA_subsample_1dim(X,Y,resamples=5,kFold=5,prePCA=None)
 
                     corr_CC1_vars[ix,iy,iori,0,1,ises] = np.corrcoef(X_c[:,0],poprate[idx_T])[0,1]
                     corr_CC1_vars[ix,iy,iori,1,1,ises] = np.corrcoef(Y_c[:,0],poprate[idx_T])[0,1]
@@ -570,7 +570,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA dim1'
                         Y   = regress_out_behavior_modulation(sessions[ises],B,Y,rank=3,lam=0)
                         # Y   = regress_out_behavior_modulation(Y,sessions[ises].trialdata[idx_T],sessions[ises].trialdata['Orientation']==ori)
 
-                    [CCA_corrtest[iapl,:,iori,ises,i],_] = CCA_subsample(X.T,Y.T,resamples=5,kFold=5,prePCA=None,n_components=nccadims)
+                    [CCA_corrtest[iapl,:,iori,ises,i],_] = CCA_subsample(X,Y,resamples=5,kFold=5,prePCA=None,n_components=nccadims)
 
 #%%
 
@@ -628,8 +628,8 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA for d
         for ipopsize,popsize in enumerate(popsizes):
 
             if len(idx_areax)>popsize and len(idx_areay)>popsize:
-                # [corr_CC1_vars[ix,iy,iori,0,0,ises],_] = CCA_subsample_1dim(X.T,Y.T,resamples=5,kFold=5,prePCA=None)
-                [temp,_] = CCA_subsample(X.T,Y.T,nN=popsize,nK=np.sum(idx_T),resamples=5,kFold=5,prePCA=prePCA,n_components=popsize)
+                # [corr_CC1_vars[ix,iy,iori,0,0,ises],_] = CCA_subsample_1dim(X,Y,resamples=5,kFold=5,prePCA=None)
+                [temp,_] = CCA_subsample(X,Y,nN=popsize,nK=np.sum(idx_T),resamples=5,kFold=5,prePCA=prePCA,n_components=popsize)
                 corr_CC1_vars[iori,:np.min((prePCA,popsize)),ipopsize,ises] = temp
 
 #%% Plot:
@@ -693,10 +693,10 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA for d
         for ipopsize,popsize in enumerate(popsizes):
             if len(idx_areax)>popsize and len(idx_areay)>popsize:
 
-                [temp,_] = CCA_subsample(X.T,Y.T,nN=popsize,nK=np.sum(idx_T),resamples=1,kFold=5,prePCA=None,n_components=np.min((ndims,popsize)))
+                [temp,_] = CCA_subsample(X,Y,nN=popsize,nK=np.sum(idx_T),resamples=1,kFold=5,prePCA=None,n_components=np.min((ndims,popsize)))
                 CCA_cvcorr[iori,:len(temp),ipopsize,ises] = temp
 
-                [temp,_] = CCA_subsample(X.T,Y.T,nN=popsize,nK=np.sum(idx_T),resamples=1,kFold=5,prePCA=prePCA,n_components=popsize)
+                [temp,_] = CCA_subsample(X,Y,nN=popsize,nK=np.sum(idx_T),resamples=1,kFold=5,prePCA=prePCA,n_components=popsize)
                 CCA_cvcorr_wPCA[iori,:len(temp),ipopsize,ises] = temp
 
 #%% Plot:
@@ -893,7 +893,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA dim1'
             XZ_c, ZX_c = model_CCA_XZ.fit_transform(X,Z)
 
             # corr_CC1[ix,iy,iori,0,ises] = np.corrcoef(X_c[:,0],Y_c[:,0])[0,1]
-            # [corr_CC1_vars[ix,iy,iori,0,0,ises],_] = CCA_subsample_1dim(X.T,Y.T,resamples=5,kFold=5,prePCA=None)
+            # [corr_CC1_vars[ix,iy,iori,0,0,ises],_] = CCA_subsample_1dim(X,Y,resamples=5,kFold=5,prePCA=None)
             for i in range(ncomponents):
                 proj_corr[i,iori,ises]      = np.corrcoef(XY_c[:,i],XZ_c[:,i])[0,1]
                 weight_corr[i,iori,ises]    = np.corrcoef(model_CCA_XY.x_weights_[i,:],model_CCA_XZ.x_weights_[i,:])[0,1]

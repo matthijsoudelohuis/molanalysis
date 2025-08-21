@@ -505,7 +505,7 @@ for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model
         X_s = X[sort1,:]
         Y_s = Y[sort2,:]
 
-        test_corr[ises,:,isort],_ = CCA_subsample(X_s.T,Y_s.T,nN=np.min([nsampleneurons,X.shape[1],Y.shape[1]]),nK=None,resamples=nresamples,kFold=5,prePCA=prePCA,n_components=n_components)
+        test_corr[ises,:,isort],_ = CCA_subsample(X_s,Y_s,nN=np.min([nsampleneurons,X.shape[1],Y.shape[1]]),nK=None,resamples=nresamples,kFold=5,prePCA=prePCA,n_components=n_components)
 
 #%% Make the figure: 
 clrs_sorts = sns.color_palette('tab10',n_colors=nSorts)

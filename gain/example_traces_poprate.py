@@ -28,8 +28,8 @@ session_list        = np.array(['LPE12223_2024_06_10']) #GR
 sessions,nSessions   = filter_sessions(protocols = 'GR',only_session_id=session_list)
 
 #%%  Load data properly:        
-# calciumversion = 'deconv'
-calciumversion = 'dF'
+calciumversion = 'deconv'
+# calciumversion = 'dF'
 for ises in range(nSessions):
     # sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
                                 # calciumversion=calciumversion,keepraw=False)
@@ -38,9 +38,9 @@ for ises in range(nSessions):
 t_axis = sessions[0].t_axis
 
 #%% compute tuning metrics:
-idx_resp = (t_axis>=0.5) & (t_axis<=1.5)
-sessions[0].respmat = np.nanmean(sessions[0].tensor[:,:,idx_resp],axis=2)
-sessions = compute_tuning_wrapper(sessions)
+idx_resp                = (t_axis>=0.5) & (t_axis<=1.5)
+sessions[0].respmat     = np.nanmean(sessions[0].tensor[:,:,idx_resp],axis=2)
+sessions                = compute_tuning_wrapper(sessions)
 
 #%% Add how neurons are coupled to the population rate: 
 for ses in tqdm(sessions,desc='Computing tuning metrics for each session'):
@@ -67,12 +67,116 @@ neuronsel = np.random.choice(np.where(idx_N)[0],n_example_cells,replace=False)
 #%%
 
 
+#%% Activity triggered population rate: 
+# I have a data matrix X of  size T by N, timepoints by neurons. This data matrix describes the activity
+#  of neurons over time and has mostly zero entries of when the activity was zero and entries
+#  that are positive, the moments of calcium transients. I am itnerested in the the population
+#  activity at the moments that each neuron becomes active. I want to make therefore a 
+# 'activity-triggered population rate' metric for each neuron. This is the average popuation
+#  rate of all the other neurons at the moment neuron i turns from inactive to active (>0 activity). 
+# This code implements this efficiently. For all neurons N, binarize the activity and 
+# take only the moments of transitioning into activity. 
+# Then take the mean poprate at these moments. 
+
+# Preferences
+t_pre = 5
+t_post = 5
+
+# The number of samples in a chunk
+nsamples = int((t_pre+t_post) * sessions[0].sessiondata['fs'][0])
+samples_pre = int(t_pre * sessions[0].sessiondata['fs'][0])
+t_axis = np.linspace(-t_pre,t_post,nsamples)
+
+# Create a vector from 0 up to nsamples
+sample_idx = np.arange(nsamples)
+
+N = len(sessions[0].celldata)
+stPR = np.full((N,nsamples),np.nan)
+
+calciumdata = sessions[0].calciumdata.to_numpy()
+
+poprate = np.mean(zscore(calciumdata,axis=0), axis=1)
+# Binarize the activity
+X_bin_onset = (calciumdata > 0).astype(int)
+
+# Find the moments of transitioning into activity
+# X_bin_onset = np.diff(X_bin_onset, axis=0, append=0) == 1
+
+for iN in tqdm(range(N),total=N,desc='Computing activity triggered population rate'):
+    t_events = np.where(X_bin_onset[:,iN])[0]
+    t_events = np.clip(t_events, samples_pre+1, len(X_bin_onset)-samples_pre-1)
+
+    # Calculate the index of the first sample for each chunk
+    # Require integers, because it will be used for indexing
+    # start_idx = ((t_events - t_pre) * sessions[0].sessiondata['fs'][0]).astype(int)
+    # start_idx = ((t_events - t_pre) * sessions[0].sessiondata['fs'][0]).astype(int)
+    start_idx = t_events - samples_pre
+
+    # Use broadcasting to create an array with indices
+    # Each row contains consecutive indices for each chunk
+    idx = start_idx[:, None] + sample_idx[None, :]
+
+    # Get all the chunks using fancy indexing
+    signal_chunks = poprate[idx]
+
+    # Calculate the average like you did earlier
+    stPR[iN,:] = signal_chunks.mean(axis=0)
+
+#%% 
+# Convolve poprate with calciumdata[:,0] with flat window
+window = np.ones(int(t_pre * sessions[0].sessiondata['fs'][0])) / (t_pre * sessions[0].sessiondata['fs'][0])
+stPR_conv = np.convolve(poprate, window, mode='same')
+
+
+plt.plot(stPR[0,:],linewidth=0.5,color='r')
+
+#%% 
+fig,ax = plt.subplots(1,1,figsize=(4,2.5))
+
+for i in range(10):
+    ax.plot(t_axis,stPR[i,:])
+
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Pop rate (z-score)')
+ax.set_title('Activity triggered population rate')
+
+sns.despine(fig=fig,top=True,right=True,offset=3)
+
+#%% 
+sessions[ises].celldata['stPR'] = stPR[:,np.where(t_axis>=0)[0][0]]
+
+#%% 
+plt.scatter(sessions[ises].celldata['stPR'],sessions[ises].celldata['pop_coupling'],c='k',s=1)
+
+#%% 
+
+#Construct tensor: 3D 'matrix' of N neurons by K trials by T time bins
+t_pre = 0
+t_post = 2
+
+## Construct trial response matrix:  N neurons by K trials
+[sessions[ises].tensor,sessions[ises].t_axis]         = compute_tensor(sessions[ises].calciumdata, sessions[ises].ts_F, sessions[ises].trialdata['tOnset'], 
+                            t_pre, t_post, method='nearby')
+
+#subtract average response from tensor for each trial type: 
+trial_ori       = sessions[ises].trialdata['Orientation']
+oris            = np.sort(trial_ori.unique())
+tensor_res      = sessions[ises].tensor.copy()
+
+for i,ori in enumerate(oris):
+    idx = np.where(trial_ori==ori)[0]
+    tensor_res[:,idx,:] -= np.nanmean(tensor_res[:,trial_ori==ori,:],axis=1,keepdims=True)
+
+
+
 
 #%% Show some tuned responses with calcium and deconvolved traces across orientations:
 fig = plot_tuned_response(sessions[0].tensor,sessions[0].trialdata,t_axis,neuronsel,plot_n_trials=10)
-fig.suptitle('%s - dF/F' % sessions[0].session_id,fontsize=12)
+# fig.suptitle('%s - dF/F' % sessions[0].session_id,fontsize=12)
+fig.suptitle('%s - deconv' % sessions[0].session_id,fontsize=12)
 # save the figure
-fig.savefig(os.path.join(savedir,'TunedResponse_dF_%s.png' % sessions[0].session_id))
+# fig.savefig(os.path.join(savedir,'TunedResponse_dF_%s.png' % sessions[0].session_id))
+fig.savefig(os.path.join(savedir,'TunedResponse_deconv_%s.png' % sessions[0].session_id))
 
 #%% 
 poprate = np.mean(sessions[0].calciumdata, axis=1)

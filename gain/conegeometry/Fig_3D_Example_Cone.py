@@ -30,9 +30,14 @@ sessions[0].load_respmat(load_behaviordata=True, load_calciumdata=True,load_vide
 #%% ########################### Compute tuning metrics: ###################################
 sessions = compute_tuning_wrapper(sessions)
 
+#%% 
+sessions = compute_pop_coupling(sessions)
+
 #%% Make the 3D figure:
 # fig = plot_PCA_gratings_3D(sessions[0],thr_tuning=0.05,plotgainaxis=True)
-fig = plot_PCA_gratings_3D(sessions[0],idx=sessions[0].celldata['tuning_var'] > 0.05,plotgainaxis=True)
+fig = plot_PCA_gratings_3D(sessions[0],idx_N=sessions[0].celldata['tuning_var'] > 0.05,
+                           size='poprate',
+                           plotgainaxis=True)
 axes = fig.get_axes()
 axes[0].view_init(elev=-30, azim=25, roll=40)
 axes[1].view_init(elev=15, azim=0, roll=-10)
@@ -71,8 +76,7 @@ sessions[0].load_respmat(load_behaviordata=True, load_calciumdata=True,load_vide
                                 calciumversion='deconv',keepraw=True)
 
 #%% ########################### Compute tuning metrics: ###################################
-sessions[0].celldata['tuning_var'] = compute_tuning(sessions[0].respmat,
-                                        sessions[0].trialdata['Orientation'],tuning_metric='tuning_var')
+sessions = compute_tuning_wrapper(sessions)
 
 #%% 
 fig = plot_PCA_gratings_3D(sessions[0],thr_tuning=0.025)

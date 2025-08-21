@@ -455,6 +455,11 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
              np.percentile(ses.respmat_videome, 5))
     elif size == 'uniform':
         sizes = np.ones_like(ses.respmat_runspeed)*0.5
+    elif size == 'poprate':
+        poprate = np.nanmean(zscore(ses.respmat, axis=1), axis=0)
+        sizes = (poprate- np.percentile(poprate, 5)) / \
+            (np.percentile(poprate, 95) -
+             np.percentile(poprate, 5))*0.5
 
     fig = plt.figure(figsize=[len(areas)*4, 4])
     # fig,axes = plt.figure(1, len(areas), figsize=[len(areas)*3, 3])

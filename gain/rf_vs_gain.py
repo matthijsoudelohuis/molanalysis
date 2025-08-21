@@ -19,7 +19,7 @@ session_list        = np.array([['LPE12223','2024_06_10']])
 
 sessions,nSessions   = filter_sessions(protocols = 'SP')
 
-#   Load proper data and compute average trial responses:                      
+# Load proper data and compute average trial responses:                      
 # sessions[0].load_data(load_calciumdata=True,calciumversion='deconv')
 
 # nSessions = 5

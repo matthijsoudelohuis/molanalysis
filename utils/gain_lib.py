@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from scipy.linalg import norm
 from sklearn.preprocessing import minmax_scale
 from sklearn.metrics import r2_score
+from scipy.stats import zscore
 
 # os.chdir('e:\\Python\\molanalysis')
 
@@ -109,3 +110,13 @@ def pop_rate_gain_model(data, stimuli):
         data_hat[:,stims == i] = sm[i,:][:,np.newaxis] * (1 + np.outer(gain_weights * mf,gain_trials[stims == i]))
 
     return data_hat
+
+def compute_pop_coupling(sessions):
+    
+    for ises,ses in enumerate(sessions):
+        #How are neurons are coupled to the population rate: 
+        resp        = zscore(ses.respmat.T,axis=0)
+        poprate     = np.mean(resp, axis=1)
+        ses.celldata['pop_coupling']                          = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(len(ses.celldata))]
+    return sessions
+

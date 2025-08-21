@@ -293,7 +293,7 @@ fig.savefig(os.path.join(savedir,'Filter_NearLabeled_%d_Sessions' % nSessions + 
 
 #%% 
 for ses in sessions:
-    ses.celldata['rf_size'] = np.abs(ses.celldata['rf_sx_Fgaussrf_sx_Fgauss'] * ses.celldata['rf_sy_Fgauss'])
+    ses.celldata['rf_size'] = np.abs(ses.celldata['rf_sx_Fgauss'] * ses.celldata['rf_sy_Fgauss'])
 celldata    = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
 #%% Make a figure with boxplots with the 'rf_sx_Fgauss' and 'rf_sy_Fgauss' in celldata where only neurons with rf_r2_Fgauss is higher than a threshold, set at 0.2 and separate by area:

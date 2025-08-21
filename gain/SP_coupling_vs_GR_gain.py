@@ -203,5 +203,51 @@ plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True, offset=1,trim=True)
 my_savefig(fig,savedir,'SP_coupling_vs_GR_gain_%s' % (sessions[idx_GR].session_id), formats = ['png'])
 
-#%% 
 
+#%% Load data of sessions with large numbers of neurons: 
+sessions,nSessions   = filter_sessions(protocols = ['GR'],min_cells=2000)
+sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+
+#%%  Load data properly:                      
+for ises in range(nSessions):
+    sessions[ises].load_data(load_calciumdata=True,calciumversion='deconv')
+
+#%% How many neurons do you need to estimate the population rate effectively: 
+popsizes    = np.array([1,2,5,10,20,50,100,200,500,1000])
+npopsizes   = len(popsizes)
+
+corrdata = np.full((nSessions,npopsizes),np.nan)
+for ises in range(nSessions):
+    data         = zscore(sessions[ises].calciumdata.to_numpy(), axis=0)
+    for ipopsize,popsize in enumerate(popsizes):
+        
+        # idx_N   = np.where(sessions[ises].celldata['noise_level']<20)[0]
+        # idx_N   = np.where(sessions[ises].celldata['roi_name']=='V1')[0]
+        
+        N       = len(sessions[ises].celldata)
+        # N       = len(idx_N)
+        
+        if N<popsize*2:
+            continue
+
+        # idx_1   = np.random.choice(idx_N,popsize,replace=False)
+        # idx_2   = np.random.choice(np.setdiff1d(idx_N, idx_1),popsize,replace=False)
+        idx_1   = np.random.choice(np.arange(N),popsize,replace=False)
+        idx_2   = np.random.choice(np.setdiff1d(np.arange(N), idx_1),popsize,replace=False)
+
+        poprate_1             = np.nanmean(data[:,idx_1],axis=1)
+        poprate_2             = np.nanmean(data[:,idx_2],axis=1)
+
+        # print('Bin #%d: %d neurons' % (ipopsize+1,np.sum(idx_popsize)))
+        corrdata[ises,ipopsize]  = np.corrcoef(poprate_1,poprate_2)[0,1]
+
+#%% 
+fig,ax = plt.subplots(1,1,figsize=(3,3))
+# ax.plot(popsizes,corrdata,linewidth=2)
+shaded_error(popsizes,corrdata,linewidth=2,center='mean',error='std',color='k',ax=ax)
+ax.set_xlabel('Population size',fontsize=9)
+ax.set_ylabel('Split-half correlation',fontsize=9)
+ax.set_xlim([0,1000])
+ax.set_ylim([0,1])
+sns.despine(fig=fig, top=True, right=True, offset=1,trim=True)
+my_savefig(fig,savedir,'Population_Rate_estimate_%d_GRsessions' % (nSessions), formats = ['png'])

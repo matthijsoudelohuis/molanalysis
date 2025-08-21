@@ -229,7 +229,7 @@ xdata = sessions[ises].sig_corr.flatten()
 ydata = sessions[ises].joint_coupling.flatten()
 vdata = sessions[ises].noise_corr.flatten()
 
-Problem with dimensions here! 
+# Problem with dimensions here! 
 #be careful with x and y dimensions here! 
 #Need to copy from NC tuning GR with pcolormesh etc.
 
