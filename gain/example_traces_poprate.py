@@ -20,6 +20,7 @@ from loaddata.session_info import filter_sessions,load_sessions
 from utils.tuning import *
 from utils.plot_lib import * #get all the fixed color schemes
 from utils.explorefigs import *
+from utils.gain_lib import *
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\')
 
@@ -43,12 +44,7 @@ sessions[0].respmat     = np.nanmean(sessions[0].tensor[:,:,idx_resp],axis=2)
 sessions                = compute_tuning_wrapper(sessions)
 
 #%% Add how neurons are coupled to the population rate: 
-for ses in tqdm(sessions,desc='Computing tuning metrics for each session'):
-    resp        = zscore(ses.respmat.T,axis=0)
-    poprate     = np.mean(resp, axis=1)
-    # popcoupling = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(N)]
-
-    ses.celldata['pop_coupling']                          = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(len(ses.celldata))]
+sessions = compute_pop_coupling(sessions)
 
 #%% Concatenate celldata across sessions:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
@@ -62,9 +58,6 @@ neuronsel = np.random.choice(np.where(idx_N)[0],n_example_cells,replace=False)
 idx_N = np.all((sessions[0].celldata['noise_level'] < np.percentile(sessions[0].celldata['noise_level'],20),
     sessions[0].celldata['pop_coupling'] > np.percentile(sessions[0].celldata['pop_coupling'],80)),axis=0)
 neuronsel = np.random.choice(np.where(idx_N)[0],n_example_cells,replace=False)
-
-
-#%%
 
 
 #%% Activity triggered population rate: 

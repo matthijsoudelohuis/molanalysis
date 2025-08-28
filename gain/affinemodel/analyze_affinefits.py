@@ -50,7 +50,7 @@ OSI_thr = 0.35
 # Number of folds for K-fold cross-validation
 Nfolds = 5
 # Number of latent components
-Ncompo = 1
+Ncompo = 3
 
 r2_nc_all = np.zeros((6, Ncompo, Nfolds))
 
@@ -142,6 +142,7 @@ for i in range(Ncompo):
     ax[1,i].set_title(f'Beta compo {i+1}')
 plt.tight_layout()
 plt.show()
+my_savefig(fig,savedir,'Corr_alpha_beta_folds',formats=['png'])
 
 #%% Show the correlation between the population coupling and the multiplicative
 # gain parameter and additive gain parameter
@@ -160,18 +161,38 @@ for i_compo in range(Ncompo):
 
     slope, intercept, r_value, p_value, std_err = linregress(pop_coupling_avg, alpha_p_avg[:,i_compo])
 
-    axes[0,i_compo].scatter(pop_coupling_avg, alpha_p_avg[:,i_compo], s=1)
+    axes[0,i_compo].scatter(pop_coupling_avg, alpha_p_avg[:,i_compo], s=1, color='k')
     axes[0,i_compo].plot(pop_coupling_avg, slope*pop_coupling_avg + intercept, color='r')
-    axes[0,i_compo].set_title('Mult compo %d, R2=%.2f' % (i_compo+1, r_value), fontsize=8)
-
+    axes[0,i_compo].set_title('Mult compo %d, R2=%.2f' % (i_compo+1, r_value),color='r', fontsize=10)
+    # axes[0,i_compo].text(0,0.5,s='Mult. compo %d, R2=%.2f' % (i_compo+1, r_value),color='r',
+                        #  fontsize=9,transform=axes[0,i_compo].transAxes)
     slope, intercept, r_value, p_value, std_err = linregress(pop_coupling_avg, beta_p_avg[:,i_compo])
 
-    axes[1,i_compo].scatter(pop_coupling_avg, beta_p_avg[:,i_compo], s=1)
+    axes[1,i_compo].scatter(pop_coupling_avg, beta_p_avg[:,i_compo], s=1, color='k')
     axes[1,i_compo].plot(pop_coupling_avg, slope*pop_coupling_avg + intercept, color='r')
-    axes[1,i_compo].set_title('Add compo %d, R2=%.2f' % (i_compo+1, r_value), fontsize=8)
+    axes[1,i_compo].set_title('Add compo %d, R2=%.2f' % (i_compo+1, r_value),color='r', fontsize=10)
+    # axes[1,i_compo].text(0,0.5,s='Add. compo %d, R2=%.2f' % (i_compo+1, r_value),color='r',
+                        #  fontsize=9,transform=axes[1,i_compo].transAxes)
 
 plt.tight_layout()
-sns.despine(fig=fig, trim=True, top=True, right=True, offset=3)
+sns.despine(fig=fig, top=True, right=True, offset=1)
+my_savefig(fig,savedir,'Corr_alpha_beta_popcoupling',formats=['png'])
+
+#%% 
+fig,axes = plt.subplots(1,1,figsize=(4,3))
+ax = axes
+i_compo = 0
+from sklearn.cluster import KMeans
+data = np.column_stack((alpha_p_avg,beta_p_avg))
+kmeans = KMeans(n_clusters=1, random_state=0).fit(data)
+ax.scatter(alpha_p_avg[:,i_compo],beta_p_avg[:,i_compo],c=kmeans.labels_,s=1,cmap='viridis')
+# ax.scatter(alpha_p_avg[:,i_compo],beta_p_avg[:,i_compo],color='k',s=1)
+ax.set_xlim(np.percentile(alpha_p_avg[:,i_compo],[0.5,99.5]))
+ax.set_ylim(np.percentile(beta_p_avg[:,i_compo],[0.5,99.5]))
+
+sns.despine(fig=fig, top=True, right=True, offset=3)
+
+
 
 #%%  
 nNeurons        = 1000

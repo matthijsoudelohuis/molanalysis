@@ -17,7 +17,7 @@ savedir = 'E:\\OneDrive\\PostDoc\\Figures\\SharedGain'
 
 #%% #############################################################################
 session_list        = np.array([['LPE10919_2023_11_06']])
-# session_list        = np.array([['LPE12223_2024_06_10']])
+session_list        = np.array([['LPE12223_2024_06_10']])
 
 sessions,nSessions   = filter_sessions(protocols = ['GR'],only_session_id=session_list)
 sessiondata = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
@@ -102,7 +102,124 @@ for ax in axes:
 fig.savefig(os.path.join(savedir,'Example_Cone_3D_AL_%s' % sessions[0].sessiondata['session_id'][0] + '.png'), format = 'png')
 
 
+#%% Make a 3D cone where coloring is based on population rate: 
+
+ses = sessions[0]
+colormap = "magma"
+
+########### PCA on trial-averaged responses ############
+######### plot result as scatter by orientation ########
+idx_N = np.all((ses.celldata['roi_name']=='V1',
+                ses.celldata['noise_level']<100,
+                ses.celldata['tuning_var']>0.01),axis=0)
+
+ori = np.mod(ses.trialdata['Orientation'],180)
+oris = np.sort(np.unique(ori))
+
+fig = plt.figure(figsize=[4, 4])
+ 
+# zscore for each neuron across trial responses
+respmat_zsc = zscore(ses.respmat[idx_N, :], axis=1)
+poprate             = np.nanmean(respmat_zsc,axis=0)
+
+plotgainaxis = False
+
+# construct PCA object with specified number of components
+pca = PCA(n_components=3)
+# fit pca to response matrix (n_samples by n_features)
+Xp = pca.fit_transform(respmat_zsc.T).T
+# dimensionality is now reduced from N by K to ncomp by K
+
+if plotgainaxis:
+    gain_weights        = np.array([np.corrcoef(poprate,respmat_zsc[n,:])[0,1] for n in range(respmat_zsc.shape[0])])
+    gain_trials         = poprate - np.nanmean(respmat_zsc,axis=None)
+    # g = np.outer(np.percentile(gain_trials,[0,100]),gain_weights)
+    g = np.outer([0,10],gain_weights)
+    # g = np.outer(np.percentile(gain_trials,[0,100])*np.percentile(poprate,[0,100]),gain_weights)
+    Xg = pca.transform(g).T
+
+ax = fig.add_subplot(111, projection='3d')
+
+c = np.clip(poprate,np.percentile(poprate,1),np.percentile(poprate,99))
+c = c-np.min(c)
+c = c/np.max(c)
+cmap = matplotlib.cm.get_cmap(colormap)
+g = np.squeeze(cmap([c]))
+
+ax.scatter(Xp[0,:], Xp[1,:], Xp[2,:], c=g , s=1, alpha=0.7)
+
+nPopRateBins = 10
+
+binedges_poprate    = np.percentile(poprate,np.linspace(1,99,nPopRateBins+1))
+c = np.mean(np.column_stack((binedges_poprate[:-1],binedges_poprate[1:])),axis=1)
+c = c-np.min(c)
+c = c/np.max(c)
+g = cmap(c)
+
+for iPopRateBin in range(nPopRateBins):
+    meandata = np.empty([len(oris),3])
+
+    for istim,stim in enumerate(oris):
+        idx_T = np.all((ori == stim,
+                    poprate>binedges_poprate[iPopRateBin],
+                    poprate<=binedges_poprate[iPopRateBin+1]),axis=0)
+        meandata[istim,:] = np.mean(Xp[:,idx_T],axis=1)
+    meandata = np.concatenate((meandata,meandata[:1,:]),axis=0)
+    
+    ax.plot(meandata[:,0],meandata[:,1],meandata[:,2],
+            color=g[iPopRateBin],linewidth=2)
+
+ax.set_xlim(np.percentile(Xp[0,:],[1,99.5]))
+ax.set_ylim(np.percentile(Xp[1,:],[1,99.5]))
+ax.set_zlim(np.percentile(Xp[2,:],[1,99.5]))
+
+if plotgainaxis:
+    ax.plot(Xg[0,:],Xg[1,:],Xg[2,:],color='k',linewidth=1)
+ax.set_xlabel('PC 1')  # give labels to axes
+ax.set_ylabel('PC 2')
+ax.set_zlabel('PC 3')
+ax.set_xticklabels([])
+ax.set_yticklabels([])
+ax.set_zticklabels([])
+
+ax.grid(False)
+ax.set_facecolor('white')
+ax.set_xticks([])
+ax.set_yticks([])
+ax.set_zticks([])
+
+axes = fig.get_axes()
+ax.view_init(elev=-15, azim=25, roll=15)
+
+# ax.set_title(plottitle)
+nticks = 5
+ax.grid(True)
+ax.set_facecolor('white')
+ax.set_xticks(np.linspace(np.percentile(Xp[0,:],1),np.percentile(Xp[0],99),nticks))
+ax.set_yticks(np.linspace(np.percentile(Xp[1],1),np.percentile(Xp[1],99),nticks))
+ax.set_zticks(np.linspace(np.percentile(Xp[2],1),np.percentile(Xp[2],99),nticks))
+
+# Get rid of colored axes planes, remove fill
+ax.xaxis.pane.fill = False
+ax.yaxis.pane.fill = False
+ax.zaxis.pane.fill = False
+
+# Now set color to white (or whatever is "invisible")
+ax.xaxis.pane.set_edgecolor('w')
+ax.yaxis.pane.set_edgecolor('w')
+ax.zaxis.pane.set_edgecolor('w')
+
+print('Variance Explained by first 3 components: %2.2f' %
+        (pca.explained_variance_ratio_.cumsum()[2]))
+my_savefig(fig,savedir,'Example_Cone_3D_PopRate_%s' % sessions[0].session_id,formats=['png','pdf'])
+
 #%% 
+
+
+
+
+
+
 
 
 

@@ -36,7 +36,7 @@ cm_blue = LinearSegmentedColormap.from_list("Custom", colors, N=20)
 
 centerthr           = [15,15,15,15]
 centerthr           = [20,20,20,20]
-gaussian_sigma = 1
+gaussian_sigma      = 1
 
 #%% #############################################################################
 

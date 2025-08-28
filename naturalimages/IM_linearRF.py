@@ -28,6 +28,7 @@ from utils.imagelib import load_natural_images #
 from utils.tuning import *
 from utils.RRRlib import *
 from utils.corr_lib import compute_signal_noise_correlation
+from utils.gain_lib import *
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\Images\\')
 
@@ -166,7 +167,7 @@ def lowrank_RF_cv(Y, IMdata, lam=0.05,nranks=25,nsub=3,kfold=2):
     K,N                 = np.shape(Y)        # K is the number of images, N is the number of neurons
     Y_hat               = np.full((K,N),np.nan)
 
-    kf = KFold(n_splits=kfold, shuffle=True)
+    kf                  = KFold(n_splits=kfold, shuffle=True)
 
     B_hat_rrr_folds = np.full((Ly*Lx,N,kfold),np.nan)
 
@@ -191,6 +192,63 @@ def lowrank_RF_cv(Y, IMdata, lam=0.05,nranks=25,nsub=3,kfold=2):
 
     return cRF,Y_hat
 
+def linear_RF(Y, IMdata, lam=0.05,nsub=3,kfold=2):
+    """
+    Compute a linear approximation of the receptive field (RF) from the natural image responses
+    Parameters
+    ----------
+    Y : array with shape (K,N)
+        The neural responses to N natural images
+    IMdata : array with shape (H, W, K)
+        The natural image data of shape H x W x K 
+        where H is the height of the image, W is the width of the image, and K is the number of images
+    lam : float, default=0.05
+        The regularization parameter for the multiple linear regression
+    nsub : int, default=3
+        The downsampling factor for the natural images
+
+    Returns
+    -------
+    cRF : array with shape (Ly, Lx, N)
+        The linear approximation of the receptive field
+    Y_hat : array with shape (K,N)
+        The predicted neural responses
+    """
+
+    IMdata              = IMdata[::nsub, ::nsub, :]         #subsample the natural images
+    Ly,Lx,K             = np.shape(IMdata)                  #get dimensions
+    X                   = np.reshape(IMdata, (Ly*Lx, K)).T  #X is now pixels by images matrix
+    X                   = X / np.linalg.norm(X, axis=0)     # normalize the pixels in each image
+    assert np.shape(Y)[0] == np.shape(X)[0], 'Number of neuronal responses does not match number of images'
+
+    K,N                 = np.shape(Y)        # K is the number of images, N is the number of neurons
+    Y_hat               = np.full((K,N),np.nan)
+
+    kf = KFold(n_splits=kfold, shuffle=True)
+
+    B_hat               = LM(Y, X, lam=lam)     #fit multiple linear regression (with ridge penalty)
+    
+    Y_hat               = X @ B_hat         #predict the trial to trial response from the low rank coefficients
+
+
+    # B_hat_folds = np.full((Ly*Lx,N,kfold),np.nan)
+
+    # for i, (train_index, test_index) in enumerate(kf.split(X)):
+
+    #     X_train, X_test = X[train_index], X[test_index]
+    #     Y_train, Y_test = Y[train_index], Y[test_index]
+
+    #     B_hat               = LM(Y_train, X_train, lam=lam)     #fit multiple linear regression (with ridge penalty)
+
+    #     Y_hat[test_index,:] = X_test @ B_hat         #predict the trial to trial response from the low rank coefficients
+        
+    #     B_hat_folds[:,:,i] = B_hat
+
+    # B_hat   = np.nanmean(B_hat_folds, axis=2)
+
+    cRF         = np.reshape(B_hat, (Ly,Lx, N)) #reshape the low rank coefficients to the image space
+
+    return cRF,Y_hat
 
 def linear_RF_cv(Y, IMdata, lam=0.05,nsub=3,kfold=2):
     """
@@ -246,8 +304,7 @@ def linear_RF_cv(Y, IMdata, lam=0.05,nsub=3,kfold=2):
 
     return cRF,Y_hat
 
-
-#%% Fit each cRF with a 2D gaussian:
+#Fit each cRF with a 2D gaussian:
 def fit_2dgauss_cRF(cRF, nsub,celldata):
     N = np.shape(cRF)[2]
 
@@ -596,7 +653,7 @@ fig.savefig(os.path.join(savedir,'RRR_FitRF_corr_dRF_%s_%s.png' % (datatype,sess
 #%% On the trial to trial response: RRR to get RF
 
 #NOTES:
-# For the reconstruction it worked really well to divide by population rate, zscore
+# For the reconstruction it worked really well to zscore responses
 # Then fit the data with lam=0.05, nranks=50, nsub=3
 # Later update: reduced rank is not necessary, is only limiting, nsub2 is better but 
 # slower. Lam depends on df/deconv and needs to be optimized with crossval. Furthermore 
@@ -1104,196 +1161,7 @@ sessions[sesidx].celldata = fit_2dgauss_cRF(cRF, nsub=nsub,celldata=sessions[ses
 
 
 
-
-
-
-
-
 #%% 
-
-#    # #     # #     #    ######  #######  #####  ####### ######  ### #     #  #####  
-#   #  ##    # ##    #    #     # #       #     # #     # #     #  #  ##    # #     # 
-#  #   # #   # # #   #    #     # #       #       #     # #     #  #  # #   # #       
-###    #  #  # #  #  #    #     # #####   #       #     # #     #  #  #  #  # #  #### 
-#  #   #   # # #   # #    #     # #       #       #     # #     #  #  #   # # #     # 
-#   #  #    ## #    ##    #     # #       #     # #     # #     #  #  #    ## #     # 
-#    # #     # #     #    ######  #######  #####  ####### ######  ### #     #  #####  
-
-#%% 
-# Do KNN decoding with choristers and soloists, very easy! Cool! Is there a large V1 dataset with natural images with spiking data? Yes Paolo Papale data. But that is MUA no?
-# Do KNN category decoding? 
-# Reconstruct the image with choristers and soloists, which one better? How about binning sparsity?
-
-sesidx = 11
-resp = sessions[sesidx].respmat.T
-np.shape(resp)
-istim = np.array(sessions[sesidx].trialdata['ImageNumber'])
-nimg = istim.max() # these are blank stims (exclude them)
-
-# mean center each neuron
-resp -= resp.mean(axis=0)
-resp = resp / (resp.std(axis=0) + 1e-6)
-
-### sanity check - decent signal variance ?
-# split stimuli into two repeats
-NN = resp.shape[1]
-sresp = np.zeros((2, nimg, NN), np.float64)
-inan = np.zeros((nimg,)).astype(bool)
-for n in range(nimg):
-    ist = (istim==n).nonzero()[0]
-    i1 = ist[:int(ist.size/2)]
-    i2 = ist[int(ist.size/2):]
-    # check if two repeats of stim
-    if np.logical_or(i2.size < 1, i1.size < 1):
-        inan[n] = 1
-    else:
-        sresp[0, n, :] = resp[i1, :].mean(axis=0)
-        sresp[1, n, :] = resp[i2, :].mean(axis=0)
-        
-# normalize the responses across images
-# Subtract that mean, and divide by std — this makes the response of each neuron
-# for each repeat zero-mean and unit-variance across stimuli.
-# So now, for each neuron, the normalized responses to different stimuli 
-# are on the same scale in both repeats.
-snorm = sresp - sresp.mean(axis=1)[:,np.newaxis,:]
-snorm = snorm / (snorm.std(axis=1)[:,np.newaxis,:] + 1e-6)
-
-#Get the correlation of each neuron's response across repeats
-cc = (snorm[0].T @ snorm[1]) / sresp.shape[1]
-#print the mean correlation coeff:
-print('fraction of signal variance: %2.3f'%np.diag(cc).mean())
-
-cc = sresp[0] @ sresp[1].T
-
-cc = sresp[0] @ sresp[1].T
-cc /= (sresp[0]**2).sum()
-cc /= (sresp[1]**2).sum()
-nstims = sresp.shape[1]
-print('decoding accuracy: %2.3f'%(cc.argmax(axis=1)==np.arange(0,nstims,1,int)).mean())
-
-#%% 
-
-def plot_knn_binnedvar(sessions,sesidx,varlabel,nbins=5):
-
-    resp = sessions[sesidx].respmat.T
-    istim = np.array(sessions[sesidx].trialdata['ImageNumber'])
-    # nimg = istim.max() + 1 # these are blank stims (exclude them)
-    nimg = len(np.unique(istim))
-
-    # mean center each neuron
-    resp -= resp.mean(axis=0)
-    resp = resp / (resp.std(axis=0) + 1e-6)
-
-    ### sanity check - decent signal variance ?
-    # split stimuli into two repeats
-    NN = resp.shape[1]
-    sresp = np.zeros((2, nimg, NN), np.float64)
-    inan = np.zeros((nimg,)).astype(bool)
-    # for n in range(nimg):
-    for n,ni in enumerate(np.unique(istim)): # loop over images
-        ist = (istim==ni).nonzero()[0]
-        i1 = ist[:int(ist.size/2)]
-        i2 = ist[int(ist.size/2):]
-        # check if two repeats of stim
-        if np.logical_or(i2.size < 1, i1.size < 1):
-            inan[n] = 1
-        else:
-            sresp[0, n, :] = resp[i1, :].mean(axis=0)
-            sresp[1, n, :] = resp[i2, :].mean(axis=0)
-    sresp = sresp[:,~inan,:]
-
-    binedges = np.nanpercentile(sessions[sesidx].celldata[varlabel],np.linspace(0,100,nbins+1))
-    bincenters  = (binedges[:-1]+binedges[1:])/2
-    knnperf = np.empty(nbins)
-    for ibin in range(nbins):
-        idx_N = (sessions[sesidx].celldata[varlabel] >= binedges[ibin]) & (sessions[sesidx].celldata[varlabel] < binedges[ibin+1])
-        cc = sresp[0][:,idx_N] @ sresp[1][:,idx_N].T
-        # cc = sresp[0] @ sresp[1].T
-        cc /= (sresp[0,:,idx_N]**2).sum()
-        cc /= (sresp[1,:,idx_N]**2).sum()
-
-        knnperf[ibin] = (cc.argmax(axis=1)==np.arange(0,nimg,1,int)).mean()
-    fig,ax = plt.subplots(1,1,figsize=(3,3))
-    ax.plot(bincenters,knnperf,color='k',linewidth=2)
-    ax.set_xlabel(varlabel)
-    # ax.set_xticks(binedges[:-1])
-    ax.set_ylabel('KNN decoding accuracy')
-    ax.set_ylim([0,ax.get_ylim()[1]])
-    sns.despine(offset=3,top=True,right=True,trim=True)
-
-# plot_knn_binnedvar(sessions,sesidx,varlabel='gini_coefficient',nbins=5)
-# plot_knn_binnedvar(sessions,sesidx,varlabel='skew',nbins=5)
-
-#%%
-sesidx =5
-numeric_cols = sessions[sesidx].celldata.select_dtypes(include=[np.number]).columns
-for col in numeric_cols:
-    plot_knn_binnedvar(sessions,sesidx,varlabel=col,nbins=5)
-
-#%% Add how neurons are coupled to the population rate: 
-for ses in tqdm(sessions,desc='Computing tuning metrics for each session'):
-    resp = zscore(ses.respmat.T,axis=0)
-    poprate = np.mean(resp, axis=1)
-    # popcoupling = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(N)]
-
-    ses.celldata['pop_coupling']                          = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(len(ses.celldata))]
-
-plot_knn_binnedvar(sessions,10,varlabel='pop_coupling',nbins=5)
-
-for ises in range(nSessions):
-    sessions[ises].celldata['pop_coupling'][sessions[ises].celldata['pop_coupling']>0.3] = np.nan
-    plot_knn_binnedvar(sessions,ises,varlabel='pop_coupling',nbins=10)
-
-# plot_knn_binnedvar(sessions,11,varlabel='RF_R2',nbins=5)
-
-#%% 
-var1 = 'pop_coupling'
-var2 = 'tuning_SNR'
-# var2 = 'iscell_prob'
-# var2 = 'npix_soma'
-# var2 = 'radius'
-# var2 = 'skew'
-# var2 = 'event_rate'
-
-plt.scatter(sessions[sesidx].celldata[var1],sessions[sesidx].celldata[var2],c='k',alpha=0.5,s=5)
-plt.xlabel(var1)
-plt.ylabel(var2)
-from scipy.stats import linregress
-
-# Linear regression
-slope, intercept, r_value, p_value, std_err = linregress(sessions[sesidx].celldata[var1],sessions[sesidx].celldata[var2])
-
-# Plot regression line
-xs = np.array([sessions[sesidx].celldata[var1].min(),sessions[sesidx].celldata[var1].max()])
-ys = slope * xs + intercept
-plt.plot(xs,ys,'r')
-# plt.axhline(y=1, color='k', linestyle='--', linewidth=1)
-# Plot r value and p value
-plt.text(0.05,0.95,'r=%1.2f, p=%1.2e' % (r_value,p_value),transform=plt.gca().transAxes)
-
-
-#%%
-sesidx = 11
-numeric_cols = ['rf_sx_RRR','rf_sy_RRR','rf_r2_RRR','RF_R2']
-for col in numeric_cols:
-    plot_knn_binnedvar(sessions,sesidx,varlabel=col,nbins=10)
-
-#%%
-sessions[sesidx].celldata['rf_sx_RRR'] = np.clip(sessions[sesidx].celldata['rf_sx_RRR'],0,100)
-sessions[sesidx].celldata['rf_sy_RRR'] = np.clip(sessions[sesidx].celldata['rf_sy_RRR'],0,100)
-
-#%%
-sesidx = 11
-numeric_cols = ['rf_sx_RRR','rf_sy_RRR','rf_r2_RRR','RF_R2']
-for col in numeric_cols:
-    plot_knn_binnedvar(sessions,sesidx,varlabel=col,nbins=5)
-
-
-
-
-#%% 
-
-
 
  #####     #    ### #     #    ######  ####### 
 #     #   # #    #  ##    #    #     # #       
@@ -1302,8 +1170,6 @@ for col in numeric_cols:
 #     # #######  #  #   # #    #   #   #       
 #     # #     #  #  #    ##    #    #  #       
  #####  #     # ### #     #    #     # #       
-
-
 
 #%% ################################################
 session_list        = np.array([['LPE11086_2023_12_16']])
@@ -1318,12 +1184,8 @@ sessions,nSessions   = filter_sessions(protocols = ['IM'],only_session_id=sessio
 for ises in range(nSessions):    # iterate over sessions
     sessions[ises].load_respmat(calciumversion='deconv',keepraw=False)
 
-
 #%% Add how neurons are coupled to the population rate: 
-for ses in tqdm(sessions,desc='Computing tuning metrics for each session'):
-    resp                                = zscore(ses.respmat.T,axis=0)
-    poprate                             = np.mean(resp, axis=1)
-    ses.celldata['pop_coupling']        = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(len(ses.celldata))]
+sessions = compute_pop_coupling(sessions)
 
 #%% 
 
@@ -1356,7 +1218,6 @@ sessions[sesidx].celldata = fit_2dgauss_cRF(cRF, nsub, sessions[sesidx].celldata
 
 
 #%% Show some linear RF estimates for neurons with different coupling quantiles: 
-
 nexamplecells           = 6
 npopcouplingquantiles   = 5
 
@@ -1551,3 +1412,282 @@ ax.set_ylabel('RF R2')
 plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True,offset=3)
 my_savefig(fig,savedir,'RFs_quant_by_poprate_%s' % sessions[sesidx].session_id, formats = ['png'])
+
+
+
+
+#%% On the trial to trial response: linear regression to get RF
+
+
+
+#%% On the trial to trial response: RRR to get RF
+
+#NOTES:
+# For the reconstruction it worked really well to zscore responses
+# Then fit the data with lam=0.05, nranks=50, nsub=3
+# Later update: reduced rank is not necessary, is only limiting, nsub2 is better but 
+# slower. Lam depends on df/deconv and needs to be optimized with crossval. Furthermore 
+# lambda biases towards low or high frequency reconstruction. 
+
+nsub                = 3 #without subsampling really slow, i.e. nsub=1
+lam                 = 0.1
+ncouplingbins       = 5
+ReconR2             = np.empty((nSessions,5600))
+ReconR2_popcoupling = np.empty((nSessions,5600,ncouplingbins))
+maxnoiselevel       = 20
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting linear RF for each session'):
+    binedges_popcoupling    = np.percentile(ses.celldata['pop_coupling'],np.linspace(0,100,ncouplingbins+1))
+
+    resp    = ses.respmat.T
+
+    K,N     = np.shape(resp)
+
+    #normalize the response for each neuron to the maximum:
+    resp            = zscore(resp, axis=0)
+
+    IMdata          = natimgdata[:,:,ses.trialdata['ImageNumber']]
+
+    # ses.cRF,Y_hat   = linear_RF_cv(resp, IMdata, lam=lam, nsub=nsub)
+    ses.cRF,Y_hat   = linear_RF(resp, IMdata, lam=lam, nsub=nsub)
+    
+    IMdata          = IMdata[::nsub, ::nsub, :]         #subsample the natural images
+
+    # RF_R2 = r2_score(resp,Y_hat,multioutput='raw_values')
+    # ses.celldata['RF_R2'] = RF_R2
+    # print('RF R2: %0.2f' % (RF_R2.mean()))
+
+    # Reconstruct images from the RF:
+    # idx_N = RF_R2>0.01
+    idx_N = np.ones(N,dtype=bool)
+
+    resp_F              = copy.deepcopy(resp)
+    resp_F              = np.clip(resp_F,np.percentile(resp_F,0),np.percentile(resp_F,99.99))
+    IMdata_hat          = np.tensordot(ses.cRF[:,:,idx_N],resp_F[:,idx_N],axes=[2,1])
+
+    for im in range(5600):
+        ReconR2[ises,im] = np.corrcoef(IMdata[:,:,im].flatten(),IMdata_hat[:,:,im].flatten())[0,1]
+    
+    for icp in range(ncouplingbins):
+        # idx_N = np.all((ses.celldata['pop_coupling'] >= binedges_popcoupling[icp],
+        #                 ses.celldata['pop_coupling'] <= binedges_popcoupling[icp+1]), axis=0)
+        
+        idx_N = np.all((
+                        ses.celldata['pop_coupling'] >= binedges_popcoupling[icp],
+                        ses.celldata['pop_coupling'] <= binedges_popcoupling[icp+1],
+                        # ses.celldata['noise_level'] < maxnoiselevel,
+                        ses.celldata['roi_name'] == 'V1'
+                        ), axis=0)
+
+        IMdata_hat          = np.tensordot(ses.cRF[:,:,idx_N],resp_F[:,idx_N],axes=[2,1])
+
+        for im in range(5600):
+            ReconR2_popcoupling[ises,im,icp] = np.corrcoef(IMdata[:,:,im].flatten(),IMdata_hat[:,:,im].flatten())[0,1]
+
+
+#%% 
+for ises,ses in tqdm(enumerate(sessions),desc='Computing population rate for each session'):
+    resp    = ses.respmat.T
+    #normalize the response for each neuron to the maximum:
+    resp            = zscore(resp, axis=0)
+    ses.poprate = np.mean(resp, axis=1)
+
+#%% Show the reconstruction as a function of population rate: 
+
+fig,axes = plt.subplots(4,4,figsize=(10,10))
+axes = axes.flatten()
+for ises,ses in enumerate(sessions):
+    ax = axes[ises]
+    ax.scatter(ses.poprate,ReconR2[ises,:],color='black',alpha=0.5,s=1)
+    ax.set_title('%s' % ses.session_id)
+
+#%%
+sameIM_poprate              = np.full((nSessions,100,10),np.nan)
+sameIM_reconR2              = np.full((nSessions,100,10),np.nan)
+sameIM_reconR2_popcoupling  = np.full((nSessions,100,10,ncouplingbins),np.nan)
+
+for ises,ses in enumerate(sessions):
+    #Identify all trials with images that are repeated 10 times in the session:
+    im_repeats  = ses.trialdata['ImageNumber'].value_counts()[ses.trialdata['ImageNumber'].value_counts()==10].index.to_numpy()
+    
+    for iIM,IM in enumerate(im_repeats):
+        idx_T = ses.trialdata['ImageNumber'] == IM
+        sameIM_poprate[ises,iIM,:] = ses.poprate[idx_T]
+        sameIM_reconR2[ises,iIM,:] = ReconR2[ises,idx_T]
+        sameIM_reconR2_popcoupling[ises,iIM,:] = ReconR2_popcoupling[ises,idx_T,:]
+
+#%% 
+clrs_popcoupling    = sns.color_palette('magma',ncouplingbins)
+
+coeflabels = ['slope','intercept','rvalue','pvalue']
+coefdata = np.full((nSessions,ncouplingbins,len(coeflabels)),np.nan)
+
+# fig,axes    = plt.subplots(4,4,figsize=(10,10),sharex=True,sharey=True)
+fig,axes    = plt.subplots(1,5,figsize=(13,3),sharex=True,sharey=True)
+axes        = axes.flatten()
+idx_ses = np.where(np.any(~np.isnan(sameIM_reconR2),axis=(1,2)))[0]
+handles     = np.empty(ncouplingbins,dtype=object)
+    
+for iax,ises in enumerate(idx_ses):
+    ax = axes[iax]
+    if np.any(~np.isnan(sameIM_reconR2[ises,:,:])):
+        for icp in range(ncouplingbins):
+            # for iIM in range(100):
+            #     ax.scatter(sameIM_poprate[ises,iIM,:],sameIM_reconR2_popcoupling[ises,iIM,:,icp],
+            #                color=clrs_popcoupling[icp],alpha=0.5,s=1)
+
+            xdata = sameIM_poprate[ises,:,:]
+            ydata = sameIM_reconR2_popcoupling[ises,:,:,icp]
+
+            xdata = zscore(xdata,axis=1,nan_policy='omit')
+
+            xdata = xdata.flatten()
+            ydata = ydata.flatten()
+
+            notnan = ~np.isnan(ydata) & ~np.isnan(xdata)
+            xdata = xdata[notnan]
+            ydata = ydata[notnan] 
+
+            # xdata = np.clip(xdata,np.percentile(xdata,1),np.percentile(xdata,99))
+            notextreme = xdata < np.percentile(xdata,99)
+            xdata = xdata[notextreme]
+            ydata = ydata[notextreme]
+
+            ax.scatter(xdata,ydata,s=3,marker='.',c=clrs_popcoupling[icp],alpha=0.5)
+
+            slope, intercept, r_value, p_value, std_err = stats.linregress(xdata,ydata)
+            coefdata[ises,icp,:] = [slope,intercept,r_value,p_value]
+            x = np.linspace(np.min(xdata),np.max(xdata),100)
+            y = slope*x + intercept
+            
+            handles[icp] = ax.plot(x,y,c=clrs_popcoupling[icp],lw=2)[0]
+        ax.set_title('%s' % sessions[ises].session_id)
+        if iax == 0: 
+            ax.set_ylabel('Recon. R2')
+        if iax == len(idx_ses)//2:
+            ax.set_xlabel('Population rate (z-scored within image repetitions)')
+        if iax==len(idx_ses)-1:
+            ax.legend(handles,['0-20%','20-40%','40-60%','60-80%','80-100%'],
+                    reverse=True,fontsize=8,frameon=False,title='pop. coupling',bbox_to_anchor=(1.05,1), loc='upper left')
+
+plt.tight_layout()
+sns.despine(top=True,right=True,offset=3,trim=False)
+my_savefig(fig,savedir,'Scatter_ReconR2_vs_poprate_sameIM_%dsessions' % (nSessions),formats=['png'])
+
+#%% Show the coefficients of the linear regression fits across sessions and coupling bins
+df = pd.DataFrame(coefdata.reshape((nSessions*ncouplingbins,len(coeflabels))),
+                  columns=coeflabels)
+df['popcoupling'] = np.tile(np.arange(ncouplingbins),nSessions)
+
+fig,axes    = plt.subplots(1,4,figsize=(9,3),sharex=True)
+ax = axes
+for icoef,coef in enumerate(coeflabels):
+    ax = axes[icoef]
+    sns.pointplot(data=df,x='popcoupling',y=coef,color=clrs_popcoupling[icp],ax=ax,
+                  errorbar=('ci', 95),join=False,palette=clrs_popcoupling)
+    ax.set_xlabel('Pop. Coupling')
+    ax.set_ylabel(coef)
+    # ax.set_ylim([0,1])
+plt.tight_layout()
+sns.despine(top=True,right=True,offset=3,trim=True)
+my_savefig(fig,savedir,'ReconR2_vs_popcoupling_sameIM_%dsessions' % (nSessions),formats=['png'])
+
+#%% Compute correlation between population rate and reconstruction R2 for each image
+# to select a good example
+
+
+#%% 
+coeflabels = ['slope','intercept','rvalue','pvalue']
+coefdata = np.full((nSessions,100,ncouplingbins,len(coeflabels)),np.nan)
+   
+for ises,ses in enumerate(sessions):
+    if np.any(~np.isnan(sameIM_reconR2[ises,:,:])):
+        for icp in range(ncouplingbins):
+            for iIM in range(100):
+                xdata = sameIM_poprate[ises,iIM,:]
+                ydata = sameIM_reconR2_popcoupling[ises,iIM,:,icp]
+
+                slope, intercept, r_value, p_value, std_err = stats.linregress(xdata,ydata)
+                coefdata[ises,iIM,icp,:] = [slope,intercept,r_value,p_value]
+
+#%% Find a session and image with good R2 and with significant improvement for high coupling units
+# and not for low coupling units
+
+meanR2          = np.mean(sameIM_reconR2_popcoupling,axis=(2,3))
+corrdiff        = coefdata[:,:,4,2] - coefdata[:,:,0,2]
+
+idx = np.where(np.all((
+            meanR2>np.nanpercentile(meanR2,80),
+            corrdiff>np.nanpercentile(corrdiff,70),
+                ),axis=0))
+
+#%% 
+ncouplingbins       = 5
+maxnoiselevel       = 20
+
+exampleID           = 1
+
+ises                = idx[0][exampleID]
+iIM                 = idx[1][exampleID]
+
+ses                     = sessions[ises]
+binedges_popcoupling    = np.percentile(ses.celldata['pop_coupling'],np.linspace(0,100,ncouplingbins+1))
+
+resp                = ses.respmat.T
+
+K,N                 = np.shape(resp)
+
+#normalize the response for each neuron to the maximum:
+resp            = zscore(resp, axis=0)
+
+IMdata          = natimgdata[:,:,ses.trialdata['ImageNumber']]
+IMdata          = IMdata[::nsub, ::nsub, :]         #subsample the natural images
+
+# Reconstruct images from the RF:
+resp_F              = copy.deepcopy(resp)
+resp_F              = np.clip(resp_F,np.percentile(resp_F,0),np.percentile(resp_F,99.99))
+
+#%% 
+
+im_repeats  = ses.trialdata['ImageNumber'].value_counts()[ses.trialdata['ImageNumber'].value_counts()==10].index.to_numpy()
+IM = im_repeats[iIM]
+idx_T = np.where(ses.trialdata['ImageNumber'] == IM)[0]
+assert(len(idx_T) == 10), 'There should be 10 trials for this image'
+
+idx_T = idx_T[np.argsort(ses.poprate[idx_T])]
+
+fig,axes = plt.subplots(1,1,figsize=(3,3))
+ax              = axes
+IMdata          = natimgdata[:,:,ses.trialdata['ImageNumber']]
+ax.imshow(IMdata[:,:,idx_T[0]],cmap='gray')
+ax.set_title('Image %d' % IM)
+ax.set_xticks([])
+ax.set_yticks([])
+my_savefig(fig,savedir,'ExampleImage_%d' % (IM),formats=['png'])
+
+fig,axes = plt.subplots(ncouplingbins,10,figsize=(10,5),sharex=True,sharey=True)
+for icp in range(ncouplingbins):
+    idx_N = np.all((
+                    ses.celldata['pop_coupling'] >= binedges_popcoupling[icp],
+                    ses.celldata['pop_coupling'] <= binedges_popcoupling[icp+1],
+                    ses.celldata['noise_level'] < maxnoiselevel,
+                    ses.celldata['roi_name'] == 'V1'
+                    ), axis=0)
+
+    IMdata_hat      = np.tensordot(ses.cRF[:,:,idx_N],resp_F[:,idx_N],axes=[2,1])
+
+    for imrep in range(10):
+        ax = axes[icp,imrep]
+        # ax.imshow(IMdata[:,:,idx_T[imrep]],cmap='gray',vmin=0,vmax=1)
+        # ax.imshow(IMdata_hat[:,:,idx_T[imrep]],cmap='gray',vmin=0,vmax=256)
+        ax.imshow(IMdata_hat[:,:,idx_T[imrep]],cmap='gray',
+                  vmin=-np.percentile(IMdata_hat[:,:,idx_T[imrep]],99),
+                  vmax=np.percentile(IMdata_hat[:,:,idx_T[imrep]],99))
+        # ax.imshow(IMdata_hat[:,:,idx_T[imrep]],cmap='gray',vmin=0,vmax=1)
+        ax.set_xticks([])
+        ax.set_yticks([])
+my_savefig(fig,savedir,'ExampleImage_couplingbins_reconstruction_%d_%s' % (IM,ses.session_id),formats=['png'])
+
+#%% 
+
+

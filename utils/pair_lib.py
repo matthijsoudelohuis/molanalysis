@@ -123,26 +123,50 @@ def value_matching(idx,group,values,bins=20,showFig=False):
     idx_subsampled : numpy array
         Indices of the subsampled elements
     """
-    # first identify the group with the least counts overall
-    group_counts = np.array([np.sum(group==g) for g in np.unique(group)])
-    least_group = np.unique(group)[np.argmin(group_counts)]
+    
+    #OLD VERSION:
+    # # first identify the group with the least counts overall
+    # group_counts = np.array([np.sum(group==g) for g in np.unique(group)])
+    # least_group = np.unique(group)[np.argmin(group_counts)]
 
-    # make a histogram of the values of the group with the least counts
-    hist,bin_edges = np.histogram(values[group==least_group],bins=bins)
+    # # make a histogram of the values of the group with the least counts
+    # hist,bin_edges = np.histogram(values[group==least_group],bins=bins)
+    # bin_centers = (bin_edges[:-1] + bin_edges[1:])/2
+
+    # # go over the other groups and subsample without replacement from each of the groups the same number of values in each bin
+    # idx_subsampled = []
+    # for g in np.unique(group):
+    #     if g != least_group:
+    #         for i in range(len(bin_centers)):
+    #             bin_group_idx = np.all((group==g,values>=bin_edges[i],values<bin_edges[i+1]),axis=0)
+    #             if np.sum(bin_group_idx) > hist[i]:
+    #                 idx_subsampled.extend(np.random.choice(np.where(bin_group_idx)[0],hist[i],replace=False))
+    #             else:
+    #                 idx_subsampled.extend(np.where(bin_group_idx)[0])
+    # idx_subsampled.extend(np.where(group==least_group)[0])
+
+    ugroups = np.unique(group)
+    ngroups = len(ugroups)
+    histdata = np.empty([bins,ngroups])
+    bin_lims = np.percentile(values, [0,100])
+    bin_lims = np.percentile(values, [1,99])
+    for g in range(ngroups):
+        [histdata[:,g],bin_edges] = np.histogram(values[group==ugroups[g]],bins=bins,range=bin_lims)
+        # [histdata[:,g],bin_edges] = np.histogram(values[group==ugroups[g]],bins=bin_edges)
+    hist = np.min(histdata, axis=1).astype(int) #take the minimum across groups
     bin_centers = (bin_edges[:-1] + bin_edges[1:])/2
-
+    
     # go over the other groups and subsample without replacement from each of the groups the same number of values in each bin
     idx_subsampled = []
-    for g in np.unique(group):
-        if g != least_group:
-            for i in range(len(bin_centers)):
-                bin_group_idx = np.all((group==g,values>=bin_edges[i],values<bin_edges[i+1]),axis=0)
-                if np.sum(bin_group_idx) > hist[i]:
-                    idx_subsampled.extend(np.random.choice(np.where(bin_group_idx)[0],hist[i],replace=False))
-                else:
-                    idx_subsampled.extend(np.where(bin_group_idx)[0])
-    idx_subsampled.extend(np.where(group==least_group)[0])
-    
+    for g in ugroups:
+        for i in range(len(bin_centers)):
+            # idx_N  = np.all((group==g,values>=bin_edges[i],values<bin_edges[i+1]),axis=0)
+            # if np.sum(idx_N) < hist[i]:
+            #     print(np.sum(idx_N))
+            #     print(hist[i])
+            bin_group_idx = np.all((group==g,values>=bin_edges[i],values<bin_edges[i+1]),axis=0)
+            idx_subsampled.extend(np.random.choice(np.where(bin_group_idx)[0],hist[i],replace=False))
+
     if showFig:
         values_new = values[idx_subsampled]
         group_new = group[idx_subsampled]

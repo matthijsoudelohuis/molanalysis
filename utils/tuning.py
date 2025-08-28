@@ -171,6 +171,7 @@ def compute_prefori(response_matrix,conditions_vector):
 
     for iC,cond in enumerate(conditions):
         tempmean                            = np.nanmean(response_matrix[:,conditions_vector==cond],axis=1)
+        # tempmean                            = np.nanmedian(response_matrix[:,conditions_vector==cond],axis=1)
         resp_mean[:,iC]                     = tempmean
     
     pref_cond             = conditions[np.argmax(resp_mean,axis=1)]
