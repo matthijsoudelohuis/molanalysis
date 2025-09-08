@@ -715,7 +715,7 @@ for ises in range(nSessions):
 #%% ##################### Compute pairwise neuronal distances: ##############################
 sessions = compute_pairwise_anatomical_distance(sessions)
 
-#%% 
+#%% Compute noise correlations / covariance after subtracting X modes of covariance:
 areas = ['V1','PM']
 n_components = 20
 fa = FA(n_components=n_components)

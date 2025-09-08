@@ -100,6 +100,14 @@ def mean_resp_gn(ses,trialfilter=None):
 #     # #    #  #     #    #     #  #    ## #     #       #    #     # #    ##  #  #    ## #     # 
  #####  #     # #     #    #    ### #     #  #####        #     #####  #     # ### #     #  #####  
 
+def ori_remapping(sessions):
+    for ises in range(len(sessions)):
+        if sessions[ises].sessiondata['protocol'][0] == 'GR':
+            if not 'Orientation_orig' in sessions[ises].trialdata.keys():
+                sessions[ises].trialdata['Orientation_orig']    = sessions[ises].trialdata['Orientation']
+                sessions[ises].trialdata['Orientation']         = np.mod(270 - sessions[ises].trialdata['Orientation'],360)
+    return sessions
+
 def get_pref_orispeed(resp_mean,oris,speeds,asindex=True):
     
     #Find preferred orientation and speed for each cell
@@ -362,7 +370,8 @@ def compute_tuning_wrapper(sessions):
     Currently computes OSI, DSI, gOSI, and Tuning Variance, plus preferred orientation for GR
     For GN tuning variance and preferred orientation and speed
     """
-    for ises in tqdm(range(len(sessions)),desc= 'Computing tuning metrics: '):
+    # for ises in tqdm(range(len(sessions)),desc= 'Computing tuning metrics: '):
+    for ises in range(len(sessions)):
         if sessions[ises].sessiondata['protocol'].isin(['GR'])[0]:
             sessions[ises].celldata['OSI'] = compute_tuning(sessions[ises].respmat,
                                                         sessions[ises].trialdata['Orientation'],

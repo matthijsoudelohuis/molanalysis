@@ -1152,7 +1152,7 @@ def plot_bin_corr_distance_projs(binsdRF,bin_dist,areapairs,layerpairs,projpairs
 
 
 def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',projpairs=' ',corr_type='noise_corr',rf_type='Fsmooth',
-                    r2_thr=0.2,noise_thr=100,filternear=False,binresolution=5,tuned_thr=0,absolute=False,
+                    r2_thr=0.2,noise_thr=100,filternear=False,binresolution=5,binlim=75,tuned_thr=0,absolute=False,
                     normalize=False,dsi_thr=0,min_dist=15,filtersign=None,corr_thr=0.05,
                     rotate_prefori=False,deltaori=None,centerori=None,surroundori=None,shufflefield=None):
     """
@@ -1180,7 +1180,6 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
     nSessions = len(sessions)
 
     #Binning parameters 2D:
-    binlim          = 75
     binedges_2d     = np.arange(-binlim,binlim,binresolution)+binresolution/2 
     bincenters_2d   = binedges_2d[:-1]+binresolution/2 
     nBins           = len(bincenters_2d)
@@ -1189,8 +1188,6 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
     bin_2d_count    = np.zeros((nSessions,nBins,nBins,len(areapairs),len(layerpairs),len(projpairs)))
 
     #Binning parameters 1D distance
-    # binlim          = 100
-    binlim          = 75
     binedges_dist   = np.arange(-binresolution/2,binlim,binresolution)+binresolution/2 
     binsdRF = binedges_dist[:-1]+binresolution/2 
     nBins           = len(binsdRF)
@@ -1257,7 +1254,9 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                     # corrdata = corrdata/np.nanstd(corrdata,axis=None) - np.nanmean(corrdata,axis=None)
                     corrdata = corrdata - np.nanmean(corrdata,axis=None)
 
-                if corr_type == 'trace_corr':
+                if sessions[ises].sessiondata['protocol'][0] == 'SP':
+                    n = len(sessions[ises].ts_F)
+                elif corr_type == 'trace_corr':
                     n = len(sessions[ises].ts_F)
                 elif corr_type in ['noise_corr','noise_cov','sig_corr']:
                     n = np.shape(sessions[ises].respmat)[1]
@@ -1322,7 +1321,11 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                 signalfilter    = np.logical_and(signalfilter[0],signalfilter[1])
 
                 if tuned_thr:
-                    tuningfilter    = np.meshgrid(celldata['tuning_var']>tuned_thr,celldata['tuning_var']>tuned_thr)
+                    if tuned_thr<1:
+                        tuningfilter    = np.meshgrid(celldata['tuning_var']>tuned_thr,celldata['tuning_var']>tuned_thr)
+                    elif tuned_thr>1:
+                        tuningfilter    = np.meshgrid(celldata['gOSI']>np.percentile(celldata['gOSI'],100-tuned_thr),
+                                                      celldata['gOSI']>np.percentile(celldata['gOSI'],100-tuned_thr))
                     tuningfilter    = np.logical_and(tuningfilter[0],tuningfilter[1])
                 else: 
                     tuningfilter    = np.ones(np.shape(rffilter))
@@ -2346,7 +2349,7 @@ def plot_corr_radial_tuning_dori(binsdRF,bin_dist_count,bin_dist_data,deltaoris,
         
         ax.legend(handles=handles,labels=[str(x) for x in deltaoris],frameon=False,ncol=3,fontsize=6)
         ax.set_xlim([0,xylim])
-        ax.set_ylim([my_floor(np.min(bin_dist_data)*0.65,3),my_ceil(np.max(bin_dist_data)*1.1,3)])
+        ax.set_ylim([my_floor(np.min(bin_dist_data[:,:,iap,:,:],)*0.65,3),my_ceil(np.max(bin_dist_data[:,:,iap,:,:],)*1.1,3)])
         ax.set_xlabel(u'Δ %s' % dim12label)   
         ax.set_title('%s' % (areapair),c=clrs_areapairs[iap])
         ax.set_ylabel('Correlation')

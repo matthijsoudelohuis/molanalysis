@@ -14,8 +14,6 @@ import copy
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
 from statannotations.Annotator import Annotator
 
 from loaddata.session_info import filter_sessions,load_sessions
