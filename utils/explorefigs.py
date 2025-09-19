@@ -445,22 +445,24 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
 
     pal = sns.color_palette('husl', len(oris))
     pal = np.tile(sns.color_palette('husl', 8), (2, 1))
+    minperc = 10
+    maxperc = 90
     if size == 'runspeed':
-        sizes = (ses.respmat_runspeed - np.percentile(ses.respmat_runspeed, 5)) / \
-            (np.percentile(ses.respmat_runspeed, 95) -
-             np.percentile(ses.respmat_runspeed, 5))
+        sizes = (ses.respmat_runspeed - np.percentile(ses.respmat_runspeed, minperc)) / \
+            (np.percentile(ses.respmat_runspeed, maxperc) -
+             np.percentile(ses.respmat_runspeed, minperc))
     elif size == 'videome':
-        sizes = (ses.respmat_videome - np.percentile(ses.respmat_videome, 5)) / \
-            (np.percentile(ses.respmat_videome, 95) -
-             np.percentile(ses.respmat_videome, 5))
+        sizes = (ses.respmat_videome - np.percentile(ses.respmat_videome, minperc)) / \
+            (np.percentile(ses.respmat_videome, maxperc) -
+             np.percentile(ses.respmat_videome, minperc))
     elif size == 'uniform':
         sizes = np.ones_like(ses.respmat_runspeed)*0.5
     elif size == 'poprate':
         poprate = np.nanmean(zscore(ses.respmat, axis=1), axis=0)
-        sizes = (poprate- np.percentile(poprate, 5)) / \
-            (np.percentile(poprate, 95) -
-             np.percentile(poprate, 5))*0.5
-
+        sizes = (poprate- np.percentile(poprate, minperc)) / \
+            (np.percentile(poprate, maxperc) -
+             np.percentile(poprate, minperc))
+        
     fig = plt.figure(figsize=[len(areas)*4, 4])
     # fig,axes = plt.figure(1, len(areas), figsize=[len(areas)*3, 3])
 # 
@@ -499,7 +501,8 @@ def plot_PCA_gratings_3D(ses, size='runspeed', export_animation=False, savedir=N
             # ax.scatter(x, y, color=pal[t], s=25, alpha=0.8)     #each trial is one dot
             # ax.scatter(x, y, z, color=pal[t], s=ses.respmat_runspeed[ori_ind[t]], alpha=0.8)     #each trial is one dot
             # each trial is one dot
-            ax.scatter(x, y, z, color=pal[t], s=sizes[ori_ind[t]]*6, alpha=0.8)
+            ax.scatter(x, y, z, color=pal[t], s=sizes[ori_ind[t]]*6, alpha=0.4)
+            ax.scatter(x, y, z, color=pal[t], s=sizes[ori_ind[t]]*6, alpha=0.4)
             # ax.scatter(x, y, z,marker='o')     #each trial is one dot
         if plotgainaxis:
             ax.plot(Xg[0,:],Xg[1,:],Xg[2,:],color='k',linewidth=1)

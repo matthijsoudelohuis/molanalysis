@@ -14,7 +14,7 @@
 
 #%% ###################################################
 import math, os
-os.chdir('c:\\Python\\molanalysis')
+os.chdir('e:\\Python\\molanalysis')
 from loaddata.get_data_folder import get_local_drive
 # os.chdir(os.path.join(get_local_drive(),'Python','molanalysis'))
 
@@ -26,10 +26,12 @@ from scipy import stats
 import seaborn as sns
 from tqdm import tqdm
 from scipy.stats import zscore
+from skimage.measure import block_reduce
 
+from utils.rf_lib import filter_nearlabeled
 from loaddata.session_info import filter_sessions
 from utils.psth import compute_tensor
-from preprocessing.preprocesslib import assign_layer
+from preprocessing.preprocesslib import assign_layer,assign_layer2
 from utils.plot_lib import * #get all the fixed color schemes
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\PopRateCorr\\')
@@ -45,9 +47,16 @@ protocols           = ['GR','GN']
 protocols           = ['SP']
 # protocols           = ['IM']
 
-sessions,nSessions   = filter_sessions(protocols = protocols,min_lab_cells_V1=0,min_lab_cells_PM=0,
+sessions,nSessions   = filter_sessions(protocols = protocols,min_lab_cells_V1=20,min_lab_cells_PM=20,
 # sessions,nSessions   = filter_sessions(protocols = protocols,min_lab_cells_V1=20,min_lab_cells_PM=20,
-                                       load_calciumdata=True,calciumversion='deconv')
+                                    #    load_calciumdata=True,calciumversion='deconv')
+                                       load_calciumdata=True,calciumversion='dF')
+
+#%% % 
+
+
+
+
 
 #%% Interpolate timestamps such that activity was pseudosimultaneous:
 nplanes = 8
@@ -59,8 +68,321 @@ for ises in range(nSessions):
             #print(offset)
             sessions[ises].calciumdata.iloc[:,iN] = np.interp(ts_F - offset,ts_F,sessions[ises].calciumdata.iloc[:,iN])
 
+#%%  # Normalize each column (neuron activity)
+for ises in range(nSessions):   
+    #sessions[ises].calciumdata = sessions[ises].calciumdata.apply(lambda x: (x - x.min()) / (x.max() - x.min()))
+    sessions[ises].calciumdata = sessions[ises].calciumdata.apply(zscore)
+
+# #%%  # Normalize each column (neuron activity) between 0 and 1
+# for ises in range(nSessions):   
+#     #sessions[ises].calciumdata = sessions[ises].calciumdata.apply(lambda x: (x - x.min()) / (x.max() - x.min()))
+#     sessions[ises].calciumdata                = block_reduce(sessions[ises].calciumdata, block_size=(2,1), func=np.mean, cval=np.mean(sessions[ises].calciumdata))
+
+
+#%%  #assign arealayerlabel
+for ises in range(nSessions):   
+    # sessions[ises].celldata = assign_layer(sessions[ises].celldata)
+    sessions[ises].celldata = assign_layer2(sessions[ises].celldata)
+    sessions[ises].celldata['arealayerlabel'] = sessions[ises].celldata['arealabel'] + sessions[ises].celldata['layer'] 
+
+#%%
+for ises in range(nSessions):
+    for iplane in range(8):
+        idx_N = np.where(sessions[ises].celldata['plane_idx']==iplane)[0]
+        ts_F = sessions[ises].ts_F
+        ts_F_interp = sessions[ises].ts_F - iplane/8
+
+        sessions[ises].calciumdata.iloc[:,idx_N] = np.interp(ts_F_interp,ts_F,sessions[ises].calciumdata.iloc[:,idx_N])
+        #= compute_tensor(sessions[ises].calciumdata.iloc[:,idx_N],ts_F_interp)[sessions[ises].celldata['plane_idx']==iplane]
+
+
+#%% Compute average rate for different populations: 
+ises        = 9
+
+arealayerlabels = ['V1unlL2/3',
+                    'V1labL2/3',
+                    'PMunlL2/3',
+                    'PMlabL2/3',
+                    'PMunlL5',
+                    'PMlabL5',
+                   ]
+
+nArealayerlabels = len(arealayerlabels)
+
+nS              = len(sessions[ises].calciumdata)
+datamat         = np.full((nArealayerlabels,nS),np.nan)
+
+minNneurons     = 10
+filter_nearby   = True
+poprate = np.nanmean(sessions[ises].calciumdata,axis=1)
+
+for iall,arealayerlabel in enumerate(arealayerlabels):
+    
+    if filter_nearby:
+        idx_nearby  = filter_nearlabeled(sessions[ises],radius=50)
+    else:
+        idx_nearby = np.ones(len(sessions[ises].celldata),dtype=bool)
+
+    idx_N               = np.where(np.all((
+                                    sessions[ises].celldata['arealayerlabel']==arealayerlabel,
+                                           idx_nearby,
+                                        ),axis=0))[0]
+    # idx_N
+    if len(idx_N)<minNneurons:
+        continue
+    # datamat[iall,:]     = np.nanmean(sessions[ises].calciumdata.iloc[:,idx_N],axis=1)
+    idx_N_subsample     = np.random.choice(idx_N,minNneurons,replace=False)
+    datamat[iall,:]     = np.nanmean(sessions[ises].calciumdata.iloc[:,idx_N_subsample],axis=1)
+    # datamat[iall,:]     = np.nanmean(sessions[ises].calciumdata[:,idx_N],axis=1) / poprate
+
+clrs_arealayerlabels = sns.color_palette('tab10',nArealayerlabels)
+
+idx_T = np.arange(100,200) #take random stretch of timepoints
+# idx_T = np.arange(500,600) #take random stretch of timepoints
+
 #%% 
-from skimage.measure import block_reduce
+fig, axes = plt.subplots(1,1,figsize=(6,3))
+ax = axes
+# ax.plot(np.arange(len(idx_T))/sessions[ises].sessiondata['fs'][0],poprate[idx_T],color='k',linewidth=1.5)
+for iall,arealayerlabel in enumerate(arealayerlabels):
+    ax.plot(np.arange(len(idx_T))/sessions[ises].sessiondata['fs'][0],datamat[iall,idx_T],color=clrs_arealayerlabels[iall],linewidth=0.75)
+ax.legend(['poprate'] + list(arealayerlabels),loc='upper right',frameon=False,fontsize=8,ncol=3)
+ax.set_xlabel('Time (sec)')
+ax.set_ylabel('Population rate (normalized)')
+
+sns.despine(top=True,right=True,offset=3)
+#my_savefig(fig,savedir,'Poprate_Excertp_%s_%s' % ('_'.join(protocols),sessions[ises].session_id),formats=['png'])
+
+#%% 
+fig, axes = plt.subplots(3,1,figsize=(6,6))
+clrs = np.tile(['black','red'],3)
+subplotlabels = np.array(['V1 - L2/3','PM - L2/3','PM - L5'])
+# ax.plot(np.arange(len(idx_T))/sessions[ises].sessiondata['fs'][0],poprate[idx_T],color='k',linewidth=1.5)
+for iall,arealayerlabel in enumerate(arealayerlabels):
+    ax = axes[iall//2]
+    ax.plot(np.arange(len(idx_T))/sessions[ises].sessiondata['fs'][0],datamat[iall,idx_T],color=clrs[iall],linewidth=0.75)
+    ax.legend(['unlabeled','labeled'],loc='upper right',frameon=False,fontsize=8,ncol=3)
+    ax.set_title('%s' % subplotlabels[iall//2])
+ax.set_xlabel('Time (sec)')
+ax.set_ylabel('Population rate (z-score)')
+plt.tight_layout()
+sns.despine(top=True,right=True,offset=3)
+my_savefig(fig,savedir,'Poprate_Excerpt_LayerLabeled_%s_%s' % ('_'.join(protocols),sessions[ises].session_id),formats=['png'])
+
+#%% 
+
+
+#%% Compute correlation of rate for different populations: 
+arealayerlabels = ['V1unlL2/3',
+                    'V1labL2/3',
+                    'PMunlL2/3',
+                    'PMlabL2/3',
+                    'PMunlL5',
+                    'PMlabL5',
+                   ]
+
+nArealayerlabels = len(arealayerlabels)
+
+nboots              = 10
+corrmat         = np.full((nArealayerlabels,nArealayerlabels,nSessions),np.nan)
+corrdata        = np.full((nArealayerlabels,nArealayerlabels,nSessions),np.nan)
+corrdata_boot   = np.full((nArealayerlabels,nArealayerlabels,nSessions,nboots),np.nan)
+
+minNneurons     = 10
+filter_nearby   = True
+filter_nearby   = False
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Compute crosscorrelations between population rates:'):
+    nS              = len(sessions[ises].calciumdata)
+    datamat         = np.full((nArealayerlabels,nS),np.nan)
+
+    # for iall,arealayerlabel in enumerate(arealayerlabels):
+        
+    #     if filter_nearby:
+    #         idx_nearby  = filter_nearlabeled(sessions[ises],radius=50)
+    #     else:
+    #         idx_nearby = np.ones(len(sessions[ises].celldata),dtype=bool)
+
+    #     idx_N               = np.where(np.all((
+    #                                     sessions[ises].celldata['arealayerlabel']==arealayerlabel,
+    #                                         idx_nearby,
+    #                                         ),axis=0))[0]
+    #     if len(idx_N)<minNneurons:
+    #         continue
+    #     datamat[iall,:]     = np.nanmean(sessions[ises].calciumdata.iloc[:,idx_N],axis=1)
+
+    # corrdata[:,:,ises] = np.corrcoef(datamat)
+
+    for iallx,allx in enumerate(arealayerlabels):
+        for ially,ally in enumerate(arealayerlabels):
+
+            if filter_nearby:
+                idx_nearby  = filter_nearlabeled(sessions[ises],radius=50)
+            else:
+                idx_nearby = np.ones(len(sessions[ises].celldata),dtype=bool)
+
+            idx_N1               = np.all((
+                                            sessions[ises].celldata['arealayerlabel']==allx,
+                                                idx_nearby,
+                                                ),axis=0)
+            
+            idx_N2               = np.all((
+                                            sessions[ises].celldata['arealayerlabel']==ally,
+                                                idx_nearby,
+                                                ),axis=0)
+            
+            sampleNneurons = min(np.sum(idx_N1),np.sum(idx_N2))
+            for iboot in range(nboots):
+                bootidx_N1          = np.random.choice(np.where(idx_N1)[0],sampleNneurons,replace=True)
+                bootidx_N2          = np.random.choice(np.where(idx_N2)[0],sampleNneurons,replace=True)
+                
+                corrdata_boot[iallx,ially,ises,iboot] = np.corrcoef(np.nanmean(sessions[ises].calciumdata.iloc[:,bootidx_N1],axis=1),
+                                                                        np.nanmean(sessions[ises].calciumdata.iloc[:,bootidx_N2],axis=1))[0,1]
+
+#%% 
+sns.heatmap(np.nanmean(corrdata,axis=2),vmin=-0.5,vmax=0.5,cmap='bwr',annot=True,
+            xticklabels=arealayerlabels,yticklabels=arealayerlabels)
+
+#%% 
+sns.heatmap(np.nanmean(corrdata_boot,axis=(2,3)),vmin=-0.5,vmax=0.5,cmap='bwr',annot=True,
+            xticklabels=arealayerlabels,yticklabels=arealayerlabels)
+
+
+#%% 
+arealabelpairs  = [
+                    'V1labL2/3-V1unlL2/3',
+                    'PMlabL2/3-PMunlL2/3',
+                    'PMlabL5-PMunlL5',
+                    ]
+
+arealayerlabels = ['V1unlL2/3',
+                    'V1labL2/3',
+                    'PMunlL2/3',
+                    'PMlabL2/3',
+                    'PMunlL5',
+                    'PMlabL5',
+                   ]
+
+nArealayerlabelpairs    = (len(arealabelpairs))
+nArealayerlabels        = len(arealayerlabels)
+
+maxnoiselevel   = 20
+mineventrate    = 15
+minNneurons     = 10
+# filter_nearby   = True
+filter_nearby   = False
+nboots          = 10
+
+corrdata                = np.full((nArealayerlabelpairs,nArealayerlabels,nSessions),np.nan)
+corrdata_boot           = np.full((nArealayerlabelpairs,nArealayerlabels,nSessions,nboots),np.nan)
+
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Compute crosscorrelations between population rates:'):
+    nS              = len(sessions[ises].calciumdata)
+    datamat         = np.full((nArealayerlabels,nS),np.nan)
+
+    for ialp,alp in enumerate(arealabelpairs):
+        idx_N1              = np.all((sessions[ises].celldata['arealayerlabel'] == alp.split('-')[0],
+                                      sessions[ises].celldata['noise_level']<maxnoiselevel,
+                                    sessions[ises].celldata['event_rate']>np.nanpercentile(sessions[ises].celldata['event_rate'],mineventrate),
+                                    #   sessions[ises].celldata['tuning_var']>0.025,
+                                    #   sessions[ises].celldata['depth']<250,
+                                    #   sessions[ises].celldata['depth']>250,
+                                    #   sessions[ises].celldata['gOSI']>0.5,
+                                    # idx_nearby
+                                      ),axis=0)
+        idx_N2              = np.all((sessions[ises].celldata['arealayerlabel'] == alp.split('-')[1],
+                                      sessions[ises].celldata['noise_level']<maxnoiselevel,
+                                        # sessions[ises].celldata['gOSI']>0.5,
+                                        # sessions[ises].celldata['depth']<250,
+                                        # sessions[ises].celldata['depth']>250,
+                                    sessions[ises].celldata['event_rate']>np.nanpercentile(sessions[ises].celldata['event_rate'],mineventrate),
+                                        # idx_nearby
+                                        ),axis=0)
+
+        for iall,arealayerlabel in enumerate(arealayerlabels):
+
+            idx_N3              = np.all((sessions[ises].celldata['arealayerlabel'] == arealayerlabel,
+                                        #   sessions[ises].celldata['tuning_var']>0.025,
+                                        #   sessions[ises].celldata['gOSI']>np.nanpercentile(sessions[ises].celldata['gOSI'],50),
+                                        #   sessions[ises].celldata['OSI']>0.5,
+                                            sessions[ises].celldata['noise_level']<maxnoiselevel,
+                                            sessions[ises].celldata['event_rate']>np.nanpercentile(sessions[ises].celldata['event_rate'],mineventrate),
+                                        ),axis=0)
+
+            if np.sum(idx_N1) < minNneurons or np.sum(idx_N2) < minNneurons or np.sum(idx_N3) < minNneurons:
+                continue
+
+            sampleNneurons = min(np.sum(idx_N1),np.sum(idx_N2),np.sum(idx_N3))
+            # sampleNneurons = minNneurons
+
+            for iboot in range(nboots):
+                
+                bootidx_N1          = np.random.choice(np.where(idx_N1)[0],sampleNneurons,replace=True)
+                bootidx_N2          = np.random.choice(np.where(idx_N2)[0],sampleNneurons,replace=True)
+                bootidx_N3          = np.random.choice(np.where(idx_N3)[0],sampleNneurons,replace=True)
+                
+                corrdata_boot[ialp,iall,ises,iboot] = np.corrcoef(np.nanmean(sessions[ises].calciumdata.iloc[:,bootidx_N1],axis=1) - np.nanmean(sessions[ises].calciumdata.iloc[:,bootidx_N2],axis=1),
+                                                np.nanmean(sessions[ises].calciumdata.iloc[:,bootidx_N3],axis=1))[0,1]
+
+
+#%% 
+sns.heatmap(np.nanmean(corrdata_boot,axis=(2,3)),vmin=-0.1,vmax=0.1,cmap='bwr',annot=True,
+            xticklabels=arealayerlabels,yticklabels=arealabelpairs)
+
+
+#%% 
+datamat_diff = datamat / (poprate[np.newaxis,:]+1e-8) #look at fluctuations relative to the total population
+
+corrmat     = np.corrcoef(datamat_diff)
+
+fig, axes = plt.subplots(1,1,figsize=(3,3))
+ax = axes
+ax.imshow(corrmat,cmap='RdBu_r',vmin=-1,vmax=1)
+ax.set_xticks(range(nArealayerlabels),labels=arealayerlabels,rotation=90)
+ax.set_yticks(range(nArealayerlabels),labels=arealayerlabels)
+cbar = fig.colorbar(ax.imshow(corrmat,cmap='RdBu_r',vmin=-1,vmax=1), ax=ax,shrink=0.5)
+cbar.set_label('Correlation')
+
+
+#%% 
+def plot_crosscorr_poppairs(crosscorr_data,timelags,arealayerlabels,pop_pairs,titles):
+    npop_pairs = len(pop_pairs)
+    fig,axes = plt.subplots(1,npop_pairs,figsize=(npop_pairs*3+1,3),sharey=True,sharex=True)
+    clrs = sns.color_palette('tab10',n_colors=16)
+
+    for i in range(npop_pairs):
+        ax = axes[i]
+        pop_pair_array = pop_pairs[i]
+        handles = []
+        for ipair,(ipop,jpop) in enumerate(pop_pair_array):
+            datatoplot = crosscorr_data[ipop,jpop]
+            # ax.plot(lags * 1/ses.sessiondata['fs'][0],np.nanmean(datatoplot,axis=-1),label='%s-%s' % (arealayerlabels[ipop],arealayerlabels[jpop]))
+            handles.append(shaded_error(timelags,datatoplot.T,ax=ax,error='sem',
+                        color=clrs[ipair],
+                        label='%s-%s' % (arealayerlabels[ipop],arealayerlabels[jpop])))    
+        ax.set_title(titles[i])
+        ax.set_xlabel('Lag (sec)')
+        ax.axhline(0,linestyle='--',color='k')
+        ax.axvline(0,linestyle='--',color='grey')
+        if i==0:
+            ax.set_ylabel('Correlation')
+        # ax.legend(bbox_to_anchor=(1.0, 1), loc='upper left', borderaxespad=-.1,frameon=False,fontsize=6)
+        ax.legend(loc='upper center', frameon=False,fontsize=6,ncol=2)
+        # ax.set_ylim(np.nanpercentile(datatoplot,[0,100]))
+        ax.set_xlim(np.percentile(timelags,[0,100]))
+
+    sns.despine(top=True,right=True,offset=3)
+    plt.tight_layout()
+    return fig
+
+#%%
+
+
+
+
+
+
+
 
 #%% 
 arealabelpairs  = [
@@ -205,141 +527,16 @@ my_savefig(fig,savedir,'FF_FB_poprate_Corr_SP_%dsessions_boot' % nSessions)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-#%% Interpolate timestamps such that activity was pseudosimultaneous:
-nplanes = 8
-for ises in range(nSessions):
-    ts_F = sessions[ises].ts_F
-    for iN in range(len(sessions[ises].celldata)):
-        if sessions[ises].celldata['plane_idx'][iN] != 0:
-            offset = sessions[ises].celldata['plane_idx'][iN] / nplanes / sessions[ises].sessiondata['fs'][0]
-            #print(offset)
-            sessions[ises].calciumdata.iloc[:,iN] = np.interp(ts_F - offset,ts_F,sessions[ises].calciumdata.iloc[:,iN])
-
-#%%  # Normalize each column (neuron activity) between 0 and 1
-for ises in range(nSessions):   
-    #sessions[ises].calciumdata = sessions[ises].calciumdata.apply(lambda x: (x - x.min()) / (x.max() - x.min()))
-    sessions[ises].calciumdata = sessions[ises].calciumdata.apply(zscore)
-
-#%%  #assign arealayerlabel
-for ises in range(nSessions):   
-    sessions[ises].celldata = assign_layer(sessions[ises].celldata)
-    sessions[ises].celldata['arealayerlabel'] = sessions[ises].celldata['arealabel'] + sessions[ises].celldata['layer'] 
-
-#%%
-for ises in range(nSessions):
-    for iplane in range(8):
-        idx_N = np.where(sessions[ises].celldata['plane_idx']==iplane)[0]
-        ts_F = sessions[ises].ts_F
-        ts_F_interp = sessions[ises].ts_F - iplane/8
-
-        sessions[ises].calciumdata.iloc[:,idx_N] = np.interp(ts_F_interp,ts_F,sessions[ises].calciumdata.iloc[:,idx_N])
-        #= compute_tensor(sessions[ises].calciumdata.iloc[:,idx_N],ts_F_interp)[sessions[ises].celldata['plane_idx']==iplane]
-
-
-#%% Compute average rate for different populations: 
-ises        = 4
-
-arealayerlabels = ['V1unlL2/3',
-                    'V1labL2/3',
-                    'PMunlL2/3',
-                    'PMlabL2/3',
-                    'PMunlL5',
-                    'PMlabL5',
-                   ]
-
-nArealayerlabels = len(arealayerlabels)
-
-nS              = len(sessions[ises].calciumdata)
-datamat         = np.full((nArealayerlabels,nS),np.nan)
-
-minNneurons     = 10
-
-poprate = np.nanmean(sessions[ises].calciumdata,axis=1)
-for iall,arealayerlabel in enumerate(arealayerlabels):
-    idx_N               = np.where(sessions[ises].celldata['arealayerlabel']==arealayerlabel)[0]
-    if len(idx_N)<minNneurons:
-        continue
-    datamat[iall,:]     = np.nanmean(sessions[ises].calciumdata.iloc[:,idx_N],axis=1)
-    # datamat[iall,:]     = np.nanmean(sessions[ises].calciumdata[:,idx_N],axis=1) / poprate
-
-clrs_arealayerlabels = sns.color_palette('tab10',nArealayerlabels)
-
-fig, axes = plt.subplots(1,1,figsize=(6,3))
-
-idx_T = np.arange(100,200) #take random stretch of timepoints
-# idx_T = np.arange(500,600) #take random stretch of timepoints
-
-ax = axes
-ax.plot(np.arange(len(idx_T))/sessions[ises].sessiondata['fs'][0],poprate[idx_T],color='k',linewidth=1.5)
-for iall,arealayerlabel in enumerate(arealayerlabels):
-    ax.plot(np.arange(len(idx_T))/sessions[ises].sessiondata['fs'][0],datamat[iall,idx_T],color=clrs_arealayerlabels[iall],linewidth=0.75)
-ax.legend(['poprate'] + list(arealayerlabels),loc='upper right',frameon=False,fontsize=8,ncol=3)
-ax.set_xlabel('Time (sec)')
-ax.set_ylabel('Population rate (normalized)')
-
-sns.despine(top=True,right=True,offset=3)
-#my_savefig(fig,savedir,'Poprate_Excertp_%s_%s' % ('_'.join(protocols),sessions[ises].session_id),formats=['png'])
-
-#%% 
-datamat_diff = datamat / (poprate[np.newaxis,:]+1e-8) #look at fluctuations relative to the total population
-
-corrmat     = np.corrcoef(datamat_diff)
-
-fig, axes = plt.subplots(1,1,figsize=(3,3))
-ax = axes
-ax.imshow(corrmat,cmap='RdBu_r',vmin=-1,vmax=1)
-ax.set_xticks(range(nArealayerlabels),labels=arealayerlabels,rotation=90)
-ax.set_yticks(range(nArealayerlabels),labels=arealayerlabels)
-cbar = fig.colorbar(ax.imshow(corrmat,cmap='RdBu_r',vmin=-1,vmax=1), ax=ax,shrink=0.5)
-cbar.set_label('Correlation')
-
-
-#%% 
-def plot_crosscorr_poppairs(crosscorr_data,timelags,arealayerlabels,pop_pairs,titles):
-    npop_pairs = len(pop_pairs)
-    fig,axes = plt.subplots(1,npop_pairs,figsize=(npop_pairs*3+1,3),sharey=True,sharex=True)
-    clrs = sns.color_palette('tab10',n_colors=16)
-
-    for i in range(npop_pairs):
-        ax = axes[i]
-        pop_pair_array = pop_pairs[i]
-        handles = []
-        for ipair,(ipop,jpop) in enumerate(pop_pair_array):
-            datatoplot = crosscorr_data[ipop,jpop]
-            # ax.plot(lags * 1/ses.sessiondata['fs'][0],np.nanmean(datatoplot,axis=-1),label='%s-%s' % (arealayerlabels[ipop],arealayerlabels[jpop]))
-            handles.append(shaded_error(timelags,datatoplot.T,ax=ax,error='sem',
-                        color=clrs[ipair],
-                        label='%s-%s' % (arealayerlabels[ipop],arealayerlabels[jpop])))    
-        ax.set_title(titles[i])
-        ax.set_xlabel('Lag (sec)')
-        ax.axhline(0,linestyle='--',color='k')
-        ax.axvline(0,linestyle='--',color='grey')
-        if i==0:
-            ax.set_ylabel('Correlation')
-        # ax.legend(bbox_to_anchor=(1.0, 1), loc='upper left', borderaxespad=-.1,frameon=False,fontsize=6)
-        ax.legend(loc='upper center', frameon=False,fontsize=6,ncol=2)
-        # ax.set_ylim(np.nanpercentile(datatoplot,[0,100]))
-        ax.set_xlim(np.percentile(timelags,[0,100]))
-
-    sns.despine(top=True,right=True,offset=3)
-    plt.tight_layout()
-    return fig
-
 #%% 
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tsa.api import VAR
+
+
+
+
+
+
+
 
 
 #%% Compute average rate for different populations: 

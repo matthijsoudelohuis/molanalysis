@@ -700,8 +700,6 @@ my_savefig(fig,savedir,'CrossArea_Spatial_Cov_XYZ_%dsessions_projpairs' % (nSess
  #####  #       ####### #     #    #    #     # #     # ####### #######  #####   #####  
 
 
-#%% 
-
 #%% Load all sessions from certain protocols: 
 # sessions,nSessions   = filter_sessions(protocols = ['SP','GR','IM','GN','RF'],filter_areas=['V1','PM']) 
 # sessions,nSessions   = filter_sessions(protocols = ['GR','GN'],filter_areas=['V1','PM']) 

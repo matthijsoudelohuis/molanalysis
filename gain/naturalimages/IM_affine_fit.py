@@ -387,41 +387,33 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting affine m
 #%% 
 radius = 500
 sessions = compute_pairwise_anatomical_distance(sessions)
+nrespbins = 10
 
 for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting affine model based on linear RF for each session'):
-
+    N = len(ses.celldata)
     ses.celldata['aff_r2_rfsplit']      = np.nan
     ses.celldata['aff_alpha_rfsplit']   = np.nan
     ses.celldata['aff_beta_rfsplit']    = np.nan
-    ses.celldata['aff_offset_rfsplit']    = np.nan
-
-    # valuedata are the correlation values, these are going to be binned
-    vdata           = ses.respmat[iN,:]
-
-    #First 2D binning: x is elevation, y is azimuth, 
-    xdata               = ses.Y_hat[iN,:]
-    ydata               = ses.poprate
-    
-    binedges_2d = np.percentile
-    #Take the sum of the correlations in each bin:
-    bin_2d   = binned_statistic_2d(x=xdata, y=ydata, values=vdata,bins=binedges_2d, statistic='mean')[0]
-                           
-
-    Y           = ses.Y
-
-    T           = ses.Y_hat
-
-    N           = ses.respmat.shape[0]
-
-    Y_hat       = np.full_like(ses.respmat, np.nan)
 
     for iN in range(N):
-    # for iN in range(10):
-        idx_N       = ses.distmat_xyz[iN,:] < radius
-        idx_N[iN]   = False
-        r           = np.nanmean(ses.respmat[idx_N,:], axis=0)
+    # for iN in range(100):
+        # idx_N       = ses.distmat_xyz[iN,:] < radius
+        # idx_N[iN]   = False
         # r           = np.nanmean(ses.respmat[idx_N,:], axis=0)
+        # # r           = np.nanmean(ses.respmat[idx_N,:], axis=0)
     
+        # valuedata are the correlation values, these are going to be binned
+        vdata           = zscore(ses.respmat[iN,:])
+
+        #First 2D binning: x is elevation, y is azimuth, 
+        xdata          = ses.Y_hat[iN,:]
+        ydata          = ses.poprate
+        
+        bins            = (np.percentile(xdata,np.linspace(0,100,nrespbins+1)),np.percentile(ydata,[0,50,100]))
+
+        #Take the sum of the correlations in each bin:
+        bin_2d      = binned_statistic_2d(x=xdata, y=ydata, values=vdata,bins=bins, statistic='mean')[0]
+
         y           = Y[iN,:]
         x           = T[iN,:]
         
@@ -430,19 +422,17 @@ for ises, ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting affine m
             # model_R2[modelversions.index(modelversion), iN] = np.nan
             # Y_hat[iN,:,modelversions.index(modelversion)] = np.nan
             continue
-        # Construct the design matrix
-        A = np.vstack([r * x, r, np.ones_like(y)]).T
+        
+        x = bin_2d[:,0]
+        y = bin_2d[:,1]
 
-        # Perform linear regression using least squares
-        coefs, residuals, rank, s = np.linalg.lstsq(A, y, rcond=None)
+        mask = ~np.isnan(x) & ~np.isnan(y)
+        slope, intercept, r_value, p_value, std_err = linregress(x[mask], y[mask])
 
         # Store the coefficients
-        [ses.celldata.loc[iN,'aff_alpha_rffull'], ses.celldata.loc[iN,'aff_beta_rffull'], 
-            ses.celldata.loc[iN,'aff_offset_rffull']] = coefs
+        [ses.celldata.loc[iN,'aff_alpha_rfsplit'], ses.celldata.loc[iN,'aff_beta_rfsplit'], 
+            ses.celldata.loc[iN,'aff_r2_rfsplit']] = [slope,intercept,r_value**2]
 
-        # Compute R^2 value
-        y_pred = A @ coefs
-        ses.celldata.loc[iN,'aff_r2_rffull'] = r2_score(y, y_pred)
     
 #%% Concatenate data:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
@@ -450,7 +440,69 @@ celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 #%% Show distribution of multiplicative and additive gain across sessions:
 # percthr = 50
 # bins = np.logspace(np.log10(0.1),np.log10(50),50)
-r2_thr = 0.1
+r2_thr = 0.3
+bins = np.linspace(0,4,50)
+fig,axes = plt.subplots(1,2,figsize=(6,3))
+ax = axes[0]
+idx_N = np.all((celldata['noise_level']<20,
+                    # celldata['roi_name']=='V1',
+                    # celldata['tuning_SNR']>0.2,
+                    celldata['aff_r2_rfsplit']>r2_thr,
+                    # celldata['pop_coupling']<np.percentile(celldata['pop_coupling'],100-percthr),
+                    # celldata['pop_coupling']>np.percentile(celldata['pop_coupling'],100-percthr),
+                    # ((celldata['VM_r2_low'] + celldata['VM_r2_high'])/2)>r2_thr,
+                    ),axis=0)
+sns.histplot(celldata['aff_alpha_rfsplit'][idx_N],color='green',element="step",stat="probability", 
+             common_norm=False,alpha=0.2,ax=ax,bins=bins)
+ax.axvline(1,color='k',ls='--')
+ax.plot(np.nanmean(celldata['aff_alpha_rfsplit'][idx_N]),0.1,markersize=10,
+        color='green',marker='v')
+ax.set_title('Multiplicative gain')
+ax.text(0.6,0.6,'N = %d\nneurons' % (np.sum(idx_N)),transform=ax.transAxes)
+
+bins = np.linspace(-0.3,1,50)
+ax = axes[1]
+sns.histplot(celldata['aff_beta_rfsplit'][idx_N],color='blue',element="step",stat="probability", 
+             common_norm=False,alpha=0.2,ax=ax,bins=bins)
+ax.set_title('Additive offset')
+plt.tight_layout()
+sns.despine(fig=fig,trim=True,offset=5,ax=ax)
+my_savefig(fig,savedir,'IM_affine_imsplit_naturalimages_%d_sessions' % (nSessions),formats=['png'])
+
+#%%
+r2_thr = 0
+fig,axes = plt.subplots(1,3,figsize=(9,3))
+idx_N = np.all((celldata['noise_level']<20,
+                    celldata['roi_name']=='V1',
+                    celldata['aff_r2_rfsplit']>r2_thr,
+                    celldata['aff_r2_rffull']>r2_thr,
+                    celldata['aff_r2_imreps']>r2_thr,
+                    # celldata['pop_coupling']<np.percentile(celldata['pop_coupling'],100-percthr),
+                    # celldata['pop_coupling']>np.percentile(celldata['pop_coupling'],100-percthr),
+                    ),axis=0)
+ax = axes[0]
+sns.scatterplot(data=celldata[idx_N],x='aff_alpha_rffull',y='aff_alpha_rfsplit',ax=ax,marker='.',color='black',alpha=0.1)
+ax = axes[1]
+sns.scatterplot(data=celldata[idx_N],x='aff_alpha_imreps',y='aff_alpha_rfsplit',ax=ax,marker='.',color='black',alpha=0.1)
+ax = axes[2]
+sns.scatterplot(data=celldata[idx_N],x='aff_alpha_imreps',y='aff_alpha_rffull',ax=ax,marker='.',color='black',alpha=0.1)
+plt.tight_layout()
+sns.despine(fig=fig,trim=True,offset=5,ax=ax)
+my_savefig(fig,savedir,'IM_affine_consistency_models_%d_sessions' % (nSessions),formats=['png'])
+
+#%% Show which model has the best R2 - not comparable though, because R2 of RFFull is explainging trial to trial variability,
+# not the response during high activiy
+fig,axes = plt.subplots(1,1,figsize=(3,3))
+ax = axes
+sns.histplot(data=celldata,x='aff_r2_rfsplit',ax=ax,color='green',element="step",stat="probability",alpha=0.2)
+sns.histplot(data=celldata,x='aff_r2_rffull',ax=ax,color='blue',element="step",stat="probability",alpha=0.2)
+sns.histplot(data=celldata,x='aff_r2_imreps',ax=ax,color='purple',element="step",stat="probability",alpha=0.2)
+ax.legend(['RFSPLIT','RFFULL','IMREPS'],loc='best',frameon=False)
+
+#%% Show distribution of multiplicative and additive gain across sessions:
+# percthr = 50
+# bins = np.logspace(np.log10(0.1),np.log10(50),50)
+r2_thr = 0.2
 bins = np.linspace(0,4,50)
 fig,axes = plt.subplots(1,2,figsize=(6,3))
 ax = axes[0]
@@ -462,21 +514,21 @@ idx_N = np.all((celldata['noise_level']<20,
                     # celldata['pop_coupling']>np.percentile(celldata['pop_coupling'],100-percthr),
                     # ((celldata['VM_r2_low'] + celldata['VM_r2_high'])/2)>r2_thr,
                     ),axis=0)
-sns.histplot(celldata['aff_alpha_imreps'][idx_N],color='green',element="step",stat="probability", 
+sns.histplot(celldata['aff_alpha_rffull'][idx_N],color='green',element="step",stat="probability", 
              common_norm=False,alpha=0.2,ax=ax,bins=bins)
 ax.axvline(1,color='k',ls='--')
-ax.plot(np.nanmean(celldata['aff_alpha_imreps'][idx_N]),0.1,markersize=10,
+ax.plot(np.nanmean(celldata['aff_alpha_rffull'][idx_N]),0.1,markersize=10,
         color='green',marker='v')
 ax.set_title('Multiplicative gain')
 ax.text(0.6,0.6,'N = %d\nneurons' % (np.sum(idx_N)),transform=ax.transAxes)
 
 bins = np.linspace(0,100,50)
 ax = axes[1]
-sns.histplot(celldata['aff_beta_imreps'][idx_N],color='blue',element="step",stat="probability", 
+sns.histplot(celldata['aff_beta_rffull'][idx_N],color='blue',element="step",stat="probability", 
              common_norm=False,alpha=0.2,ax=ax,bins=bins)
 ax.set_title('Additive offset')
 plt.tight_layout()
 sns.despine(fig=fig,trim=True,offset=5,ax=ax)
-my_savefig(fig,savedir,'IM_affine_imreps_naturalimages_%d_sessions' % (nSessions),formats=['png'])
+# my_savefig(fig,savedir,'IM_affine_imreps_naturalimages_%d_sessions' % (nSessions),formats=['png'])
 
 

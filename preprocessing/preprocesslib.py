@@ -1195,25 +1195,25 @@ def assign_layer(celldata):
     return celldata
 
 
-def assign_layer2(celldata):
+def assign_layer2(celldata,splitdepth=300):
     celldata['layer'] = ''
 
     layers = {
         'V1': {
-            'L2/3': (0, 300),
-            'L5': (300, np.inf)
+            'L2/3': (0, splitdepth),
+            'L5': (splitdepth, np.inf)
         },
         'PM': {
-            'L2/3': (0, 300),
-            'L5': (300, np.inf)
+            'L2/3': (0, splitdepth),
+            'L5': (splitdepth, np.inf)
         },
         'AL': {
-            'L2/3': (0, 300),
-            'L5': (300, np.inf)
+            'L2/3': (0, splitdepth),
+            'L5': (splitdepth, np.inf)
         },
         'RSP': {
-            'L2/3': (0, 300),
-            'L5': (300, np.inf)
+            'L2/3': (0, splitdepth),
+            'L5': (splitdepth, np.inf)
         }
     }
 

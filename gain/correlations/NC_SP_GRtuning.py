@@ -15,10 +15,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
-import statsmodels.formula.api as smf
 from sklearn.decomposition import FactorAnalysis as FA
+from statsmodels.formula.api import ols
 
-from loaddata.session_info import filter_sessions,load_sessions
+from loaddata.session_info import *
 from utils.plot_lib import * #get all the fixed color schemes
 from utils.corr_lib import *
 from utils.rf_lib import smooth_rf,exclude_outlier_rf,filter_nearlabeled,replace_smooth_with_Fsig
@@ -26,21 +26,19 @@ from utils.tuning import *
 from utils.gain_lib import * 
 
 savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\PairwiseCorrelations\\')
+calciumversion = 'dF'
 
 #%% ###### Load SP sessions: ###############################
 sessions,nSessions  = filter_sessions(protocols = ['SP'])
 sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
-calciumversion = 'dF'
-
 #%% 
 session_list        = np.array([['LPE11086_2024_01_05']])
 session_list        = np.array([['LPE12223_2024_06_10','LPE11086_2024_01_05']])
 
-
 #%%  Load data and transfer GR tuning to SP celldata info:      
 idx_ses             = np.zeros(len(sessiondata),dtype=bool)
-
+tuning_metrics      = ['OSI','gOSI','tuning_var','pref_ori','DSI']
 for ises in tqdm(range(nSessions),total=nSessions,desc='Transfer GR tuning info to SP celldata'):
     GRsessions,nGRsessions  = filter_sessions(protocols = ['GR'],only_session_id=[sessiondata['session_id'][ises]])
 
@@ -51,13 +49,15 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Transfer GR tuning info 
         GRsessions      = compute_tuning_wrapper(GRsessions)
         #Load SP data:
         sessions[ises].load_data(load_calciumdata=True,calciumversion=calciumversion)
-        #Transfer GR tuning info to SP celldata:
-        sessions[ises].celldata.update(GRsessions[0].celldata)
+
+        for metric in tuning_metrics:
+            sessions[ises].celldata[metric] = GRsessions[0].celldata[metric]
 
 #%% Keep only those SP sessions that have a corresponding GR session:
 sessions        = [ses for ises,ses in enumerate(sessions) if idx_ses[ises]]
 sessiondata     = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 nSessions       = len(sessions)
+report_sessions(sessions)
 
 #%% ##################### Compute pairwise neuronal distances: ##############################
 sessions        = compute_pairwise_anatomical_distance(sessions)
@@ -68,11 +68,12 @@ sessions        = compute_pairwise_anatomical_distance(sessions)
 #%% Compute trace correlations:
 sessions = compute_trace_correlation(sessions,binwidth=0.5,uppertriangular=False)
 
-
 #%% Compute noise correlations / covariance after subtracting X modes of covariance:
 areas = ['V1','PM']
 n_components = 20
 fa = FA(n_components=n_components)
+zthr = 3 # zscore threshold, remove outliers - Kohn and Smith, 2005, Ruff and Cohen, 2016 
+# import numpy.ma as ma
 
 # comps = np.array([0,1,2,3,4,5,6,7,8,9])
 comps = np.arange(1,n_components)
@@ -82,7 +83,9 @@ comps = np.arange(1,n_components)
 for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Computing noise correlations'):
     # Compute noise correlations from spontaneous activity:
     data                            = zscore(sessions[ises].calciumdata,axis=0)
+    data                            = np.clip(data,-zthr,zthr)
     sessions[ises].trace_corr       = np.corrcoef(data.T)
+
     fa.fit(data)
     data_T                          = fa.transform(data)
     data_hat                        = np.dot(data_T[:,comps], fa.components_[comps,:])       # Reconstruct data
@@ -172,7 +175,6 @@ plt.tight_layout()
 #%% #########################################################################################
 # Average correlations as a function of anatomical distance per difference in preferred orientation
 # for different percentiles of how strongly tuned neurons are
-
 areapairs = ['V1-V1','PM-PM']
 
 extremefrac     = 25
@@ -180,6 +182,9 @@ extremefrac     = 25
 tuning_metric   = 'gOSI'
 # corr_type       = 'noise_cov'
 corr_type       = 'trace_corr'
+
+# extremefrac     = 75
+# tuning_metric   = 'event_rate'
 
 # tuning_metric = 'tuning_var'
 dprefs          = np.arange(0,90+22.5,22.5)
@@ -189,7 +194,7 @@ bincenters      = (binedges[1:]+binedges[:-1])/2
 data            = np.full((nSessions,len(areapairs),len(dprefs),len(binedges)-1,3),np.nan) #for each session, combination of delta pref store the mean noise corr for all and for the top and bottom tuned percentages
 
 # fig = plt.subplots(1,3,figsize=(12,4))
-for ises in range(nSessions):
+for ises in tqdm(range(nSessions),total=nSessions,desc='Averaging correlations across sessions'):
     # sessions[ises].delta_pref = np.abs(np.subtract.outer(sessions[ises].celldata['pref_ori'].values,sessions[ises].celldata['pref_ori'].values))
 
     dpref = np.subtract.outer(sessions[ises].celldata['pref_ori'].to_numpy(),sessions[ises].celldata['pref_ori'].to_numpy())
@@ -230,8 +235,6 @@ for ises in range(nSessions):
             data[ises,iap,idpref,:,2] = binned_statistic(x=sessions[ises].distmat_xy[cellfilter].flatten(),
                                                 values=corrdata[cellfilter].flatten(),statistic='mean',bins=binedges)[0]
 
-#%% 
-from statsmodels.formula.api import ols
 
 #%% Show tuning and distance dependent trace correlations:
 clrs            = sns.color_palette('inferno_r', len(dprefs))
@@ -273,7 +276,7 @@ ax.set_xticks(np.arange(0,1000,100),np.arange(0,1000,100),rotation=45)
 ax.set_ylim([0,0.05])
 ax.set_xlim([0,np.max(bincenters)])
 plt.tight_layout()
-my_savefig(fig, savedir, 'NC_deltaXY_deltaOri_tuningperc_SP_%s' % (tuning_metric), formats = ['png'])
+# my_savefig(fig, savedir, 'NC_deltaXY_deltaOri_tuningperc_SP_%s' % (tuning_metric), formats = ['png'])
 # plt.savefig(os.path.join(savedir,'PairwiseCorrelations','NC_deltaOri_V1_tuningperc' + '.png'), format = 'png')
 
 
@@ -286,7 +289,7 @@ projpairs           = ' '
 rf_type             = 'F'
 # rf_type             = 'Fsmooth'
 corr_type           = 'trace_corr'
-corr_type           = 'noise_cov'
+# corr_type           = 'noise_cov'
 binresolution       = 10
 normalize           = False
 # normalize = True
@@ -300,14 +303,13 @@ bin_angle_surr_count_ses,binsangle] = bin_corr_deltarf_ses(sessions,rf_type=rf_t
                         areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
                         method='mean',filtersign=None,corr_type=corr_type,noise_thr=20,
                         binresolution=binresolution,normalize=normalize,absolute=absolute,
-                        shufflefield=shufflefield,r2_thr=0.0)
+                        shufflefield=shufflefield,r2_thr=0)
 
 #%% Plot radial tuning:
 fig = plot_corr_radial_tuning_areas_sessions(binsdRF,bin_dist_count_ses,bin_dist_mean_ses,
                                              areapairs,layerpairs,projpairs,min_counts=500)
 
 # my_savefig(fig,savedir,'RadialTuning_Areas_SP_%s' % (corr_type),formats = ['png'])
-
 
 
 #%% Loop over all delta preferred orientations and store mean correlations as well as distribution of pos and neg correlations:
@@ -327,10 +329,9 @@ deltaoris           = np.unique(sessions[0].delta_pref[~np.isnan(sessions[0].del
 # deltaoris           = np.array([0,22.5])
 ndeltaoris          = len(deltaoris)
 
-deltaori            = None
 rotate_prefori      = True
-tuned_thr           = 0.025
-# tuned_thr           = 25 #percentile of neurons with gOSI values above this value that are included
+# tuned_thr           = 0.025
+tuned_thr           = 50 #percentile of neurons with gOSI values above this value that are included
 rf_type             = 'F'
 corr_type           = 'trace_corr'
 # corr_type           = 'noise_cov'
@@ -342,7 +343,7 @@ binresolution       = 10
 bin_angle_cent_mean_ses,bin_angle_cent_count_ses,bin_angle_surr_mean_ses,
 bin_angle_surr_count_ses,bincenters_angle] = bin_corr_deltarf_ses(sessions,method='mean',areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
                             corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,
-                            r2_thr=1,deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+                            r2_thr=1,deltaori=None,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
 
 #Init output arrays:
 bin_2d_mean_oris_ses        = np.full((ndeltaoris,*np.shape(bin_2d_mean_ses)),np.nan)
@@ -374,6 +375,23 @@ for idOri,deltaori in enumerate(deltaoris):
                                                     method='mean',filtersign=None,areapairs=areapairs,layerpairs=layerpairs,
                                                     projpairs=projpairs,corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,
                                                     r2_thr=r2_thr,deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
+    [_,bin_2d_posf_oris_ses[idOri,:,:,:,:,:],_,
+     bin_dist_posf_oris_ses[idOri,:,:,:,:],_,_,
+     bin_angle_cent_posf_oris_ses[idOri,:,:,:,:],_,
+     bin_angle_surr_posf_oris_ses[idOri,:,:,:,:],_,_] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='pos',
+                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                                                    corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,
+                                                    r2_thr=r2_thr,deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
+    [_,bin_2d_negf_oris_ses[idOri,:,:,:,:,:],_,
+     bin_dist_negf_oris_ses[idOri,:,:,:,:],_,_,
+     bin_angle_cent_negf_oris_ses[idOri,:,:,:,:],_,
+     bin_angle_surr_negf_oris_ses[idOri,:,:,:,:],_,_] = bin_corr_deltarf_ses(sessions,method='frac',filtersign='neg',
+                                                    areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs,
+                                                    corr_type=corr_type,binresolution=binresolution,rotate_prefori=rotate_prefori,
+                                                    r2_thr=r2_thr,deltaori=deltaori,rf_type=rf_type,noise_thr=noise_thr,tuned_thr=tuned_thr)
+
 
 #%% Compute mean over sessions for each orientation
 bin_2d_count_oris = np.nansum(bin_2d_count_oris_ses,1)
@@ -418,8 +436,6 @@ bin_angle_surr_negf_oris = nanweightedaverage(bin_angle_surr_negf_oris_ses,weigh
 #%% Show radial tuning for each delta ori:
 fig = plot_corr_radial_tuning_dori(bincenters_dist,bin_dist_count_oris,bin_dist_mean_oris,deltaoris,	
                            areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
-# fig.savefig(os.path.join(savedir,'Collinear_Radial_Tuning_areas_%s_mean_SP' % (corr_type) + '.png'), format = 'png')
-my_savefig(fig,savedir,'Collinear_Radial_Tuning_areas_%s_mean_SP' % (corr_type), formats = ['png'])
 
 axes = fig.get_axes()
 #report stats: 
@@ -441,12 +457,21 @@ for iap,areapair in enumerate(areapairs):
     for itest,test in enumerate(result.index[:-1]):
         pval = result.loc[test,'PR(>F)']
         print('%s (F=%2.2f,p=%1.3f)' % (test,result.loc[test,'F'],pval))
-        ax.text(0.4,0.7-0.05*itest,'%s (F=%2.2f,p=%1.3f)' % (test,result.loc[test,'F'],pval),ha='center',va='center',
+        ax.text(0.4,0.2-0.05*itest,'%s (F=%2.2f,p=%1.3f)' % (test,result.loc[test,'F'],pval),ha='center',va='center',
                 transform=ax.transAxes,fontsize=5)
+        
+my_savefig(fig,savedir,'Collinear_Radial_Tuning_areas_%s_mean_SP' % (corr_type), formats = ['png'])
+
+#%% Show radial tuning for each delta ori:
+fig = plot_corr_radial_tuning_dori(bincenters_dist,bin_dist_count_oris,bin_dist_posf_oris,deltaoris,	
+                           areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
+
+fig = plot_corr_radial_tuning_dori(bincenters_dist,bin_dist_count_oris,bin_dist_negf_oris,deltaoris,	
+                           areapairs=areapairs,layerpairs=layerpairs,projpairs=projpairs)
 
 #%% 
 gaussian_sigma      = 1.2
-min_counts          = 500
+min_counts          = 250
 centerthr           = [20,20,20,20]
 
 #%% Show spatial maps per delta ori for the mean correlation
@@ -455,10 +480,14 @@ fig = plot_2D_mean_corr_dori(bin_2d_mean_oris,bin_2d_count_oris,bincenters_2d,de
 my_savefig(fig,savedir,'Collinear_DeltaRF_2D_areas_%s_mean_SP' % (corr_type), formats = ['png'])
 
 #%% Show spatial maps per delta ori for the mean correlation
-fig = plot_2D_mean_corr_dori(bin_2d_mean_oris,bin_2d_count_oris,bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
+fig = plot_2D_mean_corr_dori(bin_2d_posf_oris,bin_2d_count_oris,bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
                         projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap='magma')
-# my_savefig(fig,savedir,'Collinear_DeltaRF_2D_areas_%s_mean_SP' % (corr_type), formats = ['png'])
+my_savefig(fig,savedir,'Collinear_DeltaRF_2D_areas_%s_posf_SP' % (corr_type), formats = ['png'])
 
+#%% Show spatial maps per delta ori for the mean correlation
+fig = plot_2D_mean_corr_dori(bin_2d_negf_oris,bin_2d_count_oris,bincenters_2d,deltaoris,areapairs=areapairs,layerpairs=layerpairs,
+                        projpairs=projpairs,centerthr=centerthr,min_counts=min_counts,gaussian_sigma=gaussian_sigma,cmap='magma')
+my_savefig(fig,savedir,'Collinear_DeltaRF_2D_areas_%s_negf_SP' % (corr_type), formats = ['png'])
 
 #%% Compute collinear selectivity index:
 csi_cent_mean_oris =  collinear_selectivity_index(bin_angle_cent_mean_oris,bincenters_angle)
@@ -474,6 +503,5 @@ csi_surr_negf_oris =  collinear_selectivity_index(bin_angle_surr_negf_oris,bince
 #%% Plot the CSI values as function of delta ori for the three different areapairs
 # fig = plot_csi_deltaori_areas(csi_cent_mean_oris,csi_cent_posf_oris,csi_cent_negf_oris,deltaoris,areapairs)
 # fig.savefig(os.path.join(savedir,'Collinear_CSI_Cent_areas_%s' % (corr_type) + '.png'), format = 'png')
-
 fig = plot_csi_deltaori_areas(csi_surr_mean_oris,csi_surr_posf_oris,csi_surr_negf_oris,deltaoris,areapairs)
 fig.savefig(os.path.join(savedir,'Collinear_CSI_Surr_areas_%s' % (corr_type) + '.png'), format = 'png')

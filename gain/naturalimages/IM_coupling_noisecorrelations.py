@@ -169,3 +169,88 @@ cb.set_label('Noise correlation',fontsize=10,loc='center')
 sns.despine(fig=fig, top=True, right=True,offset=3)
 fig.tight_layout()
 my_savefig(fig,savedir,'IM_Signal_Coupling_Noise_correlation_%s' % (sessions[ises].session_id), formats = ['png'])
+
+
+
+## COPIED FROM GR: NEED TO ADAPT TO IM: !!!
+
+
+# #%% 
+# ises = 8
+# tunethr = 0.5
+
+# fig,axes = plt.subplots(1,2,figsize=(8,4))
+
+# # idx_N = np.outer(sessions[ises].celldata['gOSI']>tunethr,sessions[ises].celldata['gOSI']>tunethr)
+# idx_N = np.outer(sessions[ises].celldata['OSI']>tunethr,sessions[ises].celldata['OSI']>tunethr)
+# # idx_N = np.outer(sessions[ises].celldata['tuning_var']>0.1,sessions[ises].celldata['tuning_var']>0.1)
+# # idx_N = np.outer(sessions[ises].celldata['tuning_var']>0.1,sessions[ises].celldata['tuning_var']>0.1)
+
+# subsample = 100
+# ax = axes[0]
+# ax.scatter(sessions[ises].joint_coupling[idx_N].flatten()[::subsample],sessions[ises].noise_corr[idx_N].flatten()[::subsample],c='k',s=1)
+# ax.set_xlabel('Joint coupling')
+# ax.set_ylabel('Noise correlation')
+# ax.set_title('Population coupling vs noise correlation')
+
+# ax = axes[1]
+# ax.scatter(sessions[ises].sig_corr[idx_N].flatten()[::subsample],sessions[ises].noise_corr[idx_N].flatten()[::subsample],c='k',s=1)
+# ax.set_ylabel('Noise correlation')
+# ax.set_xlabel('Signal correlation')
+# ax.set_title('Signal corr vs noise correlation')
+
+# #%% 
+# # Get 2D binned map data: 
+# areapairs   = ['V1-V1','PM-PM','V1-PM']
+# nAreaPairs  = len(areapairs)
+# tunethr     = 0.5
+# x,y         = [np.linspace(-1,1,20),np.linspace(-0.15,0.5,20)] #be careful with x and y dimensions here! 
+# X,Y         = np.meshgrid(y,x)
+
+# data = np.empty((nSessions,nAreaPairs,len(x)-1,len(y)-1)) #for each session, combination of delta pref store the mean noise corr for all and for the top and bottom tuned percentages
+
+# for ises in range(nSessions):
+#     for iareapair,areapair in enumerate(areapairs):
+        
+#         areafilter      = filter_2d_areapair(sessions[ises],areapair)
+
+#         # tunefilter      = np.outer(sessions[ises].celldata['gOSI']>tunethr,sessions[ises].celldata['gOSI']>tunethr)
+#         tunefilter      = np.outer(sessions[ises].celldata['OSI']>tunethr,sessions[ises].celldata['OSI']>tunethr)
+#         # tunefilter      = np.outer(sessions[ises].celldata['tuning_var']>tunethr,sessions[ises].celldata['tuning_var']>tunethr)
+
+#         nanfilter         = np.all((~np.isnan(sessions[ises].sig_corr),
+#                                     ~np.isnan(sessions[ises].joint_coupling),
+#                                     ~np.isnan(sessions[ises].noise_corr),
+#                                               ),axis=0)
+
+#         cellfilter       = np.all((areafilter,tunefilter,nanfilter),axis=0)
+
+#         xdata = sessions[ises].sig_corr[cellfilter].flatten()
+#         ydata = sessions[ises].joint_coupling[cellfilter].flatten()
+#         vdata = sessions[ises].noise_corr[cellfilter].flatten()
+
+#         data[ises,iareapair,:,:] = binned_statistic_2d(xdata, ydata, vdata, statistic='mean', bins=[x,y], range=None)[0]
+
+# #%% 
+# cmaplim = 0.5
+# fig,axes = plt.subplots(1,nAreaPairs,figsize=(nAreaPairs*3,3))
+# for iareapair,areapair in enumerate(areapairs):
+#     ax = axes[iareapair]
+#     pcm = ax.pcolor(X,Y,np.nanmean(data[:,iareapair,:,:],axis=0),vmin=-cmaplim,vmax=cmaplim,cmap='bwr') #np.nanmean(data[:,iareapair,:,:],vmin=-0.7,vmax=0.7,cmap='bwr')
+#     ax.set_facecolor('gray')
+#     if iareapair==0: 
+#         ax.set_ylabel('Signal correlation')
+#     ax.set_xlabel('Joint coupling')
+#     ax.set_title('%s' % areapair)
+#     ax.axhline(0,c='k',lw=0.25,ls='--')
+#     ax.axvline(0,c='k',lw=0.25,ls='--')
+#     if iareapair==nAreaPairs-1:
+#         cb_ax = fig.add_axes([0.98, 0.5, 0.01, 0.3])
+#         cb = fig.colorbar(pcm, cax=cb_ax, shrink=0.5)
+#         cb.ax.tick_params(labelsize=7) 
+#         # cb.set_label('Noise correlation',fontsize=10,loc='center')
+#         # cb.set_label('Noise correlation',fontsize=6,loc='center')
+# sns.despine(fig=fig, top=True, right=True,offset=3)
+# fig.tight_layout()
+# my_savefig(fig,savedir,'IM_Signal_Coupling_NC_Areapairs_%dsessions' % (nSessions), formats = ['png'])
+

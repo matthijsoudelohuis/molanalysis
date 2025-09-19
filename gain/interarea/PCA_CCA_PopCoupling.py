@@ -21,7 +21,6 @@ from sklearn.impute import SimpleImputer
 from scipy.stats import zscore
 from sklearn.cross_decomposition import CCA
 
-
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.psth import compute_tensor,compute_respmat
 from utils.tuning import compute_tuning,compute_tuning_wrapper
@@ -44,6 +43,12 @@ sessions,nSessions   = filter_sessions(protocols = 'GR',only_session_id=session_
 #%% Load all GR sessions: 
 sessions,nSessions   = filter_sessions(protocols = 'GR')
 
+#%% Remove two sessions with too much drift in them:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
+
 #%%  Load data properly:        
 calciumversion = 'deconv'
 for ises in range(nSessions):
@@ -56,12 +61,6 @@ sessions = compute_tuning_wrapper(sessions)
 
 #%% Add how neurons are coupled to the population rate: 
 sessions = compute_pop_coupling(sessions)
-
-# #%% Add how neurons are coupled to the population rate: 
-# for ses in tqdm(sessions,desc='Computing population coupling for each session'):
-#     resp        = zscore(ses.respmat.T,axis=0)
-#     poprate     = np.mean(resp, axis=1)
-#     ses.celldata['pop_coupling']                          = [np.corrcoef(resp[:,i],poprate)[0,1] for i in range(len(ses.celldata))]
 
 #%% 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
@@ -465,4 +464,167 @@ ax.set_xlabel('CCA Dimension')
 ax.set_ylabel('Correlation')
 ax.legend(handles,couplinglabels,loc='upper right',reverse=True,fontsize=7,frameon=True,title='pop. coupling')
 sns.despine(top=True,right=True,offset=1,trim=True)
-my_savefig(fig,savedir,'CCA_V1PM_PopCoupling_testcorr_%dsessions' % (nSessions),formats=['png'])
+my_savefig(fig,savedir,'CCA_V1PM_PopCoupling_BothAreas_testcorr_%dsessions' % (nSessions),formats=['png'])
+
+
+#%% Are the CCA correlations higher for choristers or soloists to random population of neurons in the other area?
+kFold               = 5
+n_components        = 20
+nStim               = 16
+nmodelfits          = 5
+nsampleneurons      = 50
+# nsampleneurons      = 100
+maxnoiselevel       = 20
+nbins_popcoupling   = 5
+couplinglabels      = ['0-20%','20-40%','40-60%','60-80%','80-100%']
+areas               = np.array(['V1', 'PM'])
+nareas              = len(areas)
+CCA_corrtest        = np.full((nbins_popcoupling,nareas,n_components,nSessions,nStim),np.nan)
+# prePCA              = 25
+prePCA              = None
+
+#%% Fit:
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model'):    # iterate over sessions
+    binedges_popcoupling   = np.percentile(ses.celldata['pop_coupling'],np.linspace(0,100,nbins_popcoupling+1))
+    for iarea in range(nareas):
+        for ibin in range(nbins_popcoupling):
+            idx_areax           = np.where(np.all((ses.celldata['roi_name']==areas[iarea],
+                                            ses.celldata['pop_coupling']>binedges_popcoupling[ibin],
+                                            ses.celldata['pop_coupling']<binedges_popcoupling[ibin+1],
+                                            ses.celldata['noise_level']<maxnoiselevel),axis=0))[0]
+            idx_areay           = np.where(np.all((ses.celldata['roi_name']==areas[1-iarea],
+                                            # ses.celldata['pop_coupling']>binedges_popcoupling[ibin],
+                                            # ses.celldata['pop_coupling']<binedges_popcoupling[ibin+1],
+                                            ses.celldata['noise_level']<maxnoiselevel),axis=0))[0]
+                
+            if len(idx_areax)>nsampleneurons and len(idx_areay)>nsampleneurons:
+                # for istim,stim in tqdm(enumerate(np.unique(ses.trialdata['stimCond'])),total=nStim,desc='Fitting CCA model'):    # iterate over sessions
+                for istim,stim in enumerate(np.unique(ses.trialdata['stimCond'])): # loop over orientations
+                    idx_T               = ses.trialdata['stimCond']==stim
+                
+                    X                   = sessions[ises].respmat[np.ix_(idx_areax,idx_T)].T
+                    Y                   = sessions[ises].respmat[np.ix_(idx_areay,idx_T)].T
+                    
+                    [g,_] = CCA_subsample(X,Y,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=prePCA,
+                        n_components=np.min([n_components,nsampleneurons]))
+                    CCA_corrtest[ibin,iarea,:,ises,istim] = g
+
+                    # [g,_] = CCA_subsample_it(X,Y,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=prePCA,
+                    #                          n_components=np.min([n_components,nsampleneurons]))
+                    # CCA_corrtest[ibin,:,ises,istim] = g
+
+#%%
+clrs_couplingbins = sns.color_palette('magma',nbins_popcoupling)
+fig, axes = plt.subplots(1,2,figsize=(6,3))
+
+handles = []
+for iarea in range(nareas):
+    ax = axes[iarea]
+    for icpl in range(nbins_popcoupling):
+        # ax.plot(np.arange(n_components),np.nanmean(CCA_corrtest[iapl,:,:,:],axis=(1,2)),
+                # color=clrs_arealabelpairs[iapl],linewidth=2)
+        iapldata = CCA_corrtest[icpl,iarea,:,:,:].reshape(n_components,-1)
+        handles.append(shaded_error(x=np.arange(n_components),
+                                    y=iapldata.T,
+                                    # error='sem',color='k',alpha=0.3,ax=ax))
+                                    error='sem',color=clrs_couplingbins[icpl],alpha=0.3,ax=ax))
+    ax.set_xticks(np.arange(0,n_components+5,5))
+    ax.set_xticklabels(np.arange(0,n_components+5,5)+1)
+    ax.set_ylim([0,my_ceil(np.nanmax(np.nanmean(CCA_corrtest,axis=(1,3,4))),1)])
+    ax.set_yticks([0,ax.get_ylim()[1]/2,ax.get_ylim()[1]])
+    ax.set_xlabel('CCA Dimension')
+    if iarea==0:
+        ax.set_ylabel('Correlation')
+    ax.set_title('%s-%s' % (areas[iarea],areas[1-iarea]))
+    ax.legend(handles,couplinglabels,loc='upper right',reverse=True,fontsize=7,frameon=True,title='Pop. coupling in %s' % areas[iarea])
+plt.tight_layout()
+sns.despine(top=True,right=True,offset=1,trim=True)
+my_savefig(fig,savedir,'CCA_V1PM_PopCoupling_OneArea_testcorr_%dsessions' % (nSessions),formats=['png'])
+
+
+
+#%% Are the CCA correlations higher for choristers or soloists across areas?
+# IF you shuffle the trials, but sort them by population rate, does it still work?
+
+kFold               = 5
+n_components        = 20
+nStim               = 16
+nmodelfits          = 5
+nsampleneurons      = 50
+# nsampleneurons      = 100
+maxnoiselevel       = 20
+nbins_popcoupling   = 5
+couplinglabels      = ['0-20%','20-40%','40-60%','60-80%','80-100%']
+# couplinglabels      = ['0-33%','33-66%','66-100%']
+areas               = np.array(['V1', 'PM'])
+orders              = np.array(['Original','Poprate Sorted','Shuffled']) #last dim: original, sorted, shuffled
+CCA_corrtest        = np.full((nbins_popcoupling,n_components,nSessions,nStim,len(orders)),np.nan)
+prePCA              = 25
+# prePCA              = None
+
+#%% Fit:
+for ises,ses in tqdm(enumerate(sessions),total=nSessions,desc='Fitting CCA model'):    # iterate over sessions
+    binedges_popcoupling   = np.percentile(ses.celldata['pop_coupling'],np.linspace(0,100,nbins_popcoupling+1))
+    
+    #identify the population activity in the two areas for all trials by taking the mean z-scored activity
+    poprate_areax         = np.nanmean(zscore(ses.respmat,axis=1)[np.all((ses.celldata['roi_name']==areas[0],
+                                        ses.celldata['noise_level']<maxnoiselevel),axis=0),:],axis=0)
+    poprate_areay         = np.nanmean(zscore(ses.respmat,axis=1)[np.all((ses.celldata['roi_name']==areas[1],
+                                        ses.celldata['noise_level']<maxnoiselevel),axis=0),:],axis=0)
+    #Now loop over the population coupling bins and compute CCA between differently coupled neurons
+    for ibin in range(nbins_popcoupling):
+        idx_areax           = np.where(np.all((ses.celldata['roi_name']==areas[0],
+                                        ses.celldata['pop_coupling']>binedges_popcoupling[ibin],
+                                        ses.celldata['pop_coupling']<binedges_popcoupling[ibin+1],
+                                        ses.celldata['noise_level']<maxnoiselevel),axis=0))[0]
+        idx_areay           = np.where(np.all((ses.celldata['roi_name']==areas[1],
+                                        ses.celldata['pop_coupling']>binedges_popcoupling[ibin],
+                                        ses.celldata['pop_coupling']<binedges_popcoupling[ibin+1],
+                                        ses.celldata['noise_level']<maxnoiselevel),axis=0))[0]
+        
+        if len(idx_areax)>nsampleneurons and len(idx_areay)>nsampleneurons:
+            # for istim,stim in tqdm(enumerate(np.unique(ses.trialdata['stimCond'])),total=nStim,desc='Fitting CCA model'):    # iterate over sessions
+            for istim,stim in enumerate(np.unique(ses.trialdata['stimCond'])): # loop over orientations
+                idx_T               = ses.trialdata['stimCond']==stim
+            
+                X                   = sessions[ises].respmat[np.ix_(idx_areax,idx_T)].T
+                Y                   = sessions[ises].respmat[np.ix_(idx_areay,idx_T)].T
+                
+                [CCA_corrtest[ibin,:,ises,istim,0],_] = CCA_subsample(X,Y,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=prePCA,
+                    n_components=np.min([n_components,nsampleneurons]))
+                
+                X = X[np.argsort(poprate_areax[idx_T]),:]
+                Y = Y[np.argsort(poprate_areay[idx_T]),:]
+                [CCA_corrtest[ibin,:,ises,istim,1],_] = CCA_subsample(X,Y,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=prePCA,
+                    n_components=np.min([n_components,nsampleneurons]))
+
+                np.random.shuffle(Y)
+                [CCA_corrtest[ibin,:,ises,istim,2],_] = CCA_subsample(X,Y,nN=nsampleneurons,resamples=nmodelfits,kFold=kFold,prePCA=prePCA,
+                    n_components=np.min([n_components,nsampleneurons]))
+                
+#%% Make the figure: 
+clrs_couplingbins = sns.color_palette('magma',nbins_popcoupling)
+fig, axes = plt.subplots(1,3,figsize=(9,3))
+for iorder,order in enumerate(orders):
+    ax = axes[iorder]
+    handles = []
+
+    for icpl in range(nbins_popcoupling):
+        iapldata = CCA_corrtest[icpl,:,:,:,iorder].reshape(n_components,-1)
+        handles.append(shaded_error(x=np.arange(n_components),
+                                    y=iapldata.T,
+                                    # error='sem',color='k',alpha=0.3,ax=ax))
+                                    error='sem',color=clrs_couplingbins[icpl],alpha=0.3,ax=ax))
+    ax.set_xticks(np.arange(0,n_components+5,5))
+    ax.set_xticklabels(np.arange(0,n_components+5,5)+1)
+    ax.set_ylim([0,my_ceil(np.nanmax(np.nanmean(CCA_corrtest,axis=(2,3))),1)])
+    ax.set_yticks([0,ax.get_ylim()[1]/2,ax.get_ylim()[1]])
+    ax.set_xlabel('CCA Dimension')
+    ax.set_ylabel('Correlation')
+    ax.set_title(order)
+    ax.legend(handles,couplinglabels,loc='upper right',reverse=True,fontsize=7,frameon=True,title='pop. coupling')
+plt.tight_layout()
+sns.despine(top=True,right=True,offset=1,trim=True)
+my_savefig(fig,savedir,'CCA_V1PM_PopCoupling_BothAreas_rateordered_%dsessions' % (nSessions),formats=['png'])
+
+

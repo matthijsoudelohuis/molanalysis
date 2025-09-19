@@ -2706,7 +2706,7 @@ def plot_2D_mean_corr(bin_2d,bin_2d_count,bincenters_2d,areapairs=' ',layerpairs
 
 
 def plot_2D_mean_corr_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs=' ',layerpairs=' ',projpairs=' ',
-                      gaussian_sigma=0.8,centerthr=[15,15,15],min_counts=50,cmap='hot'):
+                      gaussian_sigma=0.8,centerthr=[15,15,15],min_counts=50,cmap='hot',perclim=2):
     #Definitions of azimuth, elevation and delta RF 2D space:
     delta_az,delta_el   = np.meshgrid(bincenters_2d,bincenters_2d)
     # delta_el,delta_az   = np.meshgrid(bincenters_2d,bincenters_2d)
@@ -2725,6 +2725,7 @@ def plot_2D_mean_corr_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs
     ilp = 0
     ipp = 0 
     for iap,areapair in enumerate(areapairs):
+        vmin = vmax = np.nan
         for idOri,deltaori in enumerate(deltaoris):
             ax                                              = axes[iap,idOri]
             data                                            = copy.deepcopy(bin_2d[idOri,:,:,iap,ilp,ipp])
@@ -2732,7 +2733,10 @@ def plot_2D_mean_corr_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs
             data                                            = gaussian_filter(data,sigma=[gaussian_sigma,gaussian_sigma])
             data[bin_2d_count[idOri,:,:,iap,ilp,ipp]<min_counts]     = np.nan
             # ax.imshow(data,vmin=np.nanpercentile(data,5),vmax=np.nanpercentile(data,95),cmap=cmap)
-            ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,5),vmax=np.nanpercentile(data,95),cmap=cmap)
+            # ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(data,5),vmax=np.nanpercentile(data,95),cmap=cmap)
+            vmin = np.nanmin([np.nanpercentile(data,perclim),vmin])
+            vmax = np.nanmax([np.nanpercentile(data,100-perclim),vmax])
+            ax.pcolor(delta_az,delta_el,data,vmin=vmin,vmax=vmax,cmap=cmap)
             # ax.pcolor(delta_az,delta_el,data,vmin=np.nanpercentile(bin_2d,10),vmax=np.nanpercentile(bin_2d,95),cmap=cmap)
             ax.set_facecolor('grey')
             ax.set_title('%s-%s deg' % (areapair, deltaori),c=clrs_areapairs[iap],fontsize=10)

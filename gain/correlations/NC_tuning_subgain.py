@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from statannotations.Annotator import Annotator
+from scipy.stats import binned_statistic_2d
 
 from loaddata.session_info import filter_sessions,load_sessions
 from utils.plot_lib import * #get all the fixed color schemes
@@ -25,7 +26,7 @@ from utils.tuning import *
 from utils.gain_lib import * 
 from scipy.stats import binned_statistic,binned_statistic_2d
 
-savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\')
+savedir = os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\NoiseCorrelations\\')
 
 #%% #############################################################################
 session_list        = np.array([['LPE10919_2023_11_06']])
@@ -39,6 +40,13 @@ session_list        = np.array([['LPE12223_2024_06_10'], #GR
 sessions,nSessions   = filter_sessions(protocols = ['GR'],only_session_id=session_list,filter_areas=['V1','PM']) 
 
 sessions,nSessions   = filter_sessions(protocols = ['GR'],filter_areas=['V1','PM']) 
+
+
+#%% Remove sessions with too much drift in them:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
 
 #%%  Load data properly:                      
 for ises in range(nSessions):
@@ -223,6 +231,12 @@ session_list        = np.array([['LPE10884_2023_10_20']])
 
 sessions,nSessions   = filter_sessions(protocols = ['GR'],only_session_id=session_list,filter_areas=['V1','PM']) 
 
+#%% Remove sessions with too much drift in them:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
+
 #%%  Load data properly:                      
 for ises in range(nSessions):
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
@@ -231,14 +245,14 @@ for ises in range(nSessions):
 #%% ########################### Compute tuning metrics: ###################################
 sessions        = compute_tuning_wrapper(sessions)
 
+#%% Add how neurons are coupled to the population rate: 
+sessions        = compute_pop_coupling(sessions)
+
+#%% ##################### Compute pairwise neuronal distances: ##############################
+sessions        = compute_pairwise_anatomical_distance(sessions)
+
 #%% ########################## Compute signal and noise correlations: ###################################
 sessions       = compute_signal_noise_correlation(sessions,filter_stationary=False,uppertriangular=False)
-
-#%% Show for neurons with different population coupling: 
-for ises,ses in enumerate(sessions):
-    data                = zscore(sessions[ises].respmat.T, axis=0)
-    poprate             = np.nanmean(data,axis=1)
-    sessions[ises].celldata['pop_coupling'] = [np.corrcoef(data[:,i],poprate)[0,1] for i in range(np.shape(data)[1])]
 
 #%% ########################## Compute joint coupling: ###################################
 for ises,ses in enumerate(sessions):
@@ -248,35 +262,36 @@ for ises,ses in enumerate(sessions):
 ises = 0
 plt.imshow(sessions[ises].joint_coupling,vmin=-0.1,vmax=0.2)
 
-#%% 
-from scipy.stats import binned_statistic_2d
 
 #%%
-resp_meanori,respmat_res        = mean_resp_gr(sessions[ises],trialfilter=None)
+for ises in range(nSessions):
+    resp_meanori,respmat_res        = mean_resp_gr(sessions[ises],trialfilter=None)
 
-sessions[ises].sig_corr         = np.corrcoef(resp_meanori)
-sessions[ises].noise_corr       = np.corrcoef(respmat_res)
+    sessions[ises].sig_corr         = np.corrcoef(resp_meanori)
+    sessions[ises].noise_corr       = np.corrcoef(respmat_res)
 
-[N,K]                           = np.shape(respmat_res) #get dimensions of response matrix
+    [N,K]                           = np.shape(respmat_res) #get dimensions of response matrix
 
-# #Compute signal correlation on separate halfs of trials:
-trialfilter                     = np.random.choice([True,False],size=(K),p=[0.5,0.5])
-resp_meanori1,_                 = mean_resp_gr(sessions[ises],trialfilter=trialfilter)
-resp_meanori2,_                 = mean_resp_gr(sessions[ises],trialfilter=~trialfilter)
-sessions[ises].sig_corr         = 0.5 * (np.corrcoef(resp_meanori1, resp_meanori2)[:N, N:] +
-                                np.corrcoef(resp_meanori2, resp_meanori1)[:N, N:])
+    # #Compute signal correlation on separate halfs of trials:
+    trialfilter                     = np.random.choice([True,False],size=(K),p=[0.5,0.5])
+    resp_meanori1,_                 = mean_resp_gr(sessions[ises],trialfilter=trialfilter)
+    resp_meanori2,_                 = mean_resp_gr(sessions[ises],trialfilter=~trialfilter)
+    sessions[ises].sig_corr         = 0.5 * (np.corrcoef(resp_meanori1, resp_meanori2)[:N, N:] +
+                                    np.corrcoef(resp_meanori2, resp_meanori1)[:N, N:])
 
-# plt.imshow(sessions[ises].sig_corr,vmin=-0.4,vmax=0.4)
-
-# np.where(sessions[ises].sig_corr==np.max(sessions[ises].sig_corr))
-np.fill_diagonal(sessions[ises].sig_corr,np.nan)
-np.fill_diagonal(sessions[ises].delta_pref,np.nan)
-np.fill_diagonal(sessions[ises].noise_corr,np.nan)
+    # np.where(sessions[ises].sig_corr==np.max(sessions[ises].sig_corr))
+    np.fill_diagonal(sessions[ises].sig_corr,np.nan)
+    np.fill_diagonal(sessions[ises].delta_pref,np.nan)
+    np.fill_diagonal(sessions[ises].noise_corr,np.nan)
 
 #%% 
-fig,axes = plt.subplots(1,3,figsize=(11,4))
+ises = 8
+tunethr = 0.5
 
-idx_N = np.outer(sessions[ises].celldata['gOSI']>0.4,sessions[ises].celldata['gOSI']>0.4)
+fig,axes = plt.subplots(1,2,figsize=(8,4))
+
+# idx_N = np.outer(sessions[ises].celldata['gOSI']>tunethr,sessions[ises].celldata['gOSI']>tunethr)
+idx_N = np.outer(sessions[ises].celldata['OSI']>tunethr,sessions[ises].celldata['OSI']>tunethr)
 # idx_N = np.outer(sessions[ises].celldata['tuning_var']>0.1,sessions[ises].celldata['tuning_var']>0.1)
 # idx_N = np.outer(sessions[ises].celldata['tuning_var']>0.1,sessions[ises].celldata['tuning_var']>0.1)
 
@@ -293,41 +308,78 @@ ax.set_ylabel('Noise correlation')
 ax.set_xlabel('Signal correlation')
 ax.set_title('Signal corr vs noise correlation')
 
-xdata = sessions[ises].sig_corr[idx_N].flatten()
-ydata = sessions[ises].joint_coupling[idx_N].flatten()
-vdata = sessions[ises].noise_corr[idx_N].flatten()
+#%% 
+# Get 2D binned map data: 
+areapairs   = ['V1-V1','PM-PM','V1-PM']
+nAreaPairs  = len(areapairs)
+tunethr     = 0.5
+x,y         = [np.linspace(-1,1,20),np.linspace(-0.15,0.5,20)] #be careful with x and y dimensions here! 
+X,Y         = np.meshgrid(y,x)
 
-shared_idx = ~np.isnan(xdata) & ~np.isnan(ydata) & ~np.isnan(vdata)
-xdata = xdata[shared_idx]
-ydata = ydata[shared_idx]
-vdata = vdata[shared_idx]
+data = np.empty((nSessions,nAreaPairs,len(x)-1,len(y)-1)) #for each session, combination of delta pref store the mean noise corr for all and for the top and bottom tuned percentages
 
-ax = axes[2]
-x,y = [np.linspace(-1,1,20),np.linspace(-0.15,0.38,20)] #be careful with x and y dimensions here! 
-X,Y = np.meshgrid(y,x)
-g = binned_statistic_2d(xdata, ydata, vdata, statistic='mean', bins=[x,y], range=None)[0]
-ax.pcolor(X,Y,g,vmin=-0.7,vmax=0.7,cmap='bwr')
-# ax.imshow(g,origin='lower',extent=[-1,1,-1,1],vmin=-0.8,vmax=0.8,cmap='bwr',)
-ax.set_facecolor('gray')
-ax.set_ylabel('Signal correlation')
-ax.set_xlabel('Joint coupling')
-ax.set_title('Joint influence on noise correlation')
-# cb = fig.colorbar(ax.images[0], ax=ax, shrink=0.5)
-# cb.set_label('Noise correlation',fontsize=10,loc='center')
+for ises in range(nSessions):
+    for iareapair,areapair in enumerate(areapairs):
+        
+        areafilter      = filter_2d_areapair(sessions[ises],areapair)
+
+        # tunefilter      = np.outer(sessions[ises].celldata['gOSI']>tunethr,sessions[ises].celldata['gOSI']>tunethr)
+        tunefilter      = np.outer(sessions[ises].celldata['OSI']>tunethr,sessions[ises].celldata['OSI']>tunethr)
+        # tunefilter      = np.outer(sessions[ises].celldata['tuning_var']>tunethr,sessions[ises].celldata['tuning_var']>tunethr)
+
+        nanfilter         = np.all((~np.isnan(sessions[ises].sig_corr),
+                                    ~np.isnan(sessions[ises].joint_coupling),
+                                    ~np.isnan(sessions[ises].noise_corr),
+                                              ),axis=0)
+
+        cellfilter       = np.all((areafilter,tunefilter,nanfilter),axis=0)
+
+        xdata = sessions[ises].sig_corr[cellfilter].flatten()
+        ydata = sessions[ises].joint_coupling[cellfilter].flatten()
+        vdata = sessions[ises].noise_corr[cellfilter].flatten()
+
+        data[ises,iareapair,:,:] = binned_statistic_2d(xdata, ydata, vdata, statistic='mean', bins=[x,y], range=None)[0]
+
+#%% 
+cmaplim = 0.5
+fig,axes = plt.subplots(1,nAreaPairs,figsize=(nAreaPairs*3,3))
+for iareapair,areapair in enumerate(areapairs):
+    ax = axes[iareapair]
+    pcm = ax.pcolor(X,Y,np.nanmean(data[:,iareapair,:,:],axis=0),vmin=-cmaplim,vmax=cmaplim,cmap='bwr') #np.nanmean(data[:,iareapair,:,:],vmin=-0.7,vmax=0.7,cmap='bwr')
+    ax.set_facecolor('gray')
+    if iareapair==0: 
+        ax.set_ylabel('Signal correlation')
+    ax.set_xlabel('Joint coupling')
+    ax.set_title('%s' % areapair)
+    ax.axhline(0,c='k',lw=0.25,ls='--')
+    ax.axvline(0,c='k',lw=0.25,ls='--')
+    if iareapair==nAreaPairs-1:
+        cb_ax = fig.add_axes([0.98, 0.5, 0.01, 0.3])
+        cb = fig.colorbar(pcm, cax=cb_ax, shrink=0.5)
+        cb.ax.tick_params(labelsize=7) 
+        # cb.set_label('Noise correlation',fontsize=10,loc='center')
+        # cb.set_label('Noise correlation',fontsize=6,loc='center')
 sns.despine(fig=fig, top=True, right=True,offset=3)
 fig.tight_layout()
-my_savefig(fig,savedir,'GR_Signal_Coupling_Noise_correlation_%s' % (sessions[ises].session_id), formats = ['png'])
+my_savefig(fig,savedir,'GR_Signal_Coupling_NC_Areapairs_%dsessions' % (nSessions), formats = ['png'])
+
+
+
+
+
+
+
+
+
 
 
 #%% 
-
 # plt.plot(data[idx_ses_2,:,0])
 
 idx_ses_1 = 3
 idx_ses_2 = 6
 
 alloris                            = np.sort(sessions[ises].trialdata['Orientation'].unique())
-
 
 oris1                           = sessions[idx_ses_1].trialdata['Orientation']
 poprate1                        = np.nanmean(zscore(sessions[idx_ses_1].respmat,axis=1),axis=0)
