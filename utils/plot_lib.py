@@ -699,6 +699,11 @@ def get_clr_area_pairs(areapairs):
                     'PM-V1' : sns.xkcd_rgb['peacock blue'],
                     'V1-PM' : sns.xkcd_rgb['orangered'],
                     'PM-PM' : sns.xkcd_rgb['barney'],
+                    'V1-AL' : sns.xkcd_rgb['scarlet'],
+                    'V1-RSP' : sns.xkcd_rgb['grape'],
+                    'PM-AL' : sns.xkcd_rgb['cerulean'],
+                    'PM-RSP' : sns.xkcd_rgb['violet'],
+                    'RSP-AL' : sns.xkcd_rgb['khaki'],
                     ' ' : sns.xkcd_rgb['black']}
     return itemgetter(*areapairs)(palette)
 

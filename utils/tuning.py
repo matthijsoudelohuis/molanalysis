@@ -100,13 +100,26 @@ def mean_resp_gn(ses,trialfilter=None):
 #     # #    #  #     #    #     #  #    ## #     #       #    #     # #    ##  #  #    ## #     # 
  #####  #     # #     #    #    ### #     #  #####        #     #####  #     # ### #     #  #####  
 
+
 def ori_remapping(sessions):
     for ises in range(len(sessions)):
         if sessions[ises].sessiondata['protocol'][0] == 'GR':
             if not 'Orientation_orig' in sessions[ises].trialdata.keys():
                 sessions[ises].trialdata['Orientation_orig']    = sessions[ises].trialdata['Orientation']
                 sessions[ises].trialdata['Orientation']         = np.mod(270 - sessions[ises].trialdata['Orientation'],360)
+            else: 
+                print('Orientation_orig already present')
+    # for ori in [0,90,180,270]:
+    #     print('Original: %s, Remapped: %s' % (ori, np.mod(270 - ori,360)))
     return sessions
+
+# def ori_remapping(sessions):
+#     for ises in range(len(sessions)):
+#         if sessions[ises].sessiondata['protocol'][0] == 'GR':
+#             if not 'Orientation_orig' in sessions[ises].trialdata.keys():
+#                 sessions[ises].trialdata['Orientation_orig']    = sessions[ises].trialdata['Orientation']
+#                 sessions[ises].trialdata['Orientation']         = np.mod(270 - sessions[ises].trialdata['Orientation'],360)
+#     return sessions
 
 def get_pref_orispeed(resp_mean,oris,speeds,asindex=True):
     

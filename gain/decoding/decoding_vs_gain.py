@@ -35,11 +35,19 @@ sessions[0].load_respmat(load_behaviordata=True, load_calciumdata=True,load_vide
 #%% 
 sessions,nSessions   = filter_sessions(protocols = 'GR',filter_areas=['V1'])
 
+#%% Remove sessions with too much drift in them:
+sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
+sessions            = [sessions[i] for i in sessions_in_list]
+nSessions           = len(sessions)
+
+
 #%%  Load data properly:                      
 for ises in range(nSessions):
     # sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,calciumversion='dF')
     sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
-                                calciumversion='deconv',keepraw=True)
+                                calciumversion='deconv',keepraw=False)
+                                # calciumversion='deconv',keepraw=True)
 
 #%%  Load data properly:                      
 ## Parameters for temporal binning
