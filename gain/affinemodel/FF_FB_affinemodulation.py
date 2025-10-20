@@ -10,6 +10,7 @@ from sklearn.preprocessing import minmax_scale
 from sklearn.metrics import r2_score
 from tqdm import tqdm
 from scipy.stats import linregress
+import statsmodels.formula.api as smf
 
 os.chdir('e:\\Python\\molanalysis')
 
@@ -209,6 +210,7 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Computing corr rates and
     # respdata            = zscore(sessions[ises].respmat_behavout, axis=1)
 
     respdata            = sessions[ises].respmat_behavout / sessions[ises].celldata['meanF'].to_numpy()[:,None]
+    # respdata            = sessions[ises].respmat_behavout / sessions[ises].celldata['meanF'].to_numpy()[:,None]
 
     # idx_nearby          = filter_nearlabeled(sessions[ises],radius=50)
 
@@ -263,8 +265,8 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Computing corr rates and
             idx_N2      = np.intersect1d(idx_N2,idx_sub)
         
         # meanpopact          = np.nanmean(respdata[idx_N1,:],axis=0) - np.nanmean(respdata[idx_N2,:],axis=0)
-
         meanpopact          = np.nanmean(respdata[idx_N1,:],axis=0)
+        # meanpopact          = np.nanmean(zscore(respdata[idx_N1,:],axis=1),axis=0)
 
         corrdata_confounds[ialp,ises,0]      = np.corrcoef(meanpopact,sessions[ises].respmat_runspeed)[0,1]
         corrdata_confounds[ialp,ises,1]      = np.corrcoef(meanpopact,sessions[ises].respmat_videome)[0,1]
@@ -340,6 +342,11 @@ for iN in tqdm(range(N),total=N,desc='Fitting gain for each neuron'):
         ydata = mean_resp_split[ialp,:,1,iN]
         data_gainregress[iN,ialp,:] = linregress(xdata,ydata)[:3]
 
+#%%
+# idx_sigN = corrsig_cells[0,:]==1
+# idx_sigN = corrsig_cells[0,:]==-1
+# plt.hist(corrdata_cells[0,idx_sigN].flatten())
+# corrsig_cells[ialp,idx_ses]==-1
 
 #%%
 plotdata = np.nanmean(corrdata_boot,axis=2)
@@ -508,8 +515,10 @@ sns.despine(fig=fig, top=True, right=True,offset=3)
 
 #%% 
 from scipy import stats
+clrs_arealabelpairs = ['green','purple']
+ticklabels = ['FF','FB']
 # clrs_arealabelpairs = sns.color_palette('pastel',narealabelpairs)
-fig,axes = plt.subplots(1,2,figsize=(6,3))
+fig,axes = plt.subplots(1,2,figsize=(4.5,3))
 for iparam in range(2):
     ax = axes[iparam]
     # idx_N = np.all(data_gainregress[:,:,2] > 0.3,axis=1)
@@ -520,37 +529,29 @@ for iparam in range(2):
                     # celldata['gOSI']>0.5,
                     # celldata['nearby'],
                     # np.any(corrsig_cells==1,axis=0),
+                    # np.any(corrsig_cells==-1,axis=0),
                     np.any(data_gainregress[:,:,2] > 0.5,axis=1),
                      ),axis=0)
-    # sns.stripplot(data=data_gainregress[idx_N,:,iparam],palette=clrs_arealabelpairs,
-    #             ax=ax)
     sns.barplot(data=data_gainregress[idx_N,:,iparam],palette=clrs_arealabelpairs,
                 ax=ax,estimator=np.nanmean,errorbar=('ci', 95))
-    # sns.barplot(data=np.abs(data_gainregress[idx_N,:,iparam]),palette=clrs_arealabelpairs,
-                # ax=ax,estimator=np.nanmean)
     if np.shape(data_gainregress)[1]==2:
         h,p = stats.ttest_ind(data_gainregress[idx_N,0,iparam],
                             data_gainregress[idx_N,1,iparam],nan_policy='omit')
+        p = p * narealabelpairs
         add_stat_annotation(ax, 0.2, 0.8, np.nanmean(data_gainregress[idx_N,:,iparam],axis=0).max()*1.1, p, h=0)
     elif np.shape(data_gainregress)[1]==4:
         for iidx,idx in enumerate([[0,2],[0,1],[2,3]]):
             h,p = stats.ttest_ind(data_gainregress[idx_N,idx[0],iparam],
                                 data_gainregress[idx_N,idx[1],iparam],nan_policy='omit')
+            p = p * narealabelpairs
             add_stat_annotation(ax, idx[0], idx[1], np.nanmean(data_gainregress[np.ix_(np.where(idx_N)[0],idx,[iparam])],axis=0).max()*1.2+iidx*0.01, p, h=0.001)
     
         # h,p = stats.ttest_ind(data_gainregress[idx_N,0,iparam],
         #                     data_gainregress[idx_N,2,iparam],nan_policy='omit')
         # add_stat_annotation(ax, 0, 2, np.nanmean(data_gainregress[idx_N,:,iparam],axis=0).max()*1.1, p, h=0.0)
  
-    ax.tick_params(labelsize=6,rotation=45)
-
-    # if iparam==1:
-    #     sns.barplot(data=np.abs(data_gainregress[idx_N,:,iparam]),palette=clrs_arealabelpairs,ax=ax)
-    # else: 
-    #     sns.barplot(data=data_gainregress[idx_N,:,iparam],palette=clrs_arealabelpairs,ax=ax)
-        # sns.barplot(data=np.abs(data_gainregress[idx_N,:,iparam]),palette=clrs_arealabelpairs,ax=ax)
-
-    ax.set_xticklabels(arealabelpairs)
+    ax.tick_params(labelsize=9,rotation=0)
+    ax.set_xticklabels(ticklabels)
     if iparam == 0:
         ax.set_title('Multiplicative')
     else:
@@ -558,7 +559,7 @@ for iparam in range(2):
 plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True,offset=3)
 # my_savefig(fig,savedir,'FF_FB_labeled_affinemodulation_barplot_GR%dsessions' % (nSessions), formats = ['png'])
-my_savefig(fig,savedir,'FF_FB_affinemodulation_barplot_GR%dsessions' % (nSessions), formats = ['png'])
+# my_savefig(fig,savedir,'FF_FB_affinemodulation_barplot_GR%dsessions' % (nSessions), formats = ['png'])
 # my_savefig(fig,savedir,'FF_FB_affinemodulation_sigN_barplot_GR%dsessions' % (nSessions), formats = ['png'])
 # my_savefig(fig,savedir,'FF_FB_affinemodulation_sigP_barplot_GR%dsessions' % (nSessions), formats = ['png'])
 
@@ -666,11 +667,176 @@ sns.despine(fig=fig, top=True, right=True,offset=3)
 # my_savefig(fig,savedir,'FF_FB_affinemodulation_popcoupling_%s_%dsessions' % (layerlabel,nSessions), formats = ['png'])
 
 
+######  #######  #####  ####### ######  ### #     #  #####  
+#     # #       #     # #     # #     #  #  ##    # #     # 
+#     # #       #       #     # #     #  #  # #   # #       
+#     # #####   #       #     # #     #  #  #  #  # #  #### 
+#     # #       #       #     # #     #  #  #   # # #     # 
+#     # #       #     # #     # #     #  #  #    ## #     # 
+######  #######  #####  ####### ######  ### #     #  #####  
+
+#%% 
+from utils.regress_lib import *
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 
 
+#%% Decoding orientation when the FF or FB activity is high or low:
 
+arealabelpairs  = [
+                    'V1lab-PMunlL2/3',
+                    # 'V1lab-V1unl-PMlabL2/3',
+                    # 'V1lab-V1unl-PMunlL5',
+                    # 'V1lab-V1unl-PMlabL5',
+                    'PMlab-V1unlL2/3',
+                    # 'PMlab-PMunl-V1labL2/3',
+                    ]
 
+narealabelpairs         = len(arealabelpairs)
 
+perc                = 20
+minnneurons         = 10
+maxnoiselevel       = 20
+
+nmodelfits          = 10
+nsampleneurons      = 25
+kfold               = 5
+# lam               = None
+lam                 = 0.05
+model_name          = 'SVM'
+scoring_type        = 'accuracy_score'
+
+error_cv = np.full((narealabelpairs,2,nSessions,nmodelfits),np.nan)
+
+for ises in tqdm(range(nSessions),total=nSessions,desc='Decoding across sessions'):
+    [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
+
+    # respdata            = sessions[ises].respmat_behavout / sessions[ises].celldata['meanF'].to_numpy()[:,None]
+    # data            = sessions[ises].respmat_behavout / sessions[ises].celldata['meanF'].to_numpy()[:,None]
+    # data            = sessions[ises].respmat
+    data            = sessions[ises].respmat_behavout / sessions[ises].celldata['meanF'].to_numpy()[:,None]
+
+    ori_ses     = sessions[ises].trialdata['Orientation']
+
+    # idx_nearby          = filter_nearlabeled(sessions[ises],radius=50)
+
+    for ialp,alp in enumerate(arealabelpairs):
+        idx_N1              = np.where(np.all((
+                                    sessions[ises].celldata['arealabel'] == alp.split('-')[0],
+                                    sessions[ises].celldata['noise_level']<maxnoiselevel,
+                                      ),axis=0))[0]
+        
+        # idx_N2              = np.where(np.all((sessions[ises].celldata['arealayerlabel'] == alp.split('-')[1],
+        #                               sessions[ises].celldata['noise_level']<maxnoiselevel,
+        #                               ),axis=0))[0]
+
+        idx_ses             = np.isin(celldata['session_id'],sessions[ises].celldata['session_id'][0])
+        idx_N2              = np.where(np.all((sessions[ises].celldata['arealayerlabel'] == alp.split('-')[1],
+                                    #   corrsig_cells[ialp,idx_ses]==1,
+                                      corrsig_cells[ialp,idx_ses]==-1,
+                                    #   corrsig_cells[ialp,idx_ses]==0,
+                                    #   np.any(corrsig_cells[:,idx_ses]!=1,axis=0),
+                                    #   np.any(corrsig_cells[:,idx_ses]==1,axis=0),
+                                      np.any(data_gainregress[idx_ses,:,2] > 0.5,axis=1),
+                                      sessions[ises].celldata['noise_level']<maxnoiselevel,
+                                      ),axis=0))[0]
+
+        if len(idx_N1) < minnneurons or len(idx_N2) < nsampleneurons:
+            continue
+        
+        if lam is None:
+            y = ori_ses
+            label_encoder = LabelEncoder()
+            y = label_encoder.fit_transform(y.ravel())  # Convert to 1D array
+            X = data.T
+            X,y,_ = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+            lam = find_optimal_lambda(X,y,model_name=model_name,kfold=kfold)
+
+        # meanpopact          = np.nanmean(zscore(data[idx_N1,:],axis=1),axis=0)
+        meanpopact          = np.nanmean(data[idx_N1,:],axis=0)
+        
+        # meanpopact2          = np.nanmean(data[idx_N2,:],axis=0)
+        # plt.scatter(meanpopact,meanpopact2)
+        # plt.plot([0,1],[0,1],transform=ax.transAxes)
+
+        # compute index for trials with low and high activity in the other labeled pop
+        idx_K1            = []
+        idx_K2            = []
+        ori_ses             = sessions[ises].trialdata['Orientation']
+        oris                = np.unique(ori_ses)
+        for i,ori in enumerate(oris):
+            idx_T               = ori_ses == ori
+            idx_K1.append(list(np.where(np.logical_and(idx_T,meanpopact < np.nanpercentile(meanpopact[ori_ses == ori],perc)))[0]))
+            idx_K2.append(list(np.where(np.logical_and(idx_T,meanpopact > np.nanpercentile(meanpopact[ori_ses == ori],100-perc)))[0]))
+        
+        idx_K1 = np.array(idx_K1).flatten()
+        idx_K2 = np.array(idx_K2).flatten()
+
+        for imf in range(nmodelfits):
+            idx_N_sub = np.random.choice(idx_N2,nsampleneurons,replace=False)
+            X = data[np.ix_(idx_N_sub,idx_K1)].T
+            y = ori_ses[idx_K1]
+            label_encoder = LabelEncoder()
+            y = label_encoder.fit_transform(y.ravel())  # C
+            X,y,_ = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+
+            error_cv[ialp,0,ises,imf],_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,scoring_type=scoring_type,
+                                                                lam=lam,norm_out=False,subtract_shuffle=False)
+            
+            X = data[np.ix_(idx_N_sub,idx_K2)].T
+            y = ori_ses[idx_K2]
+            label_encoder = LabelEncoder()
+            y = label_encoder.fit_transform(y.ravel())  # C
+            X,y,_ = prep_Xpredictor(X,y) #zscore, set columns with all nans to 0, set nans to 0
+            error_cv[ialp,1,ises,imf],_,_,_   = my_decoder_wrapper(X,y,model_name=model_name,kfold=kfold,scoring_type=scoring_type,
+                                                                lam=lam,norm_out=False,subtract_shuffle=False)
+         
+
+#%%
+axtitles = np.array(['Feedforward','Feedback']) 
+fig,axes = plt.subplots(1,2,figsize=(5,3),sharey=True)
+for ialp,alp in enumerate(arealabelpairs):
+    ax = axes[ialp]
+    data = np.nanmean(error_cv[ialp,:,:,:],axis=2)
+    sns.stripplot(data.T,palette=['grey','red'],alpha=0.5,ax=ax,jitter=0.1)
+    sns.barplot(data.T,palette=['grey','red'],alpha=0.5,ax=ax)
+    sns.lineplot(data,palette=sns.color_palette(['grey'],nSessions),alpha=0.5,ax=ax,legend=False,
+                linewidth=2,linestyle='-')
+
+    ax.axhline(1/16,linestyle='--',color='k',alpha=0.5)
+    ax.text(0.5,1/16+0.05,'Chance',fontsize=10,ha='center',va='center')
+    ax.set_ylim([0,1])
+    ax.set_title(axtitles[ialp],fontsize=12,)
+    ax.set_xticks([0,1],labels=['Low','High'])
+    if ialp == 0:
+        ax.set_ylabel('Decoding Performance')
+    else:
+        ax.set_ylabel('')
+
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True,offset=3)
+
+#Statistics:
+testdata    = np.nanmean(error_cv,axis=3) #average over modelfits
+df = pd.DataFrame({'perf': testdata.flatten(),
+                   'act': np.repeat(np.tile(np.arange(2),2),nSessions),
+                   'area': np.repeat(np.arange(2),2*nSessions),
+                   'session_id': np.tile(np.arange(nSessions),2*2)
+                   })
+df.dropna(inplace=True)
+
+model     = smf.mixedlm("perf ~ act * area", data=df,groups=df["session_id"])
+result    = model.fit(reml=False)
+print(result.summary())
+# my_savefig(fig,savedir,'Decoding_Ori_FF_FB_LowHigh_%dsessions' % nSessions, formats = ['png'])
+# my_savefig(fig,savedir,'Decoding_Ori_FF_FB_LowHigh_SigP_%dsessions' % nSessions, formats = ['png'])
+# my_savefig(fig,savedir,'Decoding_Ori_FF_FB_LowHigh_SigN_%dsessions' % nSessions, formats = ['png'])
+
+#%% 
+
+#Comments: the interaction effect between FF and FB on decoding 
+# is there if in the first part the deconv/F0 is chosen for meanpopact in population 1
+# but then in the second half for the decoding you work with respmat original
+# This is confounding with the behavioral data again. So need to fix this... 
 
 
 
