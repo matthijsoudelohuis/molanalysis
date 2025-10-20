@@ -103,12 +103,17 @@ def mean_resp_gn(ses,trialfilter=None):
 
 def ori_remapping(sessions):
     for ises in range(len(sessions)):
-        if sessions[ises].sessiondata['protocol'][0] == 'GR':
-            if not 'Orientation_orig' in sessions[ises].trialdata.keys():
+        if not 'Orientation_orig' in sessions[ises].trialdata.keys():
+            if sessions[ises].sessiondata['protocol'][0]  in 'GR':
                 sessions[ises].trialdata['Orientation_orig']    = sessions[ises].trialdata['Orientation']
                 sessions[ises].trialdata['Orientation']         = np.mod(270 - sessions[ises].trialdata['Orientation'],360)
-            else: 
-                print('Orientation_orig already present')
+            elif sessions[ises].sessiondata['protocol'][0]  in 'GN':
+                sessions[ises].trialdata['Orientation_orig']    = sessions[ises].trialdata['Orientation']
+                sessions[ises].trialdata['Orientation']         = np.mod(270 - sessions[ises].trialdata['Orientation'],360)
+                sessions[ises].trialdata['centerOrientation_orig']      = sessions[ises].trialdata['centerOrientation']
+                sessions[ises].trialdata['centerOrientation']         = np.mod(270 - sessions[ises].trialdata['centerOrientation'],360)
+        else: 
+            print('Orientation_orig already present')
     # for ori in [0,90,180,270]:
     #     print('Original: %s, Remapped: %s' % (ori, np.mod(270 - ori,360)))
     return sessions
@@ -406,7 +411,7 @@ def compute_tuning_wrapper(sessions):
             resp_mean,resp_res      = mean_resp_gn(sessions[ises])
             sessions[ises].celldata['tuning_var'] = compute_tuning_var(resp_mat=sessions[ises].respmat,resp_res=resp_res)
             oris, speeds    = [np.unique(sessions[ises].trialdata[col]).astype('int') for col in ('centerOrientation', 'centerSpeed')]
-            sessions[ises].celldata['pref_ori'],sessions[ises].celldata['pref_speed'] = get_pref_orispeed(resp_mean,oris,speeds)
+            sessions[ises].celldata['pref_ori'],sessions[ises].celldata['pref_speed'] = get_pref_orispeed(resp_mean,oris,speeds,asindex=False)
 
 
     return sessions

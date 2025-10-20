@@ -1306,7 +1306,7 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                 if rotate_prefori: 
                     for iN in range(len(celldata)):
                         # ori_rots            = celldata['pref_ori'][iN]
-                        ori_rots            = np.tile(celldata['pref_ori'][iN],len(celldata))
+                        ori_rots            = 360 - np.tile(celldata['pref_ori'][iN],len(celldata))
                         angle_vec           = np.vstack((delta_el[iN,:], delta_az[iN,:]))
                         angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots) 
                         delta_el[iN,:]      = angle_vec_rot[0,:]
@@ -1339,7 +1339,7 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
 
                 proxfilter      = ~(sessions[ises].distmat_xy<min_dist)
 
-                assert sum([deltaori is not None, centerori is not None, surroundori is not None]) <= 1, 'at maximum one of deltaori, centerori, or surroundori can be not None'
+                # assert sum([deltaori is not None, centerori is not None, surroundori is not None]) <= 1, 'at maximum one of deltaori, centerori, or surroundori can be not None'
                 
                 if centerori is not None:
                     centerorifilter = np.tile(celldata['pref_ori']== centerori,(len(celldata),1)).T
@@ -1380,7 +1380,6 @@ def bin_corr_deltarf_ses(sessions,method='mean',areapairs=' ',layerpairs=' ',pro
                             layerfilter     = filter_2d_layerpair(sessions[ises],layerpair)
 
                             projfilter      = filter_2d_projpair(sessions[ises],projpair)
-
                             #Combine all filters into a single filter:
                             cellfilter      = np.all((rffilter,signalfilter,tuningfilter,areafilter,nearfilter,corrsignfilter,
                                                 layerfilter,projfilter,proxfilter,nanfilter,
@@ -1547,7 +1546,7 @@ def bin_corr_deltarf_ses_vkeep(sessions,method='mean',areapairs=' ',layerpairs='
                 if rotate_prefori: 
                     for iN in range(len(celldata)):
                         # ori_rots            = celldata['pref_ori'][iN]
-                        ori_rots            = np.tile(celldata['pref_ori'][iN],len(celldata))
+                        ori_rots            = 360 - np.tile(celldata['pref_ori'][iN],len(celldata))
                         angle_vec           = np.vstack((delta_el[iN,:], delta_az[iN,:]))
                         angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots) 
                         # angle_vec_rot       = apply_ori_rot(angle_vec,ori_rots + 90) #90 degrees is added to make collinear horizontal, incorrect
@@ -2365,10 +2364,10 @@ def plot_corr_radial_tuning_dori(binsdRF,bin_dist_count,bin_dist_data,deltaoris,
 
 
 def plot_corr_radial_tuning_projs_dori(binsdRF,bin_dist_count,bin_dist_data,deltaoris,	
-                           areapairs=' ',layerpairs=' ',projpairs=' '):
+                           areapairs=' ',layerpairs=' ',projpairs=' ',min_counts=50):
     bin_dist_error = np.full(bin_dist_count.shape,0.08) / bin_dist_count**0.5
-    bin_dist_data[bin_dist_count<50] = np.nan
-    bin_dist_error[bin_dist_count<50] = 0
+    bin_dist_data[bin_dist_count<min_counts] = np.nan
+    bin_dist_error[bin_dist_count<min_counts] = 0
     
     if np.max(binsdRF)>100:
         xylim               = 250
@@ -2470,7 +2469,7 @@ def plot_corr_center_tuning_projs_dori(binsdRF,bin_dist_count_oris,bin_dist_mean
 def plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
                             binsdRF,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,	
                            areapairs=' ',layerpairs=' ',projpairs=' '):
-    delta_x,delta_y   = np.meshgrid(bincenters_2d,-bincenters_2d)
+    delta_x,delta_y   = np.meshgrid(bincenters_2d,bincenters_2d)
 
     min_counts          = 200
     xy_min              = 10
@@ -2545,7 +2544,7 @@ def plot_mean_frac_corr_areas(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf
 def plot_mean_frac_corr_projs(bincenters_2d,bin_2d_count,bin_2d_mean,bin_2d_posf,bin_2d_negf,
                             binsdRF,bin_dist_count,bin_dist_mean,bin_dist_posf,bin_dist_negf,	
                            areapairs=' ',layerpairs=' ',projpairs=' '):
-    delta_x,delta_y   = np.meshgrid(bincenters_2d,-bincenters_2d)
+    delta_x,delta_y   = np.meshgrid(bincenters_2d,bincenters_2d)
 
     min_counts          = 200
 
@@ -2670,7 +2669,7 @@ def plot_mean_corr_layers(binsdRF,bin_dist_count,bin_dist_mean,
 def plot_2D_mean_corr(bin_2d,bin_2d_count,bincenters_2d,areapairs=' ',layerpairs=' ',projpairs=' ',
                       gaussian_sigma=0.8,centerthr=[15,15,15],min_counts=50,cmap='hot'):
     #Definitions of azimuth, elevation and delta RF 2D space:
-    delta_az,delta_el   = np.meshgrid(bincenters_2d,-bincenters_2d)
+    delta_az,delta_el   = np.meshgrid(bincenters_2d,bincenters_2d)
     # angle_rf        = np.mod(np.arctan2(delta_az,delta_el)+np.pi/2,np.pi*2)
 
     deglim              = 60
@@ -2712,11 +2711,11 @@ def plot_2D_mean_corr(bin_2d,bin_2d_count,bincenters_2d,areapairs=' ',layerpairs
 
 
 def plot_2D_mean_corr_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs=' ',layerpairs=' ',projpairs=' ',
-                      gaussian_sigma=0.8,centerthr=[15,15,15],min_counts=50,cmap='hot',perclim=2):
+                      gaussian_sigma=0.8,centerthr=20,min_counts=50,cmap='hot',perclim=2):
     #Definitions of azimuth, elevation and delta RF 2D space:
-    delta_az,delta_el   = np.meshgrid(bincenters_2d,-bincenters_2d)
+    delta_az,delta_el   = np.meshgrid(bincenters_2d,bincenters_2d)
     # delta_el,delta_az   = np.meshgrid(bincenters_2d,bincenters_2d)
-    # delta_az,delta_el   = np.meshgrid(bincenters_2d,-bincenters_2d)
+    # delta_az,delta_el   = np.meshgrid(bincenters_2d,bincenters_2d)
     
     deglim              = 60
     clrs_areapairs      = get_clr_area_pairs(areapairs)
@@ -2745,8 +2744,8 @@ def plot_2D_mean_corr_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs
             vmin = np.nanpercentile(data,perclim)
             vmax = np.nanpercentile(data,100-perclim)
 
-            # vmin = -0.01
-            # vmax = 0.01
+            # vmin = 0.03
+            # vmax = 0.07
             # vmin = np.nanmin([np.nanpercentile(data,perclim),vmin])
             # vmax = np.nanmax([np.nanpercentile(data,100-perclim),vmax])
 
@@ -2758,22 +2757,22 @@ def plot_2D_mean_corr_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs
             ax.set_ylim([-deglim,deglim])
             ax.set_ylabel(u'Δ deg Orthogonal')
             ax.set_xlabel(u'Δ deg Collinear')
-            circle=plt.Circle((0,0),centerthr[iap], color='white', fill=False,linestyle='--',linewidth=1)
+            circle=plt.Circle((0,0),centerthr, color='white', fill=False,linestyle='--',linewidth=1)
             ax.add_patch(circle)
             
-            # basis = np.sqrt(centerthr[iap]**2/2)
-            # ax.plot([basis,deglim],[basis,deglim],color='white',linestyle='--',linewidth=1)
-            # ax.plot([-basis,-deglim],[-basis,-deglim],color='white',linestyle='--',linewidth=1)
-            # ax.plot([-basis,-deglim],[basis,deglim],color='white',linestyle='--',linewidth=1)
-            # ax.plot([basis,deglim],[-basis,-deglim],color='white',linestyle='--',linewidth=1)
+            basis = np.sqrt(centerthr**2/2)
+            ax.plot([basis,deglim],[basis,deglim],color='white',linestyle='--',linewidth=1)
+            ax.plot([-basis,-deglim],[-basis,-deglim],color='white',linestyle='--',linewidth=1)
+            ax.plot([-basis,-deglim],[basis,deglim],color='white',linestyle='--',linewidth=1)
+            ax.plot([basis,deglim],[-basis,-deglim],color='white',linestyle='--',linewidth=1)
 
     plt.tight_layout()
     return fig
 
 def plot_2D_mean_corr_projs_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,areapairs=' ',layerpairs=' ',projpairs=' ',
-                      gaussian_sigma=0.8,centerthr=[15,15,15],min_counts=50,cmap='hot',perclim=2):
+                      gaussian_sigma=0.8,centerthr=20,min_counts=50,cmap='hot',perclim=2):
     #Definitions of azimuth, elevation and delta RF 2D space:
-    delta_az,delta_el   = np.meshgrid(bincenters_2d,-bincenters_2d)
+    delta_az,delta_el   = np.meshgrid(bincenters_2d,bincenters_2d)
 
     deglim              = 60
     clrs_projpairs = get_clr_labelpairs(projpairs)
@@ -2800,13 +2799,13 @@ def plot_2D_mean_corr_projs_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,are
             ax.set_ylim([-deglim,deglim])
             ax.set_ylabel(u'Δ deg Orthogonal')
             ax.set_xlabel(u'Δ deg Collinear')
-            circle=plt.Circle((0,0),centerthr[iap], color='white', fill=False,linestyle='--',linewidth=1)
+            circle=plt.Circle((0,0),centerthr, color='white', fill=False,linestyle='--',linewidth=1)
             ax.add_patch(circle)
-            # basis = np.sqrt(centerthr[iap]**2/2)
-            # ax.plot([basis,deglim],[basis,deglim],color='white',linestyle='--',linewidth=1)
-            # ax.plot([-basis,-deglim],[-basis,-deglim],color='white',linestyle='--',linewidth=1)
-            # ax.plot([-basis,-deglim],[basis,deglim],color='white',linestyle='--',linewidth=1)
-            # ax.plot([basis,deglim],[-basis,-deglim],color='white',linestyle='--',linewidth=1)
+            basis = np.sqrt(centerthr**2/2)
+            ax.plot([basis,deglim],[basis,deglim],color='white',linestyle='--',linewidth=1)
+            ax.plot([-basis,-deglim],[-basis,-deglim],color='white',linestyle='--',linewidth=1)
+            ax.plot([-basis,-deglim],[basis,deglim],color='white',linestyle='--',linewidth=1)
+            ax.plot([basis,deglim],[-basis,-deglim],color='white',linestyle='--',linewidth=1)
 
     plt.tight_layout()
     return fig
@@ -2832,14 +2831,21 @@ def plot_2D_mean_corr_projs_dori(bin_2d,bin_2d_count,bincenters_2d,deltaoris,are
 
 
 # Compute collinear selectivity index:
-def collinear_selectivity_index(data,bincenters_angle):
+def collinear_selectivity_index(data,bincenters_angle,counts,min_counts=50):
     dim                 = np.where(np.array(data.shape) == len(bincenters_angle))[0][0]
     
+    data = copy.deepcopy(data)
+    data[counts<min_counts] = np.nan
+
     collineardata       = np.nanmean(np.take(data,np.where(np.mod(bincenters_angle,np.pi)<=np.pi/4)[0],axis=dim),axis=dim)
     perpendiculardata   = np.nanmean(np.take(data,np.where(np.mod(bincenters_angle,np.pi)>np.pi/4)[0],axis=dim),axis=dim)
-
+# 
     CSI                 = (collineardata - perpendiculardata) / (collineardata + perpendiculardata)
     CSI                 = np.clip(CSI,a_min=-1,a_max=1)
+    # CSI[CSI<-1]         = np.nan
+    # CSI[CSI>1]         = np.nan
+    # CSI                 = np.clip(CSI,a_min=-1,a_max=1)
+    # CSI                 = np.clip(CSI,a_min=-1,a_max=1)
     # CSI             = collineardata - perpendiculardata
     
     return CSI
@@ -2862,9 +2868,12 @@ def collinear_selectivity_index(data,bincenters_angle):
 # return CSI
 
 # Compute retinotopic alignment index:
-def retinotopic_alignment_index(data,bincenters_dist,centerthr=20):
+def retinotopic_alignment_index(data,bincenters_dist,counts,min_counts=50,centerthr=20):
     dim             = np.where(np.array(data.shape) == len(bincenters_dist))[0][0]
     
+    data = copy.deepcopy(data)
+    data[counts<min_counts] = np.nan
+
     centerdata      = np.nanmean(np.take(data,np.where(bincenters_dist<=centerthr)[0],axis=dim),axis=dim)
     surrdata        = np.nanmean(np.take(data,np.where(bincenters_dist>=centerthr)[0],axis=dim),axis=dim)
 
@@ -2876,18 +2885,41 @@ def retinotopic_alignment_index(data,bincenters_dist,centerthr=20):
 
 
 def plot_csi_deltaori_areas_ses(csi_mean,csi_pos,csi_neg,deltaoris,areapairs):
-    fig,axes = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*2.5,2),sharex=True,sharey=True)
+    fig,axes = plt.subplots(1,len(areapairs),figsize=(len(areapairs)*2.5,3),sharex=True,sharey=True)
     clrs_areapairs = get_clr_area_pairs(areapairs)
     ilp     = 0
     ipp     = 0
     for iap,areapair in enumerate(areapairs):
         ax = axes[iap]
+        nses = np.sum(~np.isnan(csi_mean[0,:,iap,ilp,ipp]))
+
         ax.errorbar(x=deltaoris,y=np.nanmean(csi_mean[:,:,iap,ilp,ipp],axis=1),
-                    yerr=np.nanstd(csi_mean[:,:,iap,ilp,ipp],axis=1) / np.sqrt(csi_mean.shape[1]),label='mean',color='k')
+                    yerr=np.nanstd(csi_mean[:,:,iap,ilp,ipp],axis=1) / np.sqrt(nses),label='mean',color='k')
         ax.errorbar(x=deltaoris,y=np.nanmean(csi_pos[:,:,iap,ilp,ipp],axis=1),
-                    yerr=np.nanstd(csi_pos[:,:,iap,ilp,ipp],axis=1) / np.sqrt(csi_pos.shape[1]),label='pos',color='r')
+                    yerr=np.nanstd(csi_pos[:,:,iap,ilp,ipp],axis=1) / np.sqrt(nses),label='pos',color='r')
         ax.errorbar(x=deltaoris,y=np.nanmean(csi_neg[:,:,iap,ilp,ipp],axis=1),
-                    yerr=np.nanstd(csi_neg[:,:,iap,ilp,ipp],axis=1) / np.sqrt(csi_neg.shape[1]),label='neg',color='b')
+                    yerr=np.nanstd(csi_neg[:,:,iap,ilp,ipp],axis=1) / np.sqrt(nses),label='neg',color='b')
+        for idOri,deltaori in enumerate(deltaoris):
+            h,p = stats.ttest_1samp(csi_mean[idOri,:,iap,ilp,ipp],0,nan_policy='omit')
+            if p<0.05:
+                ax.text(deltaori,np.nanmean(csi_mean[idOri,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='k')
+            h,p = stats.ttest_1samp(csi_pos[idOri,:,iap,ilp,ipp],0,nan_policy='omit')
+            if p<0.05:
+                ax.text(deltaori,np.nanmean(csi_pos[idOri,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='r')
+            h,p = stats.ttest_1samp(csi_neg[idOri,:,iap,ilp,ipp],0,nan_policy='omit')
+            if p<0.05:
+                ax.text(deltaori,np.nanmean(csi_neg[idOri,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='b')
+
+        # if len(deltaoris)==2:
+        h,p = stats.ttest_rel(csi_mean[0,:,iap,ilp,ipp],csi_mean[-1,:,iap,ilp,ipp],nan_policy='omit')
+        if p<0.05:
+            ax.text(np.mean(deltaoris),np.nanmean(csi_mean[:,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='k')
+        h,p = stats.ttest_rel(csi_pos[0,:,iap,ilp,ipp],csi_pos[-1,:,iap,ilp,ipp],nan_policy='omit')
+        if p<0.05:
+            ax.text(np.mean(deltaoris),np.nanmean(csi_pos[:,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='r')
+        h,p = stats.ttest_rel(csi_neg[0,:,iap,ilp,ipp],csi_neg[-1,:,iap,ilp,ipp],nan_policy='omit')
+        if p<0.05:
+            ax.text(np.mean(deltaoris),np.nanmean(csi_neg[:,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='b')
 
         # ax.plot(deltaoris,csi_mean[:,iap,ilp,ipp],label='mean',color='k')
         # ax.plot(deltaoris,csi_pos[:,iap,ilp,ipp],label='pos',color='r',linestyle='-')
@@ -2907,6 +2939,7 @@ def plot_csi_deltaori_areas_ses(csi_mean,csi_pos,csi_neg,deltaoris,areapairs):
             text.set_color(ax.lines[i].get_color())
         ax.set_title(areapair,fontsize=11,color=clrs_areapairs[iap])
         plt.tight_layout()
+        sns.despine(fig,top=True,right=True,offset=3)
     return fig
 
 def plot_csi_deltaori_areas(csi_mean,csi_pos,csi_neg,deltaoris,areapairs):
@@ -2923,6 +2956,7 @@ def plot_csi_deltaori_areas(csi_mean,csi_pos,csi_neg,deltaoris,areapairs):
         ax.set_xlabel('Delta Ori (deg)')
         if iap==0:
             ax.set_ylabel('Angular CSI')
+
         # ax.set_ylim([-1,1])
         # ax.set_ylim([-0.5,0.5])
         # ax.set_ylim([-0.25,0.25])
@@ -2933,7 +2967,8 @@ def plot_csi_deltaori_areas(csi_mean,csi_pos,csi_neg,deltaoris,areapairs):
         for i,text in enumerate(l.get_texts()):
             text.set_color(ax.lines[i].get_color())
         ax.set_title(areapair,fontsize=11,color=clrs_areapairs[iap])
-        plt.tight_layout()
+        plt.tight_layout()     
+        sns.despine(fig,top=True,right=True,offset=3)
     return fig
 
 def plot_csi_deltaori_projs_ses(csi_mean,csi_pos,csi_neg,deltaoris,projpairs):
@@ -2944,23 +2979,34 @@ def plot_csi_deltaori_projs_ses(csi_mean,csi_pos,csi_neg,deltaoris,projpairs):
 
     for ipp,projpair in enumerate(projpairs):
         ax = axes[ipp]
+        nses = np.sum(~np.isnan(csi_mean[0,:,iap,ilp,ipp]))
+
         ax.errorbar(x=deltaoris,y=np.nanmean(csi_mean[:,:,iap,ilp,ipp],axis=1),
-                    yerr=np.nanstd(csi_mean[:,:,iap,ilp,ipp],axis=1) / np.sqrt(csi_mean.shape[1]),label='mean',color='k')
-        # ax.errorbar(x=deltaoris,y=np.nanmean(csi_pos[:,:,iap,ilp,ipp],axis=1),
-        #             yerr=np.nanstd(csi_pos[:,:,iap,ilp,ipp],axis=1) / np.sqrt(csi_pos.shape[1]),label='pos',color='r')
-        # ax.errorbar(x=deltaoris,y=np.nanmean(csi_neg[:,:,iap,ilp,ipp],axis=1),
-        #             yerr=np.nanstd(csi_neg[:,:,iap,ilp,ipp],axis=1) / np.sqrt(csi_neg.shape[1]),label='neg',color='b')
+                    yerr=np.nanstd(csi_mean[:,:,iap,ilp,ipp],axis=1) / np.sqrt(nses),label='mean',color='k')
+        ax.errorbar(x=deltaoris,y=np.nanmean(csi_pos[:,:,iap,ilp,ipp],axis=1),
+                    yerr=np.nanstd(csi_pos[:,:,iap,ilp,ipp],axis=1) / np.sqrt(nses),label='pos',color='r')
+        ax.errorbar(x=deltaoris,y=np.nanmean(csi_neg[:,:,iap,ilp,ipp],axis=1),
+                    yerr=np.nanstd(csi_neg[:,:,iap,ilp,ipp],axis=1) / np.sqrt(nses),label='neg',color='b')
 
+        for idOri,deltaori in enumerate(deltaoris):
+            h,p = stats.ttest_1samp(csi_mean[idOri,:,iap,ilp,ipp],0,nan_policy='omit')
+            if p<0.05:
+                ax.text(deltaori,np.nanmean(csi_mean[idOri,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='k')
+                # print(f'Area: {areapair} | Delta Ori: {deltaori} | p: {p}')
+            # print(p)
+        if len(deltaoris)==2:
+            h,p = stats.ttest_rel(csi_mean[0,:,iap,ilp,ipp],csi_mean[1,:,iap,ilp,ipp],nan_policy='omit')
+            if p<0.05:
+                ax.text(np.mean(deltaoris),np.nanmean(csi_mean[:,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='k')
+                # print(f'Area: {areapair} | difference between deltaoris | p: {p}')
+            # print(p)
 
-        # ax.plot(deltaoris,csi_mean[:,iap,ilp,ipp],label='mean',color='k')
-        # ax.plot(deltaoris,csi_pos[:,iap,ilp,ipp],label='pos',color='r',linestyle='-')
-        # ax.plot(deltaoris,csi_neg[:,iap,ilp,ipp],label='neg',color='b',linestyle='-')
         ax.set_xticks(deltaoris[::2])
         ax.set_xlabel('Delta Ori (deg)')
         if ipp==0:
             ax.set_ylabel('Angular CSI')
-        # ax.set_ylim([-1,1])
-        ax.set_ylim([-0.5,0.5])
+        ax.set_ylim([-.3,.3])
+        # ax.set_ylim([-0.5,0.5])
         # ax.set_xticks(deltaoris[::2])
         ax.axhline(0,linestyle='--',color='k',linewidth=1)
         l = ax.legend(frameon=False,loc='upper right',fontsize=7,ncol=3,handlelength=0,handletextpad=0)
@@ -2968,8 +3014,66 @@ def plot_csi_deltaori_projs_ses(csi_mean,csi_pos,csi_neg,deltaoris,projpairs):
             text.set_color(ax.lines[i].get_color())
         ax.set_title(projpair,fontsize=11,color=clrs_projpairs[ipp])
         plt.tight_layout()
+        sns.despine(fig,top=True,right=True,offset=3)
     return fig
 
+
+def plot_rai_deltaori_projs_ses(rai_mean,rai_pos,rai_neg,deltaoris,projpairs):
+    fig,axes = plt.subplots(1,len(projpairs),figsize=(len(projpairs)*2.5,2),
+                            sharex=True,sharey=True)
+    iap = 0
+    ilp = 0
+    clrs_projpairs = get_clr_labelpairs(projpairs)
+
+    for ipp,projpair in enumerate(projpairs):
+        ax = axes[ipp]
+        nses = np.sum(~np.isnan(rai_mean[0,:,iap,ilp,ipp]))
+
+        ax.errorbar(x=deltaoris,y=np.nanmean(rai_mean[:,:,iap,ilp,ipp],axis=1),
+                    yerr=np.nanstd(rai_mean[:,:,iap,ilp,ipp],axis=1) / np.sqrt(nses),label='mean',color='k')
+        ax.errorbar(x=deltaoris,y=np.nanmean(rai_pos[:,:,iap,ilp,ipp],axis=1),
+                    yerr=np.nanstd(rai_pos[:,:,iap,ilp,ipp],axis=1) / np.sqrt(nses),label='pos',color='r')
+        ax.errorbar(x=deltaoris,y=np.nanmean(rai_neg[:,:,iap,ilp,ipp],axis=1),
+                    yerr=np.nanstd(rai_neg[:,:,iap,ilp,ipp],axis=1) / np.sqrt(nses),label='neg',color='b')
+        
+        for idOri,deltaori in enumerate(deltaoris):
+            h,p = stats.ttest_1samp(rai_mean[idOri,:,iap,ilp,ipp],0,nan_policy='omit')
+            if p<0.05:
+                ax.text(deltaori,np.nanmean(rai_mean[idOri,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='k')
+            h,p = stats.ttest_1samp(rai_pos[idOri,:,iap,ilp,ipp],0,nan_policy='omit')
+            if p<0.05:
+                ax.text(deltaori,np.nanmean(rai_pos[idOri,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='r')
+            h,p = stats.ttest_1samp(rai_neg[idOri,:,iap,ilp,ipp],0,nan_policy='omit')
+            if p<0.05:
+                ax.text(deltaori,np.nanmean(rai_neg[idOri,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='b')
+
+        if len(deltaoris)==2:
+            h,p = stats.ttest_rel(rai_mean[0,:,iap,ilp,ipp],rai_mean[1,:,iap,ilp,ipp],nan_policy='omit')
+            if p<0.05:
+                ax.text(np.mean(deltaoris),np.nanmean(rai_mean[:,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='k')
+            h,p = stats.ttest_rel(rai_pos[0,:,iap,ilp,ipp],rai_pos[1,:,iap,ilp,ipp],nan_policy='omit')
+            if p<0.05:
+                ax.text(np.mean(deltaoris),np.nanmean(rai_pos[:,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='r')
+            h,p = stats.ttest_rel(rai_neg[0,:,iap,ilp,ipp],rai_neg[1,:,iap,ilp,ipp],nan_policy='omit')
+            if p<0.05:
+                ax.text(np.mean(deltaoris),np.nanmean(rai_neg[:,:,iap,ilp,ipp])+0.01,get_sig_asterisks(p),color='b')
+
+
+        ax.set_xticks(deltaoris[::2])
+        ax.set_xlabel('Delta Ori (deg)')
+        if ipp==0:
+            ax.set_ylabel('RAI')
+        ax.set_ylim([-.3,.3])
+        # ax.set_ylim([-0.5,0.5])
+        # ax.set_xticks(deltaoris[::2])
+        ax.axhline(0,linestyle='--',color='k',linewidth=1)
+        l = ax.legend(frameon=False,loc='upper right',fontsize=7,ncol=3,handlelength=0,handletextpad=0)
+        for i,text in enumerate(l.get_texts()):
+            text.set_color(ax.lines[i].get_color())
+        ax.set_title(projpair,fontsize=11,color=clrs_projpairs[ipp])
+        plt.tight_layout()
+        sns.despine(fig,top=True,right=True,offset=3)
+    return fig
 
 def plot_csi_deltaori_projs(csi_mean,csi_pos,csi_neg,deltaoris,projpairs):
     fig,axes = plt.subplots(1,len(projpairs),figsize=(len(projpairs)*2.5,2),sharex=True,sharey=True)
@@ -2995,6 +3099,7 @@ def plot_csi_deltaori_projs(csi_mean,csi_pos,csi_neg,deltaoris,projpairs):
             text.set_color(ax.lines[i].get_color())
         ax.set_title(projpair,fontsize=11,color=clrs_projpairs[ipp])
         plt.tight_layout()
+        sns.despine(fig,top=True,right=True,offset=3)
     return fig
 
 # def plot_bin_corr_deltarf_flex(sessions,binmean,binpos,areapairs=' ',layerpairs=' ',projpairs=' ',
@@ -3224,7 +3329,8 @@ def plot_corr_angular_tuning_dori(bin_angle_oris,bin_angle_count_oris,
     bin_angle_err = np.full(bin_angle_count_oris.shape,0.08) / bin_angle_count_oris**0.5
 
     # Make the figure:
-    deglim              = 2*np.pi
+    tickstep = 90
+    deglim              = 2*np.pi - np.deg2rad(tickstep)
     ndeltaoris          = len(deltaoris)
     fig,axes    = plt.subplots(len(areapairs),len(deltaoris),figsize=(len(deltaoris)*1.5,len(areapairs)*1),
                                sharex=True,sharey=True)
@@ -3253,13 +3359,14 @@ def plot_corr_angular_tuning_dori(bin_angle_oris,bin_angle_count_oris,
                 ax.set_ylabel('')
 
             ax.set_xlim([0,deglim])
-            ax.set_xticks(np.arange(0,2*np.pi,step = np.deg2rad(45)),labels=np.arange(0,360,step = 45),fontsize=7)
+            ax.set_xticks(np.arange(0,2*np.pi,step = np.deg2rad(tickstep)),labels=np.arange(0,360,step = tickstep),fontsize=7)
             if idOri==np.floor(len(deltaoris)/2) and iap==len(areapairs):
                 ax.set_xlabel(u'Angular surround bin (\N{DEGREE SIGN})')
             # if iap==len(areapairs):
                 # ax.set_xlabel(u'Angle (deg)')
     # ax.set_ylim([0,0.05])
     plt.tight_layout()
+    sns.despine(fig=fig,top=True,right=True,offset=3)
     return fig
 
 
@@ -3268,7 +3375,8 @@ def plot_corr_angular_tuning_projs_dori(bin_angle_oris,bin_angle_count_oris,
     bin_angle_err = np.full(bin_angle_count_oris.shape,0.08) / bin_angle_count_oris**0.5
 
     # Make the figure:
-    deglim              = 2*np.pi
+    tickstep = 90
+    deglim              = 2*np.pi - np.deg2rad(tickstep)
     ndeltaoris          = len(deltaoris)
     fig,axes    = plt.subplots(len(projpairs),len(deltaoris),figsize=(len(deltaoris)*1.5,len(projpairs)*1),
                                sharex=True,sharey=True)
@@ -3291,12 +3399,12 @@ def plot_corr_angular_tuning_projs_dori(bin_angle_oris,bin_angle_count_oris,
                 ax.set_ylabel('%s' % (projpair),c=clrs_projpairs[ipp])
             else:     
                 ax.set_ylabel('')
-
+            # ax.set_ylim([])
             ax.set_xlim([0,deglim])
-            ax.set_xticks(np.arange(0,2*np.pi,step = np.deg2rad(45)),labels=np.arange(0,360,step = 45),fontsize=7)
+            ax.set_xticks(np.arange(0,2*np.pi,step = np.deg2rad(tickstep)),labels=np.arange(0,360,step = tickstep),fontsize=7)
             if idOri==np.floor(len(deltaoris)/2) and iap==len(areapairs):
                 ax.set_xlabel(u'Angular surround bin (\N{DEGREE SIGN})')
-    ax.set_ylim(np.percentile(bin_angle_oris,[2,99]))
+    ax.set_ylim(np.nanpercentile(bin_angle_oris,[2,99]))
     plt.tight_layout()
     return fig
 

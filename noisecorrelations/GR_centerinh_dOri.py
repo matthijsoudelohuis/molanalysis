@@ -74,15 +74,6 @@ for ises in range(nSessions):
     delattr(sessions[ises],'behaviordata')
     # delattr(sessions[ises],'calciumdata')
 
-
-#%% 
-def ori_remapping(sessions):
-    for ises in range(nSessions):
-        if sessions[ises].sessiondata['protocol'][0] == 'GR':
-            sessions[ises].trialdata['Orientation_orig']    = sessions[ises].trialdata['Orientation']
-            sessions[ises].trialdata['Orientation']         = np.mod(270 - sessions[ises].trialdata['Orientation'],360)
-    return sessions
-
 #%%
 sessions = ori_remapping(sessions)
 
