@@ -36,6 +36,9 @@ def plot_excerpt(ses, trialsel=None, neuronsel=None, plot_neural=True, plot_beha
     elif ses.sessiondata['protocol'][0] == 'DN':
         tstart  = ses.trialdata['tStart'][trialsel[0]-1]
         tstop   = ses.trialdata['tEnd'][trialsel[1]-1]
+    elif ses.sessiondata['protocol'][0] == 'SP':
+        tstart  = ses.sessiondata['tStart'][0] + 30
+        tstop   = ses.sessiondata['tEnd'][0]
         
     fig, ax = plt.subplots(figsize=[9, 12])
     counter = 0

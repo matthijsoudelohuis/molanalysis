@@ -7,7 +7,7 @@ Matthijs Oude Lohuis, 2023, Champalimaud Center
 
 #%% ###################################################
 import math, os
-os.chdir('e:\\Python\\molanalysis')
+os.chdir('c:\\Python\\molanalysis')
 from loaddata.get_data_folder import get_local_drive
 
 import numpy as np
@@ -56,3 +56,31 @@ fig = plot_tuned_response(sessions[0].tensor,sessions[0].trialdata,t_axis,exampl
 fig.suptitle('%s - dF/F' % sessions[0].session_id,fontsize=12)
 # save the figure
 fig.savefig(os.path.join(savedir,'TunedResponse_dF_%s.png' % sessions[0].session_id))
+
+
+#%% Load an example session: 
+sessions,nSessions   = filter_sessions(protocols = 'SP',min_cells=2000)
+
+#%%  Load data properly:                      
+for ises in range(nSessions):
+    # sessions[ises].load_data(load_behaviordata=False, load_calciumdata=True,calciumversion='dF')
+    # sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                # calciumversion='deconv',keepraw=True)
+    sessions[ises].load_data(load_calciumdata=True,calciumversion='deconv',load_behaviordata=True,load_videodata=True)
+
+#%% #####################################
+
+for ises in range(nSessions):
+    #Show some traces to see responses:
+    example_cells   = np.arange(len(sessions[ises].celldata)) #all cells
+    sessions[ises].celldata['redcell'] = 0
+    fig = plot_excerpt(sessions[ises],trialsel=(10,20),neural_version='raster',neuronsel=example_cells)
+    my_savefig(fig,savedir,'Excerpt_SP_%s' % (sessions[ises].session_id))
+
+#%% 
+sessions[1].celldata['redcell'] = 0
+example_cells   = np.arange(len(sessions[1].celldata)) #all cells
+fig = plot_excerpt(sessions[1],trialsel=(10,20),neural_version='raster',neuronsel=example_cells)
+my_savefig(fig,savedir,'AffineModel_R2_MultAddSep_PredictorsOverall_%dsessions' % (nSessions), formats = ['png'])
+
+# %%
