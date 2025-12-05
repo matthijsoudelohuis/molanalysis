@@ -277,7 +277,7 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Computing corr rates and
         #Ratio:
         # meanpopact          = np.nanmean(respdata[idx_N1,:],axis=0) / np.nanmean(respdata[idx_N2,:],axis=0)
         #Difference:
-        # meanpopact          = np.nanmean(respdata[idx_N1,:],axis=0) - np.nanmean(respdata[idx_N2,:],axis=0)
+        meanpopact          = np.nanmean(respdata[idx_N1,:],axis=0) - np.nanmean(respdata[idx_N2,:],axis=0)
         # meanpopact          = np.nanmean(respdata[idx_N2,:],axis=0) - np.nanmean(respdata[idx_N1,:],axis=0)
 
         # compute meanresp for trials with low and high difference in lab-unl activation
@@ -519,6 +519,7 @@ for itype,(itype,itypelabel) in enumerate(zip([0,1],['mult','add'])):
             ax.set_title(itypelabel)
 plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True,offset=3)
+my_savefig(fig,savedir,'FF_FB_affinemodulation_sig_mod_labunldiff_%dsessions' % (nSessions), formats = ['png'])
 
 #%% 
 clrs_arealabelpairs = sns.color_palette('pastel',narealabelpairs)
@@ -1205,126 +1206,6 @@ sns.despine(fig=fig, top=True, right=True,offset=3)
 # my_savefig(fig,savedir,'FF_FB_affinemodulation_barplot_GR%dsessions' % (nSessions), formats = ['png'])
 # my_savefig(fig,savedir,'FF_FB_affinemodulation_sigN_barplot_GR%dsessions' % (nSessions), formats = ['png'])
 # my_savefig(fig,savedir,'FF_FB_affinemodulation_sigP_barplot_GR%dsessions' % (nSessions), formats = ['png'])
-
-
-
-
-#%%
-                                            
-#       ####   ####  #####  # #    #  ####  
-#      #    # #    # #    # # ##   # #    # 
-#      #    # #    # #    # # # #  # #      
-#      #    # #    # #####  # #  # # #  ### 
-#      #    # #    # #      # #   ## #    # 
-######  ####   ####  #      # #    #  ####  
-
-
-#%%
-for ises in range(nSessions):   
-    sessions[ises].celldata['nearby'] = filter_nearlabeled(sessions[ises],radius=40)
-celldata = pd.concat([sessions[ises].celldata for ises in range(nSessions)]).reset_index(drop=True)
-
-#%%
-fracdata = np.full((narealabelpairs,2,nSessions),np.nan)
-
-for ises in range(nSessions):
-    idx_ses = np.isin(celldata['session_id'],sessions[ises].session_id)
-
-    for ialp,alp in enumerate(arealabelpairs):
-
-        idx_N = np.all((idx_ses,
-                        ~np.isnan(corrsig_cells[ialp,:]),
-                        celldata['nearby'],
-                        np.any(params_regress[:,:,2] > 0.5,axis=1),
-                        ),axis=0)
-        fracdata[ialp,0,ises] = np.sum(corrsig_cells[ialp,idx_N]==1) / np.sum(idx_N)
-        fracdata[ialp,1,ises] = np.sum(corrsig_cells[ialp,idx_N]==-1) / np.sum(idx_N)
-        # fracdata[ialp,1,ises] = np.sum(corrsig_cells[ialp,idx_ses]==-1) / np.sum(~np.isnan(corrsig_cells[ialp,idx_ses]))
-
-clrs = ['black','red']
-axtitles = np.array(['FF: +corr','FF: -corr', 'FB: +corr','FB: -corr'])
-fig,axes = plt.subplots(1,4,figsize=(12,3))
-
-ax = axes[0]
-sns.barplot(data=fracdata[:2,0,:].T,palette=clrs,ax=ax,alpha=0.3)
-sns.stripplot(data=fracdata[:2,0,:].T,palette=clrs,ax=ax)
-h,p = stats.ttest_rel(fracdata[0,0,:],fracdata[1,0,:],nan_policy='omit')
-add_stat_annotation(ax, 0.2, .8, np.nanmean(fracdata[:2,0,:]), p, h=0)
-ax.set_xticklabels(arealabelpairs[:2])
-print(p)
-
-ax = axes[1]
-sns.barplot(data=fracdata[:2,1,:].T,palette=clrs,ax=ax,alpha=0.3)
-sns.stripplot(data=fracdata[:2,1,:].T,palette=clrs,ax=ax)
-h,p = stats.ttest_rel(fracdata[0,1,:],fracdata[1,1,:],nan_policy='omit')
-add_stat_annotation(ax, 0.2, .8, np.nanmean(fracdata[:2,1,:]), p, h=0)
-ax.set_xticklabels(arealabelpairs[:2])
-print(p)
-
-ax = axes[2]
-sns.barplot(data=fracdata[2:,0,:].T,palette=clrs,ax=ax,alpha=0.3)
-sns.stripplot(data=fracdata[2:,0,:].T,palette=clrs,ax=ax)
-h,p = stats.ttest_rel(fracdata[2,0,:],fracdata[3,0,:],nan_policy='omit')
-add_stat_annotation(ax, 0.2, .8, np.nanmean(fracdata[2:,0,:]), p, h=0)
-ax.set_xticklabels(arealabelpairs[2:])
-print(p)
-
-ax = axes[3]
-sns.barplot(data=fracdata[2:,1,:].T,palette=clrs,ax=ax,alpha=0.3)
-sns.stripplot(data=fracdata[2:,1,:].T,palette=clrs,ax=ax)
-h,p = stats.ttest_rel(fracdata[2,1,:],fracdata[3,1,:],nan_policy='omit')
-add_stat_annotation(ax, 0.2, .8, np.nanmean(fracdata[2:,1,:]), p, h=0)
-ax.set_xticklabels(arealabelpairs[2:])
-print(p)
-
-for iax,ax in enumerate(axes):
-    ax.set_title(axtitles[iax])
-plt.tight_layout()
-sns.despine(fig=fig, top=True, right=True,offset=3)
-# my_savefig(fig,savedir,'FF_FB_affinemodulation_FracSig_%dsessions' % (nSessions), formats = ['png'])
-
-#%%
-
-
-
-
-
-
-#%% 
-
-clrs_arealabelpairs = sns.color_palette('pastel',narealabelpairs)
-fig,axes = plt.subplots(2,narealabelpairs,figsize=(narealabelpairs*3,6),sharey='row')
-for ialp,alp in enumerate(arealabelpairs):
-    for iparam in range(2):
-        ax = axes[iparam,ialp]
-        # idx_N = params_regress[:,ialp,2] > 0.3
-        idx_N =  celldata['OSI']>0.5
-        idx_N = np.all((celldata['gOSI']>0.5,
-                        ~np.isnan(params_regress[:,ialp,iparam])),axis=0)
-        
-        sns.regplot(x=celldata['pop_coupling'][idx_N],y=params_regress[idx_N,ialp,iparam],color=clrs_arealabelpairs[ialp],
-                    ax=ax,scatter=True,marker='o',
-                    scatter_kws={'alpha':0.5, 's':20, 'edgecolors':'white'},
-                    line_kws={'color':clrs_arealabelpairs[ialp], 'ls':'-', 'linewidth':3})
-        b = linregress(celldata['pop_coupling'][idx_N],params_regress[idx_N,ialp,iparam])
-
-        ax.set_xlim(np.nanpercentile(celldata['pop_coupling'][idx_N],[1,99]))
-        ax.set_ylim(np.nanpercentile(params_regress[idx_N,ialp,iparam],[1,99]))
-        ax.text(0.1,0.8,'R2: %1.2f'%(b[2]),transform=ax.transAxes)
-        ax.set_title(alp,fontsize=12,color=clrs_arealabelpairs[ialp])
-        ax.set_xlabel('Pop. Coupling')
-        if iparam == 0:
-            ax.set_ylabel('Slope')
-        else:
-            ax.set_ylabel('Offset')
-
-plt.tight_layout()
-sns.despine(fig=fig, top=True, right=True,offset=3)
-# my_savefig(fig,savedir,'FF_FB_affinemodulation_popcoupling_%s_%dsessions' % (layerlabel,nSessions), formats = ['png'])
-
-
-
-
 
 #%% 
 # DEPRECATED: 
