@@ -711,7 +711,22 @@ def get_clr_labeled():
     # clrs            = ['black','red']
     return ['gray','indianred']
 
-   
+def arealabeled_to_figlabels(arealabeled):
+    # arealabeled_fig = np.array(np.shape(arealabeled),dtype=object)
+    table       = {'V1unl': "$V1_{ND}$",
+        'V1lab' : "$V1_{PM}$",
+        'PMunl' : "$PM_{ND}$",
+        'PMlab' : "$PM_{V1}$",
+        'V1_UNL': "$V1_{ND}$",
+        'V1_LAB' : "$V1_{PM}$",
+        'PM_UNL' : "$PM_{ND}$",
+        'PM_LAB' : "$PM_{V1}$",
+        'ALunl':    "$AL_{ND}$",
+        'ALlab' :   "$AL_{PM}$",
+        'RSPunl' :  "$RSP_{ND}$",
+        'RSPlab' :  "$RSP_{PM}$"}
+    return itemgetter(*arealabeled)(table)
+
 def get_clr_deltaoris(deltaoris,version=90):
     # c = ["darkred","darkgreen"]
     # v = [0,1.]

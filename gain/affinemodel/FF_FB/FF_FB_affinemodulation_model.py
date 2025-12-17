@@ -972,27 +972,6 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Computing affine modulat
             cvR2_preds_both[ialp,:,:,idx_ses] = tempcvR2_preds
 
 #%% 
-fig,axes = plt.subplots(1,2,figsize=(6,2.5))
-ax=axes[0]
-ax.plot(meanpopact_N1,color='red',label=legendlabels[0],linewidth=0.1,alpha=1)
-ax.plot(meanpopact_N2,color='grey',label=legendlabels[1],linewidth=0.1,alpha=1)
-ax.set_xlabel('Trials')
-ax.set_ylabel('Population activity')
-ax.legend(['PMLab','PMUnl'],fontsize=9,frameon=False)
-ax = axes[1]
-# ax.scatter(meanpopact_N2,meanpopact_N1,color='k',s=0.1)
-ax.scatter(meanpopact_N2,meanpopact_N1,c=meanpopact_N1 - meanpopact_N2,s=0.2,cmap='coolwarm',vmin=-0.5,vmax=0.5)
-ax.text(0.1,0.8,'High FB',transform=ax.transAxes)
-ax.text(0.7,0.2,'Low FB',transform=ax.transAxes)
-ax.plot([-1,1],[-1,1],color='k',linewidth=0.2)
-ax.set_xlim(np.percentile(meanpopact_N1,[0,99.5]))
-ax.set_ylim(np.percentile(meanpopact_N1,[0,99.5]))
-ax_nticks(ax, 3)
-plt.tight_layout()
-sns.despine(fig=fig, top=True, right=True,offset=1)
-# my_savefig(fig,savedir,'Diff_LabUnl_GR%dsessions' % (nSessions), formats = ['png'])
-
-#%% 
 ipred = nbehavPCs
 # modelnames = ['Original','Diff','Both']
 modelnames = ['Orig','Both','Diff']

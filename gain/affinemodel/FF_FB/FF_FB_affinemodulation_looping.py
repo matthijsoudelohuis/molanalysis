@@ -16,7 +16,7 @@ from scipy import stats
 os.chdir('e:\\Python\\molanalysis')
 
 from utils.explorefigs import plot_PCA_gratings_3D,plot_PCA_gratings
-from loaddata.session_info import filter_sessions,load_sessions
+from loaddata.session_info import filter_sessions,load_sessions,report_sessions
 from utils.tuning import compute_tuning_wrapper
 from utils.gain_lib import * 
 from utils.pair_lib import compute_pairwise_anatomical_distance,value_matching
@@ -43,6 +43,7 @@ sessiondata         = pd.concat([ses.sessiondata for ses in sessions]).reset_ind
 sessions_in_list    = np.where(~sessiondata['session_id'].isin(['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']))[0]
 sessions            = [sessions[i] for i in sessions_in_list]
 nSessions           = len(sessions)
+sessiondata             = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
 
 #%%  Load data properly:
 calciumversion = 'deconv'
@@ -65,9 +66,54 @@ for ises in range(nSessions):
 
     sessions[ises].celldata['arealayer'] = sessions[ises].celldata['roi_name'] + sessions[ises].celldata['layer'] 
 
+#%% SHow the fraction of nonlooped neurons within a radius from looped cells:
+
+arealabelpairs      = ['PMunlL2/3',
+                    'V1unlL2/3']
+narealabelpairs     = len(arealabelpairs)
+clrs_arealabelpairs = ['purple','green']
+legendlabels        = ['PM','V1']
+
+radii           = np.arange(0,400,20)
+# radii           = np.array([0,10,20,50,100,200])
+fracnonlooped   = np.zeros((narealabelpairs,len(radii),nSessions))
+
+for ises in range(nSessions):
+    for iradius,radius in enumerate(radii):
+        sessions[ises].celldata['nearby'] = filter_nearlabeled(sessions[ises],radius=radius)
+        for ialp,alp in enumerate(arealabelpairs):
+            idx_N = sessions[ises].celldata['arealayerlabel'] == alp
+            fracnonlooped[ialp,iradius,ises] = np.sum(sessions[ises].celldata['nearby'][idx_N]) / np.sum(idx_N)
 
 #%%
+# fig,axes = plt.subplots(1,2,figsize=(6,3),sharex=True,sharey=True)
+fig,ax = plt.subplots(1,1,figsize=(3,3),sharex=True,sharey=True)
+for ialp,alp in enumerate(arealabelpairs):
 
+    # ax = axes[ialp]
+    # ax.scatter(radii, np.nanmean(fracnonlooped[ialp,:,:],axis=1), marker='o', color=clrs_arealabelpairs[ialp])
+    # ax.plot(radii,np.nanmean(error_cv[:,ialp,:,:],axis=(2)),color=clrs_arealabelpairs[ialp], linewidth=0.5)
+    shaded_error(radii,fracnonlooped[ialp,:,:].T,center='mean',error='sem',color=clrs_arealabelpairs[ialp],ax=ax)
+    ax.set_ylim([0,1])
+    # ax.set_xlim([0,popsizes[-1]+1])
+    # ax.set_xticks(radii)
+    ax.set_xticks(np.arange(0,400,50))
+    ax.set_xlabel('Min dist to looped cell (um)')
+    if ialp == 0: 
+        ax.set_ylabel('Fraction data')
+    # ax.set_title(legendlabels[ialp],fontsize=12)
+
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True,offset=3)
+my_savefig(fig,savedir,'Fraction_nonlooped_distance_V1PM_%dsessions' % nSessions)
+
+
+#%%
+# without subsampling to equalize numbers of neruons
+# p<0.001
+# nearby neurons only
+# maxnoiselevel=20
+# minneurons=10
 
 #%% Show tuning curve when activityin the other area is low or high (only still trials)
 arealabelpairs  = [
@@ -107,6 +153,7 @@ params_regress          = np.full((nCells,narealabelpairs,3),np.nan)
 corrdata_cells          = np.full((narealabelpairs,nCells),np.nan)
 corrsig_cells           = np.full((narealabelpairs,nCells),np.nan)
 
+# np.random.seed(1)
 
 for ises in tqdm(range(nSessions),total=nSessions,desc='Computing corr rates and affine mod'):
     [N,K]           = np.shape(sessions[ises].respmat) #get dimensions of response matrix
@@ -120,20 +167,22 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Computing corr rates and
         idx_N1              = np.where(np.all((
                                     sessions[ises].celldata['arealabel'] == alp.split('-')[0],
                                     sessions[ises].celldata['noise_level']<maxnoiselevel,
+                                    sessions[ises].celldata['nearby'],
                                       ),axis=0))[0]
         
         idx_N2              = np.where(np.all((
                                     sessions[ises].celldata['arealabel'] == alp.split('-')[1],
                                     sessions[ises].celldata['noise_level']<maxnoiselevel,
+                                    sessions[ises].celldata['nearby'],
                                       ),axis=0))[0]
 
         idx_N3              = np.where(np.all((sessions[ises].celldata['arealayerlabel'] == alp.split('-')[2],
                                       sessions[ises].celldata['noise_level']<maxnoiselevel,
                                       ),axis=0))[0]
 
-        subsampleneurons = np.min([idx_N1.shape[0],idx_N2.shape[0]])
-        idx_N1 = np.random.choice(idx_N1,subsampleneurons,replace=False)
-        idx_N2 = np.random.choice(idx_N2,subsampleneurons,replace=False)
+        # subsampleneurons = np.min([idx_N1.shape[0],idx_N2.shape[0]])
+        # idx_N1 = np.random.choice(idx_N1,subsampleneurons,replace=False)
+        # idx_N2 = np.random.choice(idx_N2,subsampleneurons,replace=False)
 
         if len(idx_N1) < minnneurons or len(idx_N3) < minnneurons:
             continue
@@ -223,10 +272,6 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Computing corr rates and
 #         ydata = mean_resp_split[ialp,:,1,iN]
 #         params_regress[iN,ialp,:] = linregress(xdata,ydata)[:3]
 
-#%% Compute same metric as Flora:
-rangeresp = np.nanmax(mean_resp_split,axis=1) - np.nanmin(mean_resp_split,axis=1)
-rangeresp = np.nanmax(rangeresp,axis=(0,1))
-
 #%% Show some example neurons:
 
 # #%% use 
@@ -266,7 +311,6 @@ rangeresp = np.nanmax(rangeresp,axis=(0,1))
 
 # example_cell      = np.random.choice(celldata['cell_id'][idx_examples])
 
-
 #%%
                                             
 #       ####   ####  #####  # #    #  ####  
@@ -276,10 +320,17 @@ rangeresp = np.nanmax(rangeresp,axis=(0,1))
 #      #    # #    # #      # #   ## #    # 
 ######  ####   ####  #      # #    #  ####  
 
+#%% Compute same metric as Flora:
+rangeresp = np.nanmax(mean_resp_split,axis=1) - np.nanmin(mean_resp_split,axis=1)
+rangeresp = np.nanmax(rangeresp,axis=(0,1))
+
+#%% 
+minrangeresp    = 0.04
+radius          = 50
 
 #%%
-for ises in range(nSessions):   
-    sessions[ises].celldata['nearby'] = filter_nearlabeled(sessions[ises],radius=40)
+for ises in range(nSessions):
+    sessions[ises].celldata['nearby'] = filter_nearlabeled(sessions[ises],radius=radius)
 celldata = pd.concat([sessions[ises].celldata for ises in range(nSessions)]).reset_index(drop=True)
 
 #%%
@@ -293,7 +344,8 @@ for ises in range(nSessions):
         idx_N = np.all((idx_ses,
                         ~np.isnan(corrsig_cells[ialp,:]),
                         celldata['nearby'],
-                        rangeresp>0.04,
+                        # celldata['noise_level']<maxnoiselevel,
+                        rangeresp>minrangeresp,
                         # np.any(params_regress[:,:,2] > 0.5,axis=1),
                         ),axis=0)
         fracdata[ialp,0,ises] = np.sum(corrsig_cells[ialp,idx_N]==1) / np.sum(idx_N)
@@ -302,8 +354,8 @@ for ises in range(nSessions):
 
 clrs = ['black','red']
 axtitles = np.array(['FF: +corr','FF: -corr', 'FB: +corr','FB: -corr'])
-fig,axes = plt.subplots(1,4,figsize=(12,3))
 
+fig,axes = plt.subplots(1,4,figsize=(12,3))
 ax = axes[0]
 sns.barplot(data=fracdata[:2,0,:].T,palette=clrs,ax=ax,alpha=0.3)
 sns.stripplot(data=fracdata[:2,0,:].T,palette=clrs,ax=ax)
@@ -342,6 +394,34 @@ plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True,offset=3)
 # my_savefig(fig,savedir,'FF_FB_affinemodulation_FracSig_%dsessions' % (nSessions), formats = ['png'])
 
+#%%
+
+
+#%% Show mean tuned responses and modulation between looped and nonlooped neurons: 
+fig,axes = plt.subplots(2,4,figsize=(10,3),sharex=True,sharey=True)
+clrs = ['black','red']
+axtitles = np.array([['FF unl: -corr','FF lab: -corr', 'FB unl: -corr','FB lab: -corr'],
+                     ['FF unl: +corr','FF lab: +corr', 'FB unl: +corr','FB lab: +corr']])
+
+minrangeresp = 0.04
+for ialp,alp in enumerate(arealabelpairs):
+    for isign,sign in enumerate([-1,1]):
+        ax = axes[isign,ialp]
+        idx_N = np.all((
+                        corrsig_cells[ialp,:]==sign,
+                        celldata['nearby'],
+                        celldata['noise_level']<maxnoiselevel,
+                        rangeresp>minrangeresp,
+                        ),axis=0)
+        meandata = np.nanmean(mean_resp_split_aligned[ialp,:,0,idx_N],axis=0)
+        ax.plot(oris,meandata,color=clrs[0],alpha=1)
+        meandata = np.nanmean(mean_resp_split_aligned[ialp,:,1,idx_N],axis=0)
+        ax.plot(oris,meandata,color=clrs[1],alpha=1)
+        ax.set_title(axtitles[isign,ialp])
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True,offset=3)
+# my_savefig(fig,savedir,'FF_FB_Looped_Correlations_bootstrapped_%dsessions' % (nSessions), formats = ['png'])
+
 #%% Bootstrapped comparison of correlations and significant correlations with other area: 
 
 # For each bootstrap, for each labeled cell a random nonlabeled cell that is nearby is sampled. 
@@ -349,36 +429,33 @@ sns.despine(fig=fig, top=True, right=True,offset=3)
 # The distribution of correlations is compared to the loop correlation distribution.
 # The fraction of significantly positive and negative as well. 
 
-nboots          = 100
-minrangeresp    = 0.04
-radius          = 50
+nboots          = 50
 
-loopfrac = np.full((2,2),np.nan) # FF vs FB, +corr vs -corr
-loopmean = np.full((2),np.nan) # FF vs FB, +corr vs -corr
-loopmean_abs = np.full((2),np.nan) # FF vs FB, +corr vs -corr
-bootfrac = np.full((2,2,nboots),np.nan) # FF vs FB, +corr vs -corr
-bootmean = np.full((2,nboots),np.nan) # FF vs FB, +corr vs -corr
-bootmean_abs = np.full((2,nboots),np.nan) # FF vs FB, +corr vs -corr
+loopfrac        = np.full((2,2),np.nan) # FF vs FB, +corr vs -corr
+loopmean        = np.full((2),np.nan) # FF vs FB, +corr vs -corr
+loopmean_abs    = np.full((2),np.nan) # FF vs FB, +corr vs -corr
+bootfrac        = np.full((2,2,nboots),np.nan) # FF vs FB, +corr vs -corr
+bootmean        = np.full((2,nboots),np.nan) # FF vs FB, +corr vs -corr
+bootmean_abs    = np.full((2,nboots),np.nan) # FF vs FB, +corr vs -corr
 
-binedges = np.linspace(-1,1,50)
-nhistbins = len(binedges)-1
-loophist =  np.full((2,nhistbins),np.nan) # FF vs FB, +corr vs -corr
-boothist =  np.full((2,nhistbins,nboots),np.nan) # FF vs FB, +corr vs -corr
+binedges        = np.linspace(-1,1,50)
+nhistbins       = len(binedges)-1
+loophist        = np.full((2,nhistbins),np.nan) # FF vs FB, +corr vs -corr
+boothist        = np.full((2,nhistbins,nboots),np.nan) # FF vs FB, +corr vs -corr
 
-idx_N = np.all((
-                # ~np.isnan(corrsig_cells[ialp,:]),
-                # celldata['nearby'],
-                rangeresp>minrangeresp,
-                ),axis=0)
+idx_N           = np.all((
+                    # celldata['noise_level']<maxnoiselevel,
+                    rangeresp>minrangeresp,
+                    ),axis=0)
 
-loopfrac[0,0] = np.sum(corrsig_cells[1,idx_N]==1) / np.sum(~np.isnan(corrsig_cells[1,idx_N]))
-loopfrac[0,1] = np.sum(corrsig_cells[1,idx_N]==-1) / np.sum(~np.isnan(corrsig_cells[1,idx_N]))
-loopfrac[1,0] = np.sum(corrsig_cells[3,idx_N]==1) / np.sum(~np.isnan(corrsig_cells[3,idx_N]))
-loopfrac[1,1] = np.sum(corrsig_cells[3,idx_N]==-1) / np.sum(~np.isnan(corrsig_cells[3,idx_N]))
+loopfrac[0,0]   = np.sum(corrsig_cells[1,idx_N]==1) / np.sum(~np.isnan(corrsig_cells[1,idx_N]))
+loopfrac[0,1]   = np.sum(corrsig_cells[1,idx_N]==-1) / np.sum(~np.isnan(corrsig_cells[1,idx_N]))
+loopfrac[1,0]   = np.sum(corrsig_cells[3,idx_N]==1) / np.sum(~np.isnan(corrsig_cells[3,idx_N]))
+loopfrac[1,1]   = np.sum(corrsig_cells[3,idx_N]==-1) / np.sum(~np.isnan(corrsig_cells[3,idx_N]))
 loopmean[0]     = np.nanmean(corrdata_cells[1,idx_N])
 loopmean[1]     = np.nanmean(corrdata_cells[3,idx_N])
-loopmean_abs[0]     = np.nanmean(np.abs(corrdata_cells[1,idx_N]))
-loopmean_abs[1]     = np.nanmean(np.abs(corrdata_cells[3,idx_N]))
+loopmean_abs[0] = np.nanmean(np.abs(corrdata_cells[1,idx_N]))
+loopmean_abs[1] = np.nanmean(np.abs(corrdata_cells[3,idx_N]))
 
 histcounts      = np.histogram(corrdata_cells[1,idx_N],bins=binedges)[0]
 loophist[0,:]   = np.cumsum(histcounts)/np.sum(histcounts)
@@ -401,11 +478,14 @@ for iboot in tqdm(range(nboots),total=nboots,desc='Bootstrapping'):
         idx_nearby_ses = np.where(np.all((np.squeeze(sessions[ises].distmat_xyz[idx_N_ses,:]<radius),
                                                  rangeresp[idx_ses]>minrangeresp,
                                                  sessions[ises].celldata['redcell']==0,
+                                                #  sessions[ises].celldata['noise_level']<maxnoiselevel,
                                                  ),axis=0))[0]
         #Convert this index to the index in the whole dataset
         idx_nearby = np.where(np.isin(celldata['cell_id'],sessions[ises].celldata['cell_id'][idx_nearby_ses]))[0]
         if len(idx_nearby) > 0: #pick a random one from the selected nearby cells
             idx_PMlab_nearby[iN] = np.random.choice(idx_nearby,1) 
+    if iboot == 0: 
+        print('PMlab: %d/%d' % (np.sum(~np.isnan(idx_PMlab_nearby)),len(idx_PMlab)))
     idx_PMlab_nearby = idx_PMlab_nearby[~np.isnan(idx_PMlab_nearby)].astype(int) #remove nans
 
     bootfrac[0,0,iboot] = np.sum(corrsig_cells[0,idx_PMlab_nearby]==1) / len(idx_PMlab_nearby) #compute fraction of sig pos for this boot
@@ -430,6 +510,8 @@ for iboot in tqdm(range(nboots),total=nboots,desc='Bootstrapping'):
 
         if len(idx_nearby) > 0:
             idx_V1lab_nearby[iN] = np.random.choice(idx_nearby,1)
+    if iboot == 0: 
+        print('V1lab: %d/%d' % (np.sum(~np.isnan(idx_V1lab_nearby)),len(idx_V1lab_nearby)))
     idx_V1lab_nearby = idx_V1lab_nearby[~np.isnan(idx_V1lab_nearby)].astype(int)
 
     bootfrac[1,0,iboot] = np.sum(corrsig_cells[2,idx_V1lab_nearby]==1) / len(idx_V1lab_nearby)
@@ -443,65 +525,41 @@ for iboot in tqdm(range(nboots),total=nboots,desc='Bootstrapping'):
 #%% 
 clrs_arealabelpairs = ['green','purple']
 legendlabels = ['FF','FB']
-axisbuffer = 0.05
+axisbuffer = 0.025
 lw = 2
 # fig,axes = plt.subplots(2,5,figsize=(12,5),sharex='col')
 fig,axes = plt.subplots(2,5,figsize=(10,4))
+
+loopdata_subplots = np.stack((loopmean,loopmean_abs,loopfrac[:,0],loopfrac[:,1]),axis=1)
+bootdata_subplots = np.stack((bootmean,bootmean_abs,bootfrac[:,0],bootfrac[:,1]),axis=1)
+# bootdata_subplots = np.concatenate((bootmean,bootmean_abs,bootfrac[ialp,0],bootfrac[ialp,1]),axis=2)
+subplotlabels = np.array(['Mean','Abs. Mean','Frac. Pos.','Frac. Neg.'])
+
 for ialp in range(2):
     axes[ialp,0].plot(binedges[:-1],loophist[ialp,:],color=clrs_arealabelpairs[ialp])
     
     shaded_error(binedges[:-1],np.nanmean(boothist[ialp,:,:],axis=1),np.nanstd(boothist[ialp,:,:],axis=1),
                     ax=axes[ialp,0],color='grey')
-    axes[ialp,0].set_xlim([binedges[np.where(loophist[ialp,:]>0)[0][0]],binedges[np.where(loophist[ialp,:]==1)[0][0]]])
+    axes[ialp,0].set_xlim([binedges[np.where(loophist[ialp,:]>0)[0][0]],binedges[np.where(loophist[ialp,:]>0.999)[0][0]]])
     axes[ialp,0].set_ylim([0,1])
     axes[ialp,0].set_ylabel(legendlabels[ialp],fontsize=15,fontweight='bold',color=clrs_arealabelpairs[ialp])
     if ialp == 0:
         axes[ialp,0].set_title('Corr. coeff.')
-        # axes[ialp,0].set_xlabel('Corr. coeff.')
     
-    axidx = 1
-    axes[ialp,axidx].axvline(loopmean[ialp],color=clrs_arealabelpairs[ialp],linewidth=lw)
-    sns.histplot(bootmean[ialp,:],ax=axes[ialp,axidx],bins=np.linspace(-.1,1,500),element='step',stat='probability',color='grey')
-    axes[ialp,axidx].set_xlim([loopmean[ialp]-axisbuffer,loopmean[ialp]+axisbuffer])
-    if loopmean[ialp]<np.percentile(bootmean[ialp,:],2.5) or loopmean[ialp]>np.percentile(bootmean[ialp,:],97.5):
-        axes[ialp,axidx].text(loopmean[ialp],0.1,'*',fontsize=20,color=clrs_arealabelpairs[ialp])
-    if ialp == 0:
-        # axes[ialp,1].set_xlabel('Mean Corr.')
-        axes[ialp,axidx].set_title('Mean Corr.')
-
-    axidx = 2
-    axes[ialp,axidx].axvline(loopmean_abs[ialp],color=clrs_arealabelpairs[ialp],linewidth=lw)
-    sns.histplot(bootmean_abs[ialp,:],ax=axes[ialp,axidx],bins=np.linspace(-.1,1,500),element='step',stat='probability',color='grey')
-    axes[ialp,axidx].set_xlim([loopmean_abs[ialp]-axisbuffer,loopmean_abs[ialp]+axisbuffer])
-    if loopmean_abs[ialp]<np.percentile(bootmean_abs[ialp,:],2.5) or loopmean_abs[ialp]>np.percentile(bootmean_abs[ialp,:],97.5):
-        axes[ialp,axidx].text(loopmean_abs[ialp],0.1,'*',fontsize=20,color=clrs_arealabelpairs[ialp])
-    if ialp == 0:
-        # axes[ialp,2].set_xlabel('Mean Abs. Corr.')
-        axes[ialp,axidx].set_title('Mean Abs. Corr.')
-    
-    axidx = 3
-    axes[ialp,axidx].axvline(loopfrac[ialp,0],color=clrs_arealabelpairs[ialp],linewidth=lw)
-    sns.histplot(bootfrac[ialp,0],ax=axes[ialp,axidx],bins=np.linspace(-.1,1,500),element='step',stat='probability',color='grey')
-    axes[ialp,axidx].set_xlim([np.percentile(bootfrac[ialp,0],0)-axisbuffer,np.percentile(bootfrac[ialp,0],100)+axisbuffer])
-    if loopfrac[ialp,0]<np.percentile(bootfrac[ialp,0],2.5) or loopfrac[ialp,0]>np.percentile(bootfrac[ialp,0],97.5):
-        axes[ialp,axidx].text(loopfrac[ialp,0],0.1,'*',fontsize=20,color=clrs_arealabelpairs[ialp])
-    if ialp == 0:
-        # axes[ialp,axidx].set_xlabel('Frac. Pos. Corr.')
-        axes[ialp,axidx].set_title('Frac. Pos. Corr.')
-    
-    axidx = 4
-    axes[ialp,axidx].axvline(loopfrac[ialp,1],color=clrs_arealabelpairs[ialp],linewidth=lw)
-    sns.histplot(bootfrac[ialp,1],ax=axes[ialp,axidx],bins=np.linspace(-.1,1,500),element='step',stat='probability',color='grey')
-    axes[ialp,axidx].set_xlim([np.percentile(bootfrac[ialp,1],0)-axisbuffer,np.percentile(bootfrac[ialp,1],100)+axisbuffer])
-    if loopfrac[ialp,1]<np.percentile(bootfrac[ialp,1],2.5) or loopfrac[ialp,1]>np.percentile(bootfrac[ialp,1],97.5):
-        axes[ialp,axidx].text(loopfrac[ialp,1],0.1,'*',fontsize=20,color=clrs_arealabelpairs[ialp])
-    if ialp == 0:
-        # axes[ialp,4].set_xlabel('Frac. Neg. Corr.')
-        axes[ialp,axidx].set_title('Frac. Neg. Corr.')
+    for imetric in range(4):
+        axidx = imetric+1
+        axes[ialp,axidx].axvline(loopdata_subplots[ialp,imetric],color=clrs_arealabelpairs[ialp],linewidth=lw)
+        sns.histplot(bootdata_subplots[ialp,imetric,:],ax=axes[ialp,axidx],bins=np.linspace(-.1,1,500),element='step',stat='probability',color='grey')
+        axes[ialp,axidx].set_xlim([np.percentile(bootdata_subplots[ialp,imetric],0)-axisbuffer,
+                                   np.percentile(bootdata_subplots[ialp,imetric],100)+axisbuffer])
+        pval = np.sum(bootdata_subplots[ialp,imetric,:]>loopdata_subplots[ialp,imetric])/len(bootdata_subplots[ialp,imetric,:])
+        axes[ialp,axidx].text(loopdata_subplots[ialp,imetric],0.1,get_sig_asterisks(np.min([pval,1-pval]),return_ns=True),fontsize=16,color=clrs_arealabelpairs[ialp])
+        if ialp == 0:
+            axes[ialp,axidx].set_title(subplotlabels[imetric])
 
 plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True,offset=3)
-my_savefig(fig,savedir,'FF_FB_Looped_Correlations_bootstrapped_%dsessions' % (nSessions), formats = ['png'])
+# my_savefig(fig,savedir,'FF_FB_Looped_Correlations_bootstrapped_%dsessions' % (nSessions), formats = ['png'])
 
 #%% 
 
