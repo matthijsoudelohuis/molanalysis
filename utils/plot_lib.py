@@ -775,6 +775,20 @@ def get_clr_area_labeled(area_labeled):
         'RSPlab' : sns.xkcd_rgb['crimson']}
     return itemgetter(*area_labeled)(palette)
 
+def get_clr_arealabelpairs(arealabelpairs):
+    palette       = {
+        'V1lab-V1unl-PMunlL2/3': '#9933FF',
+        'V1lab-V1unl-PMunlL5':  '#9933FF',
+        'PMlab-PMunl-V1unlL2/3': '#00CC99',
+        'PMlab-PMunl-V1unlL5':  '#00CC99',
+                    }
+
+    return itemgetter(*arealabelpairs)(palette)
+
+def get_clr_area_low_high():
+    c = np.array([["#C489FF", "#7C00F9"],  # V1lab-V1unl-PMunl
+                   ["#7BFFDE", "#009A74"]])  # PMlab-PMunl-V1unl
+    return c
 
 def get_clr_area_labelpairs(area_labelpairs):
     palette       = {

@@ -10,8 +10,9 @@ import statsmodels.formula.api as smf
 from sklearn.decomposition import PCA
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import r2_score
+from pylab import *
 
-os.chdir('e:\\Python\\molanalysis')
+os.chdir('c:\\Python\\molanalysis')
 
 from loaddata.get_data_folder import get_local_drive
 
@@ -25,7 +26,7 @@ from preprocessing.preprocesslib import assign_layer,assign_layer2
 from utils.rf_lib import filter_nearlabeled
 from utils.RRRlib import regress_out_behavior_modulation
 
-savedir =  os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\Affine_FF_vs_FB\\')
+savedir =  os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\Affine_FF_vs_FB\\TrialwiseModel\\')
 
 #%% #############################################################################
 session_list            = np.array([['LPE10919_2023_11_06']])
@@ -52,7 +53,6 @@ for ises in range(nSessions):
 
 #%%
 sessions = compute_tuning_wrapper(sessions)
-sessions = compute_pop_coupling(sessions)
 
 #%%
 for ises in range(nSessions):   
@@ -70,6 +70,7 @@ for ises in range(nSessions):
 #%% Concatenate all cells:
 celldata                = pd.concat([sessions[ises].celldata for ises in range(nSessions)]).reset_index(drop=True)
 nCells                  = len(celldata)
+
 
 #%%
 def fit_affine_FFFB(y,X,S,kfold=5,subtract_shuffle=True):
@@ -112,8 +113,8 @@ def fit_affine_FFFB(y,X,S,kfold=5,subtract_shuffle=True):
 #%% Parameters for model fitting:
 minnneurons             = 10
 maxnoiselevel           = 20 
-nbehavPCs               = 5
-nvideoPCs               = 10
+nbehavPCs               = 8
+nvideoPCs               = 15
 
 #%% Check whether epochs of endogenous high feedforward activity are associated with a specific modulation of the 
 arealabelpairs  = [
@@ -124,7 +125,8 @@ arealabelpairs  = [
 narealabelpairs         = len(arealabelpairs)
 
 nPredictors             = nbehavPCs + 1 # +1 for mean pop activity
-predlabels              = np.array([f'Behav_PC{i}' for i in range(nbehavPCs)] + ['MeanPopAct'])
+# predlabels              = np.array([f'Behav_PC{i}' for i in range(nbehavPCs)] + ['MeanPopAct'])
+predlabels              = np.array(['FF or FB'] + [f'Behav_PC{i}' for i in range(nbehavPCs)])
 AffModels               = np.array(['Stim','Mult','Add','Both'])
 nAffModels              = len(AffModels)
 
@@ -133,8 +135,15 @@ cvR2_affine             = np.full((narealabelpairs,nAffModels,nCells),np.nan)
 cvR2_preds              = np.full((narealabelpairs,nAffModels,nPredictors,nCells),np.nan)
 
 pca                     = PCA(n_components=nbehavPCs)
+from utils.RRRlib import LM
+from scipy.sparse.linalg import svds
+rank = nbehavPCs
 
 for ises in tqdm(range(nSessions),total=nSessions,desc='Computing affine modulation models'):
+    # zscore neural responses
+    respdata        = zscore(sessions[ises].respmat, axis=1)
+    # respdata        = sessions[ises].respmat / sessions[ises].celldata['meanF'].to_numpy()[:,None]
+
     #construct behavioral design matrix
     X       = np.stack((sessions[ises].respmat_videome,
                     sessions[ises].respmat_runspeed,
@@ -146,11 +155,12 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Computing affine modulat
     X       = zscore(X,axis=0,nan_policy='omit')
     si      = SimpleImputer() #impute missing values
     X       = si.fit_transform(X)
-    X_p     = pca.fit_transform(X) #reduce dimensionality
 
-    # zscore neural responses
-    respdata        = zscore(sessions[ises].respmat, axis=1)
-    # respdata        = sessions[ises].respmat / sessions[ises].celldata['meanF'].to_numpy()[:,None]
+    X_p     = pca.fit_transform(X) #reduce dimensionality
+    # #RRR to reduce dimensionality:
+    # B_hat       = LM(respdata.T,X,lam=0)
+    # U, s, V     = svds(B_hat,k=rank,which='LM')
+    # X_p         = X @ U #project X onto the low rank subspace to get most predictive behavioral components
 
     #Get mean response per orientation (to predict trial by trial responses and multiplicative modulation)
     meanresp    = np.full_like(respdata,np.nan)
@@ -188,9 +198,10 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Computing affine modulat
         meanpopact_N2          = np.nanmean(respdata[idx_source_N2,:],axis=0)
 
         for iN,N in enumerate(idx_target):
-            y       = respdata[N,:]
+            y       = respdata[N,:] 
             # X       = np.column_stack((X_p,meanpopact_N1,meanpopact_N2))
-            X       = np.column_stack((X_p,meanpopact_N1))
+            # X       = np.column_stack((X_p,meanpopact_N1))
+            X       = np.column_stack((meanpopact_N1,X_p))
             S       = meanresp[N,:]
             tempcvR2_models,tempcvR2_preds = fit_affine_FFFB(y,X,S,kfold=5,subtract_shuffle=True)
 
@@ -199,10 +210,125 @@ for ises in tqdm(range(nSessions),total=nSessions,desc='Computing affine modulat
             cvR2_affine[ialp,:,idx_ses] = tempcvR2_models
             cvR2_preds[ialp,:,:,idx_ses] = tempcvR2_preds
 
-#%% 
-clrs_arealabelpairs = ['green','purple']
+
+#%% Make schematic figure of affine model:
+#Get good example cell, well described by both mult and add modulation:
+ialp = 0
+mult_diff = cvR2_affine[ialp,1] - cvR2_affine[ialp,0]
+add_diff = cvR2_affine[ialp,2] - cvR2_affine[ialp,0]
+add_diff = cvR2_affine[ialp,3] - cvR2_affine[ialp,0]
+idx_examples = np.where(np.all((
+                        cvR2_affine[ialp,0,:]>np.nanpercentile(cvR2_affine[ialp,0,:],80),
+                        mult_diff>np.nanpercentile(mult_diff,80),
+                        add_diff>np.nanpercentile(add_diff,80),
+                       ),axis=0))[0]
+
+example_cell      = np.random.choice(idx_examples,1)
+# print(example_cell)
+# example_cell = np.where(celldata['cell_id'] == 'LPE12223_2024_06_10_3_0012')[0]
+
+ises = np.where(np.isin(sessiondata['session_id'], celldata['session_id'][example_cell]))[0][0]
+idx_inses = np.where(np.isin(sessions[ises].celldata['cell_id'], celldata['cell_id'][example_cell]))[0]
+
+trial_ori   = sessions[ises].trialdata['Orientation']
+sortidx     = np.argsort(trial_ori)
+nT          = len(trial_ori)
+
+idx_source_N1  = np.where(np.all((sessions[ises].celldata['arealabel'] == 'V1lab',
+                                        sessions[ises].celldata['noise_level']<maxnoiselevel,
+                                        # sessions[ises].celldata['nearby']
+                                        ),axis=0))[0]
+meanpopact_N1          = np.nanmean(sessions[ises].respmat[idx_source_N1,:],axis=0)
+meanpopact_N1 = zscore(meanpopact_N1)
+#construct behavioral design matrix
+X       = np.stack((sessions[ises].respmat_videome,
+                sessions[ises].respmat_runspeed,
+                sessions[ises].respmat_pupilarea,
+                sessions[ises].respmat_pupilareaderiv,
+                sessions[ises].respmat_pupilx,
+                sessions[ises].respmat_pupily),axis=1)
+X       = np.column_stack((X,sessions[ises].respmat_videopc[:nvideoPCs,:].T))
+X       = zscore(X,axis=0,nan_policy='omit')
+si      = SimpleImputer() #impute missing values
+X       = si.fit_transform(X)
+X_p     = pca.fit_transform(X) #reduce dimensionality
+
+# zscore neural responses
+y        = zscore(sessions[ises].respmat[idx_inses,:], axis=1)
+
+#Get mean response per orientation (to predict trial by trial responses and multiplicative modulation)
+S       = np.full_like(y,np.nan)
+for i,ori in enumerate(trial_ori.unique()):
+    idx_T              = trial_ori == ori
+    S[:,idx_T] = np.nanmean(y[:,idx_T],axis=1)[:,None]
+
+X       = np.column_stack((meanpopact_N1,X_p))
+
+X_add = X
+X_mult = X_add * S.T
+
+y = y.T[sortidx]
+X_add = X_add[sortidx,:]
+X_mult = X_mult[sortidx,:]
+S = S.T[sortidx]
+
+subsampling_factor = 10
+y = y[::subsampling_factor,:]
+X_add = X_add[::subsampling_factor,:]
+X_mult = X_mult[::subsampling_factor,:]
+S = S[::subsampling_factor,:]
+
+#  Construct the design matrix
+A                           = np.column_stack([S,X_add, X_mult])
+A                           = zscore(A,axis=0,nan_policy='omit')
+coefs, residuals, rank, s   = np.linalg.lstsq(A, y, rcond=None)    # Perform linear regression using least squares
+y_hat = A @ coefs
+
+cmap = 'viridis'
+
+cmap = 'magma'
+
+vmin,vmax = np.percentile(y,[5,95])
+fig = plt.figure(figsize=(6,6))
+desired_width = 1 / (1 + 1 + 6 + 6 + 5)
+spacing = 0.05
+ax = fig.add_subplot(111,position=[0.1,0.1,1*desired_width,0.8])
+pcolor(y, cmap=cmap, vmin=vmin, vmax=vmax)
+ax.set_axis_off()
+ax.set_title('Resp.',fontsize=7)
+xpos = 0.1 + desired_width + spacing
+
+ax = fig.add_subplot(111,position=[xpos,0.1,1*desired_width,0.8])
+pcolor(y_hat, cmap=cmap, vmin=vmin, vmax=vmax)
+ax.set_axis_off()
+ax.set_title('Pred. Resp.',fontsize=7)
+xpos = xpos + desired_width + spacing
+
+ax = fig.add_subplot(111,position=[xpos,0.1,1*desired_width,0.8])
+pcolor(S, cmap=cmap, vmin=vmin, vmax=vmax)
+ax.set_axis_off()
+ax.set_title('Stim.',fontsize=7)
+xpos = xpos + desired_width + spacing
+
+vmin,vmax = [-2,2]
+ax = fig.add_subplot(111,position=[xpos,0.1,1*desired_width*6,0.8])
+pcolor(X_add, cmap=cmap, vmin=vmin, vmax=vmax)
+ax.set_axis_off()
+ax.set_title('Add.',fontsize=7)
+xpos = xpos + 6*desired_width + spacing
+
+ax = fig.add_subplot(111,position=[xpos,0.1,1*desired_width*6,0.8])
+pcolor(X_mult, cmap=cmap, vmin=vmin, vmax=vmax)
+ax.set_axis_off()
+ax.set_title('Mult.',fontsize=7)
+xpos = xpos + desired_width + spacing
+
+my_savefig(fig,os.path.join(savedir,'ExampleNeurons'),'AffineModel_ExampleCell_cell%s' % (celldata['cell_id'][example_cell].to_numpy()[0]))
+
+# %% 
+clrs_arealabelpairs = ['#9933FF','#00CC99']
 legendlabels        = ['FF','FB']
-legendlabels        = ['FF\n(V1->PM)','FB\n(PM->V1)']
+# legendlabels        = ['FF\n(V1->PM)','FB\n(PM->V1)']
 
 #%% Show overall model performance: 
 fig,axes = plt.subplots(1,2,figsize=(3,2.5),sharey=True,sharex=True) 
@@ -217,36 +343,58 @@ for ialp in range(narealabelpairs):
 axes[0].set_ylabel('Performance R2')
 plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True,offset=3)
-my_savefig(fig,savedir,'AffineModel_R2_StimvsAffine_Overall_%dsessions' % (nSessions), formats = ['png'])
+# my_savefig(fig,savedir,'AffineModel_R2_StimvsAffine_Overall_%dsessions' % (nSessions), formats = ['png'])
 
 #%% Show overall model performance: 
-fig,axes = plt.subplots(1,2,figsize=(5,2.5)) 
-ax = axes[0]
-ax.plot(np.arange(nAffModels),np.nanmean(cvR2_affine,axis=(0,2)),marker=None,
-        linewidth=1.3,color='k')
-ax.scatter(np.arange(nAffModels),np.nanmean(cvR2_affine,axis=(0,2)),s=50,
-           c=sns.color_palette('magma',nAffModels))
-ax.set_ylim([0,my_ceil(np.nanmean(cvR2_affine[:,-1,:]),2)])
-ax.set_ylabel('Performance R2')
-ax_nticks(ax, 5)
-ax.set_xticks(np.arange(nAffModels),labels=AffModels)
+fig,axes = plt.subplots(1,1,figsize=(3,2)) 
 
-ax = axes[1]
-ymean   = np.nanmean(cvR2_preds[:,-1,:,:],axis=(0,2))
-yerr    = np.nanstd(cvR2_preds[:,-1,:,:],axis=(0,2)) / np.sqrt(np.sum(~np.isnan(cvR2_preds[0,-1,:,:]),axis=1))*5
+ax = axes
+idx_model = 3
+ymean   = np.nanmean(cvR2_preds[:,idx_model,:,:],axis=(0,2))
+yerr    = np.nanstd(cvR2_preds[:,idx_model,:,:],axis=(0,2)) / np.sqrt(np.sum(~np.isnan(cvR2_preds[0,idx_model,:,:]),axis=1))*5
+
+# ymean   = np.nanmean(cvR2_preds[:,-1,:,:],axis=(0,2))
+# yerr    = np.nanstd(cvR2_preds[:,-1,:,:],axis=(0,2)) / np.sqrt(np.sum(~np.isnan(cvR2_preds[0,-1,:,:]),axis=1))*5
 ax.errorbar(np.arange(nPredictors),ymean,yerr,linestyle='', color='k',marker='o',
             linewidth=2)
 # ax.plot(np.arange(nPredictors),ymean,marker=None,
 #         linewidth=1.3,color='k')
 # shaded_error(np.arange(nPredictors),ymean,yerr,color='black',alpha=0.2,ax=ax)
-ax.set_ylim([0,0.04])
-ax.set_ylim([0,my_ceil(np.nanmean(cvR2_preds[:,-1,0,:]),2)])
+# ax.set_ylim([0,0.04])
+# ax.set_ylim([0,my_ceil(np.nanmean(cvR2_preds[:,idx_model,1,:]),2)])
 ax.set_ylabel(u'$\Delta R^2$')
-ax_nticks(ax, 5)
+ax_nticks(ax, 3)
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True,offset=3)
+ax.set_xticks(np.arange(nPredictors),labels=predlabels,rotation=45,ha='right')
+my_savefig(fig,savedir,'AffineModel_uniqueR2_MultAddSep_PredictorsOverall_%dsessions' % (nSessions))
+
+
+#%% Show overall model performance: 
+fig,axes = plt.subplots(4,1,figsize=(3,6),sharey=True,sharex=True)
+
+for ivar,var in enumerate(['Mult','Add']):
+    for ialp,alp in enumerate(arealabelpairs):
+        # ax = axes[ivar,ialp]
+        ax = axes[ivar*2 + ialp]
+        ymean   = np.nanmean(cvR2_preds[ialp,ivar+1,:,:],axis=1)
+        yerr    = np.nanstd(cvR2_preds[ialp,ivar+1,:,:],axis=1) / np.sqrt(np.sum(~np.isnan(cvR2_preds[ialp,ivar+1,:,:]),axis=1))*5
+        ax.errorbar(np.arange(nPredictors),ymean,yerr,linestyle='', color='k',marker='o',
+                    markersize=7,linewidth=2)
+        # ax.plot(np.arange(nPredictors),ymean,marker=None,
+        #         linewidth=1.3,color='k')
+        # shaded_error(np.arange(nPredictors),ymean,yerr,color='black',alpha=0.2,ax=ax)
+        ax.set_ylim([0,my_ceil(np.nanmax(np.nanmean(cvR2_preds,axis=(1,3)).flatten()),2)])
+        ax.set_ylabel(u'$\Delta R^2$')
+        ax_nticks(ax, 3)
+        ax.set_title(f'{legendlabels[ialp]} - {var}')
+        ax.set_xticks(np.arange(nPredictors),labels=predlabels,rotation=45,ha='right')
+
 plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True,offset=3)
 ax.set_xticks(np.arange(nPredictors),labels=predlabels,rotation=45,ha='right')
 # my_savefig(fig,savedir,'AffineModel_R2_MultAddSep_PredictorsOverall_%dsessions' % (nSessions), formats = ['png'])
+
 
 #%% Show overall model performance as histograms:
 fig,axes = plt.subplots(1,4,figsize=(12,3),sharey=True,sharex=True)
@@ -1206,7 +1354,8 @@ legendlabels     = ['FF - PML2/3',
                     'FB - V1L2/3',
                     'FB - V1L5',
                     ]
-clrs_arealabelpairs = ['green','green','purple','purple']
+# clrs_arealabelpairs = ['green','green','purple','purple']
+clrs_arealabelpairs = get_clr_arealabelpairs(arealabelpairs)
 
 narealabelpairs         = len(arealabelpairs)
 
