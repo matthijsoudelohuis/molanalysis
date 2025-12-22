@@ -1,4 +1,7 @@
 {
     "typescript.tsserver.maxTsServerMemory": 15000,
-    "editor.largeFileOptimizations": false
+    "editor.largeFileOptimizations": false,
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python-envs.pythonProjects": []
 }
