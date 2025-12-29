@@ -142,7 +142,8 @@ for iPopCouplingBin in range(nPopCouplingBins):
     idx_N =    np.all((
                             # sessions[ises].celldata['gOSI']>0.4,
                             sessions[ises].celldata['noise_level']<20,
-                            sessions[ises].celldata['roi_name']=='PM'
+                            # sessions[ises].celldata['roi_name']=='V1'
+                            # sessions[ises].celldata['roi_name']=='PM'
                             ),axis=0)
     
     binedges_popcoupling = np.percentile(sessions[ises].celldata['pop_coupling'][idx_N],np.linspace(0,100,nPopCouplingBins+1))
@@ -195,6 +196,14 @@ plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True,offset=3)
 # my_savefig(fig,savedir,'Evoked_Activity_vs_Modulation_%dGRsessions_V1' % (nSessions))
 my_savefig(fig,savedir,'Evoked_Activity_vs_Modulation_%dGRsessions_PM' % (nSessions))
+
+
+
+
+
+
+
+
 
 
 

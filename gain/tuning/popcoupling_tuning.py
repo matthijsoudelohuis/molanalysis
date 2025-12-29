@@ -93,7 +93,7 @@ ax.legend(['0-20%','20-40%','40-60%','60-80%','80-100%'],
                     reverse=True,fontsize=7,frameon=False,title='pop. coupling',bbox_to_anchor=(1.05,1), loc='upper left')
 
 sns.despine(fig=fig,trim=True,top=True,right=True,offset=3)
-my_savefig(fig,savedir,'Popcoupling_tuning_%dGRsessions' % nSessions,formats=['png'])
+# my_savefig(fig,savedir,'Popcoupling_tuning_%dGRsessions' % nSessions,formats=['png'])
 
 #%% 
 fig, ax = plt.subplots(1,1,figsize=(4,4),subplot_kw={'projection': 'polar'})
