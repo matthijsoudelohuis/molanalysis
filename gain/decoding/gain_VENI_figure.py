@@ -24,6 +24,86 @@ savedir =  os.path.join(get_local_drive(),'OneDrive\\Fellowships & Grants\\2025 
 
 #%% #############################################################################
 
+sessions,nSessions   = filter_sessions(protocols = 'SP',filter_areas=['V1'],load_calciumdata=True)
+
+#%% #############################################################################
+session_list        = np.array([['LPE12223_2024_06_10']])
+
+sessions,nSessions      = filter_sessions(protocols = ['GR'],only_session_id=session_list)
+sessiondata             = pd.concat([ses.sessiondata for ses in sessions]).reset_index(drop=True)
+
+#%%  Load data properly:        
+calciumversion = 'deconv'
+for ises in range(nSessions):
+    sessions[ises].load_respmat(load_behaviordata=True, load_calciumdata=True,load_videodata=True,
+                                calciumversion=calciumversion,keepraw=False)
+    
+#%%
+sessions = compute_pop_coupling(sessions)
+ises = 0
+# resp = sessions[ises].respmat / sessions[ises].celldata['meanF'].to_numpy()[:,None]
+# resp = sessions[ises].respmat / sessions[ises].celldata['meanF'].to_numpy()[:,None]
+resp        = zscore(sessions[ises].respmat,axis=1)
+
+#%%
+ises = 3
+
+resp        = zscore(np.array(sessions[ises].calciumdata),axis=1).T
+# resp        = np.array(sessions[ises].calciumdata).T
+
+popratemat = np.mean(resp, axis=0)
+
+
+# N           = len(sessions[0].celldata)
+
+# popratemat = np.zeros((N,len(resp[0,:])))
+# for iN in range(N):
+    # popratemat[iN,:] = np.mean(resp[np.setdiff1d(np.arange(N),iN),:], axis=0)
+
+sessions[ises].celldata['pop_coupling']                          = [np.corrcoef(resp[i,:],popratemat)[0,1] for i in range(len(sessions[ises].celldata))]
+
+
+
+# %%
+# meandata = np.nanmean(sessions[ises].calciumdata,axis=1)
+meandata = np.nanmean(resp,axis=0)
+# ax.plot(meandata)
+ntrialstoplot = 150
+starttrial = np.random.randint(0,resp.shape[1]-ntrialstoplot)   
+# starttrial = 2941
+starttrial = 1481
+idx = np.arange(starttrial,starttrial+ntrialstoplot)
+# idx = np.arange(600,1000)
+# idx = np.arange(3000,3500)
+# idx = np.arange(2000,2500)
+
+fig,axes = plt.subplots(1,1,figsize=(5,2.5))
+ax = axes
+meandatanorm = (meandata[idx] - np.min(meandata[idx])) / (np.max(meandata[idx]) - np.min(meandata[idx]))
+ax.plot(meandatanorm,color='k',linewidth=2,alpha=1)
+
+chorister = sessions[ises].celldata['pop_coupling'] > np.percentile(sessions[ises].celldata['pop_coupling'],90)
+chorister_idx = np.random.choice(np.where(chorister)[0])
+chorister_idx = 568
+choristerdata = (resp[np.ix_([chorister_idx],idx)].squeeze() - np.min(resp[np.ix_([chorister_idx],idx)])) / (np.max(resp[np.ix_([chorister_idx],idx)]) - np.min(resp[np.ix_([chorister_idx],idx)]))
+ax.plot(choristerdata-1,color='red',alpha=1)
+
+soloist = sessions[ises].celldata['pop_coupling'] < np.percentile(sessions[ises].celldata['pop_coupling'],10)
+soloist_idx = np.random.choice(np.where(soloist)[0])
+# soloist_idx = 117
+# soloist_idx = 123
+# soloist_idx = 1636
+soloist_idx = 1690
+soloistdata = (resp[np.ix_([soloist_idx],idx)].squeeze() - np.min(resp[np.ix_([soloist_idx],idx)])) / (np.max(resp[np.ix_([soloist_idx],idx)]) - np.min(resp[np.ix_([soloist_idx],idx)]))
+ax.plot(soloistdata-2,color='blue',alpha=1)  
+
+ax.set_yticks([-2,-1,0],labels=['Soloist','Chorister','Population'])
+ax.set_xlabel('Trial')
+ax.set_title('Example neurons with different population coupling')
+sns.despine(fig=fig, top=True, right=True, offset=1,trim=False)
+my_savefig(fig=fig,savedir=savedir,filename='VENI_populationcoupling_exampleneurons')
+
+#%%
 sessions,nSessions   = filter_sessions(protocols = 'GR')
 
 
@@ -44,33 +124,110 @@ sessions = compute_pop_coupling(sessions,version='radius_500')
 
 #%% Filter out cells that are close to a labeled cell:
 for ises,ses in enumerate(sessions):
-    ses.celldata['nearby'] = filter_nearlabeled(sessions[ises],radius=30)
+    ses.celldata['nearby'] = filter_nearlabeled(sessions[ises],radius=50)
 
 #%% Concatenate cell data:
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
 
+#%%
+def compute_dprime(resp1,resp2):
+    mean1   = np.mean(resp1)
+    mean2   = np.mean(resp2)
+    var1    = np.var(resp1)
+    var2    = np.var(resp2)
+    dprime  = (mean1 - mean2) / np.sqrt(0.5 * (var1 + var2))
+    return dprime
+
+#%%
+
+for ises,ses in enumerate(sessions):
+    ses.reset_label_threshold(threshold=0.4)
+    # ses.celldata
+    redcelllabels                   = np.array(['unl','lab']) #Give redcells a string label
+    ses.celldata['labeled']       = ses.celldata['redcell'].astype(int).apply(lambda x: redcelllabels[x])
+    ses.celldata['arealabel']     = ses.celldata['roi_name'] + ses.celldata['labeled']
+
+celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+#%%
+from scipy.stats import ttest_ind
+
 #%% How are neurons are coupled to the population rate of different areas:
 arealabels = np.array([['V1unl','V1lab'],['PMunl','PMlab']])
-clrs_area = get_clr_labeled()
-fig,axes = plt.subplots(1,2,figsize=(4,2))
-bins = np.linspace(-0.05,0.5,200)
+
+fig,axes = plt.subplots(1,2,figsize=(6,3))
+bins = np.linspace(-0.1,0.55,50)
+cumulative = False
+bins = np.linspace(-0.1,0.55,500)
+cumulative = True
 for ixarea,xarea in enumerate(arealabels):
     ax = axes[ixarea]
-    print(xarea)
-    # print(ixarea)
+    # print(xarea)
+    tempdata = np.empty((2),dtype=object)
     for ilabeled,labeled in enumerate(['unl','lab']):
-        idx_N = np.all((celldata['arealabel']==xarea[ilabeled],
-                        # celldata['noise_level']<20,
-                        celldata['gOSI']>0.4,
+        idx_N_lab = np.all((celldata['arealabel']==xarea[ilabeled],
+                        celldata['noise_level']<10,
+                        # celldata['gOSI']>0.3,
+                        # celldata['tuning_var']>0.015,
                         # celldata['nearby'],
                         ),axis=0)
+        tempdata[ilabeled] = celldata['pop_coupling'][idx_N_lab]
+        # print('N %s: %d' % (xarea[ilabeled],len(tempdata[ilabeled])))
         sns.histplot(
-            celldata['pop_coupling'][idx_N],bins=bins,
-            stat='density',element='step',fill=False,
-            color=clrs_area[ilabeled],cumulative=True,ax=ax)
+            celldata['pop_coupling'][idx_N_lab],bins=bins,
+            stat='probability',element='step',fill=False,
+            color=clrs_area[ilabeled],cumulative=cumulative,ax=ax)
+    dprime = compute_dprime(tempdata[1],tempdata[0])
+    pval = ttest_ind(tempdata[0],tempdata[1])[1]
+    # ax.text(0.6,0.8,'p=%1.3f' % pval,transform=ax.transAxes,ha='center',va='center',fontsize=8)
+    ax.text(0.6,0.4,get_sig_asterisks(pval),transform=ax.transAxes,ha='center',va='center',fontsize=15)
+    print('Pval %s: %.3f' % (xarea[1],pval))
+    print('Dprime %s: %.2f' % (xarea[1],dprime))
+plt.tight_layout()
+sns.despine(fig=fig,trim=True,top=True,right=True)
+my_savefig(fig,savedir,'VENI_populationcoupling_area_comparison')
 
+#%% How are neurons are coupled to the population rate of different areas:
+arealabels = np.array([['V1unl','V1lab'],['PMunl','PMlab']])
+# arealabels = np.array([['V1','V1lab'],['PMunl','PMlab']])
+fig,axes = plt.subplots(1,2,figsize=(4,3),sharex=True,sharey=True)
 
-# 
+for ixarea,xarea in enumerate(arealabels):
+    ax = axes[ixarea]
+    # print(xarea)
+    tempdata = np.empty((2),dtype=object)
+    for ilabeled,labeled in enumerate(['unl','lab']):
+        idx_N_lab = np.all((celldata['arealabel']==xarea[ilabeled],
+                        celldata['noise_level']<10,
+                        # celldata['gOSI']>0.3,
+                        # celldata['tuning_var']>0.015,
+                        # celldata['nearby'],
+                        ),axis=0)
+        tempdata[ilabeled] = celldata['pop_coupling'][idx_N_lab]
+    data = pd.DataFrame({
+        'Population coupling': np.concatenate([tempdata[0],tempdata[1]]),
+        'Label': ['Unlabeled']*len(tempdata[0]) + ['Labeled']*len(tempdata[1])
+    })
+    sns.barplot(data=data,x='Label',y='Population coupling',
+                hue ='Label',
+                palette=clrs_area,
+                errorbar=('ci', 95),capsize=0.05,
+                linewidth=3,edgecolor=None,ax=ax)
+    for ilabel in range(2):
+        ax.text(ilabel,0.025,'n=%d' % len(tempdata[ilabel]),ha='center',va='bottom',fontsize=8,
+                color='white')
+    pval = ttest_ind(tempdata[0],tempdata[1])[1]
+    ax.set_ylabel('Population coupling')
+    ax.set_title(xarea[0][:-3])
+    # ax.text(0.6,0.8,'p=%1.3f' % pval,transform=ax.transAxes,ha='center',va='center',fontsize=8)
+    # ax.text(0.6,0.4,get_sig_asterisks(pval),transform=ax.transAxes,ha='center',va='center',fontsize=15)
+    add_ind_ttest_results(ax,tempdata[0],tempdata[1],pos=[0.5,0.9],fontsize=10)
+    print('Pval %s: %.3f' % (xarea[1],pval))
+    print('Dprime %s: %.2f' % (xarea[1],dprime))
+plt.tight_layout()
+sns.despine(fig=fig,trim=False,top=True,right=True)
+my_savefig(fig,savedir,'VENI_populationcoupling_area_comparison_barplot')
+
 # %% 
 sessions,nSessions   = filter_sessions(protocols = 'GR',filter_areas=['V1'])
 

@@ -7,15 +7,12 @@ Matthijs Oude Lohuis, 2023, Champalimaud Foundation
 import os
 import numpy as np
 import pandas as pd
-import logging
 from scipy.stats import zscore
 
 from loaddata.get_data_folder import get_data_folder
 from loaddata.session import Session
 from utils.behaviorlib import * # get support functions for beh analysis 
 from utils.psth import * # get support functions for psth generation
-logger = logging.getLogger(__name__)
-
 
 def load_sessions(protocol, session_list, load_behaviordata=False, load_calciumdata=False, load_videodata=False, 
                 calciumversion='dF',filter_areas=None):

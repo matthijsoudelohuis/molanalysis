@@ -13,7 +13,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 import warnings
-from scipy.stats import pearsonr,ttest_rel
+from scipy.stats import pearsonr,ttest_rel,ttest_ind
 import copy
 from statannotations.Annotator import Annotator
 
@@ -265,6 +265,14 @@ def add_corr_results(ax, x,y,pos=[0.2,0.1],fontsize=8):
         ax.text(pos[0],pos[1],'r=%1.2f\np<0.05' % r,transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
     else: 
         ax.text(pos[0],pos[1],'p=n.s.',transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k')
+
+
+def add_ind_ttest_results(ax, x,y,pos=[0.2,0.1],fontsize=8):
+    # nas = np.logical_or(np.isnan(x), np.isnan(y))
+    t,p = ttest_ind(x, y,nan_policy='omit')
+
+    print('Independent t-test: p=%.3f' % (p))
+    ax.text(pos[0],pos[1],'p<%s' % round_pval(p,return_ns=True),transform=ax.transAxes,ha='center',va='center',fontsize=fontsize,color='k') #ax.text(0.2,0.1,'p<0.05',transform=ax.transAxes,ha='center',va='center',fontsize=10,color='red')
 
 def add_paired_ttest_results(ax, x,y,pos=[0.2,0.1],fontsize=8):
     nas = np.logical_or(np.isnan(x), np.isnan(y))
