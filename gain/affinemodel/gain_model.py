@@ -10,7 +10,7 @@ from sklearn.preprocessing import minmax_scale
 from sklearn.metrics import r2_score
 from tqdm import tqdm
 
-os.chdir('e:\\Python\\molanalysis')
+os.chdir('c:\\Python\\molanalysis')
 
 from loaddata.get_data_folder import get_local_drive
 

@@ -120,14 +120,41 @@ for iPopCouplingBin in range(nPopCouplingBins):
     ax.tick_params(axis='x', labelrotation=45)
 sns.despine(fig=fig, top=True, right=True, offset=1,trim=True)
 
+#%% 
+clrs_popcoupling    = sns.color_palette('viridis',nPopRateBins)
+ngOSIbins           = 5
+binedges_gOSI       = np.percentile(sessions[ises].celldata['gOSI'],np.linspace(0,100,ngOSIbins+1))
+fig,axes = plt.subplots(ngOSIbins,nPopCouplingBins,figsize=(10,10),sharey=True,sharex=True)
+for igOSIbin in range(ngOSIbins):
+    for iPopCouplingBin in range(nPopCouplingBins):
+        # ax = axes[igOSIbin,iPopCouplingBin]
+        ax = axes[iPopCouplingBin,igOSIbin]
+        idx_popcoupling = np.all((
+                                sessions[ises].celldata['gOSI']>binedges_gOSI[igOSIbin],
+                                sessions[ises].celldata['gOSI']<=binedges_gOSI[igOSIbin+1],
+                                # sessions[ises].celldata['roi_name']=='V1',
+                                sessions[ises].celldata['pop_coupling']>binedges_popcoupling[iPopCouplingBin],
+                                sessions[ises].celldata['pop_coupling']<=binedges_popcoupling[iPopCouplingBin+1]),axis=0)
+                            # sessions[ises].celldata['pop_coupling']>binedges_popcoupling[iPopCouplingBin],
+                            # sessions[ises].celldata['pop_coupling']<=binedges_popcoupling[iPopCouplingBin+1]),axis=0)
+
+        for iPopRateBin in range(nPopRateBins):
+            ax.plot(np.mean(meandata[idx_popcoupling,iPopRateBin,:],axis=0),color=clrs_popcoupling[iPopRateBin],
+                    linewidth=2)
+        ax.set_xticks(np.arange(0,len(ustim),2),labels=ustim[::2],fontsize=7)
+        # ax.set_yticks([0,np.shape(data)[0]],labels=[0,np.shape(data)[0]],fontsize=7)
+        if iPopCouplingBin==nPopCouplingBins-1:
+            ax.set_xlabel('Orientation',fontsize=9)
+        # ax.set_ylabel('Neuron',fontsize=9)
+        ax.tick_params(axis='x', labelrotation=45)
+sns.despine(fig=fig, top=True, right=True, offset=1,trim=True)
+
 #%%
 # Problematic: population rate bin is defined not by the selection, but based on the above which is all neurons together, etc.
 
 #%% Is modulation by population rate dependent on activity levels,
 # more multiplicative for larger activity levels
 
-# ci              = 95 #bootstrapped confidence interval
-# nboots          = 250 #number of bootstrap samples
 percspacing     = 2 #bins chosen to have approx equal number of points
 # percentiles     = np.arange(0,100+percspacing,percspacing).astype('float')
 # percentiles[percentiles==100] = 99.75 #avoid issues with max value
@@ -195,7 +222,102 @@ ax_nticks(ax,3)
 plt.tight_layout()
 sns.despine(fig=fig, top=True, right=True,offset=3)
 # my_savefig(fig,savedir,'Evoked_Activity_vs_Modulation_%dGRsessions_V1' % (nSessions))
-my_savefig(fig,savedir,'Evoked_Activity_vs_Modulation_%dGRsessions_PM' % (nSessions))
+# my_savefig(fig,savedir,'Evoked_Activity_vs_Modulation_%dGRsessions_PM' % (nSessions))
+
+
+#%% Is modulation by population rate dependent on activity levels,
+# more multiplicative for larger activity levels
+
+percspacing     = 5 #bins chosen to have approx equal number of points
+# percentiles     = np.arange(0,100+percspacing,percspacing).astype('float')
+# percentiles[percentiles==100] = 99.75 #avoid issues with max value
+# bins            = np.nanpercentile(meandata,percentiles)
+# bins            = bins[bins>0] #remove duplicate bins at 0
+# bincenters      = (bins[:-1]+bins[1:])/2 #get bin centers
+
+ngOSIbins           = 5
+binedges_gOSI       = np.percentile(sessions[ises].celldata['gOSI'],np.linspace(0,100,ngOSIbins+1))
+
+fig,axes = plt.subplots(ngOSIbins,nPopCouplingBins,figsize=(nPopCouplingBins*3,3*ngOSIbins),sharex=True,sharey=True)
+
+for iPopCouplingBin in range(nPopCouplingBins):
+    for igOSIbin in range(ngOSIbins):
+        # ax = axes[igOSIbin,iPopCouplingBin]
+        ax = axes[iPopCouplingBin,igOSIbin]
+        idx_N =    np.all((
+                                # sessions[ises].celldata['gOSI']>0.4,
+                                sessions[ises].celldata['noise_level']<20,
+                                # sessions[ises].celldata['roi_name']=='V1',
+                                sessions[ises].celldata['roi_name']=='PM',
+                                sessions[ises].celldata['gOSI']>binedges_gOSI[igOSIbin],
+                                sessions[ises].celldata['gOSI']<=binedges_gOSI[igOSIbin+1],
+                                ),axis=0)
+        
+        # binedges_popcoupling = np.percentile(sessions[ises].celldata['pop_coupling'][idx_N],np.linspace(0,100,nPopCouplingBins+1))
+        binedges_popcoupling = np.percentile(sessions[ises].celldata['pop_coupling'],np.linspace(0,100,nPopCouplingBins+1))
+
+        idx_popcoupling = np.all((
+                                idx_N,
+                                sessions[ises].celldata['pop_coupling']>binedges_popcoupling[iPopCouplingBin],
+                                sessions[ises].celldata['pop_coupling']<=binedges_popcoupling[iPopCouplingBin+1],
+                                # sessions[ises].celldata['gOSI']>binedges_gOSI[igOSIbin],
+                                # sessions[ises].celldata['gOSI']<=binedges_gOSI[igOSIbin+1],
+                                ),axis=0)
+        
+                                # sessions[ises].celldata['pop_coupling']>binedges_popcoupling[iPopCouplingBin],
+                                # sessions[ises].celldata['pop_coupling']<=binedges_popcoupling[iPopCouplingBin+1]),axis=0)
+        
+        percentiles     = np.arange(0,100+percspacing,percspacing).astype('float')
+        percentiles[percentiles==100] = 99.75 #avoid issues with max value
+        bins            = np.nanpercentile(meandata[idx_popcoupling,:,:],percentiles)
+        bins            = bins[bins>0] #remove duplicate bins at 0
+        bincenters      = (bins[:-1]+bins[1:])/2 #get bin centers
+        
+        for iPopRateBin in range(nPopRateBins):
+            xdata = meandata[idx_popcoupling,0,:]
+            # xdata = np.nanmean(meandata[idx_popcoupling,:,:],axis=1)
+            ydata = meandata[idx_popcoupling,iPopRateBin,:] - meandata[idx_popcoupling,0,:]
+            # ydata = meandata[idx_popcoupling,iPopRateBin,:] - meandata[idx_popcoupling,2,:]
+
+            xdata.flatten()
+            ydata.flatten()
+
+            idx_notnan = np.logical_and(~np.isnan(xdata),~np.isnan(ydata))
+
+            xdata = xdata[idx_notnan]
+            ydata = ydata[idx_notnan]
+            ymeandata = binned_statistic(xdata, ydata, statistic='mean', 
+                                bins=bins)[0]
+            
+            # ax.plot(bincenters,ymeandata,color=clrs_popcoupling[iPopRateBin],marker='o',linestyle='None',markersize=4)
+            ax.plot(bincenters,ymeandata,color=clrs_popcoupling[iPopRateBin],linestyle='-',
+                    marker='o',markersize=4,linewidth=2)
+            ax.set_title('Pop. Coupling %d/%d' % (iPopCouplingBin+1,nPopCouplingBins))
+            if iPopCouplingBin==nPopCouplingBins-1:
+                ax.legend(['0-20%','20-40%','40-60%','60-80%','80-100%'],
+                        reverse=True,fontsize=7,frameon=False,title='pop. rate',bbox_to_anchor=(1.05,1), loc='upper left')
+        if iPopCouplingBin==0:
+            ax.set_ylabel('Modulation (rel. to low activity)')
+        if iPopCouplingBin == np.round(nPopCouplingBins/2):
+            ax.set_xlabel('Mean evoked activity')
+        ax.axhline(0,color='grey',ls='--',linewidth=1)
+    ax.set_xlim([0,bincenters[-1]*1.1])
+    ax_nticks(ax,3)
+
+plt.tight_layout()
+sns.despine(fig=fig, top=True, right=True,offset=3)
+# my_savefig(fig,savedir,'Evoked_Activity_vs_Modulation_%dGRsessions_V1' % (nSessions))
+# my_savefig(fig,savedir,'Evoked_Activity_vs_Modulation_%dGRsessions_PM' % (nSessions))
+
+#%%
+
+
+
+
+
+
+
+
 
 
 
@@ -467,3 +589,15 @@ my_savefig(fig,savedir,'AffineModelCoefHist_SingleNeuron_GR_%ssession' % session
 
 #%% 
 celldata = pd.concat([ses.celldata for ses in sessions]).reset_index(drop=True)
+
+
+
+
+
+
+
+
+#%% 
+
+
+
