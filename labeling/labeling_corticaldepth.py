@@ -16,7 +16,6 @@ from cellpose import models
 from utils.imagelib import im_norm8
 from sklearn.preprocessing import minmax_scale
 from utils.plot_lib import *
-from utils.plot_lib import shaded_error
 
 #%% Directories: 
 rawdatadir      = 'F:\\Stacks\\'

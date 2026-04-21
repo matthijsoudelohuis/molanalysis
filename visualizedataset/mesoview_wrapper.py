@@ -23,11 +23,10 @@ from utils.imagelib import im_norm,im_norm8,im_log,im_sqrt
 
 #%% Set parameters
 rawdatadir      = "F:\\Mesoviews\\"
-# rawdatadir      = "W:\\Users\\Matthijs\\Rawdata\\PILOTS\\"
 outputdir           = os.path.join(get_data_folder(),"OV")
 
 animal_ids          = [] #If empty than all animals in folder will be processed
-# animal_ids          = ['LPE10919'] #If empty than all animals in folder will be processed
+animal_ids          = ['LPE12223'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE09830','LPE09831'] #If empty than all animals in folder will be processed
 # animal_ids          = ['LPE11086'] #If empty than all animals in folder will be processed
 
@@ -81,26 +80,27 @@ for animal_id in animal_ids: #for each animal
                     del mROI_data,c,cmax #free up memory
                     time.sleep(0.5) #for memory management
             
-            mimg    = im_norm8(mimg,min=lowprc,max=99.8) #scale between 0 and 255
+            # coeff = estimate_correc_coeff(mimg,mimg2)
+            mimg  = bleedthrough_correction(mimg,mimg2)
 
-            mimg2   = im_norm(mimg2,min=lowprc,max=uppprc) #scale between 0 and 255
-            mimg2   = im_sqrt(mimg2) #square root transform to enhance weakly expressing cells
-            mimg2   = im_norm(mimg2,min=50,max=100) #scale between 0 and 255
-
-            # coeff       = estimate_correc_coeff(mimg,mimg2)
-            # mimg  = bleedthrough_correction(mimg,mimg2)
+            mimg    = im_norm8(mimg) #scale between 0 and 255
+            mimg2   = im_norm8(mimg2) #scale between 0 and 255
 
             if not os.path.exists(os.path.join(outputdir,animal_id)):
                 os.makedirs(os.path.join(outputdir,animal_id))
 
             outpath = os.path.join(outputdir,animal_id,animal_id + '_' + sessiondate + '_green.tif')
-            fH = open(outpath,'wb') #as fH:
-            tifffile.imwrite(fH,mimg.astype('int16'), bigtiff=True)
+            tifffile.imwrite(outpath,mimg.astype('uint8'))
 
             outpath = os.path.join(outputdir,animal_id,animal_id + '_' + sessiondate + '_red.tif')
-            fH = open(outpath,'wb') #as fH:
-            tifffile.imwrite(fH,mimg2.astype('int16'), bigtiff=True)
-            
+            tifffile.imwrite(outpath,mimg2.astype('uint8'))
+
+            mimg    = im_norm(mimg,min=lowprc,max=99.8) #scale between 0 and 255
+
+            mimg2   = im_norm(mimg2,min=lowprc,max=uppprc) #scale between 0 and 255
+            mimg2   = im_sqrt(mimg2) #square root transform to enhance weakly expressing cells
+            mimg2   = im_norm(mimg2,min=50,max=100) #scale between 0 and 255
+
             rchan = (mimg2 - np.min(mimg2)) / (np.max(mimg2) - np.min(mimg2))
             gchan = (mimg - np.min(mimg)) / (np.max(mimg) - np.min(mimg))
 
@@ -112,6 +112,8 @@ for animal_id in animal_ids: #for each animal
             axes[1].imshow(rchan,cmap=cmred,vmin=0,vmax=1)
 
             im3 = rchan[:,:,np.newaxis] * clr_rchan + gchan[:,:,np.newaxis] * clr_gchan
+            outpath = os.path.join(outputdir,animal_id,animal_id + '_' + sessiondate + '_merge.tif')
+            tifffile.imwrite(outpath,im3.astype('uint8'))
 
             axes[2].imshow(im3,vmin=0,vmax=1)
 
