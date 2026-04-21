@@ -14,7 +14,7 @@ import statsmodels.formula.api as smf
 from statannotations.Annotator import Annotator
 from sklearn.decomposition import PCA
 
-os.chdir('c:\\Python\\molanalysis')
+os.chdir('e:\\Python\\molanalysis')
 
 from loaddata.get_data_folder import get_local_drive
 from utils.explorefigs import plot_PCA_gratings_3D,plot_PCA_gratings
@@ -27,7 +27,6 @@ from utils.plot_lib import * #get all the fixed color schemes
 savedir =  os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\TransferFunctions')
 
 #%% Define nonlinearities:
-
 
 def lin(x):
     return x
@@ -103,6 +102,9 @@ plt.tight_layout()
 sns.despine()
 # my_savefig(plt.gcf(),savedir,f'{nonlinearity_names[i]}_Nonlinearity_TransferFunction')
 # my_savefig(fig,savedir,f'Tranfer_functions_overview')
+
+#%% Show gain as well: 
+
 
 #%% Plotting:
 
@@ -217,6 +219,210 @@ for inonlin, nonlinearity in enumerate(nonlinearities):
     plt.tight_layout()
     sns.despine(fig=fig,right=True,top=True)
     my_savefig(fig,savedir,f'Simulation_TuningCurve_HeterogeneousPopCoupling_Model_{nonlinearity_names[inonlin]}')
+
+#%% 
+
+def visualize_tuning_curve_with_popcoupling(tuning=1.0, offset=0.0, popmod = 0.3, nonlinearity=sigmoid,operating_range=[-3,3]):
+    nstim = 7
+    markersize = 75
+    clrs = sns.color_palette('gist_rainbow',nstim)
+    xmin,xmax = [-4,4]
+    x = np.linspace(xmin, xmax, 100)
+    x_input = tuning_input(x, pref=0.0, width=1.0, gain=tuning) + offset
+
+    x_stim = np.linspace(xmin, xmax-0.5, nstim)
+    x_stim_input = tuning_input(x_stim, pref=0.0, width=1.0, gain=tuning) + offset
+
+    fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+    ax = axes[0]
+    ax.plot(x,x_input,color='black',lw=1.5,linestyle='-')
+    ax.plot(x,x_input+popmod,color='black',lw=0.5,linestyle='--')
+    ax.plot(x,x_input-popmod,color='black',lw=0.5,linestyle='--')
+
+    sns.scatterplot(x=x_stim, y=x_stim_input,hue=x_stim,palette=clrs,ax=ax,legend=False,s=markersize) 
+    ax.set_ylim([-0.05,1.05])
+    ax.set_xlabel('Stimulus')
+    ax.set_ylabel('Input current')
+    ax.set_title('Input current')
+
+    ax =  axes[1]
+    x_oprange = np.linspace(operating_range[0],operating_range[1],100)
+    y_oprange = nonlinearity(x_oprange)
+
+    ax.plot(x_oprange, y_oprange,color='black',lw=1.5,linestyle='-')
+
+    x_stim_input_med = tuning_input(x_stim, pref=0.0, width=1.0, gain=tuning) + offset
+    x_stim_input_med *= (operating_range[1] - operating_range[0])
+    x_stim_input_med = x_stim_input_med+operating_range[0]
+    y_response_med = nonlinearity(x_stim_input_med)
+
+    x_stim_input_low = tuning_input(x_stim, pref=0.0, width=1.0, gain=tuning) + offset - popmod
+    x_stim_input_low *= (operating_range[1] - operating_range[0])
+    x_stim_input_low = x_stim_input_low+operating_range[0]
+    y_response_low = nonlinearity(x_stim_input_low)
+
+    x_stim_input_high = tuning_input(x_stim, pref=0.0, width=1.0, gain=tuning) + offset + popmod
+    x_stim_input_high *= (operating_range[1] - operating_range[0])
+    x_stim_input_high = x_stim_input_high+operating_range[0]
+    y_response_high = nonlinearity(x_stim_input_high)
+
+    sns.scatterplot(x=x_stim_input_low, y=y_response_low,hue=x_stim,palette=clrs,ax=ax,legend=False,s=markersize)
+    sns.scatterplot(x=x_stim_input_high, y=y_response_high,hue=x_stim,palette=clrs,ax=ax,legend=False,s=markersize)
+
+    ax.plot(np.row_stack([x_stim_input_high,x_stim_input_high]),
+            np.row_stack([np.zeros(nstim),y_response_high]),
+             color='black',lw=0.5,linestyle='-')
+    ax.plot(np.row_stack([x_stim_input_low,x_stim_input_low]),
+            np.row_stack([np.zeros(nstim),y_response_low]),
+             color='black',lw=0.5,linestyle='-')
+
+    ax.plot(np.row_stack([np.ones(nstim)*operating_range[1],x_stim_input_high]),
+            np.row_stack([y_response_high,y_response_high]),
+             color='black',lw=0.5,linestyle='-')
+    ax.plot(np.row_stack([np.ones(nstim)*operating_range[1],x_stim_input_low]),
+            np.row_stack([y_response_low,y_response_low]),
+             color='black',lw=0.5,linestyle='-')
+    
+    ax.set_ylim([-0.05,1.05])
+    ax.set_xlim(operating_range)
+    ax.set_title('Nonlinearity')
+    ax.set_xlabel('Input')
+    ax.set_ylabel('Output')
+    # ax.grid()
+
+    ax = axes[2]
+    sns.scatterplot(x=x_stim, y=y_response_med,hue=x_stim,palette=clrs,ax=ax,legend=False,s=markersize)
+    sns.scatterplot(x=x_stim, y=y_response_low,hue=x_stim,palette=clrs,ax=ax,legend=False,s=markersize)
+    sns.scatterplot(x=x_stim, y=y_response_high,hue=x_stim,palette=clrs,ax=ax,legend=False,s=markersize)
+    ax.plot(np.row_stack([x_stim,x_stim]),np.row_stack([y_response_low,y_response_high]),color='black',lw=1.5,linestyle='-')
+    ax.set_ylim([-0.05,1.05])
+    ax.set_xlabel('Stimulus')
+    ax.set_ylabel('Output current')
+    ax.set_title('Modulated response')
+    # ax.grid()
+
+    ax = axes[3]
+    sns.scatterplot(x=y_response_low, y=y_response_high,hue=np.arange(nstim),palette=clrs,s=markersize,ax=ax,legend=False)
+    ax.plot([0,1],[0,1],color='black',lw=1.5,linestyle='--')
+    ax.set_ylim([-0.05,1.05])
+    ax.set_xlim([-0.05,1.05])
+    ax.set_xlabel('Low')
+    ax.set_ylabel('High')
+    ax.set_title('Modulated response')
+    plt.tight_layout()
+    sns.despine(fig=fig,right=True,top=True)
+    return fig
+
+#%%
+examplename = 'Sigmoid_Additive_Nontuned_Low'
+popmod = 0.15
+tuning = 0.1
+offset = 0.3
+nonlinearity = sigmoid
+fig = visualize_tuning_curve_with_popcoupling(tuning=tuning, offset=offset, popmod = popmod, 
+                                        nonlinearity=nonlinearity, operating_range=[-4,4])
+
+my_savefig(fig,savedir,'Nonlinearity_IO_%s' % (examplename))
+
+#%%
+examplename = 'Sigmoid_Additive_Nontuned_High'
+popmod = 0.15
+tuning = 0.15
+offset = 0.5
+nonlinearity = sigmoid
+fig = visualize_tuning_curve_with_popcoupling(tuning=tuning, offset=offset, popmod = popmod, 
+                                        nonlinearity=nonlinearity, operating_range=[-4,4])
+
+my_savefig(fig,savedir,'Nonlinearity_IO_%s' % (examplename))
+
+#%%
+examplename = 'Sigmoid_Mult_Tuned_Low'
+popmod = 0.15
+tuning = 0.4
+offset = 0
+nonlinearity = sigmoid
+fig = visualize_tuning_curve_with_popcoupling(tuning=tuning, offset=offset, popmod = popmod, 
+                                        nonlinearity=nonlinearity, operating_range=[-4,4])
+
+my_savefig(fig,savedir,'Nonlinearity_IO_%s' % (examplename))
+
+#%%
+examplename = 'Sigmoid_Mult_Tuned_High'
+popmod = 0.15
+tuning = 0.4
+offset = 0.2
+nonlinearity = sigmoid
+fig = visualize_tuning_curve_with_popcoupling(tuning=tuning, offset=offset, popmod = popmod, 
+                                        nonlinearity=nonlinearity, operating_range=[-4,4])
+
+my_savefig(fig,savedir,'Nonlinearity_IO_%s' % (examplename))
+
+#%%
+examplename = 'Sigmoid_Curved_Tuned'
+popmod = 0.15
+tuning = 0.9
+offset = 0.1
+nonlinearity = sigmoid
+fig = visualize_tuning_curve_with_popcoupling(tuning=tuning, offset=offset, popmod = popmod, 
+                                        nonlinearity=nonlinearity, operating_range=[-4,4])
+
+my_savefig(fig,savedir,'Nonlinearity_IO_%s' % (examplename))
+
+#%%
+nonlinearity_names = ['Linear', 'ReLU', 'Softplus', 'Sigmoid', 'Tanh', 'Power-law (p=2)', 'Exp']
+nnonlinearities = len(nonlinearities)
+
+operating_range = np.array([[0,1],
+                            [-0.5,1],
+                            [-3,3],
+                            [-5,5],
+                            [-2.5,2.5],
+                            [-.5,3],
+                            [-.5,2]])
+#%%
+examplename = 'Exp_Tuned_Additive'
+popmod = 0.15
+tuning = 0.1
+offset = 0.5
+nonlinearity = exp
+fig = visualize_tuning_curve_with_popcoupling(tuning=tuning, offset=offset, popmod = popmod, 
+                                        nonlinearity=nonlinearity, operating_range=[-.5,1])
+
+my_savefig(fig,savedir,'Nonlinearity_IO_%s' % (examplename))
+
+#%%
+examplename = 'Exp_Tuned_Multiplicative'
+popmod = 0.15
+tuning = 0.4
+offset = 0.15
+nonlinearity = exp
+fig = visualize_tuning_curve_with_popcoupling(tuning=tuning, offset=offset, popmod = popmod, 
+                                        nonlinearity=nonlinearity, operating_range=[-.5,1])
+
+my_savefig(fig,savedir,'Nonlinearity_IO_%s' % (examplename))
+
+#%%
+examplename = 'Powerlaw_Tuned_Additive'
+popmod = 0.15
+tuning = 0.1
+offset = 0.75
+nonlinearity = nonlinearities[5]
+fig = visualize_tuning_curve_with_popcoupling(tuning=tuning, offset=offset, popmod = popmod, 
+                                        nonlinearity=nonlinearity, operating_range=[-.5,1])
+my_savefig(fig,savedir,'Nonlinearity_IO_%s' % (examplename))
+
+#%%
+examplename = 'Powerlaw_Tuned_Multiplicative'
+popmod = 0.15
+tuning = 0.6
+offset = 0.2
+nonlinearity = nonlinearities[5]
+fig = visualize_tuning_curve_with_popcoupling(tuning=tuning, offset=offset, popmod = popmod, 
+                                        nonlinearity=nonlinearity, operating_range=[-.5,1])
+my_savefig(fig,savedir,'Nonlinearity_IO_%s' % (examplename))
+
+
+
 
 #%%
 
