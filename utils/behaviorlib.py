@@ -20,7 +20,6 @@ from scipy.stats import binned_statistic
 from sklearn.metrics import r2_score
 
 #personal libs:
-from utils.plot_lib import *
 from utils.plot_lib import * # get all the fixed color schemes
 
 # def filter_engaged(sessions):

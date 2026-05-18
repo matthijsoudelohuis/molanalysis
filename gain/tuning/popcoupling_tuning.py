@@ -4,7 +4,7 @@ import os, math, copy
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-os.chdir('e:\\Python\\molanalysis')
+os.chdir('c:\\Python\\molanalysis')
 import seaborn as sns
 from scipy.stats import zscore
 from scipy.stats import linregress
@@ -705,6 +705,42 @@ sessions = fitAffine_GR_singleneuron_split(sessions,radius=500)
 
 # fitAffine_GR_singleneuron_split
 
+
+#%% Get good unmodulated cell: 
+idx_examples = np.all((sessions[ises].celldata['aff_r2_grsplit']>np.percentile(sessions[ises].celldata['aff_r2_grsplit'],80),
+                       sessions[ises].celldata['aff_alpha_grsplit']<np.percentile(sessions[ises].celldata['aff_alpha_grsplit'],50),
+                       sessions[ises].celldata['aff_beta_grsplit']<np.percentile(sessions[ises].celldata['aff_beta_grsplit'],50),
+                       ),axis=0)
+
+print(sessions[ises].celldata['cell_id'][idx_examples])
+
+example_cell      = np.random.choice(sessions[ises].celldata['cell_id'][idx_examples])
+
+#%% Get good multiplicatively modulated cells: 
+idx_examples = np.all((sessions[ises].celldata['aff_r2_grsplit']>np.percentile(sessions[ises].celldata['aff_r2_grsplit'],80),
+                       sessions[ises].celldata['aff_alpha_grsplit']>np.percentile(sessions[ises].celldata['aff_alpha_grsplit'],80),
+                       sessions[ises].celldata['aff_beta_grsplit']<np.percentile(sessions[ises].celldata['aff_beta_grsplit'],50),
+                       ),axis=0)
+
+print(sessions[ises].celldata['cell_id'][idx_examples])
+
+example_cell      = np.random.choice(sessions[ises].celldata['cell_id'][idx_examples])
+# example_neuron      = 'LPE13959_2025_02_24_3_0120'
+
+#%% Get good additively modulated cells: 
+idx_examples = np.all((sessions[ises].celldata['aff_r2_grsplit']>np.percentile(sessions[ises].celldata['aff_r2_grsplit'],80),
+                       sessions[ises].celldata['aff_alpha_grsplit']<np.percentile(sessions[ises].celldata['aff_alpha_grsplit'],50),
+                       sessions[ises].celldata['aff_beta_grsplit']>np.percentile(sessions[ises].celldata['aff_beta_grsplit'],80),
+                       ),axis=0)
+
+print(sessions[ises].celldata['cell_id'][idx_examples])
+
+example_cell      = np.random.choice(sessions[ises].celldata['cell_id'][idx_examples])
+# example_cell      = 'LPE10919_2023_11_06_0_0014'
+# example_cell      = 'LPE10919_2023_11_06_1_0021'
+# example_cell      = 'LPE10919_2023_11_06_5_0441'
+
+
 #%% Identify example cell with high population coupling and orientation tuning:
 #%% Get good unmodulated cell: 
 idx_examples = np.all((sessions[ises].celldata['aff_r2_grfull']>np.percentile(sessions[ises].celldata['aff_r2_grfull'],80),
@@ -739,6 +775,9 @@ example_cell      = np.random.choice(sessions[ises].celldata['cell_id'][idx_exam
 # example_cell      = 'LPE10919_2023_11_06_0_0014'
 # example_cell      = 'LPE10919_2023_11_06_1_0021'
 # example_cell      = 'LPE10919_2023_11_06_5_0441'
+
+#%%
+example_cell = 'LPE10919_2023_11_06_0_0058'
 
 #%% 
 # pal = sns.color_palette('husl', len(oris))
@@ -818,46 +857,129 @@ ax.set_ylim(np.percentile(sessions[ises].poprate,[0.1,99.5]))
 ax.set_zlim(np.percentile(resp[:,idx_N],[0.1,99]))
 fig.tight_layout()
 sns.despine(fig=fig, top=True, right=True, offset=3,trim=True)
-my_savefig(fig,savedir,'Example_cell_3D_Ori_PopRate_Response_%s' % (example_cell), formats = ['png'])
+# my_savefig(fig,savedir,'Example_cell_3D_Ori_PopRate_Response_%s' % (example_cell), formats = ['png'])
 
 
 
 
 
 
-#%% Get good unmodulated cell: 
-idx_examples = np.all((sessions[ises].celldata['aff_r2_grsplit']>np.percentile(sessions[ises].celldata['aff_r2_grsplit'],80),
-                       sessions[ises].celldata['aff_alpha_grsplit']<np.percentile(sessions[ises].celldata['aff_alpha_grsplit'],50),
-                       sessions[ises].celldata['aff_beta_grsplit']<np.percentile(sessions[ises].celldata['aff_beta_grsplit'],50),
-                       ),axis=0)
+#%% Compute modulation (high vs low pop rate) for each neuron and orientation, across sessions
+perc_split     = 25
+ustim          = np.unique(sessions[0].trialdata['Orientation'])
+nstim          = len(ustim)
 
-print(ses.celldata['cell_id'][idx_examples])
+mean_resp_arr  = []
+modulation_arr = []
+ses_idx_arr    = []
+cell_idx_arr   = []
 
-example_cell      = np.random.choice(ses.celldata['cell_id'][idx_examples])
+for ises in range(nSessions):
+    ses   = sessions[ises]
+    N     = ses.respmat.shape[0]
+    stims = ses.trialdata['Orientation'].to_numpy()
 
-#%% Get good multiplicatively modulated cells: 
-idx_examples = np.all((sessions[ises].celldata['aff_r2_grsplit']>np.percentile(sessions[ises].celldata['aff_r2_grsplit'],80),
-                       sessions[ises].celldata['aff_alpha_grsplit']>np.percentile(sessions[ises].celldata['aff_alpha_grsplit'],80),
-                       sessions[ises].celldata['aff_beta_grsplit']<np.percentile(sessions[ises].celldata['aff_beta_grsplit'],50),
-                       ),axis=0)
+    poprate  = np.nanmean(zscore(ses.respmat, axis=1), axis=0)  # (nTrials,)
+    
+    mean_resp  = np.full((N, nstim), np.nan)
+    modulation = np.full((N, nstim), np.nan)
 
-print(sessions[ises].celldata['cell_id'][idx_examples])
+    for istim, stim in enumerate(ustim):
+        idx_all  = stims == stim
+        thr_low  = np.percentile(poprate[idx_all], perc_split)
+        thr_high = np.percentile(poprate[idx_all], 100 - perc_split)
 
-example_cell      = np.random.choice(sessions[ises].celldata['cell_id'][idx_examples])
-# example_neuron      = 'LPE13959_2025_02_24_3_0120'
+        idx_low  = idx_all & (poprate <= thr_low)
+        idx_high = idx_all & (poprate >= thr_high)
 
-#%% Get good additively modulated cells: 
-idx_examples = np.all((sessions[ises].celldata['aff_r2_grsplit']>np.percentile(sessions[ises].celldata['aff_r2_grsplit'],80),
-                       sessions[ises].celldata['aff_alpha_grsplit']<np.percentile(sessions[ises].celldata['aff_alpha_grsplit'],50),
-                       sessions[ises].celldata['aff_beta_grsplit']>np.percentile(sessions[ises].celldata['aff_beta_grsplit'],80),
-                       ),axis=0)
+        mean_resp[:, istim]  = np.nanmean(ses.respmat[:, idx_all],  axis=1)
+        modulation[:, istim] = (np.nanmean(ses.respmat[:, idx_high], axis=1) -
+                                np.nanmean(ses.respmat[:, idx_low],  axis=1))
 
-print(sessions[ises].celldata['cell_id'][idx_examples])
+        # modulation[:, istim] = (np.nanmean(ses.respmat[:, idx_high], axis=1) /
+        #                         np.nanmean(ses.respmat[:, idx_low],  axis=1))
 
-example_cell      = np.random.choice(sessions[ises].celldata['cell_id'][idx_examples])
-# example_cell      = 'LPE10919_2023_11_06_0_0014'
-# example_cell      = 'LPE10919_2023_11_06_1_0021'
-# example_cell      = 'LPE10919_2023_11_06_5_0441'
+
+    # Roll each neuron so orientation index 0 = preferred
+    prefori_idx = np.argmax(mean_resp, axis=1)
+    for n in range(N):
+        mean_resp[n,:]  = np.roll(mean_resp[n,:],  -prefori_idx[n])
+        modulation[n,:] = np.roll(modulation[n,:], -prefori_idx[n])
+
+    mean_resp_arr.append(mean_resp)
+    modulation_arr.append(modulation)
+    ses_idx_arr.extend([ises] * N)
+    cell_idx_arr.extend(range(N))
+
+mean_resp_all  = np.concatenate(mean_resp_arr,  axis=0)  # (N_total, nstim)
+modulation_all = np.concatenate(modulation_arr, axis=0)  # (N_total, nstim)
+ses_idx_all    = np.array(ses_idx_arr)
+cell_idx_all   = np.array(cell_idx_arr)
+
+#%% Select neurons showing inverted-U: modulation peaks at intermediate orientations,
+# not at preferred (index 0) or anti-preferred direction (index 8 = 180° away)
+pref_mod     = modulation_all[:, 0]
+antipref_mod = modulation_all[:, 8]
+mid_mod_peak = np.nanmax(modulation_all[:, 2:7], axis=1)  # peak modulation in 45–112.5° range
+# mid_mod_peak = np.nanmean(modulation_all[:, 3:6], axis=1)  # peak modulation in 45–112.5° range
+
+idx_invU = np.where(
+    (mid_mod_peak > pref_mod) &
+    (mid_mod_peak > antipref_mod) &
+    (mid_mod_peak > 0) &
+    ~np.any(np.isnan(modulation_all), axis=1)
+)[0]
+print('%d / %d neurons with inverted-U modulation profile' % (len(idx_invU), len(mean_resp_all)))
+
+ex_global = np.random.choice(idx_invU)
+ex_ises   = ses_idx_all[ex_global]
+ex_iN     = cell_idx_all[ex_global]
+ex_cellid = sessions[ex_ises].celldata['cell_id'].iloc[ex_iN]
+print('Example neuron: %s' % ex_cellid)
+
+#%% Select neurons showing inverted-U: modulation peaks at intermediate orientations,
+
+idx_alphabeta = np.where(
+    (celldata['aff_alpha_grsplit']>3) &
+    (celldata['aff_beta_grsplit']<0)
+)[0]
+
+ex_global = np.random.choice(idx_alphabeta)
+ex_ises   = ses_idx_all[ex_global]
+ex_iN     = cell_idx_all[ex_global]
+ex_cellid = sessions[ex_ises].celldata['cell_id'].iloc[ex_iN]
+print('Example neuron: %s' % ex_cellid)
+
+#%% Plot: mean response vs modulation per orientation for the selected example neuron
+# Each of the 16 orientations is one point; color encodes circular distance from preferred
+ori_dist = np.minimum(np.arange(nstim), nstim - np.arange(nstim))  # 0..8 steps
+clrs_ori = sns.color_palette('coolwarm', ori_dist.max() + 1)
+
+fig, ax = plt.subplots(1, 1, figsize=(4, 3.5))
+
+x = mean_resp_all[ex_global, :]
+y = modulation_all[ex_global, :]
+
+sort_ord = np.argsort(x)
+ax.plot(x[sort_ord], y[sort_ord], color='gray', linewidth=0.8, alpha=0.5, zorder=1)
+
+for i in range(nstim):
+    ax.scatter(x[i], y[i], color=clrs_ori[ori_dist[i]], s=60, zorder=3, edgecolors='none')
+
+ax.axhline(0, color='k', linewidth=0.5, linestyle=':')
+ax.set_xlabel('Mean response (all trials)', fontsize=10)
+ax.set_ylabel('Modulation  (high − low pop rate)', fontsize=10)
+ax.set_title(ex_cellid, fontsize=8)
+
+sm = plt.cm.ScalarMappable(cmap='coolwarm', norm=plt.Normalize(0, ori_dist.max()))
+sm.set_array([])
+cbar = fig.colorbar(sm, ax=ax, shrink=0.7, pad=0.02)
+cbar.set_label('Dist. from pref ori (× 22.5°)', fontsize=8)
+cbar.set_ticks(range(ori_dist.max() + 1))
+
+sns.despine(fig=fig, trim=False, top=True, right=True, offset=2)
+plt.tight_layout()
+# my_savefig(fig, savedir, 'InvertedU_modulation_%s' % ex_cellid, formats=['png'])
 
 #%% Merge celldata from all sessions
 celldata = pd.concat([sessions[ises].celldata for ises in range(nSessions)]).reset_index(drop=True)
@@ -867,12 +989,16 @@ fig,ax = plt.subplots(1,1,figsize=(4.5,4))
 
 idx_N = np.all((celldata['noise_level']<20,
                 # celldata['gOSI']>0.3,
-                celldata['OSI']>0.5,
+                # celldata['OSI']>0.5,
                 # celldata['tuning_var']>0.05,
                 ),axis=0)
-
+# celldata['minresp'] = np.nanmin(mean_resp_all,1)
+# celldata['minresp'] = np.nanmax(mean_resp_all,1)
+# hue_norm = tuple(np.nanpercentile(celldata['minresp'],[5,95]))
 # sns.scatterplot(data=celldata[celldata['aff_r2_grsplit']],x='aff_alpha_grsplit',y= 'aff_beta_grsplit',alpha=0.25,s=10,ax=ax)
-sns.scatterplot(data=celldata[idx_N],x='aff_alpha_grsplit',y= 'aff_beta_grsplit',alpha=0.5,s=8,ax=ax,color='k')
+sns.scatterplot(data=celldata[idx_N],x='aff_alpha_grsplit',y= 'aff_beta_grsplit',
+                hue='pop_coupling',palette='rocket',hue_norm=(-0.2,0.6),alpha=0.5,s=8,ax=ax,color='k')
+                # hue='minresp',hue_norm=hue_norm,palette='rocket',alpha=0.5,s=8,ax=ax,color='k')
 ax.set_xlim(np.percentile(celldata['aff_alpha_grsplit'],[0.01,99.99]))
 ax.set_ylim(np.percentile(celldata['aff_beta_grsplit'],[0.01,99.99]))
 ax.axhline(y=0,color='k',linestyle='-',linewidth=0.5)
@@ -882,8 +1008,12 @@ b = linregress(celldata['aff_alpha_grsplit'][idx_N], celldata['aff_beta_grsplit'
 ax.text(0.6,0.6,'r=%1.2f, p=%s' % (b[2],get_sig_asterisks(b[3])),transform=plt.gca().transAxes)
 
 sns.despine(fig=fig, top=True, right=True, offset=3,trim=True)
-my_savefig(fig,savedir,'Corr_Alpha_Beta_GR_RateSplit_%d' % nSessions, formats = ['png'])
+# my_savefig(fig,savedir,'Corr_Alpha_Beta_GR_RateSplit_%d' % nSessions, formats = ['png'])
 
+#%%
+# sns.scatterplot(data=celldata[idx_N],x='aff_beta_grsplit',y= 'minresp',
+                # hue='pop_coupling',palette='rocket' ,alpha=0.5,s=8,color='k')
+                
 #%%
 fig,ax = plt.subplots(1,1,figsize=(4.5,4))
 # sns.scatterplot(data=celldata[idx_N],x='tuning_var',y= 'aff_alpha_grsplit',alpha=0.5,s=8,ax=ax,color='k')
@@ -891,7 +1021,8 @@ fig,ax = plt.subplots(1,1,figsize=(4.5,4))
 # sns.scatterplot(data=celldata[idx_N],x='OSI',y= 'aff_alpha_grsplit',alpha=0.5,s=8,ax=ax,color='k')
 
 # fig,ax = plt.subplots(1,1,figsize=(4.5,4))
-sns.scatterplot(data=celldata[idx_N],x='tuning_var',y= 'aff_beta_grsplit',alpha=0.5,s=8,ax=ax,color='k')
+sns.scatterplot(data=celldata[idx_N],x='tuning_var',y= 'aff_beta_grsplit',
+                hue='pop_coupling',palette='rocket',hue_norm=(-0.2,0.6),alpha=0.5,s=8,ax=ax,color='k')
 # sns.scatterplot(data=celldata[idx_N],x='gOSI',y= 'aff_beta_grsplit',alpha=0.5,s=8,ax=ax,color='k')
 # sns.scatterplot(data=celldata[idx_N],x='OSI',y= 'aff_beta_grsplit',alpha=0.5,s=8,ax=ax,color='k')
 
@@ -935,5 +1066,5 @@ ax_nticks(ax,5)
 ax.set_xlabel('Low population rate',fontsize=10)
 ax.set_ylabel('High population rate',fontsize=10)
 sns.despine(fig=fig, top=True, right=True, offset=3,trim=True)
-my_savefig(fig,savedir,'Example_cell_GR_RateSplit_%s' % (example_cell), formats = ['png'])
+# my_savefig(fig,savedir,'Example_cell_GR_RateSplit_%s' % (example_cell), formats = ['png'])
 

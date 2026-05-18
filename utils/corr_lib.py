@@ -399,6 +399,17 @@ def filter_corr_p(r,n,p_thr=0.01):
     # plt.scatter(r.flatten(),p.flatten())
     return r
 
+def filter_sharednan(x,y):
+    """
+    Filter out shared nans in x and y.
+    """
+    isnan = np.logical_or(np.isnan(x),np.isnan(y))
+    x = x[~isnan]
+    y = y[~isnan]
+    return x,y
+
+
+
 #     # #######    #    #     #     #####  ####### ######  ######  
 ##   ## #         # #   ##    #    #     # #     # #     # #     # 
 # # # # #        #   #  # #   #    #       #     # #     # #     # 
