@@ -6,8 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 os.chdir('c:\\Python\\molanalysis')
 import seaborn as sns
-from scipy.stats import zscore
-from scipy.stats import linregress
+from scipy.stats import zscore, linregress
 from scipy.optimize import curve_fit
 
 from loaddata.session_info import filter_sessions,load_sessions
