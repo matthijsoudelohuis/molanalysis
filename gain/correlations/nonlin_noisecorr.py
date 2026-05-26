@@ -28,6 +28,9 @@ from utils.nonlin_lib import *
 
 savedir =  os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\TransferFunctions')
 
+#%%
+cm = 1/2.54  # centimeters in inches
+
 # #%% Define nonlinearities:
 
 # def lin(x):
@@ -161,13 +164,79 @@ sessions[ises].response_product = np.empty((N,N,len(oris)))
 for i,ori in enumerate(oris):
     temp = minmax_scale(sessions[ises].meanresp_orig[:,i])
 
-    sessions[ises].response_product[:,:,i] = np.outer(temp,temp)
+    # sessions[ises].response_product[:,:,i] = np.outer(temp,temp)
+    sessions[ises].response_product[:,:,i] = temp[:,np.newaxis] + temp[np.newaxis,:]
     np.fill_diagonal(sessions[ises].response_product[:, :, i],np.nan)
 
-#%% Plot the scatter between noise correlations and:
+# fig,axes = plt.subplots(1,1,figsize=(4,4))
+# ax = axes
+# sns.histplot(sessions[ises].response_product.flatten(),bins=50,ax=ax)
+# ax.set_xlabel('Product of mean tuned response')
+# ax.set_ylabel('Count')
+
+#%% Plot the scatter between average noise correlations and:
 # 1) signal correlation
+# 2) product of population coupling
+# 3)
+from utils.corr_lib import filter_sharednan
+markersize = 2
+markeralpha = 0.1
+# idx_N = np.random.choice(N,150,replace=False)
+# idx_N = np.random.choice(np.where(sessions[ises].celldata['gOSI']>0.4)[0],150,replace=False)
+
+# NC_data = sessions[ises].NC_alltrials[np.ix_(idx_N,idx_N)]
+NC_data = sessions[ises].NC_avgperstim[np.ix_(idx_N,idx_N)]
+ydata = NC_data.flatten()
+
+nsubplots = 3
+fig,axes = plt.subplots(1,nsubplots,figsize=(nsubplots*3.5*cm,4*cm),sharey=True)
+ax = axes[0]
+xdata = sessions[ises].sig_corr[np.ix_(idx_N,idx_N)].flatten()
+xdata,ydata = filter_sharednan(xdata,ydata)
+
+# sns.scatterplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,s=5,alpha=0.2)
+sns.regplot(x=xdata,y=ydata,ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
+ax.text(0.5, 0.95,'R2= %1.2f' % np.corrcoef(xdata,ydata)[0,1]**2,transform=ax.transAxes,ha='center',va='top',fontsize=8,color='red')
+ax.set_xlabel('Signal Corr')
+ax.set_ylabel('Noise Correlation')
+
+ax = axes[1]
+xdata = sessions[ises].coupling_product[np.ix_(idx_N,idx_N)]
+ydata = NC_data.flatten()
+xdata,ydata = filter_sharednan(xdata.flatten(),ydata)
+sns.regplot(x=xdata,y=ydata,ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
+ax.text(0.5, 0.95,'R2= %1.2f' % np.corrcoef(xdata.flatten(),ydata)[0,1]**2,transform=ax.transAxes,ha='center',va='top',fontsize=8,color='red')
+ax.set_xlabel('PC product')
+# ax.set_ylabel('Noise Correlation')
+
+ax = axes[2]
+ydata = NC_data.flatten()
+temp1 = sessions[ises].sig_corr[np.ix_(idx_N,idx_N)].flatten()
+temp2 = sessions[ises].coupling_product[np.ix_(idx_N,idx_N)].flatten()
+temp1 = minmax_scale(temp1,feature_range=(0,1))
+# temp1 = temp1**3
+# temp1 = temp1**2
+# temp1 = np.log(temp1)
+
+# xdata = temp1 * temp2
+temp1 = minmax_scale(temp1)
+
+xdata = temp1 * temp2
+# xdata = minmax_scale(temp1) * minmax_scale(temp2)
+xdata,ydata = filter_sharednan(xdata,ydata)
+# xdata = sessions[ises].sig_corr[np.ix_(idx_N,idx_N)] * sessions[ises].coupling_product[np.ix_(idx_N,idx_N)]
+# xdata = minmax_scale(sessions[ises].sig_corr[np.ix_(idx_N,idx_N)]) * sessions[ises].coupling_product[np.ix_(idx_N,idx_N)]
+
+sns.regplot(x=xdata,y=ydata,ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
+ax.text(0.5, 0.95,'R2= %1.2f' % np.corrcoef(xdata,ydata)[0,1]**2,transform=ax.transAxes,ha='center',va='top',fontsize=8,color='red')
+ax.set_xlabel('PC * signal corr')
+# ax.set_ylabel('Noise Correlation')
+
+sns.despine(fig=fig, top=True, right=True, offset=2,trim=False)
+plt.tight_layout()
+
+#%% 
 # 2) difference in preferred orientation
-# 3) product of population coupling
 # 4) product of response per orientation
 # 5) product of 4 and 5:
 
@@ -180,35 +249,32 @@ nsubplots = 5
 fig,axes = plt.subplots(1,nsubplots,figsize=(nsubplots*2.5,2.5))
 ax = axes[0]
 xdata = sessions[ises].sig_corr[np.ix_(idx_N,idx_N)]
-sns.scatterplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,s=5,alpha=0.2)
+# sns.scatterplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,s=5,alpha=0.2)
+sns.regplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
 ax.set_xlabel('Signal Correlation')
 ax.set_ylabel('Noise Correlation')
 
 ax = axes[1]
-sns.scatterplot(x=sessions[ises].delta_pref[np.ix_(idx_N,idx_N)].flatten(),y=NC_data.flatten(),ax=ax,s=5,alpha=0.2)
-ax.set_xlabel('Delta Preferred Orientation')
-ax.set_ylabel('Noise Correlation')
-
-ax = axes[2]
-sns.scatterplot(x=sessions[ises].coupling_product[np.ix_(idx_N,idx_N)].flatten(),y=NC_data.flatten(),ax=ax,s=5,alpha=0.2)
+xdata = sessions[ises].coupling_product[np.ix_(idx_N,idx_N)]
+sns.regplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
 ax.set_xlabel('Product of population coupling')
 ax.set_ylabel('Noise Correlation')
 
-ax = axes[3]
+ax = axes[2]
 NC_data = sessions[ises].NC_perstim[np.ix_(idx_N,idx_N,np.arange(len(oris)))].flatten()
 xdata = sessions[ises].response_product[np.ix_(idx_N,idx_N,np.arange(len(oris)))] .flatten()
-sns.scatterplot(x=xdata,y=NC_data,ax=ax,s=5,alpha=0.2)
+sns.regplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
 ax.set_xlabel('Product of responses')
 ax.set_ylabel('Noise Correlation')
 
-ax = axes[4]
+ax = axes[3]
 idx_N = np.random.choice(N,100,replace=False)
 NC_data = sessions[ises].NC_perstim[np.ix_(idx_N,idx_N,np.arange(len(oris)))].flatten()
 temp1 = sessions[ises].coupling_product[np.ix_(idx_N,idx_N)]
 temp2 = sessions[ises].response_product[np.ix_(idx_N,idx_N,np.arange(len(oris)))]
 xdata = temp1[:,:,np.newaxis] * temp2
 
-sns.scatterplot(x=xdata.flatten(),y=NC_data,ax=ax,s=5,alpha=0.2)
+sns.regplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
 ax.set_xlabel('Product of coupling and responses')
 ax.set_ylabel('Noise Correlation')
 
