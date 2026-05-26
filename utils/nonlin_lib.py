@@ -8,6 +8,8 @@ from tqdm import tqdm
 from scipy.stats import linregress,binned_statistic
 from scipy.optimize import minimize
 
+from utils.gain_lib import comp_poprate
+
 #%% ###########################################################################
 # NONLINEAR TRANSFER FUNCTION FITTING PIPELINE
 # Model: r(t) = f( θ_k(t) + γ · P(t) + b )
@@ -134,18 +136,21 @@ def fit_nl_models_sessions(sessions, nl_configs=NL_CONFIGS, verbose=False):
 
     for ises in range(nSessions):
         ses      = sessions[ises]
-        poprate  = np.nanmean(zscore(ses.respmat, axis=1), axis=0)
         ustim_s  = np.unique(ses.trialdata['Orientation'])
         stim_ids = np.searchsorted(ustim_s, ses.trialdata['Orientation'].to_numpy())
         N        = ses.respmat.shape[0]
         nstim    = len(ustim_s)
 
+        if not hasattr(ses,'popratemat'):
+            ses = comp_poprate(ses,version='radius_500')
+            
         for name in nl_names:
             ses.celldata['R2'    + name] = np.nan
             ses.celldata['Gamma' + name] = np.nan
             ses.celldata['Beta'  + name] = np.nan
 
         for iN in tqdm(range(N), desc=f'Session {ises+1}/{nSessions}'):
+            poprate = ses.popratemat[iN,:]
             resp = ses.respmat[iN, :]
             res  = fit_nl_models(resp, stim_ids, poprate, configs=nl_configs)
             for name in nl_names:

@@ -123,6 +123,11 @@ def filter_sessions(protocols,load_behaviordata=False, load_calciumdata=False,
                 if only_session_id is not None:
                     sesflag = sesflag and ses.session_id in only_session_id
 
+                #Remove sessions with too much drift in them:
+                driftses = ['LPE12013_2024_05_02','LPE10884_2023_10_20','LPE09830_2023_04_12']
+                if ses.session_id in driftses and protocol in ['GR','GN','IM']:
+                    sesflag = False
+
                 # SELECT BASED ON # TRIALS
                 if min_trials is not None:
                     sesflag = sesflag and len(ses.trialdata) >= min_trials

@@ -14,6 +14,7 @@ from scipy.stats import zscore
 
 from scipy.stats import vonmises
 from loaddata.session import Session
+from utils.pair_lib import compute_pairwise_anatomical_distance
 from utils.psth import compute_respmat
 from utils.plot_lib import * #get all the fixed color schemes
 
@@ -111,56 +112,67 @@ def pop_rate_gain_model(data, stimuli):
 
     return data_hat
 
+def comp_poprate(sessions,version='allfast'):
+
+    for ises,ses in enumerate(sessions):
+        resp                = zscore(ses.respmat,axis=1)
+
+        N                   = len(ses.celldata)
+
+        ses.popratemat      = np.full_like(resp, np.nan)
+
+        if not hasattr(ses,'distmat_xyz'):
+            # ses = compute_pairwise_anatomical_distance([ses])
+            [ses] = compute_pairwise_anatomical_distance([sessions[ises]])
+    
+        for iN in range(N):
+            
+            if version == 'allfast':
+                ses.popratemat = np.tile(np.nanmean(resp, axis=0), (N,1))
+                break
+            elif version == 'all':
+                ses.popratemat[iN,:] = np.nanmean(resp[np.setdiff1d(np.arange(N),iN),:], axis=0)
+            elif version == 'area':
+                idx_N = ses.celldata['roi_name'] == ses.celldata['roi_name'][iN]
+                idx_N[iN] = False
+                ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
+            elif version == 'plane':
+                # ses.popratemat[iN,:] = poprate_planes[ses.celldata['plane_idx'][iN]]
+                idx_N = ses.celldata['plane_idx'] == ses.celldata['plane_idx'][iN]
+                idx_N[iN] = False
+                ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
+            elif version == 'radius_50':
+                idx_N = ses.distmat_xyz[iN,:] < 50
+                idx_N[iN] = False
+                ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
+            elif version == 'radius_100':
+                idx_N = ses.distmat_xyz[iN,:] < 100
+                idx_N[iN] = False
+                ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
+            elif version == 'radius_500':
+                idx_N = ses.distmat_xyz[iN,:] < 500
+                idx_N[iN] = False
+                ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
+            elif version == 'radius_1000':
+                idx_N = ses.distmat_xyz[iN,:] < 1000
+                idx_N[iN] = False
+                ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
+            elif version == 'random':
+                ses.popratemat[iN,:] = np.random.randn(1,resp.shape[1])
+            elif version == 'runspeed':
+                ses.popratemat[iN,:] = ses.respmat_runspeed
+            elif version == 'videome':
+                ses.popratemat[iN,:] = ses.respmat_videome
+    return sessions
+
 def compute_pop_coupling(sessions,version='allfast'):
-    #How are neurons are coupled to the population rate: 
     for ises,ses in enumerate(sessions):
         resp        = zscore(ses.respmat,axis=1)
 
-        N           = len(ses.celldata)
-
         if not hasattr(ses,'popratemat'):
-            ses.popratemat = np.full_like(resp, np.nan)
-        
-            for iN in range(N):
-                
-                if version == 'allfast':
-                    ses.popratemat = np.tile(np.mean(resp, axis=0), (N,1))
-                    break
-                elif version == 'all':
-                    ses.popratemat[iN,:] = np.mean(resp[np.setdiff1d(np.arange(N),iN),:], axis=0)
-                elif version == 'area':
-                    idx_N = ses.celldata['roi_name'] == ses.celldata['roi_name'][iN]
-                    idx_N[iN] = False
-                    ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
-                elif version == 'plane':
-                    # ses.popratemat[iN,:] = poprate_planes[ses.celldata['plane_idx'][iN]]
-                    idx_N = ses.celldata['plane_idx'] == ses.celldata['plane_idx'][iN]
-                    idx_N[iN] = False
-                    ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
-                elif version == 'radius_50':
-                    idx_N = ses.distmat_xyz[iN,:] < 50
-                    idx_N[iN] = False
-                    ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
-                elif version == 'radius_100':
-                    idx_N = ses.distmat_xyz[iN,:] < 100
-                    idx_N[iN] = False
-                    ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
-                elif version == 'radius_500':
-                    idx_N = ses.distmat_xyz[iN,:] < 500
-                    idx_N[iN] = False
-                    ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
-                elif version == 'radius_1000':
-                    idx_N = ses.distmat_xyz[iN,:] < 1000
-                    idx_N[iN] = False
-                    ses.popratemat[iN,:] = np.nanmean(resp[idx_N,:], axis=0)
-                elif version == 'random':
-                    ses.popratemat[iN,:] = np.random.randn(1,resp.shape[1])
-                elif version == 'runspeed':
-                    ses.popratemat[iN,:] = ses.respmat_runspeed
-                elif version == 'videome':
-                    ses.popratemat[iN,:] = ses.respmat_videome
+            ses = comp_poprate(ses,version=version)
 
-        ses.celldata['pop_coupling']                          = [np.corrcoef(resp[i,:],ses.popratemat[i,:])[0,1] for i in range(len(ses.celldata))]
+        ses.celldata['pop_coupling']   = [np.corrcoef(resp[i,:],ses.popratemat[i,:])[0,1] for i in range(len(ses.celldata))]
     
     return sessions
 
