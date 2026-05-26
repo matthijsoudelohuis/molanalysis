@@ -122,14 +122,14 @@ prefori                         = oris[np.argmax(resp_meanori,axis=1)]
 sessions[ises].delta_pref       = np.abs(np.mod(np.subtract.outer(prefori, prefori),180))
 
 # Compute signal correlations on all trials: 
-sessions[ises].sig_corr         = np.corrcoef(resp_meanori)
+# sessions[ises].sig_corr         = np.corrcoef(resp_meanori)
 
 #Compute signal correlation on separate halfs of trials:
-# trialfilter                     = np.random.choice([True,False],size=(K),p=[0.5,0.5])
-# resp_meanori1,_                 = mean_resp_gr(sessions[ises],trialfilter=trialfilter)
-# resp_meanori2,_                 = mean_resp_gr(sessions[ises],trialfilter=~trialfilter)
-# sessions[ises].sig_corr         = 0.5 * (np.corrcoef(resp_meanori1, resp_meanori2)[:N, N:] +
-                                    # np.corrcoef(resp_meanori2, resp_meanori1)[:N, N:])
+trialfilter                     = np.random.choice([True,False],size=(K),p=[0.5,0.5])
+resp_meanori1,_                 = mean_resp_gr(sessions[ises],trialfilter=trialfilter)
+resp_meanori2,_                 = mean_resp_gr(sessions[ises],trialfilter=~trialfilter)
+sessions[ises].sig_corr         = 0.5 * (np.corrcoef(resp_meanori1, resp_meanori2)[:N, N:] +
+                                    np.corrcoef(resp_meanori2, resp_meanori1)[:N, N:])
 # Compute noise correlations from residuals:
 sessions[ises].NC_alltrials       = np.corrcoef(respmat_res)
 
@@ -177,7 +177,8 @@ for i,ori in enumerate(oris):
 #%% Plot the scatter between average noise correlations and:
 # 1) signal correlation
 # 2) product of population coupling
-# 3)
+# 3) product of 1 and 2
+
 from utils.corr_lib import filter_sharednan
 markersize = 2
 markeralpha = 0.1
@@ -214,7 +215,8 @@ ydata = NC_data.flatten()
 temp1 = sessions[ises].sig_corr[np.ix_(idx_N,idx_N)].flatten()
 temp2 = sessions[ises].coupling_product[np.ix_(idx_N,idx_N)].flatten()
 temp1 = minmax_scale(temp1,feature_range=(0,1))
-# temp1 = temp1**3
+# temp1 = zscore(temp1,nan_policy='omit')
+temp1 = temp1**0.5
 # temp1 = temp1**2
 # temp1 = np.log(temp1)
 
@@ -236,49 +238,87 @@ sns.despine(fig=fig, top=True, right=True, offset=2,trim=False)
 plt.tight_layout()
 
 #%% 
-# 2) difference in preferred orientation
-# 4) product of response per orientation
-# 5) product of 4 and 5:
 
-idx_N = np.random.choice(N,100,replace=False)
+#%% Plot the scatter between average noise correlations and:
+# 1) signal correlation
+# 2) product of population coupling
+# 3) product of 1 and 2
 
-NC_data = sessions[ises].NC_alltrials[np.ix_(idx_N,idx_N)]
-NC_data = sessions[ises].NC_avgperstim[np.ix_(idx_N,idx_N)]
+from utils.corr_lib import filter_sharednan
+markersize = 1
+markeralpha = 0.1
+# idx_N = np.random.choice(N,150,replace=False)
+idx_N = np.random.choice(np.where(sessions[ises].celldata['gOSI']>0.4)[0],
+                         50,replace=False)
+
+# NC_data = sessions[ises].NC_alltrials[np.ix_(idx_N,idx_N)]
+# NC_data = sessions[ises].NC_avgperstim[np.ix_(idx_N,idx_N)]
+NC_data = sessions[ises].NC_perstim[np.ix_(idx_N,idx_N,np.arange(len(oris)))].flatten()
+
 
 nsubplots = 5
-fig,axes = plt.subplots(1,nsubplots,figsize=(nsubplots*2.5,2.5))
+fig,axes = plt.subplots(1,nsubplots,figsize=(nsubplots*3.5*cm,4*cm),sharey=True)
 ax = axes[0]
-xdata = sessions[ises].sig_corr[np.ix_(idx_N,idx_N)]
+ydata = NC_data.flatten()
+xdata_sigcorr = np.repeat(sessions[ises].sig_corr[np.ix_(idx_N,idx_N)][:,:,np.newaxis],
+                    len(oris),axis=2).flatten()
+xdata,ydata = filter_sharednan(xdata_sigcorr,ydata)
+
 # sns.scatterplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,s=5,alpha=0.2)
-sns.regplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
-ax.set_xlabel('Signal Correlation')
+sns.regplot(x=xdata,y=ydata,ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
+ax.text(0.5, 0.95,'R2= %1.2f' % np.corrcoef(xdata,ydata)[0,1]**2,transform=ax.transAxes,ha='center',va='top',fontsize=8,color='red')
+ax.set_xlabel('Signal Corr')
 ax.set_ylabel('Noise Correlation')
 
 ax = axes[1]
-xdata = sessions[ises].coupling_product[np.ix_(idx_N,idx_N)]
-sns.regplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
-ax.set_xlabel('Product of population coupling')
-ax.set_ylabel('Noise Correlation')
+ydata = NC_data.flatten()
+xdata_coupling = np.repeat(sessions[ises].coupling_product[np.ix_(idx_N,idx_N)][:,:,np.newaxis],
+                    len(oris),axis=2).flatten()
+xdata,ydata = filter_sharednan(xdata_coupling,ydata)
+sns.regplot(x=xdata,y=ydata,ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
+ax.text(0.5, 0.95,'R2= %1.2f' % np.corrcoef(xdata.flatten(),ydata)[0,1]**2,transform=ax.transAxes,ha='center',va='top',fontsize=8,color='red')
+ax.set_xlabel('PC product')
+# ax.set_ylabel('Noise Correlation')
 
 ax = axes[2]
-NC_data = sessions[ises].NC_perstim[np.ix_(idx_N,idx_N,np.arange(len(oris)))].flatten()
-xdata = sessions[ises].response_product[np.ix_(idx_N,idx_N,np.arange(len(oris)))] .flatten()
-sns.regplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
-ax.set_xlabel('Product of responses')
-ax.set_ylabel('Noise Correlation')
+ydata = NC_data.flatten()
+temp2 = xdata_coupling
+temp1 = minmax_scale(xdata_sigcorr,feature_range=(0,1))
+# temp1 = temp1**0.5
+# xdata = temp1 * temp2
+temp1 = minmax_scale(temp1)
+
+xdata = temp1 * temp2
+xdata,ydata = filter_sharednan(xdata,ydata)
+sns.regplot(x=xdata,y=ydata,ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
+ax.text(0.5, 0.95,'R2= %1.2f' % np.corrcoef(xdata,ydata)[0,1]**2,transform=ax.transAxes,ha='center',va='top',fontsize=8,color='red')
+ax.set_xlabel('PC * signal corr')
+# ax.set_ylabel('Noise Correlation')
 
 ax = axes[3]
-idx_N = np.random.choice(N,100,replace=False)
-NC_data = sessions[ises].NC_perstim[np.ix_(idx_N,idx_N,np.arange(len(oris)))].flatten()
+ydata = NC_data.flatten()
+xdata = sessions[ises].response_product[np.ix_(idx_N,idx_N,np.arange(len(oris)))].flatten()
+
+# xdata = temp1 * temp2
+xdata,ydata = filter_sharednan(xdata,ydata)
+sns.regplot(x=xdata,y=ydata,ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
+ax.text(0.5, 0.95,'R2= %1.2f' % np.corrcoef(xdata,ydata)[0,1]**2,transform=ax.transAxes,ha='center',va='top',fontsize=8,color='red')
+# ax.set_xlabel('PC * signal corr')
+ax.set_xlabel('Resp product')
+
+ax = axes[4]
+ydata = NC_data.flatten()
 temp1 = sessions[ises].coupling_product[np.ix_(idx_N,idx_N)]
 temp2 = sessions[ises].response_product[np.ix_(idx_N,idx_N,np.arange(len(oris)))]
+# temp2 = minmax_scale(temp2,feature_range=(0,1),axis=1)
+temp2 -= np.nanmin(temp2,axis=2,keepdims=True)
+temp2 /= np.nanmax(temp2,axis=2,keepdims=True)
 xdata = temp1[:,:,np.newaxis] * temp2
-
-sns.regplot(x=xdata.flatten(),y=NC_data.flatten(),ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
-ax.set_xlabel('Product of coupling and responses')
-ax.set_ylabel('Noise Correlation')
-
-# sns.scatterplot(x=sessions[ises].response_product[np.ix_(idx_N,idx_N)].flatten(),y=NC_data.flatten(),ax=ax,s=5,alpha=0.2)
+xdata= xdata.flatten()
+xdata,ydata = filter_sharednan(xdata,ydata)
+sns.regplot(x=xdata,y=ydata,ax=ax,scatter_kws={'alpha': markeralpha, 's': markersize},line_kws={'color': 'red'})
+ax.text(0.5, 0.95,'R2= %1.2f' % np.corrcoef(xdata,ydata)[0,1]**2,transform=ax.transAxes,ha='center',va='top',fontsize=8,color='red')
+ax.set_xlabel('PC * resp product')
 
 sns.despine(fig=fig, top=True, right=True, offset=2,trim=False)
 plt.tight_layout()
