@@ -62,7 +62,6 @@ sessions = compute_pairwise_anatomical_distance(sessions)
 
 #%% Fit nonlinearity models to each neuron and collect results:
 [sessions, theta_arr, nlpar_arr, ses_idx_arr] = fit_nl_models_sessions(sessions, nl_configs=NL_CONFIGS)
-# sessions[0].celldata
 
 #%% Save the data:
 np.savez(savefilename + '.npz',

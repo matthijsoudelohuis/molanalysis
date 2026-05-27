@@ -15,7 +15,7 @@ import statsmodels.formula.api as smf
 from statannotations.Annotator import Annotator
 from sklearn.decomposition import PCA
 
-os.chdir('c:\\Python\\molanalysis')
+os.chdir('e:\\Python\\molanalysis')
 
 from loaddata.get_data_folder import get_local_drive
 from utils.explorefigs import plot_PCA_gratings_3D,plot_PCA_gratings
@@ -28,67 +28,8 @@ from utils.nonlin_lib import *
 
 savedir =  os.path.join(get_local_drive(),'OneDrive\\PostDoc\\Figures\\SharedGain\\TransferFunctions')
 
-# #%% Define nonlinearities:
-
-# def lin(x):
-#     return x
-
-# def relu(x):
-#     return np.maximum(0, x)
-
-# def softplus(x, beta=1.0):
-#     return np.log1p(np.exp(beta * x)) / beta
-
-# def sigmoid(x):
-#     return 1 / (1 + np.exp(-x))
-
-# def exp(x):
-#     return np.maximum(0, np.exp(x) - 1)  # Shifted to be zero at x=0
-
-# def tanh(x):
-#     return np.tanh((x))+1  # Shifted to be zero at x=0
-
-# def powerlaw(x, p=2):
-#     return np.maximum(0, x) ** p
-
-
-# #%% Show transfer functions for different nonlinearities:
-# nonlinearities = [lin, relu, lambda x: softplus(x, beta=2), 
-#                 sigmoid, tanh, lambda x: powerlaw(x, p=2), exp]
-# nonlinearity_names = ['Linear', 'ReLU', 'Softplus', 'Sigmoid', 'Tanh', 'Power-law (p=2)', 'Exp']
-# nnonlinearities = len(nonlinearities)
-
-# operating_range = np.array([[0,1],
-#                             [-0.5,1],
-#                             [-3,3],
-#                             [-5,5],
-#                             [-2.5,2.5],
-#                             [-.5,3],
-#                             [-.5,2]])
-
-# fig, axes = plt.subplots(3,3,figsize=(6, 6))
-# axes = axes.flatten()
-# # x = np.linspace(-10, 10, 100)
-# x = np.linspace(-5, 5, 100)
-# # x = np.linspace(-1, 1, 100)
-
-# for i, nonlinearity in enumerate(nonlinearities):
-#     ax = axes[i]
-#     y = nonlinearity(x)
-#     ax.plot(x, y)
-#     ax.set_title(nonlinearity_names[i])
-#     ax.set_xlabel('Input')
-#     ax.set_ylabel('Output')
-#     ax.grid()
-# plt.tight_layout()
-# sns.despine()
-# my_savefig(plt.gcf(),savedir,f'{nonlinearity_names[i]}_Nonlinearity_TransferFunction')
-# my_savefig(fig,savedir,f'Tranfer_functions_overview')
-
-
 
 #%% 
-
 session_list        = np.array([['LPE11086_2024_01_05']])
 session_list        = np.array([['LPE12223_2024_06_10']])
 session_list        = np.array([['LPE12223_2024_06_10','LPE11086_2024_01_05','LPE10919_2023_11_06']])
@@ -200,104 +141,6 @@ sns.despine(trim=True, offset=3)
 plt.suptitle('Nonlinearities at p0 initialization', fontsize=10, y=1.02)
 plt.tight_layout()
 # my_savefig(fig, savedir, 'NL_p0_shapes', formats=['png'])
-
-# #%% Core fitting function
-
-# def fit_nl_models(resp, stim_ids, poprate, configs=NL_CONFIGS):
-#     """
-#     Fit all NL models to a single neuron's trial-by-trial responses.
-
-#     Model: r_norm = f( θ_k + γ·P + b )
-#       Responses are min-max normalised to [0,1] before fitting so all
-#       nonlinearities share the same output regime without per-model gain.
-#       Shared params: θ_k (nstim), γ, b  — warm-started via least squares.
-#       Per-model params: shape params only (e.g. softplus β, power-law p).
-
-#     Returns dict keyed by model name:
-#       r2, theta, gamma, b, nl_par, pred (in [0,1] space), u, resp_norm
-#     """
-#     nstim = int(stim_ids.max()) + 1
-#     nT    = len(resp)
-
-#     # Least-squares warm start on normalised responses
-#     X = np.zeros((nT, nstim + 2))
-#     for k in range(nstim):
-#         X[stim_ids == k, k] = 1.0
-#     X[:, nstim]     = poprate
-#     X[:, nstim + 1] = 1.0
-#     p_ls, _, _, _ = np.linalg.lstsq(X, resp, rcond=None)
-#     theta0 = p_ls[:nstim]
-#     gamma0 = p_ls[nstim]
-#     b0     = p_ls[nstim + 1]
-
-#     results = {}
-#     for name, nl_func, n_shape, p0_shape, bnds_shape in configs:
-#         p0     = np.concatenate([theta0, [gamma0, b0], p0_shape])
-#         bounds = [(None, None)] * (nstim + 2) + bnds_shape
-
-#         def _loss(params, _resp=resp, _sid=stim_ids, _pop=poprate,
-#                   _f=nl_func, _n=n_shape, _ns=nstim):
-#             u    = params[:_ns][_sid] + params[_ns] * _pop + params[_ns + 1]
-#             pred = _f(u, *params[_ns + 2: _ns + 2 + _n]) if _n else _f(u)
-#             return np.mean((_resp - pred) ** 2)
-
-#         try:
-#             opt   = minimize(_loss, p0, method='L-BFGS-B', bounds=bounds,
-#                              options={'maxiter': 3000, 'ftol': 1e-12, 'gtol': 1e-8})
-#             theta = opt.x[:nstim]
-#             gamma = opt.x[nstim]
-#             b     = opt.x[nstim + 1]
-#             shape = list(opt.x[nstim + 2: nstim + 2 + n_shape]) if n_shape else []
-#             u     = theta[stim_ids] + gamma * poprate + b
-#             pred  = nl_func(u, *shape) if n_shape else nl_func(u)
-#             r2    = r2_score(resp, pred)
-#             results[name] = dict(r2=r2, theta=theta, gamma=gamma, b=b,
-#                                  nl_par=shape, pred=pred, u=u,
-#                                  resp_norm=resp, success=opt.success)
-#         except Exception:
-#             results[name] = dict(r2=np.nan, theta=None, gamma=None, b=None,
-#                                  nl_par=None, pred=None, u=None,
-#                                  resp_norm=resp, success=False)
-#     return results
-
-
-# #%% Fit all neurons across all sessions and collect R², Gamma, Beta, theta, nl_par
-# def fit_nl_models_sessions(sessions, nl_configs=NL_CONFIGS, verbose=False):
-#     nSessions = len(sessions)
-#     nl_names = [c[0] for c in nl_configs]
-#     nNL      = len(NL_CONFIGS)
-
-#     theta_arr  = {name: [] for name in nl_names}   # (nstim,) per neuron per model
-#     nlpar_arr  = {name: [] for name in nl_names}   # shape params per neuron per model
-#     ses_idx_arr = []                               # session index for each neuron
-
-#     for ises in range(nSessions):
-#         ses      = sessions[ises]
-#         poprate  = np.nanmean(zscore(ses.respmat, axis=1), axis=0)
-#         ustim_s  = np.unique(ses.trialdata['Orientation'])
-#         stim_ids = np.searchsorted(ustim_s, ses.trialdata['Orientation'].to_numpy())
-#         N        = ses.respmat.shape[0]
-#         nstim    = len(ustim_s)
-
-#         for name in nl_names:
-#             ses.celldata['R2'    + name] = np.nan
-#             ses.celldata['Gamma' + name] = np.nan
-#             ses.celldata['Beta'  + name] = np.nan
-
-#         for iN in tqdm(range(N), desc=f'Session {ises+1}/{nSessions}'):
-#             resp = ses.respmat[iN, :]
-#             res  = fit_nl_models(resp, stim_ids, poprate, configs=nl_configs)
-#             for name in nl_names:
-#                 ses.celldata.loc[iN, 'R2'    + name] = res[name]['r2']
-#                 ses.celldata.loc[iN, 'Gamma' + name] = res[name]['gamma']
-#                 ses.celldata.loc[iN, 'Beta'  + name] = res[name]['b']
-#                 theta_arr[name].append(
-#                     res[name]['theta'] if res[name]['theta'] is not None
-#                     else np.full(nstim, np.nan))
-#                 nlpar_arr[name].append(res[name]['nl_par'] or [])
-#             ses_idx_arr.append(ises)
-
-#     return sessions, theta_arr, nlpar_arr, ses_idx_arr
 
 
 #%% Pick example neuron: well-tuned with moderate–high pop coupling
